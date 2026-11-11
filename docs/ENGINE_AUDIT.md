@@ -119,3 +119,16 @@ The v2.5.0 adapter now updates that **disposable** OrcaWasm recipe to CGAL 6.2.1
 The candidate remains **unverified** until CMake configuration, C++ compilation, linking, API conformance, async binding and the real end-to-end `scripts/smoke-test.mjs` checks pass and the `.wasm` and `.js` artifacts are uploaded. A passing patch audit alone is **not** a successful WebAssembly build. Headless CAD/parametric design remains disabled in this candidate, not implemented.
 
 The full build remains manual-dispatch-only to prevent every small commit from launching an expensive rebuild. A controlled compatibility test run was queued for the CGAL change; the manual-only policy was then restored. A later workflow change adds the end-to-end smoke test to subsequent runs.
+
+
+## 2026-11-11: Assimp dependency blocker
+
+Candidate build [#43015046508](https://github.com/temesotejam/layer-workbench/actions/runs/43015046508) completed with a CMake error at `src/libslic3r/CMakeLists.txt:629`: `find_package(assimp REQUIRED)` could not locate `assimpConfig.cmake` or `assimp-config.cmake`. The previous CGAL version requirement was passed, confirming that the CGAL 6.2.1 upgrade and `SLIC3R_CAD=OFF` allow configuration to progress farther.
+
+Unlike the optional parametric CAD subsystem, Assimp is linked directly by `libslic3r` and is used for imported mesh formats. Skipping its CMake discovery without implementing or building its functionality would be an invalid workaround. Official OrcaSlicer v2.5.0 pins Assimp **v5.4.3** (SHA-256 `66dfbaee288f2bc43172440a55d0235dfc7bf885dda6435c038e8000e79582cb`) with GLTF/OBJ/FBX import enabled. The new `scripts/build-assimp-wasm.sh` builds that version as a static wasm32 library via Emscripten and installs its `assimp::assimp` CMake package into the existing `orcawasm/deps-install` prefix. No desktop library or unverified stub is substituted.
+
+The candidate workflow now invokes this dependency builder before the OrcaWasm build, and it saves *completed* dependency installs when the subsequent CMake configure fails (using Assimp, CGAL and oneTBB completion stamps). This avoids repeatedly paying for a cold dependency build while ensuring partially built dependencies are not cached as complete. Cache keys are separated by Assimp version.
+
+The audit workflow uses the same pinned OrcaWasm revision as the candidate and verifies the Assimp script's shell syntax, version, official archive checksum and required importers. Current fresh candidate: [#43027406588](https://github.com/temesotejam/layer-workbench/actions/runs/43027406588). Fresh audit: [#43027478702](https://github.com/temesotejam/layer-workbench/actions/runs/43027478702).
+
+This is an attempted build-system fix, **not yet a successful cross-compilation claim**. The candidate still needs full CMake configuration, C++ compilation/link, conformance/binding/smoke tests, and artifact checks. Desktop Parametric Design/CAD is explicitly outside this headless candidate.
