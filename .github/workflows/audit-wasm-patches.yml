@@ -93,8 +93,8 @@ jobs:
               raise SystemExit("Could not find the expected Thread.cpp regex in OrcaWasm patcher.")
           source = source.replace(old_thread_pattern, new_thread_pattern, 1)
 
-          old_tbb_anchor = r"""r'(?s)^if \\(FLATPAK"""
-          new_tbb_anchor = r"""r'(?s)^elseif \\(FLATPAK"""
+          old_tbb_anchor = r"""r'(?s)^if \(FLATPAK"""
+          new_tbb_anchor = r"""r'(?s)^elseif \(FLATPAK"""
           if old_tbb_anchor not in source:
               raise SystemExit("Could not find the expected TBB CMake patch anchor in OrcaWasm patcher.")
           source = source.replace(old_tbb_anchor, new_tbb_anchor, 1)
