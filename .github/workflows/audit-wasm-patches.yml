@@ -62,50 +62,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Adapt known compatibility patch anchors for v2.5.0
-        env:
-          ORCA_VERSION: ${{ steps.target.outputs.version }}
-        run: |
-          set -euo pipefail
-          if [[ "$ORCA_VERSION" != "v2.5.0" ]]; then
-            echo "No version-specific patcher adapter is defined for $ORCA_VERSION."
-            exit 1
-          fi
-          python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path("orcawasm/patches/apply.py")
-          source = path.read_text(encoding="utf-8")
-
-          old_fields = r"""r'float   min_bead_width;\n    float   min_feature_size;\n    float   min_length_factor;\n    float   wall_transition_length;\n    float   wall_transition_angle;\n    float   wall_transition_filter_deviation;\n    int     wall_distribution_count;\n    bool    is_top_or_bottom_layer;',"""
-          new_fields = r"""r'float\s+min_bead_width\s*=\s*0\.f;.*?bool\s+is_top_or_bottom_layer\s*=\s*false;',"""
-          if old_fields not in source:
-              raise SystemExit("Could not find the expected v2.4.2 WallToolPathsParams patch anchor in OrcaWasm patcher.")
-          source = source.replace(old_fields, new_fields, 1)
-
-          old_thread = r"   \tpthread_setname_np\(thread\.native_handle\(\), thread_name\);"
-          new_thread = r"\s*pthread_setname_np\(thread\.native_handle\(\), thread_name\);"
-          if old_thread not in source:
-              raise SystemExit("Could not find the expected v2.4.2 pthread patch anchor in OrcaWasm patcher.")
-          source = source.replace(old_thread, new_thread, 1)
-          old_thread_pattern = r"""r'#else\n\n// posix\nbool set_thread_name\(std::thread &thread, const char \*thread_name\)\n\{\n\s*pthread_setname_np\(thread\.native_handle\(\), thread_name\);',"""
-          new_thread_pattern = r"""r'#else\s*// posix\s*bool set_thread_name\(std::thread &thread, const char \*thread_name\)\s*\{\s*pthread_setname_np\(thread\.native_handle\(\), thread_name\);',"""
-          if old_thread_pattern not in source:
-              raise SystemExit("Could not find the expected Thread.cpp regex in OrcaWasm patcher.")
-          source = source.replace(old_thread_pattern, new_thread_pattern, 1)
-
-          old_tbb_anchor = r"""r'(?s)^if \(FLATPAK"""
-          new_tbb_anchor = r"""r'(?s)^elseif \(FLATPAK"""
-          if old_tbb_anchor not in source:
-              raise SystemExit("Could not find the expected TBB CMake patch anchor in OrcaWasm patcher.")
-          source = source.replace(old_tbb_anchor, new_tbb_anchor, 1)
-          old_tbb_command = "'if (EMSCRIPTEN)\\n'"
-          new_tbb_command = "'elseif (EMSCRIPTEN)\\n'"
-          if old_tbb_command not in source:
-              raise SystemExit("Could not find the expected TBB Emscripten patch command in OrcaWasm patcher.")
-          source = source.replace(old_tbb_command, new_tbb_command, 1)
-          path.write_text(source, encoding="utf-8")
-          print("Adapted WallToolPathsParams and Thread.cpp patch anchors for v2.5.0.")
-          PY
+        run: python3 scripts/adapt-orcawasm-v2.5.0.py orcawasm/patches/apply.py
 
       - name: Apply compatibility patches in the disposable audit checkout
         working-directory: orcawasm
