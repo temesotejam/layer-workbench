@@ -1,6 +1,10 @@
 name: Build v2.5.0 WebAssembly candidate
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/build-wasm-candidate.yml"
   workflow_dispatch:
 
 permissions:
@@ -53,18 +57,26 @@ jobs:
           /opt/emsdk/emsdk activate 3.1.74
 
       - name: Restore dependency and compiler caches
-        uses: actions/cache@v4
+        id: deps-cache
+        uses: actions/cache/restore@v4
         with:
           path: |
             orcawasm/deps-install
             orcawasm/build-wasm/emscripten-cache-mt
             ~/.cache/ccache
-          key: wasm-v2.5.0-emsdk-3.1.74-cgal-6.2.1-occt-7.8.1-onetbb-2021.13.2-native-eh-v2-${{ runner.os }}-${{ github.run_id }}
+          key: wasm-v2.5.0-emsdk-3.1.74-cgal-6.2.1-assimp-5.4.3-occt-7.8.1-onetbb-2021.13.2-native-eh-v3-${{ runner.os }}-${{ github.run_id }}
           restore-keys: |
-            wasm-v2.5.0-emsdk-3.1.74-cgal-6.2.1-occt-7.8.1-onetbb-2021.13.2-native-eh-v2-${{ runner.os }}-
+            wasm-v2.5.0-emsdk-3.1.74-cgal-6.2.1-assimp-5.4.3-occt-7.8.1-onetbb-2021.13.2-native-eh-v3-${{ runner.os }}-
 
       - name: Adapt the engine patcher to v2.5.0
         run: python3 scripts/adapt-orcawasm-v2.5.0.py orcawasm/patches/apply.py orcawasm/orca/CMakeLists.txt orcawasm/scripts/build-local-wsl.sh
+
+      - name: Build Assimp 5.4.3 for WebAssembly
+        env:
+          EMSDK: /opt/emsdk
+          EXTRA_CXX_FLAGS: "-fwasm-exceptions -pthread"
+          EXTRA_C_FLAGS: "-sSUPPORT_LONGJMP=wasm -pthread"
+        run: bash scripts/build-assimp-wasm.sh
 
       - name: Build OrcaSlicer v2.5.0 as WebAssembly
         env:
@@ -80,6 +92,33 @@ jobs:
         run: |
           cd orcawasm
           bash scripts/build-local-wsl.sh
+
+      # The upstream build-local-wsl.sh builds all dependencies before CMake
+      # configure. Preserve fully installed dependencies even if the subsequent
+      # CMake configure/compiler phase fails; otherwise every fix redoes ~40 min
+      # of Boost/OCCT/CGAL/oneTBB work.
+      - name: Confirm dependencies complete for caching
+        id: deps-ready
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f orcawasm/deps-install/.assimp_5.4.3_wasm_mt_eh_v1 &&
+                -f orcawasm/deps-install/.math_built_mt_native_eh_v2_cgal_6_2_1 &&
+                -f orcawasm/deps-install/.onetbb_v2021.13.2_native_eh_v1 ]]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Dependency build was incomplete; not caching partial results."
+          fi
+
+      - name: Save complete dependencies even after CMake failure
+        if: always() && steps.deps-ready.outputs.ready == 'true' && steps.deps-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            orcawasm/deps-install
+            orcawasm/build-wasm/emscripten-cache-mt
+            ~/.cache/ccache
+          key: ${{ steps.deps-cache.outputs.cache-primary-key }}
 
       - name: Run API conformance tests
         working-directory: orcawasm
