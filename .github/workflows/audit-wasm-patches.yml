@@ -65,6 +65,13 @@ jobs:
       - name: Adapt known compatibility patch anchors for v2.5.0
         run: python3 scripts/adapt-orcawasm-v2.5.0.py orcawasm/patches/apply.py orcawasm/orca/CMakeLists.txt orcawasm/scripts/build-local-wsl.sh
 
+      - name: Verify v2.5.0 dependency compatibility settings
+        run: |
+          set -euo pipefail
+          grep -Fxq 'CGAL_VERSION=6.2.1' orcawasm/scripts/build-local-wsl.sh
+          grep -Fq '.math_built_mt_native_eh_v2_cgal_6_2_1' orcawasm/scripts/build-local-wsl.sh
+          grep -Fq -- '-DSLIC3R_CAD=OFF' orcawasm/scripts/build-local-wsl.sh
+
       - name: Apply compatibility patches in the disposable audit checkout
         working-directory: orcawasm
         run: |
