@@ -84,11 +84,11 @@ build_source = build_source.replace(
 # OrcaSlicer v2.5.0 requires CGAL >= 6.2, while the pinned OrcaWasm
 # dependency recipe still installs 5.6.2. Align with upstream's tested 6.2.1.
 # This is a real dependency upgrade, not a bypass of the CMake version check.
-old_cgal_version = "CGAL_VERSION=5.6.2\\n"
+old_cgal_version = "CGAL_VERSION=5.6.2\n"
 if old_cgal_version not in build_source:
     raise SystemExit("Expected pinned CGAL 5.6.2 version not found in OrcaWasm recipe")
 build_source = build_source.replace(
-    old_cgal_version, "CGAL_VERSION=6.2.1\\n", 1
+    old_cgal_version, "CGAL_VERSION=6.2.1\n", 1
 )
 # Invalidate the math dependency stamp so restored caches never silently use
 # the old 5.6.2 headers or CGALConfig.cmake.
