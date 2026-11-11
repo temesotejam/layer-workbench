@@ -10,6 +10,7 @@ on:
       - "scripts/adapt-orcawasm-v2.5.0.py"
       - "scripts/build-assimp-wasm.sh"
       - "scripts/build-draco-wasm.sh"
+      - "scripts/prepare-wasm-runner.sh"
   workflow_dispatch:
     inputs:
       orca_version:
@@ -33,6 +34,12 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: Validate runner tool bootstrap (no APT dependency)
+        run: |
+          set -euo pipefail
+          bash -n scripts/prepare-wasm-runner.sh
+          bash scripts/prepare-wasm-runner.sh
 
       - name: Resolve target version
         id: target
