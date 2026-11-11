@@ -134,6 +134,112 @@ if wall_source.count(old_bead_count) != 1:
     raise SystemExit("Expected v2.5.0 Arachne bead-count overflow guard anchor not found")
 wall_paths.write_text(wall_source.replace(old_bead_count, new_bead_count, 1), encoding="utf-8")
 
+# The v2.5.0 CGAL Voronoi validation translation unit uses a fast interval
+# filter plus an exact fallback on desktop. WebAssembly has no adjustable
+# floating-point rounding mode, so interval filters cannot provide their
+# required enclosing bounds. Do not force Boost/C99 fenv macros or silently
+# accept an inexact predicate. Use the already-existing CGAL::MP_Float exact
+# predicate for the WASM planar-angle checker (slower, exact +,-,* arithmetic).
+# The CGAL surface-sweep intersection checker is used only by ARACHNE_DEBUG;
+# keep it on desktop and fail closed if a debug WASM build requests it.
+voronoi_cgal = orca_cmake.parent / "src" / "libslic3r" / "Geometry" / "VoronoiUtilsCgal.cpp"
+voronoi_source = voronoi_cgal.read_text(encoding="utf-8")
+
+def replace_voronoi_once(old: str, new: str, label: str) -> None:
+    global voronoi_source
+    if voronoi_source.count(old) != 1:
+        raise SystemExit(f"Expected v2.5.0 Voronoi anchor missing or duplicated: {label}")
+    voronoi_source = voronoi_source.replace(old, new, 1)
+
+replace_voronoi_once(
+    """#include <CGAL/Interval_nt.h>
+#include <CGAL/Cartesian_converter.h>
+#include <CGAL/Filtered_kernel.h>
+#include <CGAL/Kernel/Type_equality_wrapper.h>
+#include <CGAL/Filtered_predicate.h>
+#include <CGAL/enum.h>
+#include <CGAL/Kernel/global_functions_2.h>
+#include <boost/next_prior.hpp>
+#include <CGAL/Exact_predicates_exact_constructions_kernel.h>
+#include <CGAL/Arr_segment_traits_2.h>
+#include <CGAL/Surface_sweep_2_algorithms.h>
+""",
+    """#include <CGAL/MP_Float.h>
+#include <CGAL/Cartesian_converter.h>
+#include <CGAL/enum.h>
+#include <CGAL/Kernel/global_functions_2.h>
+#include <boost/next_prior.hpp>
+#if !defined(SLIC3R_WASM)
+#include <CGAL/Interval_nt.h>
+#include <CGAL/Filtered_kernel.h>
+#include <CGAL/Kernel/Type_equality_wrapper.h>
+#include <CGAL/Filtered_predicate.h>
+#include <CGAL/Exact_predicates_exact_constructions_kernel.h>
+#include <CGAL/Arr_segment_traits_2.h>
+#include <CGAL/Surface_sweep_2_algorithms.h>
+#endif
+#if defined(SLIC3R_WASM) && defined(ARACHNE_DEBUG)
+#error "WASM ARACHNE_DEBUG requires a port of the CGAL surface-sweep intersection checker"
+#endif
+""",
+    "interval-filter and surface-sweep headers",
+)
+replace_voronoi_once(
+    """    using K   = CGAL::Simple_cartesian<double>;
+    using FK  = CGAL::Simple_cartesian<CGAL::Interval_nt_advanced>;
+    using EK  = CGAL::Simple_cartesian<CGAL::MP_Float>;
+    using C2E = CGAL::Cartesian_converter<K, EK>;
+    using C2F = CGAL::Cartesian_converter<K, FK>;
+    class Epick : public CGAL::Filtered_kernel_adaptor<CGAL::Type_equality_wrapper<K::Base<Epick>::Type, Epick>, true> {};
+""",
+    """    using K   = CGAL::Simple_cartesian<double>;
+    using EK  = CGAL::Simple_cartesian<CGAL::MP_Float>;
+    using C2E = CGAL::Cartesian_converter<K, EK>;
+#if !defined(SLIC3R_WASM)
+    using FK  = CGAL::Simple_cartesian<CGAL::Interval_nt_advanced>;
+    using C2F = CGAL::Cartesian_converter<K, FK>;
+    class Epick : public CGAL::Filtered_kernel_adaptor<CGAL::Type_equality_wrapper<K::Base<Epick>::Type, Epick>, true> {};
+#endif
+""",
+    "filtered kernel declarations",
+)
+replace_voronoi_once(
+    """    using ParabolicTangentToSegmentOrientationPredicateFiltered = CGAL::Filtered_predicate<ParabolicTangentToSegmentOrientationPredicate<EK>, ParabolicTangentToSegmentOrientationPredicate<FK>, C2E, C2F>;
+    using ParabolicTangentToParabolicTangentOrientationPredicateFiltered = CGAL::Filtered_predicate<ParabolicTangentToParabolicTangentOrientationPredicate<EK>, ParabolicTangentToParabolicTangentOrientationPredicate<FK>, C2E, C2F>;
+""",
+    """#if defined(SLIC3R_WASM)
+    // MP_Float preserves exact conversion from double and exact +,-,*.
+    // The parabolic tangent orientation computations do not divide/sqrt.
+    template<class ExactPredicate> struct ExactWasmPredicate {
+        static EK::Point_2 convert(const K::Point_2 &p) { return C2E{}(p); }
+        static CGAL::Orientation convert(CGAL::Orientation o) { return o; }
+
+        template<class... Args>
+        CGAL::Orientation operator()(const Args &... args) const {
+            return ExactPredicate{}(convert(args)...);
+        }
+    };
+    using ParabolicTangentToSegmentOrientationPredicateFiltered = ExactWasmPredicate<ParabolicTangentToSegmentOrientationPredicate<EK>>;
+    using ParabolicTangentToParabolicTangentOrientationPredicateFiltered = ExactWasmPredicate<ParabolicTangentToParabolicTangentOrientationPredicate<EK>>;
+#else
+    using ParabolicTangentToSegmentOrientationPredicateFiltered = CGAL::Filtered_predicate<ParabolicTangentToSegmentOrientationPredicate<EK>, ParabolicTangentToSegmentOrientationPredicate<FK>, C2E, C2F>;
+    using ParabolicTangentToParabolicTangentOrientationPredicateFiltered = CGAL::Filtered_predicate<ParabolicTangentToParabolicTangentOrientationPredicate<EK>, ParabolicTangentToParabolicTangentOrientationPredicate<FK>, C2E, C2F>;
+#endif
+""",
+    "exact-only parabolic orientation predicates",
+)
+replace_voronoi_once(
+    "bool VoronoiUtilsCgal::is_voronoi_diagram_planar_intersection(const VD &voronoi_diagram)\n",
+    "#if !defined(SLIC3R_WASM)\nbool VoronoiUtilsCgal::is_voronoi_diagram_planar_intersection(const VD &voronoi_diagram)\n",
+    "desktop-only surface-sweep checker start",
+)
+replace_voronoi_once(
+    "    return intersections_pt.empty();\n}\n\nstruct ParabolicSegment\n",
+    "    return intersections_pt.empty();\n}\n#endif\n\nstruct ParabolicSegment\n",
+    "desktop-only surface-sweep checker end",
+)
+voronoi_cgal.write_text(voronoi_source, encoding="utf-8")
+
 # The browser engine build does not include the desktop Parametric Design tab.
 # v2.5.0 defaults SLIC3R_CAD=ON and therefore requires the native SolveSpace
 # (SLVS) package, which the current WASM dependency set does not build. Keep
