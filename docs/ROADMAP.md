@@ -20,6 +20,8 @@
 
 ## Phase 2 — Engine port
 - [ ] Port the engine from v2.4.2 to v2.5.0.
+- [x] Define the expanded browser editor API and capability model. See [BROWSER_ENGINE_API_PLAN.md](BROWSER_ENGINE_API_PLAN.md).
+- [ ] Complete the first native 3MF → viewport → transform → 3MF vertical slice (tracked in [Issue #2](https://github.com/temesotejam/layer-workbench/issues/2)).
 - [ ] Build the engine reproducibly in CI.
 - [ ] Load and apply printer, filament, and process profiles.
 - [ ] Validate project import/export and G-code generation.
