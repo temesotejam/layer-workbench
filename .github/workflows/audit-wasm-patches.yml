@@ -82,8 +82,8 @@ jobs:
               raise SystemExit("Could not find the expected v2.4.2 WallToolPathsParams patch anchor in OrcaWasm patcher.")
           source = source.replace(old_fields, new_fields, 1)
 
-          old_thread = r"   \\tpthread_setname_np\\(thread\\.native_handle\\(\\), thread_name\\);"
-          new_thread = r"\\s*pthread_setname_np\\(thread\\.native_handle\\(\\), thread_name\\);"
+          old_thread = r"   \tpthread_setname_np\(thread\.native_handle\(\), thread_name\);"
+          new_thread = r"\s*pthread_setname_np\(thread\.native_handle\(\), thread_name\);"
           if old_thread not in source:
               raise SystemExit("Could not find the expected v2.4.2 pthread patch anchor in OrcaWasm patcher.")
           source = source.replace(old_thread, new_thread, 1)
