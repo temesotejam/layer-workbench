@@ -97,3 +97,14 @@ A single WebAssembly binary cannot simply turn pthreads on/off at runtime. If br
 - OrcaWasm submodule configuration: https://github.com/Hiosdra/OrcaWasm/blob/master/.gitmodules
 - Emscripten pthread deployment requirements: https://emscripten.org/docs/porting/pthreads.html
 - GitHub Pages COOP/COEP workaround discussion: https://github.com/orgs/community/discussions/13309
+
+## Latest failure diagnosis: SolveSpace CAD dependency
+
+The v2.5.0 candidate progressed through the dependency build and reached the upstream `src/libslic3r/CMakeLists.txt`, then CMake failed at `find_package(SLVS REQUIRED)`. In v2.5.0, `SLIC3R_CAD` defaults to ON and enables the Parametric Design/CAD sources, which require the SolveSpace `SLVS` package. The current OrcaWasm dependency build does not build/install that package.
+
+For the first headless slicing/model-engine candidate, Parametric Design is explicitly outside the initial scope. The adapter now adds `-DSLIC3R_CAD=OFF` to the disposable OrcaWasm CMake invocation, preserving the regular slicer and OCCT paths while excluding the optional SolveSpace CAD subsystem. This is a scope decision, not a claim that CAD is ported; CAD remains a future separate dependency/feature project.
+
+The previous full build failed here:
+https://github.com/temesotejam/layer-workbench/actions/runs/42998864186
+
+The new adapter and workflow change have been committed. Their CI validation is now triggered. The next gate is whether CMake configure proceeds past the SLVS lookup and enters compilation.
