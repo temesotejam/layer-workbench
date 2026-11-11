@@ -6,6 +6,7 @@ on:
     paths:
       - ".github/workflows/audit-wasm-patches.yml"
       - "upstream/stable.json"
+      - "docs/WEB_PORT_SOURCE_AUDIT.md"
   workflow_dispatch:
     inputs:
       orca_version:
@@ -65,6 +66,15 @@ jobs:
         run: |
           set -o pipefail
           python3 patches/apply.py --check 2>&1 | tee "$GITHUB_WORKSPACE/patch-audit.log"
+
+      - name: Fail if a required patch anchor no longer matches
+        if: always()
+        run: |
+          set -euo pipefail
+          if grep -E "WARN pattern not found|FATAL:" patch-audit.log; then
+            echo "::error::One or more compatibility patch anchors did not match the selected upstream source."
+            exit 1
+          fi
 
       - name: Upload patch audit log
         if: always()
