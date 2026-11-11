@@ -7,21 +7,72 @@ on:
 
 permissions:
   contents: read
+  issues: write
+
+concurrency:
+  group: upstream-stable-check
+  cancel-in-progress: false
 
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - name: Check latest stable release
+      - name: Checkout workspace
+        uses: actions/checkout@v4
+
+      - name: Compare latest stable release with integration baseline
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+
           release="$(gh api repos/OrcaSlicer/OrcaSlicer/releases/latest)"
-          tag="$(jq -r .tag_name <<< "$release")"
-          url="$(jq -r .html_url <<< "$release")"
-          published="$(jq -r .published_at <<< "$release")"
-          echo "Latest stable release: $tag"
-          echo "Published: $published"
-          echo "Release: $url"
-          echo "No engine rebuild is triggered by this check alone."
+          tag="$(jq -r '.tag_name' <<< "$release")"
+          url="$(jq -r '.html_url' <<< "$release")"
+          published="$(jq -r '.published_at' <<< "$release")"
+          prerelease="$(jq -r '.prerelease' <<< "$release")"
+          draft="$(jq -r '.draft' <<< "$release")"
+          baseline="$(jq -r '.latest_stable_seen' upstream/stable.json)"
+
+          if [[ "$prerelease" != "false" || "$draft" != "false" || -z "$tag" || "$tag" == "null" ]]; then
+            echo "::error::GitHub did not return a valid stable release."
+            exit 1
+          fi
+
+          echo "Latest stable: $tag ($published)"
+          echo "Integration baseline: $baseline"
+
+          if [[ "$tag" == "$baseline" ]]; then
+            echo "No new stable release. Nothing to do."
+            exit 0
+          fi
+
+          title="Stable upstream release detected: $tag"
+          existing="$(gh issue list --state open --limit 100 --json number,title \
+            --jq ".[] | select(.title == \"$title\") | .number" | head -n 1 || true)"
+
+          if [[ -n "$existing" ]]; then
+            echo "Tracking issue already exists: #$existing"
+            exit 0
+          fi
+
+          cat > /tmp/issue-body.md <<EOF
+          A new stable release was detected.
+
+          - **Version:** $tag
+          - **Published:** $published
+          - **Release:** $url
+          - **Last integration baseline:** $baseline
+
+          This is a detection notice only. Do not mark the new version as supported or deploy it until the WebAssembly port has been updated and all required compatibility tests pass.
+
+          Checklist:
+          - [ ] Pin the upstream source tag and commit.
+          - [ ] Audit and port WebAssembly compatibility patches.
+          - [ ] Build the engine reproducibly.
+          - [ ] Run API, model, profile, 3MF, and G-code regression tests.
+          - [ ] Validate the browser deployment.
+          - [ ] Update `upstream/stable.json` only after successful integration.
+          EOF
+
+          gh issue create --title "$title" --body-file /tmp/issue-body.md
