@@ -73,12 +73,12 @@ orca_cmake.write_text(orca_source, encoding="utf-8")
 # the CAD feature explicitly disabled in this headless engine candidate.
 build_script = Path(sys.argv[3])
 build_source = build_script.read_text(encoding="utf-8")
-cmake_flag = "  -DSLIC3R_WASM=ON \\\\n"
+cmake_flag = "  -DSLIC3R_WASM=ON " + "\\" + "\n"
 if cmake_flag not in build_source:
     raise SystemExit("Could not find SLIC3R_WASM CMake flag in OrcaWasm build script")
 build_source = build_source.replace(
     cmake_flag,
-    cmake_flag + "  -DSLIC3R_CAD=OFF \\\\n",
+    cmake_flag + "  -DSLIC3R_CAD=OFF " + "\\" + "\n",
     1,
 )
 build_script.write_text(build_source, encoding="utf-8")
