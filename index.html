@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#151922">
+  <meta name="description" content="A personal workspace for 3D-print preparation.">
+  <title>Layer Workbench</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./" aria-label="Layer Workbench home"><span class="brand-mark">L</span><span>Layer Workbench</span></a>
+    <span class="status"><span class="status-dot"></span> Personal workspace</span>
+  </header>
+  <main class="layout">
+    <section class="intro">
+      <p class="eyebrow">3D PRINT WORKSPACE</p>
+      <h1>Prepare your next print.</h1>
+      <p class="lead">A browser-based workspace focused on retaining the upstream slicer's settings, project behavior, and slicing results.</p>
+    </section>
+    <section class="notice" aria-live="polite">
+      <div class="notice-icon">i</div>
+      <div><h2>Engine integration is not complete yet</h2>
+      <p>This is the initial website shell. No model slicing is performed yet. The next milestone is integrating and validating the WebAssembly engine.</p></div>
+    </section>
+    <section class="workspace">
+      <div class="workspace-head"><div><p class="eyebrow">WORKSPACE</p><h2>Project</h2></div><span class="version">Engine: not installed</span></div>
+      <label class="dropzone" id="dropzone" for="model-file">
+        <span class="upload-icon">↑</span>
+        <strong>Choose a 3D model</strong>
+        <span>STL / 3MF — file selection preview only at this stage</span>
+        <input id="model-file" type="file" accept=".stl,.3mf,.obj" hidden>
+      </label>
+      <p id="file-status" class="file-status">No file selected</p>
+    </section>
+    <footer><span>Personal project · Not an official upstream product</span><a href="https://github.com/temesotejam/layer-workbench">Source repository</a></footer>
+  </main>
+</body>
+</html>
