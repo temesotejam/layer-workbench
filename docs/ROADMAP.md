@@ -6,14 +6,15 @@
 - [x] Add GitHub Pages deployment workflow.
 - [x] Add a daily stable-release detector that opens a tracking issue when a new stable version appears.
 - [x] Record the current upstream target and initial engine audit.
+- [x] Add a GitHub Actions dry-run workflow for the existing WebAssembly compatibility patches.
 
 ## Phase 1 — Upstream and license audit
 - [x] Identify the current stable upstream target (v2.5.0).
 - [x] Identify the existing WebAssembly engine candidate and its v2.4.2 base.
 - [x] Identify the pthread/COOP/COEP deployment constraint.
+- [ ] Run and classify the compatibility patch dry-run against v2.5.0.
 - [ ] Pin the exact v2.5.0 source commit and dependency revisions.
 - [ ] Audit every bundled dependency and license at exact revisions.
-- [ ] Dry-run and classify the WebAssembly compatibility patch set against v2.5.0.
 - [ ] Identify gaps between desktop features and the engine API.
 
 ## Phase 2 — Engine port
