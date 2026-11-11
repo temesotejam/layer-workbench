@@ -67,6 +67,22 @@ orca_source = orca_source.replace(python_begin, "if(NOT SLIC3R_WASM)\n" + python
 orca_source = orca_source.replace(python_end, python_end + "endif()\n", 1)
 orca_cmake.write_text(orca_source, encoding="utf-8")
 
+# OrcaSlicer v2.5.0 stages native FFmpeg .so libraries for the Linux desktop
+# executable. A headless Emscripten target has no ELF shared objects to copy.
+# Skip only this desktop staging target when SLIC3R_WASM=ON; do not claim
+# support for media features that have not been ported to the browser.
+orca_src_cmake = orca_cmake.parent / "src" / "CMakeLists.txt"
+src_source = orca_src_cmake.read_text(encoding="utf-8")
+native_sos_anchor = '    if (NOT APPLE)\n        set(output_sos_Release "")\n'
+if src_source.count(native_sos_anchor) != 1:
+    raise SystemExit("Expected v2.5.0 native FFmpeg .so copy anchor not found in src/CMakeLists.txt")
+src_source = src_source.replace(
+    native_sos_anchor,
+    '    if (NOT APPLE AND NOT SLIC3R_WASM)\n        set(output_sos_Release "")\n',
+    1,
+)
+orca_src_cmake.write_text(src_source, encoding="utf-8")
+
 # The browser engine build does not include the desktop Parametric Design tab.
 # v2.5.0 defaults SLIC3R_CAD=ON and therefore requires the native SolveSpace
 # (SLVS) package, which the current WASM dependency set does not build. Keep
