@@ -144,3 +144,13 @@ The candidate workflow now builds Draco before configuring OrcaSlicer. To avoid 
 The [new patch/dependency audit #43046904876](https://github.com/temesotejam/layer-workbench/actions/runs/43046904876) passed, including syntax and version/hash/flag checks for the new Draco recipe. The new [candidate build #43047097790](https://github.com/temesotejam/layer-workbench/actions/runs/43047097790) has been triggered. The patch audit is *static*: it does not prove that Draco compilation or the complete engine succeeds.
 
 No engine success or WebAssembly artifact is claimed. CMake configure, C++ compilation/link, API conformance, asynchronous binding, real slice smoke test and uploaded `.wasm`/`.js` files are still awaiting successful verification. The independent static workspace deployment is not an engine acceptance signal.
+
+## 2026-11-12 01:40 JST: runner mirror DNS failure and APT-free bootstrap
+
+Full candidate run [#43051471275](https://github.com/temesotejam/layer-workbench/actions/runs/43051471275) failed **before source checkout or compilation**, during its `apt-get update` step. GitHub-hosted Ubuntu 24.04's Azure Ubuntu mirror name `azure.archive.ubuntu.com` could not be resolved. Three attempts (with retries and timeouts) all failed, so this run provides **no evidence** that the CGAL/Assimp/Draco fixes work or fail.
+
+For the next run, the heavyweight candidate workflow replaces the redundant APT upgrade/install step with `scripts/prepare-wasm-runner.sh`. That script verifies the tools already included in the published Ubuntu 24.04 hosted image, checks native OpenSSL headers, and only installs a tiny local pass-through `ccache` launcher if a `ccache` binary is absent. The shim invokes the real compiler without claiming to cache output. It fails explicitly if an indispensable tool is absent rather than attempting an unverified package source or silently omitting dependencies. The patch audit now executes the same bootstrap check.
+
+The update does not change upstream OrcaSlicer, OrcaWasm dependency sources, public deployed assets, or licensing. The new audit and full candidate run were triggered by the workflow changes. A passing tool bootstrap still does **not** establish successful configuration, C++ linking, API conformance, async binding, smoke tests, or generated `.wasm` artifacts.
+
+Relevant runner inventory: https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2404-Readme.md
