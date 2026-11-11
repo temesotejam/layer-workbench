@@ -59,12 +59,12 @@ replace_once(
 # skip the desktop-only Python embed dependency in the upstream root CMake file.
 orca_cmake = Path(sys.argv[2])
 orca_source = orca_cmake.read_text(encoding="utf-8")
-python_begin = "# Use bundled Python from deps instead of system Python\\n"
-python_end = "add_library(pybind11::embed ALIAS pybind11_embed)\\n"
+python_begin = "# Use bundled Python from deps instead of system Python\n"
+python_end = "add_library(pybind11::embed ALIAS pybind11_embed)\n"
 if python_begin not in orca_source or python_end not in orca_source:
     raise SystemExit("Expected v2.5.0 embedded-Python CMake block not found in OrcaSlicer root CMakeLists.txt")
-orca_source = orca_source.replace(python_begin, "if(NOT SLIC3R_WASM)\\n" + python_begin, 1)
-orca_source = orca_source.replace(python_end, python_end + "endif()\\n", 1)
+orca_source = orca_source.replace(python_begin, "if(NOT SLIC3R_WASM)\n" + python_begin, 1)
+orca_source = orca_source.replace(python_end, python_end + "endif()\n", 1)
 orca_cmake.write_text(orca_source, encoding="utf-8")
 
 path.write_text(source, encoding="utf-8")
