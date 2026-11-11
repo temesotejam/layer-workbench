@@ -7,8 +7,8 @@ modify OrcaSlicer upstream or commit upstream source into this repository.
 from pathlib import Path
 import sys
 
-if len(sys.argv) != 3:
-    raise SystemExit("usage: adapt-orcawasm-v2.5.0.py <path-to-orcawasm/patches/apply.py> <path-to-orca/CMakeLists.txt>")
+if len(sys.argv) != 4:
+    raise SystemExit("usage: adapt-orcawasm-v2.5.0.py <path-to-orcawasm/patches/apply.py> <path-to-orca/CMakeLists.txt> <path-to-build-local-wsl.sh>")
 
 path = Path(sys.argv[1])
 source = path.read_text(encoding="utf-8")
@@ -66,6 +66,22 @@ if python_begin not in orca_source or python_end not in orca_source:
 orca_source = orca_source.replace(python_begin, "if(NOT SLIC3R_WASM)\n" + python_begin, 1)
 orca_source = orca_source.replace(python_end, python_end + "endif()\n", 1)
 orca_cmake.write_text(orca_source, encoding="utf-8")
+
+# The browser engine build does not include the desktop Parametric Design tab.
+# v2.5.0 defaults SLIC3R_CAD=ON and therefore requires the native SolveSpace
+# (SLVS) package, which the current WASM dependency set does not build. Keep
+# the CAD feature explicitly disabled in this headless engine candidate.
+build_script = Path(sys.argv[3])
+build_source = build_script.read_text(encoding="utf-8")
+cmake_flag = "  -DSLIC3R_WASM=ON \\\\n"
+if cmake_flag not in build_source:
+    raise SystemExit("Could not find SLIC3R_WASM CMake flag in OrcaWasm build script")
+build_source = build_source.replace(
+    cmake_flag,
+    cmake_flag + "  -DSLIC3R_CAD=OFF \\\\n",
+    1,
+)
+build_script.write_text(build_source, encoding="utf-8")
 
 path.write_text(source, encoding="utf-8")
 print(f"Adapted OrcaWasm patcher for v2.5.0: {path}")
