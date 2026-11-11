@@ -16,7 +16,9 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Stable runner image: ubuntu-latest moved to 26.04 and its apt mirrors
+    # failed DNS resolution in #43047097790 before any WASM work began.
+    runs-on: ubuntu-24.04
     timeout-minutes: 360
     steps:
       - name: Checkout workspace
@@ -28,11 +30,32 @@ jobs:
           node-version: 26
 
       - name: Install build tools
+        shell: bash
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y \
-            build-essential clang ninja-build python3 cmake pkg-config \
-            m4 texinfo libssl-dev ccache git curl unzip zip
+          set -euo pipefail
+          # Fail on partial apt index downloads, and retry temporary network/DNS
+          # failures without making upstream source or dependency modifications.
+          for attempt in 1 2 3; do
+            if sudo apt-get update -qq \
+                -o APT::Update::Error-Mode=any \
+                -o Acquire::Retries=2 \
+                -o Acquire::http::Timeout=30 \
+                -o Acquire::https::Timeout=30 &&
+              sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+                -o Acquire::Retries=2 \
+                -o Acquire::http::Timeout=30 \
+                -o Acquire::https::Timeout=30 \
+                build-essential clang ninja-build python3 cmake pkg-config \
+                m4 texinfo libssl-dev ccache git curl unzip zip; then
+              break
+            fi
+            if [[ "$attempt" -eq 3 ]]; then
+              echo "::error::apt index/package downloads failed after 3 attempts"
+              exit 1
+            fi
+            echo "::warning::apt attempt $attempt failed; retrying transient network error"
+            sleep $((15 * attempt))
+          done
 
       - name: Clone and pin the WebAssembly engine source
         run: |
