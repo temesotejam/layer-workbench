@@ -18,7 +18,7 @@ This repository is maintained primarily for the owner's own use. It aims to prov
 
 This repository is at the initial project-scaffolding stage. It does **not** yet contain a working slicer engine, printer profiles, or a functional slicing workflow. The initial website is only a project shell.
 
-The current stable integration target is **v2.5.0**, but it is **not yet supported** by this workspace. The existing WebAssembly engine candidate is based on v2.4.2 and requires a substantial compatibility audit and port before it can be considered for use. See [the engine audit](docs/ENGINE_AUDIT.md), [the detailed desktop-to-web source audit](docs/WEB_PORT_SOURCE_AUDIT.md), and [the v2.5.0 integration issue](https://github.com/temesotejam/layer-workbench/issues/1).
+The current stable integration target is **v2.5.0**, but it is **not yet supported** by this workspace. The existing WebAssembly engine candidate is based on v2.4.2 and requires a substantial compatibility audit and port before it can be considered for use. See [the engine audit](docs/ENGINE_AUDIT.md), [the detailed desktop-to-web source audit](docs/WEB_PORT_SOURCE_AUDIT.md), [the browser engine API plan](docs/BROWSER_ENGINE_API_PLAN.md), [the v2.5.0 integration issue](https://github.com/temesotejam/layer-workbench/issues/1), and [the first browser editor milestone](https://github.com/temesotejam/layer-workbench/issues/2).
 
 ## Stable-release tracking
 
