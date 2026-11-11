@@ -132,3 +132,15 @@ The candidate workflow now invokes this dependency builder before the OrcaWasm b
 The audit workflow uses the same pinned OrcaWasm revision as the candidate and verifies the Assimp script's shell syntax, version, official archive checksum and required importers. Current fresh candidate: [#43027406588](https://github.com/temesotejam/layer-workbench/actions/runs/43027406588). Fresh audit: [#43027478702](https://github.com/temesotejam/layer-workbench/actions/runs/43027478702).
 
 This is an attempted build-system fix, **not yet a successful cross-compilation claim**. The candidate still needs full CMake configuration, C++ compilation/link, conformance/binding/smoke tests, and artifact checks. Desktop Parametric Design/CAD is explicitly outside this headless candidate.
+
+## 2026-11-12: Draco 1.5.7 dependency blocker
+
+The candidate [#43027406588](https://github.com/temesotejam/layer-workbench/actions/runs/43027406588) completed unsuccessfully at the OrcaSlicer v2.5.0 CMake configuration phase. The preceding Assimp 5.4.3 WebAssembly build and the long dependency build both succeeded, but `src/libslic3r/CMakeLists.txt:695 (find_package)` required Draco and `cmake/modules/FindDraco.cmake` reported `Draco library not found. Please install the dependency.` This is the next actual failure after resolving CGAL 6.2.1 and Assimp.
+
+Official OrcaSlicer v2.5.0 pins Google Draco **1.5.7**, archive SHA-256 `27b72ba2d5ff3d0a9814ad40d4cb88f8dc89a35491c0866d952473f8f9416b77` (`deps/Draco/Draco.cmake`). The new `scripts/build-draco-wasm.sh` downloads and verifies that exact archive, builds the genuine C++ library with the same Emscripten pthread/exception flags as the engine and installs the exported `draco::draco` CMake package and headers under `orcawasm/deps-install`. Browser-specific standalone JS glue is disabled because the engine links the C++ library directly. This is **not** a stub bypass.
+
+The candidate workflow now builds Draco before configuring OrcaSlicer. To avoid repeated expensive compilation, it may restore the fully built preceding CGAL/Assimp/OCCT/oneTBB cache, while the new cache key (`draco-1.5.7`, v4) and completion stamp distinguish the newly added dependency. The cache is saved only after all required stamps exist.
+
+The [new patch/dependency audit #43046904876](https://github.com/temesotejam/layer-workbench/actions/runs/43046904876) passed, including syntax and version/hash/flag checks for the new Draco recipe. The new [candidate build #43047097790](https://github.com/temesotejam/layer-workbench/actions/runs/43047097790) has been triggered. The patch audit is *static*: it does not prove that Draco compilation or the complete engine succeeds.
+
+No engine success or WebAssembly artifact is claimed. CMake configure, C++ compilation/link, API conformance, asynchronous binding, real slice smoke test and uploaded `.wasm`/`.js` files are still awaiting successful verification. The independent static workspace deployment is not an engine acceptance signal.
