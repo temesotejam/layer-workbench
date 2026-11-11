@@ -8,6 +8,7 @@ on:
       - "upstream/stable.json"
       - "docs/WEB_PORT_SOURCE_AUDIT.md"
       - "scripts/adapt-orcawasm-v2.5.0.py"
+      - "scripts/build-assimp-wasm.sh"
   workflow_dispatch:
     inputs:
       orca_version:
@@ -52,7 +53,8 @@ jobs:
           ORCA_VERSION: ${{ steps.target.outputs.version }}
         run: |
           set -euo pipefail
-          git clone --depth 1 https://github.com/Hiosdra/OrcaWasm.git orcawasm
+          git clone https://github.com/Hiosdra/OrcaWasm.git orcawasm
+          git -C orcawasm checkout 60a09e04f1990be39c8f6f35dffef1a2c9e224c4
           git clone --depth 1 --branch "$ORCA_VERSION" \
             https://github.com/OrcaSlicer/OrcaSlicer.git orcawasm/orca
           {
@@ -71,6 +73,17 @@ jobs:
           grep -Fxq 'CGAL_VERSION=6.2.1' orcawasm/scripts/build-local-wsl.sh
           grep -Fq '.math_built_mt_native_eh_v2_cgal_6_2_1' orcawasm/scripts/build-local-wsl.sh
           grep -Fq -- '-DSLIC3R_CAD=OFF' orcawasm/scripts/build-local-wsl.sh
+
+      - name: Validate pinned Assimp WASM dependency recipe
+        run: |
+          set -euo pipefail
+          bash -n scripts/build-assimp-wasm.sh
+          grep -Fq 'VERSION="5.4.3"' scripts/build-assimp-wasm.sh
+          grep -Fq '66dfbaee288f2bc43172440a55d0235dfc7bf885dda6435c038e8000e79582cb' scripts/build-assimp-wasm.sh
+          grep -Fq -- '-DBUILD_SHARED_LIBS=OFF' scripts/build-assimp-wasm.sh
+          grep -Fq -- '-DASSIMP_BUILD_GLTF_IMPORTER=ON' scripts/build-assimp-wasm.sh
+          grep -Fq -- '-DASSIMP_BUILD_OBJ_IMPORTER=ON' scripts/build-assimp-wasm.sh
+          grep -Fq -- '-DASSIMP_BUILD_FBX_IMPORTER=ON' scripts/build-assimp-wasm.sh
 
       - name: Apply compatibility patches in the disposable audit checkout
         working-directory: orcawasm
