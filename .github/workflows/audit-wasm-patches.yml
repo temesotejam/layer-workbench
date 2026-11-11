@@ -9,6 +9,7 @@ on:
       - "docs/WEB_PORT_SOURCE_AUDIT.md"
       - "scripts/adapt-orcawasm-v2.5.0.py"
       - "scripts/build-assimp-wasm.sh"
+      - "scripts/build-draco-wasm.sh"
   workflow_dispatch:
     inputs:
       orca_version:
@@ -84,6 +85,17 @@ jobs:
           grep -Fq -- '-DASSIMP_BUILD_GLTF_IMPORTER=ON' scripts/build-assimp-wasm.sh
           grep -Fq -- '-DASSIMP_BUILD_OBJ_IMPORTER=ON' scripts/build-assimp-wasm.sh
           grep -Fq -- '-DASSIMP_BUILD_FBX_IMPORTER=ON' scripts/build-assimp-wasm.sh
+
+      - name: Validate pinned Draco WASM dependency recipe
+        run: |
+          set -euo pipefail
+          bash -n scripts/build-draco-wasm.sh
+          grep -Fq 'VERSION="1.5.7"' scripts/build-draco-wasm.sh
+          grep -Fq '27b72ba2d5ff3d0a9814ad40d4cb88f8dc89a35491c0866d952473f8f9416b77' scripts/build-draco-wasm.sh
+          grep -Fq -- '-DDRACO_JS_GLUE=OFF' scripts/build-draco-wasm.sh
+          grep -Fq -- '-DBUILD_SHARED_LIBS=OFF' scripts/build-draco-wasm.sh
+          grep -Fq -- '-DDRACO_INSTALL=ON' scripts/build-draco-wasm.sh
+          grep -Fq 'draco::draco' scripts/build-draco-wasm.sh
 
       - name: Apply compatibility patches in the disposable audit checkout
         working-directory: orcawasm
