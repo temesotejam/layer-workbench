@@ -93,6 +93,16 @@ jobs:
               raise SystemExit("Could not find the expected Thread.cpp regex in OrcaWasm patcher.")
           source = source.replace(old_thread_pattern, new_thread_pattern, 1)
 
+          old_tbb_anchor = r"""r'(?s)^if \\(FLATPAK"""
+          new_tbb_anchor = r"""r'(?s)^elseif \\(FLATPAK"""
+          if old_tbb_anchor not in source:
+              raise SystemExit("Could not find the expected TBB CMake patch anchor in OrcaWasm patcher.")
+          source = source.replace(old_tbb_anchor, new_tbb_anchor, 1)
+          old_tbb_command = "'if (EMSCRIPTEN)\\n'"
+          new_tbb_command = "'elseif (EMSCRIPTEN)\\n'"
+          if old_tbb_command not in source:
+              raise SystemExit("Could not find the expected TBB Emscripten patch command in OrcaWasm patcher.")
+          source = source.replace(old_tbb_command, new_tbb_command, 1)
           path.write_text(source, encoding="utf-8")
           print("Adapted WallToolPathsParams and Thread.cpp patch anchors for v2.5.0.")
           PY
