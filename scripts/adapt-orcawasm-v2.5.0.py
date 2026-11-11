@@ -54,5 +54,19 @@ replace_once(
     "oneTBB Emscripten branch",
 )
 
+# The v2.5.0 desktop GUI embeds CPython through pybind11. The headless
+# SLIC3R_GUI=OFF WebAssembly target does not compile that GUI/plugin layer, so
+# do not require a native CPython interpreter/library during the WASM configure.
+replace_once(
+    "# Use bundled Python from deps instead of system Python\\n",
+    "if(NOT SLIC3R_WASM)\\n# Use bundled Python from deps instead of system Python\\n",
+    "skip desktop embedded-Python dependency for headless WASM",
+)
+replace_once(
+    "add_library(pybind11::embed ALIAS pybind11_embed)\\n",
+    "add_library(pybind11::embed ALIAS pybind11_embed)\\nendif()\\n",
+    "close desktop embedded-Python dependency block",
+)
+
 path.write_text(source, encoding="utf-8")
 print(f"Adapted OrcaWasm patcher for v2.5.0: {path}")
