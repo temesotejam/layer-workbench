@@ -103,6 +103,8 @@ jobs:
           grep -Fq -- '-DDRACO_JS_GLUE=OFF' scripts/build-draco-wasm.sh
           grep -Fq -- '-DBUILD_SHARED_LIBS=OFF' scripts/build-draco-wasm.sh
           grep -Fq -- '-DDRACO_INSTALL=ON' scripts/build-draco-wasm.sh
+          # Draco's legacy CMake requires the EMSCRIPTEN directory variable.
+          grep -Fq 'export EMSCRIPTEN="${EMSDK}/upstream/emscripten"' scripts/build-draco-wasm.sh
           grep -Fq 'draco::draco' scripts/build-draco-wasm.sh
 
       - name: Apply compatibility patches in the disposable audit checkout
