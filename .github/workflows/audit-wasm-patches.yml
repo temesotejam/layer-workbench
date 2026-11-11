@@ -77,7 +77,7 @@ jobs:
           source = path.read_text(encoding="utf-8")
 
           old_fields = r"""r'float   min_bead_width;\n    float   min_feature_size;\n    float   min_length_factor;\n    float   wall_transition_length;\n    float   wall_transition_angle;\n    float   wall_transition_filter_deviation;\n    int     wall_distribution_count;\n    bool    is_top_or_bottom_layer;',"""
-          new_fields = r"""r'float\s+min_bead_width\s*=\s*0\.f;.*?bool\s+is_top_or_bottom_layer\s*=\s*false;'"""
+          new_fields = r"""r'float\s+min_bead_width\s*=\s*0\.f;.*?bool\s+is_top_or_bottom_layer\s*=\s*false;',"""
           if old_fields not in source:
               raise SystemExit("Could not find the expected v2.4.2 WallToolPathsParams patch anchor in OrcaWasm patcher.")
           source = source.replace(old_fields, new_fields, 1)
