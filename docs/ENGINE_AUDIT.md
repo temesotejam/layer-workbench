@@ -108,3 +108,14 @@ The previous full build failed here:
 https://github.com/temesotejam/layer-workbench/actions/runs/42998864186
 
 The new adapter and workflow change have been committed. Their CI validation is now triggered. The next gate is whether CMake configure proceeds past the SLVS lookup and enters compilation.
+
+
+## 2026-11-11: CGAL 6.2.1 compatibility update
+
+Candidate run [#43010651336](https://github.com/temesotejam/layer-workbench/actions/runs/43010651336) confirmed that the headless `SLIC3R_CAD=OFF` setting resolved the previous SolveSpace/SLVS configuration blocker. The next CMake blocker was a **dependency version mismatch**: official OrcaSlicer v2.5.0 calls `find_package(CGAL 6.2 REQUIRED)` while the pinned OrcaWasm recipe installs CGAL 5.6.2.
+
+The v2.5.0 adapter now updates that **disposable** OrcaWasm recipe to CGAL 6.2.1, matching the version selected by OrcaSlicer's official `deps/CGAL/CGAL.cmake`. It also bumps the math dependency stamp to avoid incorrectly reusing a previously completed 5.6.2 install. The candidate workflow's dependency cache key is likewise versioned for CGAL 6.2.1, with its broad cross-version fallback removed.
+
+The candidate remains **unverified** until CMake configuration, C++ compilation, linking, API conformance, async binding and the real end-to-end `scripts/smoke-test.mjs` checks pass and the `.wasm` and `.js` artifacts are uploaded. A passing patch audit alone is **not** a successful WebAssembly build. Headless CAD/parametric design remains disabled in this candidate, not implemented.
+
+The full build remains manual-dispatch-only to prevent every small commit from launching an expensive rebuild. A controlled compatibility test run was queued for the CGAL change; the manual-only policy was then restored. A later workflow change adds the end-to-end smoke test to subsequent runs.
