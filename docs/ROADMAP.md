@@ -12,7 +12,7 @@
 - [x] Identify the current stable upstream target (v2.5.0).
 - [x] Identify the existing WebAssembly engine candidate and its v2.4.2 base.
 - [x] Identify the pthread/COOP/COEP deployment constraint.
-- [ ] Run and classify the compatibility patch dry-run against v2.5.0.
+- [x] Apply and verify the existing compatibility patch set against v2.5.0 in a disposable CI checkout.
 - [ ] Pin the exact v2.5.0 source commit and dependency revisions.
 - [ ] Audit every bundled dependency and license at exact revisions.
 - [x] Identify major desktop/WebAssembly architecture gaps and feature-level reuse candidates. See [WEB_PORT_SOURCE_AUDIT.md](WEB_PORT_SOURCE_AUDIT.md).
@@ -22,7 +22,7 @@
 - [ ] Port the engine from v2.4.2 to v2.5.0.
 - [x] Define the expanded browser editor API and capability model. See [BROWSER_ENGINE_API_PLAN.md](BROWSER_ENGINE_API_PLAN.md).
 - [ ] Complete the first native 3MF → viewport → transform → 3MF vertical slice (tracked in [Issue #2](https://github.com/temesotejam/layer-workbench/issues/2)).
-- [ ] Build the engine reproducibly in CI.
+- [ ] Build the engine reproducibly in CI (manual candidate workflow added: [build-wasm-candidate.yml](../.github/workflows/build-wasm-candidate.yml)).
 - [ ] Load and apply printer, filament, and process profiles.
 - [ ] Validate project import/export and G-code generation.
 - [ ] Add regression fixtures and compare outputs.
