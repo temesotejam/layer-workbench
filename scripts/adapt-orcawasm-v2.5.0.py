@@ -29,8 +29,8 @@ replace_once(
 
 # Make the existing pthread replacement tolerant of the upstream whitespace.
 replace_once(
-    r"""r"   \tpthread_setname_np\(thread\.native_handle\(\), thread_name\);" """.rstrip(),
-    r"""r"\s*pthread_setname_np\(thread\.native_handle\(\), thread_name\);" """.rstrip(),
+    r"""   \tpthread_setname_np\(thread\.native_handle\(\), thread_name\);""",
+    r"""\s*pthread_setname_np\(thread\.native_handle\(\), thread_name\);""",
     "Thread.cpp pthread regex",
 )
 
