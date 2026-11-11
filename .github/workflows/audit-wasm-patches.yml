@@ -82,6 +82,9 @@ jobs:
           grep -Fxq 'CGAL_VERSION=6.2.1' orcawasm/scripts/build-local-wsl.sh
           grep -Fq '.math_built_mt_native_eh_v2_cgal_6_2_1' orcawasm/scripts/build-local-wsl.sh
           grep -Fq -- '-DSLIC3R_CAD=OFF' orcawasm/scripts/build-local-wsl.sh
+          # v2.5.0 native Linux packaging copies FFmpeg .so files absent from WASM.
+          # Guard the staging call without altering upstream desktop behavior.
+          grep -Fq 'if (NOT APPLE AND NOT SLIC3R_WASM)' orcawasm/orca/src/CMakeLists.txt
 
       - name: Validate pinned Assimp WASM dependency recipe
         run: |
