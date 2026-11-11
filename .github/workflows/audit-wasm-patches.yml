@@ -97,11 +97,11 @@ jobs:
           print("Adapted WallToolPathsParams and Thread.cpp patch anchors for v2.5.0.")
           PY
 
-      - name: Dry-run existing compatibility patch set
+      - name: Apply compatibility patches in the disposable audit checkout
         working-directory: orcawasm
         run: |
           set -o pipefail
-          python3 patches/apply.py --check 2>&1 | tee "$GITHUB_WORKSPACE/patch-audit.log"
+          python3 patches/apply.py 2>&1 | tee "$GITHUB_WORKSPACE/patch-audit.log"
 
       - name: Fail if a required patch anchor no longer matches
         if: always()
