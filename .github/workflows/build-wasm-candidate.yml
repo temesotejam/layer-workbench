@@ -113,8 +113,9 @@ jobs:
           EXTRA_CXX_FLAGS: "-fwasm-exceptions -pthread"
           EXTRA_C_FLAGS: "-sSUPPORT_LONGJMP=wasm -pthread"
         run: |
+          set -o pipefail
           cd orcawasm
-          bash scripts/build-local-wsl.sh
+          bash scripts/build-local-wsl.sh 2>&1 | tee "$GITHUB_WORKSPACE/wasm-candidate-build.log"
 
       # The upstream build-local-wsl.sh builds all dependencies before CMake
       # configure. Preserve fully installed dependencies even if the subsequent
@@ -143,6 +144,39 @@ jobs:
             orcawasm/build-wasm/emscripten-cache-mt
             ~/.cache/ccache
           key: ${{ steps.deps-cache.outputs.cache-primary-key }}
+
+      # Preserve a short, searchable compiler/CMake failure excerpt when
+      # hosted GitHub Actions job-log retrieval is unavailable or times out.
+      # This is diagnostic-only: it never publishes an untested WASM binary.
+      - name: Capture failed build diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f wasm-candidate-build.log ]]; then
+            {
+              echo "## Error context"
+              grep -En -B 4 -A 10 '(FAILED:|error:|CMake Error|ninja: build stopped|undefined symbol|fatal error:)' wasm-candidate-build.log | tail -n 350 || true
+              echo
+              echo "## Final build output"
+              tail -n 100 wasm-candidate-build.log
+            } > wasm-candidate-failure.txt
+            {
+              echo "### Failed WASM candidate: diagnostic extract"
+              echo '```text'
+              tail -n 150 wasm-candidate-failure.txt
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload failed build diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-v2.5.0-failure-diagnostics
+          path: wasm-candidate-failure.txt
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Run API conformance tests
         working-directory: orcawasm

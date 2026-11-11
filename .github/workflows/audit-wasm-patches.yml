@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/audit-wasm-patches.yml"
+      - ".github/workflows/build-wasm-candidate.yml"
       - "upstream/stable.json"
       - "docs/WEB_PORT_SOURCE_AUDIT.md"
       - "scripts/adapt-orcawasm-v2.5.0.py"
