@@ -74,6 +74,11 @@ jobs:
       - name: Adapt the engine patcher to v2.5.0
         run: python3 scripts/adapt-orcawasm-v2.5.0.py orcawasm/patches/apply.py orcawasm/orca/CMakeLists.txt orcawasm/scripts/build-local-wsl.sh
 
+      - name: Verify headless CMake excludes native FFmpeg packaging
+        run: |
+          set -euo pipefail
+          grep -Fq 'if (NOT APPLE AND NOT SLIC3R_WASM)' orcawasm/orca/src/CMakeLists.txt
+
       - name: Build Assimp 5.4.3 for WebAssembly
         env:
           EMSDK: /opt/emsdk
