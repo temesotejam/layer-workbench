@@ -1,0 +1,8 @@
+{
+  "upstream": "https://github.com/OrcaSlicer/OrcaSlicer",
+  "latest_stable_seen": "v2.5.0",
+  "release_url": "https://github.com/OrcaSlicer/OrcaSlicer/releases/tag/v2.5.0",
+  "published_at": "2026-11-07",
+  "integration_status": "pending",
+  "note": "This is the current stable integration target, not a claim that the browser engine supports this version yet."
+}
