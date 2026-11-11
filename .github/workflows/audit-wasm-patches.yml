@@ -93,6 +93,24 @@ jobs:
           grep -Fq 'inset_count > std::numeric_limits<size_t>::max() / 2' orcawasm/orca/src/libslic3r/Arachne/WallToolPaths.cpp
           grep -Fq '? std::numeric_limits<size_t>::max()' orcawasm/orca/src/libslic3r/Arachne/WallToolPaths.cpp
 
+      - name: Verify WASM-only OpenCV texture-source exclusion
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          cmake = Path("orcawasm/orca/src/libslic3r/CMakeLists.txt").read_text(encoding="utf-8")
+          guard = (
+              "if(SLIC3R_WASM)\n"
+              "    list(REMOVE_ITEM lisbslic3r_sources\n"
+              "        TexturePainting.cpp\n"
+              "        TextureToColor/TextureToColor.cpp\n"
+              "    )\n"
+              "endif()"
+          )
+          if cmake.count(guard) != 1:
+              raise SystemExit("WASM-only OpenCV texture guard missing or duplicated")
+          PY
+
       - name: Validate pinned Assimp WASM dependency recipe
         run: |
           set -euo pipefail
