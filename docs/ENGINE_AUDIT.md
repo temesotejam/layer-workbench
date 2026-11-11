@@ -154,3 +154,10 @@ For the next run, the heavyweight candidate workflow replaces the redundant APT 
 The update does not change upstream OrcaSlicer, OrcaWasm dependency sources, public deployed assets, or licensing. The new audit and full candidate run were triggered by the workflow changes. A passing tool bootstrap still does **not** establish successful configuration, C++ linking, API conformance, async binding, smoke tests, or generated `.wasm` artifacts.
 
 Relevant runner inventory: https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2404-Readme.md
+
+
+## 2026-11-12 JST: Draco 1.5.7 EMSCRIPTEN environment fix
+
+Candidate [#43060635931](https://github.com/temesotejam/layer-workbench/actions/runs/43060635931) failed in `Build Draco 1.5.7 for WebAssembly` before the main engine build. Draco's `cmake/draco_emscripten.cmake` requires the `$EMSCRIPTEN` environment variable to point to an existing Emscripten directory; `emcmake` alone did not populate that variable on the GitHub Actions runner. The observed error was: `The EMSCRIPTEN environment variable must be set.`
+
+`build-draco-wasm.sh` now exports `EMSCRIPTEN=${EMSDK}/upstream/emscripten` after sourcing `emsdk_env.sh`, with a directory-existence check before CMake. The candidate workflow also passes the same path in the Draco step environment. The patch audit checks that requirement and [#43075820733](https://github.com/temesotejam/layer-workbench/actions/runs/43075820733) passed. A new candidate [#43075897333](https://github.com/temesotejam/layer-workbench/actions/runs/43075897333) was queued. This fixes the observed missing-variable failure only; Draco compilation, the complete engine, API conformance/binding/smoke tests, and WASM artifact creation are still **not proven** at this point.
