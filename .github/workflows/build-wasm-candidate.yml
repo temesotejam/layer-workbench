@@ -84,6 +84,8 @@ jobs:
       - name: Build Draco 1.5.7 for WebAssembly
         env:
           EMSDK: /opt/emsdk
+          # Draco 1.5.7 explicitly tests $ENV{EMSCRIPTEN} in CMake.
+          EMSCRIPTEN: /opt/emsdk/upstream/emscripten
           EXTRA_CXX_FLAGS: "-fwasm-exceptions -pthread"
           EXTRA_C_FLAGS: "-sSUPPORT_LONGJMP=wasm -pthread"
         run: bash scripts/build-draco-wasm.sh
