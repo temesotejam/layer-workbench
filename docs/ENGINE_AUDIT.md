@@ -35,6 +35,21 @@ Documented support includes session/configuration, project manifests, slicing, r
 
 Documented limitations include STEP not being accepted as a project mesh directly (convert to STL first), mapped STEP previews unsupported, project face attributes unsupported, and certain native modifier volume types failing explicitly. This feature list is from the engine README and is not equivalent to the complete desktop UI or all desktop features.
 
+## v2.5.0 compatibility patch audit result
+
+On 2026-11-11, GitHub Actions cloned the current OrcaWasm source and the official OrcaSlicer v2.5.0 tag, applied the v2.5.0-specific patcher adapter, and ran the upstream compatibility patcher in a disposable CI checkout.
+
+Result: **all existing compatibility patches applied successfully; no missing patch anchors or fatal patcher checks remained.** The successful run is recorded at:
+https://github.com/temesotejam/layer-workbench/actions/runs/42980109816
+
+The adapter updates the existing OrcaWasm patcher for:
+- v2.5.0's already-initialized Arachne parameter fields;
+- the updated POSIX thread-naming source layout;
+- the v2.5.0 oneTBB CMake file, which now has an MSVC branch before the FLATPAK branch.
+
+This is a source-patching compatibility result only. **It does not prove that the WebAssembly engine compiles, links, runs, or matches desktop output.** The next validation is the manual full build workflow:
+https://github.com/temesotejam/layer-workbench/actions/workflows/build-wasm-candidate.yml
+
 ## v2.5.0 upgrade risk
 
 The official v2.5.0 release notes describe a major release with many changes, including Python plugins, belt-printer support, filament color mixing, texture displacement, experimental parametric design, IDEX/IQEX multi-part printing, toolhead collision volumes, travel planning, and many fixes.
