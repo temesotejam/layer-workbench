@@ -111,6 +111,17 @@ jobs:
               raise SystemExit("WASM-only OpenCV texture guard missing or duplicated")
           PY
 
+      - name: Verify WASM uses exact Voronoi predicates, not unsupported rounding filters
+        shell: bash
+        run: |
+          set -euo pipefail
+          file=orcawasm/orca/src/libslic3r/Geometry/VoronoiUtilsCgal.cpp
+          grep -Fq 'using ParabolicTangentToSegmentOrientationPredicateFiltered = ExactWasmPredicate<' "$file"
+          grep -Fq 'using ParabolicTangentToParabolicTangentOrientationPredicateFiltered = ExactWasmPredicate<' "$file"
+          grep -Fq '#if defined(SLIC3R_WASM) && defined(ARACHNE_DEBUG)' "$file"
+          grep -Fq '#include <CGAL/Surface_sweep_2_algorithms.h>' "$file"
+          grep -Fq '#if !defined(SLIC3R_WASM)' "$file"
+
       - name: Validate pinned Assimp WASM dependency recipe
         run: |
           set -euo pipefail
