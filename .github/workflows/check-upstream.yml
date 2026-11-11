@@ -49,7 +49,8 @@ jobs:
 
           title="Stable upstream release detected: $tag"
           existing="$(gh issue list --state open --limit 100 --json number,title \
-            --jq ".[] | select(.title == \"$title\") | .number" | head -n 1 || true)"
+            | jq -r --arg title "$title" '.[] | select(.title == $title) | .number' \
+            | head -n 1 || true)"
 
           if [[ -n "$existing" ]]; then
             echo "Tracking issue already exists: #$existing"
@@ -72,7 +73,7 @@ jobs:
           - [ ] Build the engine reproducibly.
           - [ ] Run API, model, profile, 3MF, and G-code regression tests.
           - [ ] Validate the browser deployment.
-          - [ ] Update `upstream/stable.json` only after successful integration.
+          - [ ] Update upstream/stable.json only after successful integration.
           EOF
 
           gh issue create --title "$title" --body-file /tmp/issue-body.md
