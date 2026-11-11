@@ -2,12 +2,6 @@ name: Build v2.5.0 WebAssembly candidate
 
 on:
   workflow_dispatch:
-  # Temporary one-shot trigger: run the next CGAL compatibility fix as soon as
-  # the adapter file changes; this will be removed after the run is queued.
-  push:
-    branches: [main]
-    paths:
-      - "scripts/adapt-orcawasm-v2.5.0.py"
 
 permissions:
   contents: read
