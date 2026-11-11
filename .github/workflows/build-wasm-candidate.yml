@@ -64,8 +64,9 @@ jobs:
             orcawasm/deps-install
             orcawasm/build-wasm/emscripten-cache-mt
             ~/.cache/ccache
-          key: wasm-v2.5.0-emsdk-3.1.74-cgal-6.2.1-assimp-5.4.3-occt-7.8.1-onetbb-2021.13.2-native-eh-v3-${{ runner.os }}-${{ github.run_id }}
+          key: wasm-v2.5.0-emsdk-3.1.74-cgal-6.2.1-assimp-5.4.3-draco-1.5.7-occt-7.8.1-onetbb-2021.13.2-native-eh-v4-${{ runner.os }}-${{ github.run_id }}
           restore-keys: |
+            wasm-v2.5.0-emsdk-3.1.74-cgal-6.2.1-assimp-5.4.3-draco-1.5.7-occt-7.8.1-onetbb-2021.13.2-native-eh-v4-${{ runner.os }}-
             wasm-v2.5.0-emsdk-3.1.74-cgal-6.2.1-assimp-5.4.3-occt-7.8.1-onetbb-2021.13.2-native-eh-v3-${{ runner.os }}-
 
       - name: Adapt the engine patcher to v2.5.0
@@ -77,6 +78,13 @@ jobs:
           EXTRA_CXX_FLAGS: "-fwasm-exceptions -pthread"
           EXTRA_C_FLAGS: "-sSUPPORT_LONGJMP=wasm -pthread"
         run: bash scripts/build-assimp-wasm.sh
+
+      - name: Build Draco 1.5.7 for WebAssembly
+        env:
+          EMSDK: /opt/emsdk
+          EXTRA_CXX_FLAGS: "-fwasm-exceptions -pthread"
+          EXTRA_C_FLAGS: "-sSUPPORT_LONGJMP=wasm -pthread"
+        run: bash scripts/build-draco-wasm.sh
 
       - name: Build OrcaSlicer v2.5.0 as WebAssembly
         env:
@@ -103,6 +111,7 @@ jobs:
         shell: bash
         run: |
           if [[ -f orcawasm/deps-install/.assimp_5.4.3_wasm_mt_eh_v1 &&
+                -f orcawasm/deps-install/.draco_1.5.7_wasm_mt_eh_v1 &&
                 -f orcawasm/deps-install/.math_built_mt_native_eh_v2_cgal_6_2_1 &&
                 -f orcawasm/deps-install/.onetbb_v2021.13.2_native_eh_v1 ]]; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
