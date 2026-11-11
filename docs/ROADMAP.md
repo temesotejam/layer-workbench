@@ -15,7 +15,8 @@
 - [ ] Run and classify the compatibility patch dry-run against v2.5.0.
 - [ ] Pin the exact v2.5.0 source commit and dependency revisions.
 - [ ] Audit every bundled dependency and license at exact revisions.
-- [ ] Identify gaps between desktop features and the engine API.
+- [x] Identify major desktop/WebAssembly architecture gaps and feature-level reuse candidates. See [WEB_PORT_SOURCE_AUDIT.md](WEB_PORT_SOURCE_AUDIT.md).
+- [ ] Validate the Texture Displacement core and OpenCV-dependent paths in an actual WASM build.
 
 ## Phase 2 — Engine port
 - [ ] Port the engine from v2.4.2 to v2.5.0.
