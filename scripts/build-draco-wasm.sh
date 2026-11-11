@@ -7,6 +7,14 @@ set -euo pipefail
 EMSDK="${EMSDK:-/opt/emsdk}"
 source "${EMSDK}/emsdk_env.sh"
 
+# Draco 1.5.7 checks the EMSCRIPTEN directory explicitly in its CMake
+# configuration; emcmake alone does not guarantee this legacy variable.
+export EMSCRIPTEN="${EMSDK}/upstream/emscripten"
+if [[ ! -d "${EMSCRIPTEN}" ]]; then
+  echo "::error::Emscripten toolchain directory missing: ${EMSCRIPTEN}" >&2
+  exit 1
+fi
+
 WORKSPACE="${GITHUB_WORKSPACE:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 INSTALL="${WORKSPACE}/orcawasm/deps-install"
 VERSION="1.5.7"
