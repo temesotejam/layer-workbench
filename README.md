@@ -2,11 +2,11 @@
 
 A personal browser-based workspace for 3D-print preparation.
 
-This repository is maintained primarily for the owner's own use. It is intended to provide a browser-accessible interface while preserving the behavior, settings model, project compatibility, and slicing results of the upstream desktop slicer as closely as technically possible.
+This repository is maintained primarily for the owner's own use. It aims to provide a browser-accessible environment while preserving the behavior, settings model, project compatibility, and slicing results of the upstream desktop slicer as closely as technically possible.
 
 ## Project principles
 
-- Track upstream **stable releases**; do not follow beta, release-candidate, or nightly builds.
+- Track upstream **stable releases only**; do not follow beta, release-candidate, or nightly builds.
 - Prefer the upstream C++ slicing implementation over a separately implemented slicer.
 - Keep browser/UI adaptation code separate from upstream engine code.
 - Preserve printer, filament, process, project, and G-code behavior wherever the browser port supports it.
@@ -18,24 +18,19 @@ This repository is maintained primarily for the owner's own use. It is intended 
 
 This repository is at the initial project-scaffolding stage. It does **not** yet contain a working slicer engine, printer profiles, or a functional slicing workflow. The initial website is only a project shell.
 
-The intended technical investigation starts with the existing WebAssembly port and its exact upstream version, API, build process, supported features, and license obligations. A desktop application and a browser application are not automatically feature-equivalent; unsupported features must be identified rather than represented as complete.
+The current stable integration target is **v2.5.0**, but it is **not yet supported** by this workspace. The existing WebAssembly engine candidate is based on v2.4.2 and requires a substantial compatibility audit and port before it can be considered for use. See [the engine audit](docs/ENGINE_AUDIT.md) and [the v2.5.0 integration issue](https://github.com/temesotejam/layer-workbench/issues/1).
 
-## Stable-release update policy
+## Stable-release tracking
 
-The planned updater will:
+A scheduled GitHub Actions workflow checks the official upstream stable release once per day. When a new stable tag appears beyond the current integration baseline, it opens a tracking issue. Detection does not imply compatibility, trigger an unverified deployment, or automatically advance the supported version.
 
-1. Detect new stable upstream releases (excluding prereleases).
-2. Pin the exact upstream tag and commit used for each engine build.
-3. attempt a reproducible WebAssembly build.
-4. Run engine/API, sample-project, G-code, and browser smoke tests.
-5. Publish only after all required checks pass.
-6. Retain the previous known-good engine and deployment on failure.
-
-A detected release is not considered supported until the build and compatibility tests pass.
+The integration baseline in [upstream/stable.json](upstream/stable.json) must only be advanced after a successful build and the required compatibility tests.
 
 ## Deployment
 
-The static site is deployed from the `main` branch using GitHub Actions and GitHub Pages. The Pages site is public; do not put credentials, private printer data, personal files, or secrets in this repository or in client-side application code.
+The static site is intended to deploy from the `main` branch using GitHub Actions and GitHub Pages. The Pages site is public; do not put credentials, private printer data, personal files, or secrets in this repository or in client-side application code.
+
+The candidate multithreaded engine requires `SharedArrayBuffer` and cross-origin isolation. GitHub Pages does not expose arbitrary response headers; the service-worker workaround and actual browser compatibility have not yet been validated. Hosting may need to change if isolation cannot be made reliable. See [the engine audit](docs/ENGINE_AUDIT.md).
 
 ## Licensing and upstream notices
 
