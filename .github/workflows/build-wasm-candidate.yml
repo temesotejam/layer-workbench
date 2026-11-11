@@ -89,6 +89,11 @@ jobs:
         working-directory: orcawasm
         run: node scripts/binding-test.mjs --wasm-dir artifacts
 
+      - name: Run end-to-end engine smoke test
+        working-directory: orcawasm
+        timeout-minutes: 20
+        run: node scripts/smoke-test.mjs --wasm-dir artifacts
+
       - name: Record build metadata
         if: always()
         run: |
