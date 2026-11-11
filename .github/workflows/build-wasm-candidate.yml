@@ -29,33 +29,12 @@ jobs:
         with:
           node-version: 26
 
-      - name: Install build tools
+      # GitHub-hosted Ubuntu 24.04 already ships the build toolchain.
+      # Avoid apt-get: Azure Ubuntu mirror DNS failed repeatedly even with
+      # 3 retries (run #43051471275), before CMake could start.
+      - name: Verify preinstalled build tools (APT-free)
         shell: bash
-        run: |
-          set -euo pipefail
-          # Fail on partial apt index downloads, and retry temporary network/DNS
-          # failures without making upstream source or dependency modifications.
-          for attempt in 1 2 3; do
-            if sudo apt-get update -qq \
-                -o APT::Update::Error-Mode=any \
-                -o Acquire::Retries=2 \
-                -o Acquire::http::Timeout=30 \
-                -o Acquire::https::Timeout=30 &&
-              sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
-                -o Acquire::Retries=2 \
-                -o Acquire::http::Timeout=30 \
-                -o Acquire::https::Timeout=30 \
-                build-essential clang ninja-build python3 cmake pkg-config \
-                m4 texinfo libssl-dev ccache git curl unzip zip; then
-              break
-            fi
-            if [[ "$attempt" -eq 3 ]]; then
-              echo "::error::apt index/package downloads failed after 3 attempts"
-              exit 1
-            fi
-            echo "::warning::apt attempt $attempt failed; retrying transient network error"
-            sleep $((15 * attempt))
-          done
+        run: bash scripts/prepare-wasm-runner.sh
 
       - name: Clone and pin the WebAssembly engine source
         run: |
