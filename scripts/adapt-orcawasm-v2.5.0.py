@@ -64,7 +64,7 @@ replace_once(
 )
 replace_once(
     "add_library(pybind11::embed ALIAS pybind11_embed)\n",
-    "add_library(pybind11::embed ALIAS pybind11_embed)\n",
+    "add_library(pybind11::embed ALIAS pybind11_embed)\nendif()\n",
     "close desktop embedded-Python dependency block",
 )
 
