@@ -7,7 +7,6 @@ on:
     paths:
       - ".github/workflows/build-wasm-candidate.yml"
       - "scripts/adapt-orcawasm-v2.5.0.py"
-      - "docs/ENGINE_AUDIT.md"
 
 permissions:
   contents: read
