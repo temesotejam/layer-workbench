@@ -22,7 +22,8 @@ permissions:
 
 jobs:
   patch-audit:
-    runs-on: ubuntu-latest
+    # Keep the CI image stable while validating the fixed v2.5.0 port.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Checkout workspace
