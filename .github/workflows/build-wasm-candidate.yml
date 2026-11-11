@@ -2,6 +2,12 @@ name: Build v2.5.0 WebAssembly candidate
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/build-wasm-candidate.yml"
+      - "scripts/adapt-orcawasm-v2.5.0.py"
+      - "docs/ENGINE_AUDIT.md"
 
 permissions:
   contents: read
@@ -30,8 +36,10 @@ jobs:
             build-essential clang ninja-build python3 cmake pkg-config \
             m4 texinfo libssl-dev ccache git curl unzip zip
 
-      - name: Clone the WebAssembly engine source
-        run: git clone --depth 1 https://github.com/Hiosdra/OrcaWasm.git orcawasm
+      - name: Clone and pin the WebAssembly engine source
+        run: |
+          git clone https://github.com/Hiosdra/OrcaWasm.git orcawasm
+          git -C orcawasm checkout 60a09e04f1990be39c8f6f35dffef1a2c9e224c4
 
       - name: Cache Emscripten SDK
         id: cache-emsdk
@@ -91,7 +99,7 @@ jobs:
           {
             echo "## WebAssembly candidate"
             echo "- Target upstream: OrcaSlicer v2.5.0"
-            echo "- WebAssembly source: Hiosdra/OrcaWasm"
+            echo "- WebAssembly source: Hiosdra/OrcaWasm@60a09e04f1990be39c8f6f35dffef1a2c9e224c4"
             echo "- WebAssembly source commit: $(git -C orcawasm rev-parse HEAD 2>/dev/null || echo unavailable)"
             echo "- Upstream source commit: $(git -C orcawasm/orca rev-parse HEAD 2>/dev/null || echo unavailable)"
           } >> "$GITHUB_STEP_SUMMARY"
