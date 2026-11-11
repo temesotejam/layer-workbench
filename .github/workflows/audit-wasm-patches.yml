@@ -1,0 +1,76 @@
+name: Audit WebAssembly patches against stable source
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/audit-wasm-patches.yml"
+      - "upstream/stable.json"
+  workflow_dispatch:
+    inputs:
+      orca_version:
+        description: "Stable upstream tag to audit"
+        required: true
+        default: "v2.5.0"
+
+permissions:
+  contents: read
+
+jobs:
+  patch-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout workspace
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve target version
+        id: target
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            version="${{ inputs.orca_version }}"
+          else
+            version="$(jq -r '.latest_stable_seen' upstream/stable.json)"
+          fi
+          if [[ ! "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Expected a stable semantic version tag, got: $version"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch WebAssembly port and target upstream source
+        env:
+          ORCA_VERSION: ${{ steps.target.outputs.version }}
+        run: |
+          set -euo pipefail
+          git clone --depth 1 https://github.com/Hiosdra/OrcaWasm.git orcawasm
+          git clone --depth 1 --branch "$ORCA_VERSION" \
+            https://github.com/OrcaSlicer/OrcaSlicer.git orcawasm/orca
+          {
+            echo "## Patch audit target"
+            echo "- WebAssembly port commit: $(git -C orcawasm rev-parse HEAD)"
+            echo "- Upstream source tag: $ORCA_VERSION"
+            echo "- Upstream source commit: $(git -C orcawasm/orca rev-parse HEAD)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Dry-run existing compatibility patch set
+        working-directory: orcawasm
+        run: |
+          set -o pipefail
+          python3 patches/apply.py --check 2>&1 | tee "$GITHUB_WORKSPACE/patch-audit.log"
+
+      - name: Upload patch audit log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: patch-audit-${{ steps.target.outputs.version }}
+          path: patch-audit.log
+          if-no-files-found: ignore
+          retention-days: 30
