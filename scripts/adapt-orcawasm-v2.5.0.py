@@ -83,6 +83,40 @@ src_source = src_source.replace(
 )
 orca_src_cmake.write_text(src_source, encoding="utf-8")
 
+# The pinned OrcaWasm OpenCV finder is a stub, not an image-processing
+# library. v2.5.0 added texture conversion implementations which include real
+# opencv2 headers; these fail to compile in Emscripten. Keep all model import
+# and texture metadata structures, but exclude only the two OpenCV-dependent
+# .cpp translation units from this headless WASM build. The native desktop
+# build remains unchanged. Texture-to-color conversion must be marked
+# unsupported until a real OpenCV WASM port and functional tests are added.
+libslic3r_cmake = orca_cmake.parent / "src" / "libslic3r" / "CMakeLists.txt"
+libslic3r_source = libslic3r_cmake.read_text(encoding="utf-8")
+texture_sources = (
+    "    TexturePainting.cpp\n",
+    "    TextureToColor/TextureToColor.cpp\n",
+)
+for texture_source in texture_sources:
+    if libslic3r_source.count(texture_source) != 1:
+        raise SystemExit(f"Expected v2.5.0 texture source missing or duplicated: {texture_source}")
+source_list_anchor = "add_library(libslic3r STATIC ${lisbslic3r_sources}\n"
+if libslic3r_source.count(source_list_anchor) != 1:
+    raise SystemExit("Expected v2.5.0 libslic3r library anchor missing")
+wasm_texture_guard = """# WASM limitation: OpenCV-dependent texture-to-color conversion is not ported.
+if(SLIC3R_WASM)
+    list(REMOVE_ITEM lisbslic3r_sources
+        TexturePainting.cpp
+        TextureToColor/TextureToColor.cpp
+    )
+endif()
+
+"""
+libslic3r_source = libslic3r_source.replace(
+    source_list_anchor, wasm_texture_guard + source_list_anchor, 1
+)
+libslic3r_cmake.write_text(libslic3r_source, encoding="utf-8")
+
+
 # OrcaSlicer v2.5.0 compares a size_t inset count against a 64-bit coord_t
 # limit. On wasm32 the comparison is always true, and the fallback narrows
 # INT64_MAX to 32 bits; both diagnostics are fatal under -Werror. Saturate
