@@ -61,6 +61,37 @@ jobs:
             echo "- Upstream source commit: $(git -C orcawasm/orca rev-parse HEAD)"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Adapt known compatibility patch anchors for v2.5.0
+        env:
+          ORCA_VERSION: ${{ steps.target.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ "$ORCA_VERSION" != "v2.5.0" ]]; then
+            echo "No version-specific patcher adapter is defined for $ORCA_VERSION."
+            exit 1
+          fi
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("orcawasm/patches/apply.py")
+          source = path.read_text(encoding="utf-8")
+
+          old_fields = r"""r'float   min_bead_width;\n    float   min_feature_size;\n    float   min_length_factor;\n    float   wall_transition_length;\n    float   wall_transition_angle;\n    float   wall_transition_filter_deviation;\n    int     wall_distribution_count;\n    bool    is_top_or_bottom_layer;',"""
+          new_fields = r"""r'float\s+min_bead_width\s*=\s*0\.f;\s*\n\s*float\s+min_feature_size\s*=\s*0\.f;\s*\n\s*float\s+min_length_factor\s*=\s*0\.5f;\s*\n\s*float\s+wall_transition_length\s*=\s*0\.f;\s*\n\s*float\s+wall_transition_angle\s*=\s*10\.f;\s*\n\s*float\s+wall_transition_filter_deviation\s*=\s*0\.f;\s*\n\s*int\s+wall_distribution_count\s*=\s*1;\s*\n\s*bool\s+is_top_or_bottom_layer\s*=\s*false;',"""
+          if old_fields not in source:
+              raise SystemExit("Could not find the expected v2.4.2 WallToolPathsParams patch anchor in OrcaWasm patcher.")
+          source = source.replace(old_fields, new_fields, 1)
+
+          old_thread = r"   \\tpthread_setname_np\\(thread\\.native_handle\\(\\), thread_name\\);"
+          new_thread = r"\\s*pthread_setname_np\\(thread\\.native_handle\\(\\), thread_name\\);"
+          if old_thread not in source:
+              raise SystemExit("Could not find the expected v2.4.2 pthread patch anchor in OrcaWasm patcher.")
+          source = source.replace(old_thread, new_thread, 1)
+
+          path.write_text(source, encoding="utf-8")
+          print("Adapted WallToolPathsParams and Thread.cpp patch anchors for v2.5.0.")
+          PY
+
       - name: Dry-run existing compatibility patch set
         working-directory: orcawasm
         run: |
