@@ -63,7 +63,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Adapt known compatibility patch anchors for v2.5.0
-        run: python3 scripts/adapt-orcawasm-v2.5.0.py orcawasm/patches/apply.py
+        run: python3 scripts/adapt-orcawasm-v2.5.0.py orcawasm/patches/apply.py orcawasm/orca/CMakeLists.txt
 
       - name: Apply compatibility patches in the disposable audit checkout
         working-directory: orcawasm
