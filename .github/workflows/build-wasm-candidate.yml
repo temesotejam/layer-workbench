@@ -79,6 +79,12 @@ jobs:
           set -euo pipefail
           grep -Fq 'if (NOT APPLE AND NOT SLIC3R_WASM)' orcawasm/orca/src/CMakeLists.txt
 
+      - name: Verify wasm32-safe Arachne bead-count saturation
+        run: |
+          set -euo pipefail
+          grep -Fq 'inset_count > std::numeric_limits<size_t>::max() / 2' orcawasm/orca/src/libslic3r/Arachne/WallToolPaths.cpp
+          grep -Fq '? std::numeric_limits<size_t>::max()' orcawasm/orca/src/libslic3r/Arachne/WallToolPaths.cpp
+
       - name: Build Assimp 5.4.3 for WebAssembly
         env:
           EMSDK: /opt/emsdk

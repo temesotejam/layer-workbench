@@ -161,3 +161,12 @@ Relevant runner inventory: https://github.com/actions/runner-images/blob/main/im
 Candidate [#43060635931](https://github.com/temesotejam/layer-workbench/actions/runs/43060635931) failed in `Build Draco 1.5.7 for WebAssembly` before the main engine build. Draco's `cmake/draco_emscripten.cmake` requires the `$EMSCRIPTEN` environment variable to point to an existing Emscripten directory; `emcmake` alone did not populate that variable on the GitHub Actions runner. The observed error was: `The EMSCRIPTEN environment variable must be set.`
 
 `build-draco-wasm.sh` now exports `EMSCRIPTEN=${EMSDK}/upstream/emscripten` after sourcing `emsdk_env.sh`, with a directory-existence check before CMake. The candidate workflow also passes the same path in the Draco step environment. The patch audit checks that requirement and [#43075820733](https://github.com/temesotejam/layer-workbench/actions/runs/43075820733) passed. A new candidate [#43075897333](https://github.com/temesotejam/layer-workbench/actions/runs/43075897333) was queued. This fixes the observed missing-variable failure only; Draco compilation, the complete engine, API conformance/binding/smoke tests, and WASM artifact creation are still **not proven** at this point.
+
+
+## 2026-11-12 04:45 JST: Arachne wasm32 bead-count compiler failure
+
+Candidate [#43080815436](https://github.com/temesotejam/layer-workbench/actions/runs/43080815436) reached the native OrcaSlicer C++ compile phase (100 of 342 Ninja steps) after the CGAL/Assimp/Draco and CMake fixes. It failed in `src/libslic3r/Arachne/WallToolPaths.cpp:535` under Emscripten's `-Werror` flags. The `inset_count` operand is a 32-bit `size_t` on wasm32, whereas the original comparison uses the 64-bit signed `coord_t` maximum; Clang diagnoses an always-true comparison and narrowing of `INT64_MAX` to 32-bit `size_t`.
+
+The disposable v2.5.0 adapter now uses a mathematically bounded `size_t` saturation check before doubling: `inset_count > SIZE_MAX / 2 ? SIZE_MAX : 2 * inset_count`. This removes the compiler diagnostics and also prevents overflow for large counts without disabling warnings. The compatibility audit and candidate workflow now explicitly assert that the rewritten condition exists. No upstream history, licensing, desktop sources in this repository, or public site assets are modified.
+
+This source-level fix must pass a fresh patch audit and full compilation before it is considered validated. API conformance, async binding, end-to-end smoke tests, and WASM artifacts remain unverified.

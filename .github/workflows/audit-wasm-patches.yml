@@ -86,6 +86,12 @@ jobs:
           # Guard the staging call without altering upstream desktop behavior.
           grep -Fq 'if (NOT APPLE AND NOT SLIC3R_WASM)' orcawasm/orca/src/CMakeLists.txt
 
+      - name: Verify wasm32-safe Arachne bead-count saturation
+        run: |
+          set -euo pipefail
+          grep -Fq 'inset_count > std::numeric_limits<size_t>::max() / 2' orcawasm/orca/src/libslic3r/Arachne/WallToolPaths.cpp
+          grep -Fq '? std::numeric_limits<size_t>::max()' orcawasm/orca/src/libslic3r/Arachne/WallToolPaths.cpp
+
       - name: Validate pinned Assimp WASM dependency recipe
         run: |
           set -euo pipefail

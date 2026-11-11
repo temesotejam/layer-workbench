@@ -83,6 +83,23 @@ src_source = src_source.replace(
 )
 orca_src_cmake.write_text(src_source, encoding="utf-8")
 
+# OrcaSlicer v2.5.0 compares a size_t inset count against a 64-bit coord_t
+# limit. On wasm32 the comparison is always true, and the fallback narrows
+# INT64_MAX to 32 bits; both diagnostics are fatal under -Werror. Saturate
+# in size_t's own range instead, with no overflow in the doubling operation.
+# The edit is restricted to CI's disposable upstream source checkout.
+wall_paths = orca_cmake.parent / "src" / "libslic3r" / "Arachne" / "WallToolPaths.cpp"
+wall_source = wall_paths.read_text(encoding="utf-8")
+old_bead_count = "    const size_t max_bead_count = (inset_count < std::numeric_limits<coord_t>::max() / 2) ? 2 * inset_count : std::numeric_limits<coord_t>::max();"
+new_bead_count = (
+    "    const size_t max_bead_count = (inset_count > std::numeric_limits<size_t>::max() / 2)\n"
+    "        ? std::numeric_limits<size_t>::max()\n"
+    "        : 2 * inset_count;"
+)
+if wall_source.count(old_bead_count) != 1:
+    raise SystemExit("Expected v2.5.0 Arachne bead-count overflow guard anchor not found")
+wall_paths.write_text(wall_source.replace(old_bead_count, new_bead_count, 1), encoding="utf-8")
+
 # The browser engine build does not include the desktop Parametric Design tab.
 # v2.5.0 defaults SLIC3R_CAD=ON and therefore requires the native SolveSpace
 # (SLVS) package, which the current WASM dependency set does not build. Keep
