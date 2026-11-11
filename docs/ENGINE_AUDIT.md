@@ -50,6 +50,20 @@ The adapter updates the existing OrcaWasm patcher for:
 This is a source-patching compatibility result only. **It does not prove that the WebAssembly engine compiles, links, runs, or matches desktop output.** The next validation is the manual full build workflow:
 https://github.com/temesotejam/layer-workbench/actions/workflows/build-wasm-candidate.yml
 
+## Full-build attempt: desktop embedded Python dependency
+
+The first full v2.5.0 CMake configure reached the root project but failed at the desktop embedded-Python block. v2.5.0 now requires an exact bundled CPython 3.12.13 interpreter and embed library, while the existing headless WASM build does not build that dependency. The failing check was `find_package(Python3 3.12.13 EXACT COMPONENTS Interpreter Development.Embed)`.
+
+The current WASM candidate is configured with `SLIC3R_GUI=OFF`; the Python embed target is consumed by the desktop GUI/plugin target. The v2.5.0 adapter now wraps the embedded-Python/pybind11 setup in `if(NOT SLIC3R_WASM)` for the headless engine build. This deliberately does **not** claim that desktop Python plugins are supported in the browser; that remains a separate feature-parity item.
+
+The corrected adapter has passed the compatibility patch audit again:
+https://github.com/temesotejam/layer-workbench/actions/runs/42998697619
+
+A new full WebAssembly candidate build is currently running:
+https://github.com/temesotejam/layer-workbench/actions/runs/42998697663
+
+Do not mark the engine as v2.5.0-supported until this build reaches the compile/link stage and the API, smoke, and binding tests pass.
+
 ## v2.5.0 upgrade risk
 
 The official v2.5.0 release notes describe a major release with many changes, including Python plugins, belt-printer support, filament color mixing, texture displacement, experimental parametric design, IDEX/IQEX multi-part printing, toolhead collision volumes, travel planning, and many fixes.
