@@ -7,8 +7,8 @@ modify OrcaSlicer upstream or commit upstream source into this repository.
 from pathlib import Path
 import sys
 
-if len(sys.argv) != 2:
-    raise SystemExit("usage: adapt-orcawasm-v2.5.0.py <path-to-orcawasm/patches/apply.py>")
+if len(sys.argv) != 3:
+    raise SystemExit("usage: adapt-orcawasm-v2.5.0.py <path-to-orcawasm/patches/apply.py> <path-to-orca/CMakeLists.txt>")
 
 path = Path(sys.argv[1])
 source = path.read_text(encoding="utf-8")
@@ -56,17 +56,16 @@ replace_once(
 
 # The v2.5.0 desktop GUI embeds CPython through pybind11. The headless
 # SLIC3R_GUI=OFF WebAssembly target does not compile that GUI/plugin layer, so
-# do not require a native CPython interpreter/library during the WASM configure.
-replace_once(
-    "# Use bundled Python from deps instead of system Python\n",
-    "if(NOT SLIC3R_WASM)\n# Use bundled Python from deps instead of system Python\n",
-    "skip desktop embedded-Python dependency for headless WASM",
-)
-replace_once(
-    "add_library(pybind11::embed ALIAS pybind11_embed)\n",
-    "add_library(pybind11::embed ALIAS pybind11_embed)\nendif()\n",
-    "close desktop embedded-Python dependency block",
-)
+# skip the desktop-only Python embed dependency in the upstream root CMake file.
+orca_cmake = Path(sys.argv[2])
+orca_source = orca_cmake.read_text(encoding="utf-8")
+python_begin = "# Use bundled Python from deps instead of system Python\\n"
+python_end = "add_library(pybind11::embed ALIAS pybind11_embed)\\n"
+if python_begin not in orca_source or python_end not in orca_source:
+    raise SystemExit("Expected v2.5.0 embedded-Python CMake block not found in OrcaSlicer root CMakeLists.txt")
+orca_source = orca_source.replace(python_begin, "if(NOT SLIC3R_WASM)\\n" + python_begin, 1)
+orca_source = orca_source.replace(python_end, python_end + "endif()\\n", 1)
+orca_cmake.write_text(orca_source, encoding="utf-8")
 
 path.write_text(source, encoding="utf-8")
 print(f"Adapted OrcaWasm patcher for v2.5.0: {path}")
