@@ -30,6 +30,13 @@ a{color:#9ddbc7}
 <label>Engine WebAssembly<input id="engine-wasm" type="file" accept=".wasm"></label>
 <button id="probe" disabled>Load and inspect engine</button>
 <pre id="probe-output" role="status" aria-live="polite">Select the two files to begin.</pre>
+<hr style="border:0;border-top:1px solid #4a5663;margin:22px 0">
+<h2 style="font-size:18px">Local STL → G-code proof</h2>
+<p>Only available after the verified engine starts. This uses a fixed generic PLA test configuration, not your printer's profile. Generated G-code is for testing only and must not be sent directly to a printer.</p>
+<label>STL test model<input id="slice-stl" type="file" accept=".stl"></label>
+<button id="slice-model" disabled>Slice selected STL (test only)</button>
+<a id="download-gcode" hidden download="wasm-test.gcode">Download test G-code</a>
+<pre id="slice-output" role="status" aria-live="polite">Load the engine and choose an STL to test slicing.</pre>
 </section>
 <p>Multithreaded Emscripten requires <code>SharedArrayBuffer</code> and cross-origin isolation. Ordinary GitHub Pages responses do not provide the necessary COOP/COEP headers. Use the isolated local development server described in the documentation for this test.</p>
 </body>
