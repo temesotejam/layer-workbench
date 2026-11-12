@@ -366,7 +366,7 @@ if (new URLSearchParams(location.search).has("engineLab")) {
   import("./scripts/prepare-engine-lab.mjs").then(({installPrepareEngineLab}) =>
     installPrepareEngineLab({
       getSelection: () => entries.find(entry => entry.id === selectedId) ?? null,
-      getEntryCount: () => entries.length,
+      getEntries: () => [...entries],
       onStatus: message => { sliceNote.textContent = message; },
     })
   ).catch(error => {
