@@ -20,6 +20,10 @@ function validateNum(key,raw,limits){
     raw=raw[0];
   }
   if(typeof raw!=='number'&&typeof raw!=='string')throw new Error('Invalid value for '+key);
+  // OrcaSlicer ships infill density as e.g. "15%", unlike the test bridge's
+  // canonical numeric percentage. Strip '%' ONLY for the documented field.
+  if(typeof raw==='string'&&key==='sparse_infill_density'&&/^\s*\d+(?:\.\d+)?%\s*$/.test(raw))
+    raw=raw.trim().slice(0,-1);
   if(typeof raw==='string'&&!/^\s*\d+(?:\.\d+)?\s*$/.test(raw))throw new Error('Invalid numeric value for '+key);
   const n=Number(raw);
   if(!Number.isFinite(n)||n<limits[0]||n>limits[1]||(INTEGERS.has(key)&&!Number.isInteger(n)))
