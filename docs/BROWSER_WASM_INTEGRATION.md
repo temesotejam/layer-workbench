@@ -151,3 +151,14 @@ Extended the existing source-verified CI workflow to fetch the **actual v2.5.0 C
 - Combined compatibility across **two real upstream vendor indices** (Creality plus OrcaFilamentLibrary) passed the selected exact printer name.
 
 The audit reports **106 unsupported machine keys, 233 unsupported process keys and 67 unsupported filament keys** across these selected inheritance chains. These counts describe unsupported **distinct keys in the selected chain**, not missing files, and some are critical to actual printing. The test checks correct source/schema resolution, **not** native OrcaSlicer-vs-WASM G-code equivalence or physical printer safety. Full vendor inheritance, material/plate temperature mapping, scripts, speeds and nozzle vector semantics remain release blockers. `scripts/test-upstream-v250-creality.mjs` and `scripts/fetch-upstream-v250-fixture.py` are the reproducible audit.
+
+
+## 2026-11-13: bounded XY arc G-code Preview
+
+A real preview correctness gap was fixed in `scripts/gcode-preview-parser.mjs`. Previously, G2/G3 arcs were skipped **without updating the modal XYZE endpoint**, so the next linear move could start at the wrong location in both 2D and 3D displays. This could make a G-code preview materially misleading.
+
+The isolated diagnostic now approximates common **G17 XY-plane G2/G3 I/J center arcs** with short line segments, including clockwise, counter-clockwise and full-circle paths, relative or explicit absolute arc-center coordinates, and inches-to-millimeters conversion. It rejects excessive arc tessellation (4096 subdivisions per arc; also bounded by the existing overall segment budget) and refuses to interpret `R` arcs, helical arcs, or non-XY plane arcs as drawn straight chords. Even when an arc is omitted, its XYZE endpoint advances so subsequent moves start at the right modal position; the preview reports both approximated and skipped arc counts. UI labels disclose these limitations.
+
+[Isolated Chrome run #43269275536](https://github.com/temesotejam/layer-workbench/actions/runs/43269275536) **PASS** for the new parser regression tests and actual pinned WASM → G-code → layer and 3D preview integration. Earlier runs #43269073805 and #43269163897 failed because the legacy unit test still expected a now-rendered clockwise arc to be skipped. That expectation was corrected in `scripts/test-gcode-preview-parser.mjs`; no engine build or WASM artifact was modified.
+
+This adds **diagnostic arc visualization, not native OrcaSlicer Preview parity**. R-center calculations, G18/G19, helices, speed/acceleration, tool changes, extrusion widths and firmware-specific macros remain unsupported; generated G-code remains unapproved for actual printing.
