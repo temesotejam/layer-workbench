@@ -299,7 +299,7 @@ try {
     const warmerStatus=await prepare.locator('#lab-status').innerText();
     assert.match(warmerStatus,/native first-layer hot bed 85/);
     const warmerText=await prepare.locator('#lab-download').evaluate(async link=>await(await fetch(link.href)).text());
-    const thermalCommands=text=>text.split(/\\r?\\n/).filter(line=>/^M(?:140|190)\\b/i.test(line.trim()));
+    const thermalCommands=text=>text.split(/\r?\n/).filter(line=>/^M(?:140|190)\b/i.test(line.trim()));
     const before=thermalCommands(hotText);
     const after=thermalCommands(warmerText);
     console.log('HOT_PLATE_THERMAL_COMMANDS',JSON.stringify({before:before.slice(0,8),after:after.slice(0,8)}));
