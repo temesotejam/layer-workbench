@@ -1,0 +1,53 @@
+name: Browser Prepare end-to-end smoke
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "index.html"
+      - "app.js"
+      - "styles.css"
+      - "scripts/test-browser-ui.mjs"
+      - ".github/workflows/browser-e2e.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  chrome-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install browser test driver
+        run: npm install --no-save --no-package-lock playwright@1.56.1
+      - name: Check installed Chrome
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v google-chrome
+          google-chrome --version
+      - name: Serve local site and run actual browser smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m http.server 8765 --bind 127.0.0.1 > /tmp/layer-workbench-http.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..20}; do
+            if curl -fsS http://127.0.0.1:8765/ >/dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/test-browser-ui.mjs
+      - name: Retain visual evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prepare-browser-smoke-screenshots
+          path: browser-test-artifacts/
+          if-no-files-found: ignore
+          retention-days: 14
