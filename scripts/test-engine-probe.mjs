@@ -257,7 +257,7 @@ try {
     const nativeStatus=await prepare.locator('#lab-status').innerText();
     assert.ok(nativeStatus.startsWith('PASS: 2 STL model(s)'),nativeStatus);
     assert.match(nativeStatus,/Orca raw preset selection/);
-    assert.match(nativeStatus,/2 unsupported keys excluded/);
+    assert.match(nativeStatus,/3 unsupported keys excluded/);
     const nativeHash=await prepare.locator('#lab-download').evaluate(async link=>{
       const digest=await crypto.subtle.digest('SHA-256',await(await fetch(link.href)).arrayBuffer());
       return [...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');
