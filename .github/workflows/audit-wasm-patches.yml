@@ -152,6 +152,18 @@ jobs:
           set -o pipefail
           python3 patches/apply.py 2>&1 | tee "$GITHUB_WORKSPACE/patch-audit.log"
 
+      - name: Verify retired TextShape override is absent after patching
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e orcawasm/orca/src/libslic3r/Shape/TextShape.cpp
+          test ! -e orcawasm/orca/src/libslic3r/Shape/TextShape.hpp
+          if grep -Fq 'Shape/TextShape.cpp' orcawasm/patches/apply.py ||
+             grep -Fq 'Shape/TextShape.cpp' orcawasm/orca/src/libslic3r/CMakeLists.txt; then
+            echo "::error::Retired TextShape override leaked into v2.5.0 build sources"
+            exit 1
+          fi
+
       - name: Verify Boost.Log uses the pthread ABI end-to-end
         shell: bash
         run: |

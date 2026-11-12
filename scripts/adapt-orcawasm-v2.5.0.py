@@ -54,6 +54,24 @@ replace_once(
     "oneTBB Emscripten branch",
 )
 
+# The pinned OrcaWasm v2.4.2 patcher injects a TextShape override
+# unconditionally. The v2.5.0 source tree no longer contains Shape/TextShape
+# or its header, so that obsolete override cannot compile. Fail closed if a
+# future source revision reintroduces the files; that needs a real API audit.
+text_shape_dir = Path(sys.argv[2]).parent / "src" / "libslic3r" / "Shape"
+if (text_shape_dir / "TextShape.cpp").exists() or (text_shape_dir / "TextShape.hpp").exists():
+    raise SystemExit("Unexpected v2.5.0 TextShape source: review WASM override API")
+replace_once(
+    '    "${CMAKE_CURRENT_SOURCE_DIR}/Shape/TextShape.cpp"\n',
+    "",
+    "obsolete v2.4.2 TextShape original",
+)
+replace_once(
+    '    "${ORCA_WEB_OVERRIDES_DIR}/src/libslic3r/Shape/TextShape.cpp"\n',
+    "",
+    "obsolete v2.4.2 TextShape WASM stub",
+)
+
 # The v2.5.0 desktop GUI embeds CPython through pybind11. The headless
 # SLIC3R_GUI=OFF WebAssembly target does not compile that GUI/plugin layer, so
 # skip the desktop-only Python embed dependency in the upstream root CMake file.
