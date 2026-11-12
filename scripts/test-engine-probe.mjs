@@ -31,7 +31,7 @@ try {
   await page.waitForFunction(() => {
     const text = document.querySelector('#probe-output')?.textContent ?? '';
     return text.includes('"family": "OrcaSlicer"') || text.startsWith('FAILED:');
-  }, {timeout: 90000});
+  }, null, {timeout: 90000});
   const text = await page.locator('#probe-output').innerText();
   if (text.startsWith('FAILED:')) throw new Error(text);
   const capabilities = JSON.parse(text);
