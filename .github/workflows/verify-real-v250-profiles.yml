@@ -11,6 +11,7 @@ on:
       - "scripts/test-orca-vendor-index.mjs"
       - "scripts/fetch-upstream-v250-fixture.py"
       - "scripts/test-upstream-v250-profiles.mjs"
+      - "scripts/test-upstream-v250-creality.mjs"
       - ".github/workflows/verify-real-v250-profiles.yml"
 
 permissions:
@@ -34,4 +35,6 @@ jobs:
         run: python3 scripts/fetch-upstream-v250-fixture.py
       - name: Validate real index and three-level PLA inheritance
         run: node scripts/test-upstream-v250-profiles.mjs
+      - name: Validate real Creality machine and process inheritance
+        run: node scripts/test-upstream-v250-creality.mjs
       # No upload-artifact: upstream profile JSON stays confined to the runner.
