@@ -15,7 +15,7 @@ export function createLayerPreview(container) {
     </div>
     <canvas id="lab-toolpath-canvas" width="360" height="360" role="img" aria-label="Generated G-code extrusion and travel toolpaths by layer"></canvas>
     <p id="lab-preview-stats"></p>
-    <p>Orange: extrusion; gray dashed: travel. Linear G0/G1 only; curves and firmware commands are not rendered. This is a diagnostic view, not a validated OrcaSlicer preview.</p>
+    <p>Orange: extrusion; gray dashed: travel. G0/G1 and XY G2/G3 I/J arcs are shown (arcs approximated). R arcs, helical paths, other planes and firmware macros are not rendered. Diagnostic only; not a validated OrcaSlicer preview.</p>
   `;
   container.appendChild(section);
   const threeD=createThreeDToolpathPreview(container);
@@ -70,7 +70,7 @@ export function createLayerPreview(container) {
       }
       slider.max=String(parsed.layers.length-1);
       slider.value=String(parsed.layers.length-1);
-      stats.textContent=`${parsed.layers.length} Z levels · ${parsed.extrusions} extrusion segments · ${parsed.travels} travel segments · ${parsed.skippedArcs} unsupported arcs`;
+      stats.textContent=`${parsed.layers.length} Z levels · ${parsed.extrusions} extrusion segments · ${parsed.travels} travel segments · ${parsed.renderedArcs} approximated XY arcs · ${parsed.skippedArcs} unsupported arcs`;
       section.hidden=false;
       render(Number(slider.value));
       threeD.show(parsed);
