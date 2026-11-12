@@ -1,0 +1,27 @@
+// Check actual, pinned v2.5.0 upstream filament records fetched by CI.
+// Assertions are on the authoritative source files, not synthetic fixtures.
+import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
+import {extractVendorProfileRecords} from "./orca-vendor-index.mjs";
+import {resolveOrcaProfileFamily} from "./orca-profile-collection.mjs";
+
+const fixture=JSON.parse(readFileSync("upstream-v250-filament-fixture.json","utf8"));
+assert.equal(fixture.upstream_commit,"40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19");
+assert.equal(fixture.vendor_index.name,"OrcaFilamentLibrary");
+const indexed=extractVendorProfileRecords(fixture.vendor_index,fixture.files);
+assert.equal(indexed.records.length,3);
+assert.equal(indexed.entryCount,3);
+const resolved=resolveOrcaProfileFamily(indexed.records,"filament","Generic PLA @System");
+assert.deepEqual(resolved.chain,["fdm_filament_common","fdm_filament_pla","Generic PLA @System"]);
+assert.equal(resolved.settings.nozzle_temperature,"220");
+assert.ok(resolved.unsupported.includes("hot_plate_temp"),
+  "Native bed-type temperature handling must remain explicitly unsupported");
+assert.ok(resolved.unsupported.includes("filament_flow_ratio"),
+  "Native filament flow-ratio handling must remain explicitly unsupported");
+assert.deepEqual(resolved.compatible,[]);
+assert.equal(resolved.record.name,"Generic PLA @System");
+assert.ok(resolved.unsupported.length>=10,
+  "Real shipped preset must not be misrepresented as fully supported");
+console.log("PASS: pinned real OrcaSlicer v2.5.0 Generic PLA @System indexed inheritance");
+console.log("Confirmed native nozzle temperature:",resolved.settings.nozzle_temperature);
+console.log("Unsupported official fields across selected chain:",resolved.unsupported.length);
