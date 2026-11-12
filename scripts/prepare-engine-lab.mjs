@@ -129,7 +129,7 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
         previewInfo = " Preview unavailable: " + previewError.message;
       }
       const unsupported = nativeCollection
-        ? Object.values(nativeCollection).reduce((n,v)=>n+v.unsupported.length,0) : 0;
+        ? [nativeCollection.machine,nativeCollection.filament,nativeCollection.process].reduce((n,v)=>n+v.unsupported.length,0) : 0;
       status.textContent = "PASS: " + selected.length + " STL model(s) → " + result.gcode.byteLength +
         " G-code bytes. Restricted test profiles with " + (nativeCollection ? "Orca raw preset selection ("+rawMachine.value+" / "+rawFilament.value+" / "+rawProcess.value+"), "+unsupported+" unsupported keys excluded" : chosenPreset ? "inherited process preset (" + chosenPreset.chain.join(" > ") + ")" : processOverrides ? "test overrides" : "default process") + ";" + previewInfo + " Do not print without validating.";
       onStatus("Test WASM sliced all imported STL models and their displayed transforms on one plate; generic PLA settings only.");
