@@ -44,3 +44,17 @@ The importer retains the original `File` for each displayed model. The lab uses 
 Test locally: `python3 scripts/serve-isolated.py --port 8766`, open `http://127.0.0.1:8766/?engineLab=1`, import a small STL, select the verified `slicer-mt.js` / `slicer-mt.wasm` files, start the engine, and click **Slice selected STL (test only)**. Generated G-code is generic PLA fixture output; do not print without proper profile and machine validation.
 
 **Next gates:** preserve model coordinates, translate actual edited transforms and multiple-object plate metadata into native manifests, load full upstream profiles, add preview and cancellation, and verify an isolated production host before integrating the engine into the public UI.
+
+## 2026-11-12: Prepare affine transforms → native WASM test
+
+The isolated Prepare proof now passes the selected STL's **current Three.js model matrix** (not only the original source file) to the OrcaSlicer one-slicer-api project manifest. `scripts/transform-matrix.mjs` converts column-major Three.js storage into the native row-major affine matrix and offsets coordinates from the centered browser plate to the 256 mm bed's lower-left origin. It rejects invalid, singular or non-affine matrices. The original STL bytes remain untouched.
+
+The Prepare UI includes numeric XYZ position, Z rotation, and XYZ scale fields as a reproducible test of these operations; dragging TransformControls updates the same object matrix. **This is still a single-STL, generic-PLA development test**, not full native project editing. Multiple imported models are rejected in the local lab rather than silently omitted.
+
+[Chrome integration run #43244950738](https://github.com/temesotejam/layer-workbench/actions/runs/43244950738) passed:
+- independent native-matrix test cases for identity, translation, rotation, non-uniform scale and invalid transforms;
+- successful original STL selection and G-code generation;
+- numeric X position/Z rotation/X scale edits followed by another real WASM slice;
+- a changed G-code SHA-256 after applying those edits.
+
+This establishes that the edited Prepare transform affects the native output on the tested cube, **not** exact correspondence to desktop OrcaSlicer's transform/pivot behavior or a lossless native 3MF round-trip. A hash difference is a smoke-test signal, not a quantified toolpath parity test. Native source profile semantics, complete object hierarchies, multi-plate support, displacement, printer connection and G-code Preview remain unimplemented.
