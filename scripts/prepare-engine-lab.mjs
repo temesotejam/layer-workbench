@@ -5,6 +5,7 @@ import { loadSelectedEngine, checkIsolation } from "./probe-engine.mjs";
 import { sliceMultiStlWithEngine } from "./slice-stl.mjs";
 import {readTestProcessFile} from "./test-process-profile.mjs";
 import {readProcessPresetBundle} from "./process-preset-inheritance.mjs";
+import {readOrcaProfileCollection} from "./orca-profile-collection.mjs";
 import {createLayerPreview} from "./gcode-layer-preview.mjs";
 
 export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
@@ -21,6 +22,10 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
     <label>Optional process overrides (.json, restricted test fields) <input id="lab-process" type="file" accept=".json"></label>
     <label>Orca-style process preset bundle (.json, supported fields only) <input id="lab-preset-bundle" type="file" accept=".json"></label>
     <label>Preset name <input id="lab-preset-name" type="text" maxlength="120" placeholder="e.g. Strong"></label>
+    <label>Optional raw Orca machine/filament/process collection (.json) <input id="lab-orca-profiles" type="file" accept=".json"></label>
+    <label>Machine preset name <input id="lab-orca-machine" type="text" maxlength="160"></label>
+    <label>Filament preset name <input id="lab-orca-filament" type="text" maxlength="160"></label>
+    <label>Process preset name <input id="lab-orca-process" type="text" maxlength="160"></label>
     <button id="lab-slice" disabled>Slice STL plate (test only)</button>
     <a id="lab-download" hidden download="prepare-test.gcode">Download test G-code</a>
     <p id="lab-status" role="status" aria-live="polite">No engine loaded.</p>
@@ -35,6 +40,10 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
   const processFile = $("#lab-process");
   const presetBundle = $("#lab-preset-bundle");
   const presetName = $("#lab-preset-name");
+  const rawProfiles = $("#lab-orca-profiles");
+  const rawMachine = $("#lab-orca-machine");
+  const rawFilament = $("#lab-orca-filament");
+  const rawProcess = $("#lab-orca-process");
   const download = $("#lab-download");
   const status = $("#lab-status");
   const isolated = checkIsolation();
@@ -95,15 +104,20 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
           viewerElements:Array.from(e.object.matrixWorld.elements),
         };
       }));
-      if (processFile.files?.length && presetBundle.files?.length)
+      if ([processFile.files?.length, presetBundle.files?.length, rawProfiles.files?.length].filter(Boolean).length>1)
         throw new Error("Use either the flat process fragment OR the inherited preset bundle, not both.");
+      const nativeCollection = rawProfiles.files?.length
+        ? await readOrcaProfileCollection(rawProfiles.files[0],{
+          machine:rawMachine.value.trim(),filament:rawFilament.value.trim(),process:rawProcess.value.trim(),
+        })
+        : null;
       const chosenPreset = presetBundle.files?.length
         ? await readProcessPresetBundle(presetBundle.files[0],presetName.value.trim())
         : null;
-      const processOverrides = chosenPreset?.settings ?? await readTestProcessFile(processFile.files?.[0]);
+      const processOverrides = nativeCollection?.process.settings ?? chosenPreset?.settings ?? await readTestProcessFile(processFile.files?.[0]);
       const result = await sliceMultiStlWithEngine(loaded.engine, models, progress => {
         status.textContent = "Slicing: " + (progress?.percent ?? "?") + "% · " + (progress?.stage ?? "");
-      }, processOverrides);
+      }, processOverrides, nativeCollection);
       downloadUrl = URL.createObjectURL(new Blob([result.gcode], {type: "text/plain"}));
       download.href = downloadUrl;
       download.hidden = false;
@@ -114,8 +128,10 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
       } catch (previewError) {
         previewInfo = " Preview unavailable: " + previewError.message;
       }
+      const unsupported = nativeCollection
+        ? Object.values(nativeCollection).reduce((n,v)=>n+v.unsupported.length,0) : 0;
       status.textContent = "PASS: " + selected.length + " STL model(s) → " + result.gcode.byteLength +
-        " G-code bytes. Generic PLA base with " + (chosenPreset ? "inherited process preset (" + chosenPreset.chain.join(" > ") + ")" : processOverrides ? "test overrides" : "default process") + ";" + previewInfo + " Do not print without validating.";
+        " G-code bytes. Restricted test profiles with " + (nativeCollection ? "Orca raw preset selection ("+rawMachine.value+" / "+rawFilament.value+" / "+rawProcess.value+"), "+unsupported+" unsupported keys excluded" : chosenPreset ? "inherited process preset (" + chosenPreset.chain.join(" > ") + ")" : processOverrides ? "test overrides" : "default process") + ";" + previewInfo + " Do not print without validating.";
       onStatus("Test WASM sliced all imported STL models and their displayed transforms on one plate; generic PLA settings only.");
     } catch (error) {
       status.textContent = "FAILED slicing: " + error.message;
