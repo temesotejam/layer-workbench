@@ -26,9 +26,11 @@ assert.equal(hotBed.settings.bed_temperature,"55");
 assert.equal(hotBed.selectedBed.plateType,"hot");
 assert.equal(hotBed.selectedBed.source,"fdm_filament_pla");
 assert.ok(!hotBed.unsupported.includes("hot_plate_temp"));
-assert.ok(hotBed.unsupported.includes("hot_plate_temp_initial_layer"),
-  "Initial layer bed temperature is not implemented in generic WASM test config");
-console.log("PASS: official inherited hot-plate temperature 55 C selected explicitly (initial layer still unsupported)");
+assert.deepEqual(hotBed.settings.hot_plate_temp_initial_layer,["55"]);
+assert.equal(hotBed.selectedBed.initialLayerSource,"fdm_filament_pla");
+assert.equal(hotBed.selectedBed.initialLayerTemperature,"55");
+assert.ok(!hotBed.unsupported.includes("hot_plate_temp_initial_layer"));
+console.log("PASS: official inherited hot-plate and first-layer temperatures 55 C selected explicitly");
 
 assert.ok(resolved.unsupported.length>=10,
   "Real shipped preset must not be misrepresented as fully supported");
