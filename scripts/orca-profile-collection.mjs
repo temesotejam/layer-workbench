@@ -71,7 +71,14 @@ export function resolveOrcaProfileFamily(records,type,selected,options={}) {
       const source=[...chain].reverse().find(p=>Object.hasOwn(p,"hot_plate_temp"));
       if(!source)throw new Error("Selected hot plate temperature missing");
       const temp=validateNum("bed_temperature",source.hot_plate_temp,SPECS.filament.bed_temperature);
+      // OrcaSlicer's PrintConfig selects the bed temperature through
+      // curr_bed_type. Merely changing a compatibility bed_temperature field
+      // can alter a G-code metadata header WITHOUT issuing an M140/M190.
+      // Require a user-selected plate and pass BOTH native options so that
+      // the G-code writer sees the matching High Temp Plate settings.
       settings.bed_temperature=temp;
+      settings.curr_bed_type="High Temp Plate";
+      settings.hot_plate_temp=[temp];
       unsupported.delete("hot_plate_temp");
       // The pinned OrcaWasm one-slicer-api bridge accepts native per-filament
       // temperature vectors (see its smoke-test.mjs). Unlike the steady-state
