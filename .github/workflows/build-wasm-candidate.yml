@@ -66,8 +66,9 @@ jobs:
             orcawasm/deps-install
             orcawasm/build-wasm/emscripten-cache-mt
             ~/.cache/ccache
-          key: wasm-v2.5.0-emsdk-3.1.74-cgal-6.2.1-assimp-5.4.3-draco-1.5.7-occt-7.8.1-onetbb-2021.13.2-native-eh-v4-${{ runner.os }}-${{ github.run_id }}
+          key: wasm-v2.5.0-emsdk-3.1.74-cgal-6.2.1-assimp-5.4.3-draco-1.5.7-occt-7.8.1-onetbb-2021.13.2-native-eh-v5-${{ runner.os }}-${{ github.run_id }}
           restore-keys: |
+            wasm-v2.5.0-emsdk-3.1.74-cgal-6.2.1-assimp-5.4.3-draco-1.5.7-occt-7.8.1-onetbb-2021.13.2-native-eh-v5-${{ runner.os }}-
             wasm-v2.5.0-emsdk-3.1.74-cgal-6.2.1-assimp-5.4.3-draco-1.5.7-occt-7.8.1-onetbb-2021.13.2-native-eh-v4-${{ runner.os }}-
             wasm-v2.5.0-emsdk-3.1.74-cgal-6.2.1-assimp-5.4.3-occt-7.8.1-onetbb-2021.13.2-native-eh-v3-${{ runner.os }}-
 
@@ -113,6 +114,20 @@ jobs:
           grep -Fq '#if defined(SLIC3R_WASM) && defined(ARACHNE_DEBUG)' "$file"
           grep -Fq '#include <CGAL/Surface_sweep_2_algorithms.h>' "$file"
           grep -Fq '#if !defined(SLIC3R_WASM)' "$file"
+
+      - name: Verify Boost.Log pthread build configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'STAMP="${INSTALL}/.boost_built_mt_native_eh_v4"' orcawasm/scripts/build-local-wsl.sh
+          if grep -Fq 'define=BOOST_LOG_NO_THREADS=1' orcawasm/scripts/build-local-wsl.sh; then
+            echo "::error::Boost.Log must be rebuilt with pthread support"
+            exit 1
+          fi
+          if grep -Fq 'BOOST_LOG_NO_THREADS' orcawasm/cmake/wasm_find_paths.cmake; then
+            echo "::error::WASM compile definitions still select single-threaded Boost.Log ABI"
+            exit 1
+          fi
 
       - name: Build Assimp 5.4.3 for WebAssembly
         env:
