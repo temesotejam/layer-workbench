@@ -66,6 +66,7 @@ export function resolveOrcaProfileFamily(records,type,selected,options={}) {
     // per-filament vector. Resolve it independently of steady nozzle temp;
     // forwarding a scalar or silently using the steady temperature would
     // discard the shipped profile's initial-layer distinction.
+    let selectedFilamentVariant=null;
     if(type==="filament"){
       const initialNozzle=[...chain].reverse().find(p=>Object.hasOwn(p,"nozzle_temperature_initial_layer"));
       if(initialNozzle){
@@ -84,6 +85,34 @@ export function resolveOrcaProfileFamily(records,type,selected,options={}) {
         settings.filament_flow_ratio=[ratio];
         unsupported.delete("filament_flow_ratio");
       }
+      // Pinned v2.5.0 Generic PLA has SIX nozzle/extruder-variant flow limits,
+      // not six filaments. Never silently choose an arbitrary index.
+      const maxSource=[...chain].reverse().find(p=>Object.hasOwn(p,"filament_max_volumetric_speed"));
+      if(maxSource){
+        const values=Array.isArray(maxSource.filament_max_volumetric_speed)
+          ? maxSource.filament_max_volumetric_speed : [maxSource.filament_max_volumetric_speed];
+        if(values.length===1){
+          const limit=validateNum("filament_max_volumetric_speed",values[0],[0.1,200]);
+          settings.filament_max_volumetric_speed=[limit];
+          unsupported.delete("filament_max_volumetric_speed");
+        }else if(options.filamentVariant!==undefined){
+          const variants=[...chain].reverse()
+            .find(p=>Object.hasOwn(p,"filament_extruder_variant"))?.filament_extruder_variant;
+          if(!Array.isArray(variants)||variants.length!==values.length||
+              variants.some(v=>typeof v!=="string"||!v.trim()||v.length>120)||
+              new Set(variants).size!==variants.length)
+            throw new Error("Invalid or mismatched filament extruder variant vector");
+          if(typeof options.filamentVariant!=="string"||options.filamentVariant.length>120)
+            throw new Error("Invalid selected filament variant");
+          const index=variants.indexOf(options.filamentVariant);
+          if(index<0)throw new Error("Selected filament extruder variant not found");
+          const limit=validateNum("filament_max_volumetric_speed",values[index],[0.1,200]);
+          settings.filament_max_volumetric_speed=[limit];
+          unsupported.delete("filament_max_volumetric_speed");
+          selectedFilamentVariant={name:variants[index],index,source:maxSource.name,maxVolumetricSpeed:limit};
+        }
+      }else if(options.filamentVariant!==undefined)
+        throw new Error("Selected filament variant has no volumetric speed settings");
     }
     // A real Orca filament has plate-specific bed temperatures, not a generic
     // 'bed_temperature' field. Only map an explicitly selected hot plate in
@@ -120,7 +149,7 @@ export function resolveOrcaProfileFamily(records,type,selected,options={}) {
     }
     // Compatibility may be inherited from the nearest ancestor that defines it.
     const compatible=[...chain].reverse().find(p=>Object.hasOwn(p,'compatible_printers'))?.compatible_printers;
-    return {type,name:selected,chain:chain.map(p=>p.name),settings:{...settings},unsupported:[...unsupported].sort(),record:chain.at(-1),compatible,selectedBed};
+    return {type,name:selected,chain:chain.map(p=>p.name),settings:{...settings},unsupported:[...unsupported].sort(),record:chain.at(-1),compatible,selectedBed,selectedFilamentVariant};
   }
   return resolve();
 }

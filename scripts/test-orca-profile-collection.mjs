@@ -90,6 +90,32 @@ for(const bad of [['1','1.2'],['0.49'],['1.51'],['NaN'],[],['-1'],{}]){
     ? {...p,filament_flow_ratio:bad} : p),selection),
     /Multi-extruder|Invalid|test limits/);
 }
+// A six-value Generic PLA flow cap refers to six explicitly named variants.
+const variants=['Direct Drive Standard','Direct Drive High Flow','Direct Drive Extra High Flow',
+  'Bowden Standard','Bowden High Flow','Bowden Extra High Flow'];
+const limits=['12','21','40','12','21','30'];
+const variantProfiles=profiles.map(p=>p.name==='Generic PLA @TestPrinter'
+  ? {...p,filament_extruder_variant:variants,filament_max_volumetric_speed:limits}:p);
+const omitted=resolve(variantProfiles,selection);
+assert.equal(omitted.filament.settings.filament_max_volumetric_speed,undefined);
+assert.ok(omitted.filament.unsupported.includes('filament_max_volumetric_speed'));
+const dd=resolve(variantProfiles,selection,{filamentVariant:'Direct Drive High Flow'});
+assert.deepEqual(dd.filament.settings.filament_max_volumetric_speed,['21']);
+assert.equal(dd.filament.selectedFilamentVariant.index,1);
+const bowden=resolve(variantProfiles,selection,{filamentVariant:'Bowden Extra High Flow'});
+assert.deepEqual(bowden.filament.settings.filament_max_volumetric_speed,['30']);
+assert.equal(bowden.filament.selectedFilamentVariant.index,5);
+assert.throws(()=>resolve(variantProfiles,selection,{filamentVariant:'Unknown'}),/not found/);
+assert.throws(()=>resolve(variantProfiles.map(p=>p.name==='Generic PLA @TestPrinter'
+  ? {...p,filament_extruder_variant:variants.slice(1)}:p),selection,
+  {filamentVariant:'Direct Drive Standard'}),/mismatched/);
+assert.throws(()=>resolve(variantProfiles.map(p=>p.name==='Generic PLA @TestPrinter'
+  ? {...p,filament_max_volumetric_speed:['0',...limits.slice(1)]}:p),selection,
+  {filamentVariant:'Direct Drive Standard'}),/test limits/);
+const single=resolve(profiles.map(p=>p.name==='Generic PLA @System'
+  ? {...p,filament_max_volumetric_speed:['12']}:p),selection);
+assert.deepEqual(single.filament.settings.filament_max_volumetric_speed,['12']);
+console.log('PASS: exact filament extruder variant maps multi-value volumetric cap; no variant keeps unsupported');
 console.log('PASS: native single-filament flow ratio inherited/overridden as vector; invalid inputs rejected');
 console.log('PASS: separate inherited native first-layer nozzle temperature vector and bounds');
 console.log('PASS: explicit inherited steady and first-layer hot plate temperatures, native vector shape, fail-closed validation');

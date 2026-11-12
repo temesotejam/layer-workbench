@@ -217,3 +217,22 @@ The [pinned official v2.5.0 profile CI #43309781628](https://github.com/temesote
 The [isolated Chrome actual-WASM CI #43310060809](https://github.com/temesotejam/layer-workbench/actions/runs/43310060809) **PASS** sliced the same two-STL fixture twice, changing **only** the inherited native flow ratio from **0.80 to 1.20**. We compared numeric `E` parameters on the actual generated `G1` XY extrusion moves—not file hashes or config comments. All first 120 sampled XY extrusion `E` values differed. The first sampled value was **2.62288 → 3.53432** (absolute extruder positions also reflect preceding moves, so their ratio alone is not a direct calibrated material-flow measurement). Local fake-engine testing additionally confirms that the native one-element vector arrives in `session.init`. The first #43309855113 Chrome attempt failed because the test regex matched literal backslashes instead of real G-code line breaks; [commit `4c06e6b`](https://github.com/temesotejam/layer-workbench/commit/4c06e6b08fee415d08f67341a9304318a30c2dd1) corrected it, and the final browser run passed.
 
 **Not established:** full flow calibration parity with official desktop, six-value maximum volumetric speed semantics, per-printer nozzle/material limits, multi-extruder material dispatch, firmware-specific scripts, native-vs-WASM exact G-code equivalence or real-machine safety. This remains an isolated development bridge only.
+
+## 2026-11-13: explicit extruder-variant maximum volumetric speed
+
+Official pinned v2.5.0 Generic PLA @System contains six variant names:
+Direct Drive Standard, Direct Drive High Flow, Direct Drive Extra High Flow,
+Bowden Standard, Bowden High Flow, Bowden Extra High Flow. The corresponding
+`filament_max_volumetric_speed` values are `[12,21,40,12,21,30]` mm³/s.
+Pinned OrcaSlicer source `ParameterUtils.cpp` resolves this option using
+`filament_extruder_variant`, **not** a six-filament mapping.
+
+The opt-in localhost test accepts an exact manual variant name and forwards
+only its validated one-element native speed vector. For a multi-value vector,
+no selected variant means **unsupported**, not the first value. Mismatched
+lengths, duplicate names, unknown choices and out-of-range values reject.
+Single-value profile limits are supported as one-filament native vectors.
+
+Tests cover the official pinned index, parser validation and session.init
+forwarding. Actual WASM feed-rate change and true machine/nozzle variant
+compatibility are not yet established; do not print the generated G-code.

@@ -29,6 +29,8 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
       <option value="none">No plate-specific mapping (fixture defaults)</option>
       <option value="hot">Orca hot plate only (explicit)</option>
     </select></label>
+    <label>Filament extruder variant (exact name, optional) <input id="lab-orca-filament-variant" type="text" maxlength="120" placeholder="Direct Drive Standard"></label>
+    <small>Exact extruder variant selection is required for multi-value filament volumetric speed limits; without it no limit is guessed. Real printer extruder-type matching is not yet validated. Manufacturer scripts and generated G-code remain non-print-ready.</small>
     <small>Explicit hot plate selection maps hot_plate_temp to test bed_temperature and, when present, forwards native hot_plate_temp_initial_layer as a single-filament vector. Inherited first-layer nozzle temperature and bounded (0.5–1.5) single-filament flow ratio are forwarded as native vectors; isolated Chrome tests confirmed changes in actual M104 and G1 E commands. Multi-value flow ratios are rejected, and volumetric speed limits are still unsupported. Manufacturer startup scripts, other plates and full material settings remain unverified; generated G-code is not print-ready.</small>
     <label>Process preset name <input id="lab-orca-process" type="text" maxlength="160"></label>
     <button id="lab-slice" disabled>Slice STL plate (test only)</button>
@@ -48,6 +50,7 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
   const rawProfiles = $("#lab-orca-profiles");
   const rawMachine = $("#lab-orca-machine");
   const rawFilament = $("#lab-orca-filament");
+  const rawVariant = $("#lab-orca-filament-variant");
   const rawPlate = $("#lab-orca-plate");
   const rawProcess = $("#lab-orca-process");
   const download = $("#lab-download");
@@ -115,7 +118,8 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
       const nativeCollection = rawProfiles.files?.length
         ? await readOrcaProfileCollection(rawProfiles.files[0],{
           machine:rawMachine.value.trim(),filament:rawFilament.value.trim(),process:rawProcess.value.trim(),
-        }, {plateType:rawPlate.value==="hot" ? "hot" : undefined})
+        }, {plateType:rawPlate.value==="hot" ? "hot" : undefined,
+          filamentVariant:rawVariant.value.trim() || undefined})
         : null;
       const chosenPreset = presetBundle.files?.length
         ? await readProcessPresetBundle(presetBundle.files[0],presetName.value.trim())
@@ -135,10 +139,12 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
         previewInfo = " Preview unavailable: " + previewError.message;
       }
       const bedInfo = nativeCollection?.filament.selectedBed;
+      const speedVariant = nativeCollection?.filament.selectedFilamentVariant;
       const unsupported = nativeCollection
         ? [nativeCollection.machine,nativeCollection.filament,nativeCollection.process].reduce((n,v)=>n+v.unsupported.length,0) : 0;
       status.textContent = "PASS: " + selected.length + " STL model(s) → " + result.gcode.byteLength +
         " G-code bytes. Restricted test profiles with " + (nativeCollection ? "Orca raw preset selection ("+rawMachine.value+" / "+rawFilament.value+" / "+rawProcess.value+"), "+unsupported+" unsupported keys excluded"+(bedInfo ? ", explicitly mapped hot bed "+bedInfo.bed_temperature+" °C"+(bedInfo.initialLayerTemperature!==null ? " and native first-layer hot bed "+bedInfo.initialLayerTemperature+" °C" : " (first layer unspecified)") : "") : chosenPreset ? "inherited process preset (" + chosenPreset.chain.join(" > ") + ")" : processOverrides ? "test overrides" : "default process") + ";" + previewInfo + " Do not print without validating.";
+      if(speedVariant) console.log("Selected native volumetric limit:",speedVariant);
       onStatus("Test WASM sliced all imported STL models and their displayed transforms on one plate; generic PLA settings only.");
     } catch (error) {
       status.textContent = "FAILED slicing: " + error.message;

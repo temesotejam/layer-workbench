@@ -22,7 +22,17 @@ assert.deepEqual(resolved.settings.filament_flow_ratio,["0.98"],
   "Pinned official PLA inherits the 0.98 single-filament native flow ratio");
 assert.ok(!resolved.unsupported.includes("filament_flow_ratio"));
 assert.ok(resolved.unsupported.includes("filament_max_volumetric_speed"),
-  "Official Generic PLA defines a multi-value volumetric limit vector; do not silently reduce it");
+  "Official Generic PLA defines a six-variant volumetric limit; do not silently pick one");
+assert.equal(resolved.settings.filament_max_volumetric_speed,undefined);
+const ddHighFlow=resolveOrcaProfileFamily(indexed.records,"filament","Generic PLA @System",
+  {filamentVariant:"Direct Drive High Flow"});
+assert.deepEqual(ddHighFlow.settings.filament_max_volumetric_speed,["21"]);
+assert.equal(ddHighFlow.selectedFilamentVariant.index,1);
+const bowdenExtra=resolveOrcaProfileFamily(indexed.records,"filament","Generic PLA @System",
+  {filamentVariant:"Bowden Extra High Flow"});
+assert.deepEqual(bowdenExtra.settings.filament_max_volumetric_speed,["30"]);
+assert.equal(bowdenExtra.selectedFilamentVariant.index,5);
+console.log("PASS: pinned six-value Generic PLA maps explicit variant index 1=21, 5=30 mm3/s");
 assert.deepEqual(resolved.compatible,[]);
 assert.equal(resolved.record.name,"Generic PLA @System");
 const hotBed=resolveOrcaProfileFamily(indexed.records,"filament","Generic PLA @System",{plateType:"hot"});
