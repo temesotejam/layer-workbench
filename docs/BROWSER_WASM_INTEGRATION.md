@@ -70,3 +70,11 @@ The isolated Prepare proof now builds a **single one-slicer-api project from mul
 - the two-object G-code hash differed from the single-object G-code hash.
 
 **This does not establish desktop parity or a production multi-plate slicer.** It does not preserve complete 3MF metadata, support native filament presets, independently verify geometry paths for every object, or reproduce automatic arrangement/collision handling. Official profiles, G-code Preview, 3MF semantic round-trip and printer verification remain release blockers.
+
+## 2026-11-12: restricted native process override proof
+
+The isolated Prepare lab now accepts an **optional local process JSON fragment**. `scripts/test-process-profile.mjs` strictly validates only these numeric keys: `layer_height`, `wall_loops`, `sparse_infill_density`, `top_shell_layers`, `bottom_shell_layers`. Unsupported and malformed values are rejected. The bridge invokes `session.applyProfile("orca.native-json", ...)` after initializing its generic PLA test configuration and before registering/slicing the plate.
+
+[Chrome integration run #43246440472](https://github.com/temesotejam/layer-workbench/actions/runs/43246440472) **PASS**: the 2-model project sliced with and without a process JSON fragment containing `layer_height: 0.3` and `wall_loops: 3`; the resulting G-code SHA-256 changed. The same run passed invalid-input unit tests and all previous engine, transform, and 2-object tests.
+
+**Scope:** this is not a full imported OrcaSlicer printer/filament/process profile. Profile inheritance, nozzle/extruder vectors, machine compatibility, filament temperature and speed matrices, start/end G-code and color mapping are not validated. Do not send fixture G-code to an actual machine. Full profile parity remains a release blocker.
