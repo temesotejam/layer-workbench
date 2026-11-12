@@ -15,7 +15,7 @@ export function createLayerPreview(container) {
     </div>
     <canvas id="lab-toolpath-canvas" width="360" height="360" role="img" aria-label="Generated G-code extrusion and travel toolpaths by layer"></canvas>
     <p id="lab-preview-stats"></p>
-    <p>Orange: extrusion; gray dashed: travel. G0/G1 and XY G2/G3 I/J arcs are shown (arcs approximated). R arcs, helical paths, other planes and firmware macros are not rendered. Diagnostic only; not a validated OrcaSlicer preview.</p>
+    <p>Orange: extrusion; gray dashed: travel. G0/G1 and XY G2/G3 I/J or R arcs are shown as approximated line segments. Helical paths, non-XY planes, ambiguous or invalid arcs, and firmware macros are omitted. Diagnostic only; not a validated OrcaSlicer preview.</p>
   `;
   container.appendChild(section);
   const threeD=createThreeDToolpathPreview(container);

@@ -61,5 +61,30 @@ const absCenter=parseGcodeToolpaths("G0 X10 Y0 Z0.2\nG90.1\nG3 X0 Y10 I0 J0 E1")
 assert.equal(absCenter.renderedArcs,1);
 assert.throws(()=>parseGcodeToolpaths("G0 X10 Y0\nG3 X0 Y10 I-10 J0 E1",{maxSegments:2}),/complex/);
 assert.throws(()=>parseGcodeToolpaths("G0 X0",{maxSegments:-1}),/budget/);
-console.log('PASS: bounded XY arcs (CW, CCW, full circle, absolute and relative center), skipped endpoint safety');
+
+// R radius center selection: positive R is the minor path, negative R the
+// major path. Both must end exactly at the commanded point.
+const rMinor=parseGcodeToolpaths("G0 X10 Y0 Z0.2\nG3 X0 Y10 R10 E1\nG1 X0 Y20 E2");
+const rMajor=parseGcodeToolpaths("G0 X10 Y0 Z0.2\nG3 X0 Y10 R-10 E1\nG1 X0 Y20 E2");
+const rClockwise=parseGcodeToolpaths("G0 X10 Y0 Z0.2\nG2 X0 Y10 R10 E1");
+assert.equal(rMinor.renderedArcs,1);
+assert.equal(rMajor.renderedArcs,1);
+assert.equal(rClockwise.renderedArcs,1);
+assert.ok(rMinor.segments<rMajor.segments, 'negative R takes the long way');
+assert.ok(rMinor.layers[0].segments.some(p=>p.x2>6.5&&p.x2<7.5&&p.y2>6.5&&p.y2<7.5));
+assert.deepEqual([rMajor.layers[0].segments.at(-1).x1,rMajor.layers[0].segments.at(-1).y1],[0,10]);
+assert.ok(rClockwise.layers[0].segments.some(p=>p.x2<3.5&&p.y2<3.5));
+const rSemicircle=parseGcodeToolpaths("G0 X0 Y0 Z0.2\nG2 X10 Y0 R5 E1");
+assert.equal(rSemicircle.renderedArcs,1);
+assert.ok(rSemicircle.layers[0].segments.some(p=>p.y2>4.9));
+const invalidRadius=parseGcodeToolpaths("G0 X0 Y0 Z0.2\nG2 X10 Y0 R4 E1\nG1 X20 Y0 E2");
+assert.equal(invalidRadius.skippedArcs,1);
+assert.deepEqual([invalidRadius.layers[0].segments.at(-1).x1,invalidRadius.layers[0].segments.at(-1).x2],[10,20]);
+assert.equal(parseGcodeToolpaths("G0 X0 Y0 Z0.2\nG2 R10").skippedArcs,1);
+assert.equal(parseGcodeToolpaths("G0 X0 Y0 Z0.2\nG2 X10 Y0 R5 I5").skippedArcs,1);
+assert.equal(parseGcodeToolpaths("G0 X0 Y0 Z0.2\nG2 X10 Y0 R-5").skippedArcs,1);
+const inchRadius=parseGcodeToolpaths("G20\nG0 X1 Y0 Z0.01\nG3 X0 Y1 R1");
+assert.equal(inchRadius.renderedArcs,1);
+assert.throws(()=>parseGcodeToolpaths("G0 X10 Y0\nG3 X0 Y10 R10",{maxSegments:2}),/complex/);
+console.log('PASS: bounded XY arcs (CW, CCW, full circle, absolute and relative center), R minor/major/semicircles, skipped endpoint safety');
 console.log('PASS: G-code linear extrusion, travel, layers, relative moves, safety limits');

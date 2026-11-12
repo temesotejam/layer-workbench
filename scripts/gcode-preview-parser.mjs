@@ -1,5 +1,5 @@
 // Bounded read-only preview parser for G-code from the isolated WASM lab.
-// Linear G0/G1 and common planar G2/G3 (XY, I/J center) are visualized.
+// Linear G0/G1 and common planar G2/G3 (XY, I/J center or R radius) are visualized.
 // Unsupported arc forms are *not* drawn as misleading straight chords, but
 // their modal XYZE end positions still advance so subsequent paths stay aligned.
 // This is a diagnostic renderer, not a firmware interpreter or print safety check.
@@ -70,14 +70,44 @@ export function parseGcodeToolpaths(source, options={}) {
         append(start.x,start.y,state.x,state.y,state.z,extrusion);
       continue;
     }
-    // R arcs, non-XY planes, and helices are skipped explicitly. Still update
-    // the modal endpoint above: the NEXT move must not start at a stale point.
-    if(state.plane!=="G17"||("R" in words)||(!("I" in words)&&!("J" in words))||
-       Math.abs(state.z-start.z)>EPS){
+    // Even for omitted arcs, the modal endpoint above must advance.
+    // R is a signed radius: positive selects the minor arc, negative the
+    // major arc. Reject ambiguous R+I/J, impossible chords, and R full circles.
+    const hasRadius="R" in words;
+    const hasCenter="I" in words||"J" in words;
+    if(state.plane!=="G17"||Math.abs(state.z-start.z)>EPS||
+       hasRadius===hasCenter){
       skippedArcs++;continue;
     }
-    const cx=state.absoluteArcCenters?(words.I??start.x):start.x+(words.I??0);
-    const cy=state.absoluteArcCenters?(words.J??start.y):start.y+(words.J??0);
+    let cx,cy;
+    if(hasRadius){
+      const dx=state.x-start.x,dy=state.y-start.y;
+      const chord=Math.hypot(dx,dy),radius=Math.abs(words.R);
+      if(!Number.isFinite(radius)||radius<EPS||chord<EPS||
+         chord>2*radius+1e-7){
+        skippedArcs++;continue;
+      }
+      const h2=radius*radius-chord*chord/4;
+      if(h2< -1e-7){skippedArcs++;continue;}
+      const h=Math.sqrt(Math.max(0,h2));
+      const mx=(start.x+state.x)/2,my=(start.y+state.y)/2;
+      const ox=-dy*h/chord,oy=dx*h/chord;
+      const candidates=[[mx+ox,my+oy],[mx-ox,my-oy]].map(([x,y])=>{
+        const from=Math.atan2(start.y-y,start.x-x);
+        const to=Math.atan2(state.y-y,state.x-x);
+        const sweep=cmd==="G3"?((to-from)%TAU+TAU)%TAU:
+          -((from-to)%TAU+TAU)%TAU;
+        return {x,y,sweep};
+      });
+      const selected=candidates.find(c=>words.R<0
+        ? Math.abs(c.sweep)>Math.PI+1e-7
+        : Math.abs(c.sweep)>EPS&&Math.abs(c.sweep)<=Math.PI+1e-7);
+      if(!selected){skippedArcs++;continue;}
+      cx=selected.x;cy=selected.y;
+    }else{
+      cx=state.absoluteArcCenters?(words.I??start.x):start.x+(words.I??0);
+      cy=state.absoluteArcCenters?(words.J??start.y):start.y+(words.J??0);
+    }
     const r0=Math.hypot(start.x-cx,start.y-cy);
     const r1=Math.hypot(state.x-cx,state.y-cy);
     if(!Number.isFinite(r0)||!Number.isFinite(r1)||r0<EPS||

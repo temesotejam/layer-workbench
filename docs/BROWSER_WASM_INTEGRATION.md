@@ -243,3 +243,9 @@ was **644.409 vs 6000 mm/min** (max 758.106 vs 6000 mm/min).
 These are intentionally extreme synthetic diagnostic limits, **not** approved
 material settings. Actual printer/nozzle variant compatibility and full
 native G-code parity remain unverified; never print this test G-code.
+
+## 2026-11-13: bounded signed-R G2/G3 Preview geometry
+
+The isolated local Preview now approximates common G17 XY-plane G2/G3 **R-radius** arcs as bounded line segments. Positive R chooses a minor (up to 180°) arc and negative R selects the major (over 180°) arc, for both clockwise and counter-clockwise motion. Radius units follow G20/G21. A semicircle with positive R is supported; ambiguous negative-R semicircles, coincident endpoints, impossible radii, simultaneous R and I/J, helices, and non-XY planes are **not** drawn. They still update modal XYZE endpoint state so subsequent moves do not jump back. The existing 4096-subdivision and global segment budgets still apply.
+
+The dedicated parser regression adds minor/major and clockwise paths, semicircle, imperial units, invalid/ambiguous geometry, skipped-arc endpoint safety and budget enforcement. This is a **diagnostic visualization** only, not firmware-exact motion simulation, G-code parity with native OrcaSlicer, or print safety validation. The unchanged archived WASM engine binary is not republished to the public site.
