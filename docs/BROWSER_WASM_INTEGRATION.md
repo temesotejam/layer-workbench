@@ -86,3 +86,11 @@ The isolated Prepare lab now includes a **diagnostic 2D layer-by-layer G-code to
 [Chrome CI #43247324788](https://github.com/temesotejam/layer-workbench/actions/runs/43247324788) **PASS**: parser tests for absolute/relative motion, travel, extrusion, layers and error limits; actual WASM-generated toolpaths displayed in the canvas with a functioning layer slider; re-preview of a G-code result after native process overrides (134 Z levels in the tested scenario). All prior WASM, model transform and multi-STL regression checks also passed.
 
 This is **not native OrcaSlicer Preview parity**: no full 3D toolpath geometry, bead widths, speed/feature color legend, extrusion volume simulation, G2/G3 interpolation, firmware-specific behavior, seam/travel semantics, temperature/time estimates or multi-plate preview. The published GitHub Pages workspace continues to keep WASM inactive; the lab requires cross-origin-isolated localhost.
+
+## 2026-11-12: experimental 3D G-code view
+
+The isolated Prepare lab now has a **separate WebGL/Three.js 3D G-code path preview** alongside the previously tested 2D layer canvas. `scripts/gcode-3d-preview.mjs` consumes the parser output derived from **actual WASM G-code**, constructs extrusion and travel line segments in native G-code millimeter coordinates, and exposes camera orbit/zoom and a cumulative visible-through-layer slider. Per-layer geometries are disposed on reslice; no printer execution is enabled.
+
+[Chrome CI #43247981727](https://github.com/temesotejam/layer-workbench/actions/runs/43247981727) **PASS**: the real WASM G-code generated a WebGL canvas with nonzero toolpath segments, and the 3D layer range selector changed visible layer counts from one to the full range. Existing 2D, STL import, native slicing, transforms, multi-object and process-override regressions also passed.
+
+**Limits:** this renders simple 3D *lines*, not extrusion-width volumes. Arc interpolation, true G-code simulation, layer feature coloring, full start/end-code state, wipe/retract semantics, speed/time coloring and desktop OrcaSlicer screenshot parity remain unimplemented. The test uses opt-in localhost with COOP/COEP, not an enabled production browser slicer.
