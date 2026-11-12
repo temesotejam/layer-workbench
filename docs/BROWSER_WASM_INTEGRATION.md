@@ -32,3 +32,15 @@ GitHub Pages is serving the static app without verified COOP/COEP isolation. The
 6. Validate full 3MF round-trip, advanced editing, texture, CAD and device workflows before claiming complete parity.
 
 A green browser smoke proves one representative flow, **not full desktop equivalence**.
+
+## 2026-11-12: Prepare UI → actual WASM slice proof
+
+The Prepare viewport now exposes an **explicit opt-in local test** when opened with `?engineLab=1`. See `scripts/prepare-engine-lab.mjs`. The ordinary page does not request engine binaries or enable the test. The lab is disabled if the current host lacks cross-origin isolation. The JavaScript and WASM binaries must be selected locally by the tester. No extra engine files are deployed to Pages.
+
+The importer retains the original `File` for each displayed model. The lab uses the selected STL source bytes and **one-slicer-api** to initialize a generic PLA test session, register the project, invoke the real slicer, retrieve the G-code asset, and offer a local download. Web-only transforms (Move/Rotate/Scale) mark the selection dirty; modified models cannot be sliced in this proof, to avoid silently ignoring changes. Multiple objects, native projects, per-object settings and profiles are not yet synchronized to the engine.
+
+[Isolated Chrome test #43243644692](https://github.com/temesotejam/layer-workbench/actions/runs/43243644692) passed, explicitly logging `PASS: Prepare UI selected STL → local WASM → G-code download`. The test selected a 12-triangle binary STL in the Prepare UI and supplied the pinned WASM artifact only inside CI. This is stronger than the earlier standalone engine probe but still **not a production slice flow**.
+
+Test locally: `python3 scripts/serve-isolated.py --port 8766`, open `http://127.0.0.1:8766/?engineLab=1`, import a small STL, select the verified `slicer-mt.js` / `slicer-mt.wasm` files, start the engine, and click **Slice selected STL (test only)**. Generated G-code is generic PLA fixture output; do not print without proper profile and machine validation.
+
+**Next gates:** preserve model coordinates, translate actual edited transforms and multiple-object plate metadata into native manifests, load full upstream profiles, add preview and cancellation, and verify an isolated production host before integrating the engine into the public UI.
