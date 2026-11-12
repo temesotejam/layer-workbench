@@ -13,7 +13,7 @@ export function createThreeDToolpathPreview(container) {
     <label>Visible through layer <input id="lab-3d-layer-range" type="range" min="0" max="0" value="0" step="1"></label>
     <output id="lab-3d-layer-info"></output>
     <div id="lab-3d-canvas" aria-label="3D G-code toolpath preview" role="img"></div>
-    <p>Orange: extrusion; blue-gray: travel. Straight segments only. This is not native OrcaSlicer Preview or a print safety check.</p>
+    <p>Orange: extrusion; blue-gray: travel. XY G2/G3 I/J arcs appear as approximated line segments; R/helical/other-plane arcs are omitted. This is not native OrcaSlicer Preview or a print safety check.</p>
   `;
   container.appendChild(section);
   const host=section.querySelector("#lab-3d-canvas");
