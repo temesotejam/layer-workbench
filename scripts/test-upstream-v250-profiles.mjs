@@ -14,6 +14,8 @@ assert.equal(indexed.entryCount,3);
 const resolved=resolveOrcaProfileFamily(indexed.records,"filament","Generic PLA @System");
 assert.deepEqual(resolved.chain,["fdm_filament_common","fdm_filament_pla","Generic PLA @System"]);
 assert.equal(resolved.settings.nozzle_temperature,"220");
+assert.deepEqual(resolved.settings.nozzle_temperature_initial_layer,["220"]);
+assert.ok(!resolved.unsupported.includes("nozzle_temperature_initial_layer"));
 assert.ok(resolved.unsupported.includes("hot_plate_temp"),
   "Native bed-type temperature handling must remain explicitly unsupported");
 assert.ok(resolved.unsupported.includes("filament_flow_ratio"),
