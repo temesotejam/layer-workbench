@@ -1,37 +1,57 @@
-// Minimal, bounded read-only G-code toolpath parser for the local WASM lab.
-// G0/G1 linear moves, G90/G91, M82/M83, G92 and G20/G21 units supported.
-// Arcs, firmware macros, tool changes, retractions and acceleration rendering
-// are intentionally out of scope. Never interpret G-code as executable JS.
-export function parseGcodeToolpaths(source, options = {}) {
-  if (typeof source !== "string" || source.length > (options.maxChars ?? 20_000_000))
+// Bounded read-only preview parser for G-code from the isolated WASM lab.
+// Linear G0/G1 and common planar G2/G3 (XY, I/J center) are visualized.
+// Unsupported arc forms are *not* drawn as misleading straight chords, but
+// their modal XYZE end positions still advance so subsequent paths stay aligned.
+// This is a diagnostic renderer, not a firmware interpreter or print safety check.
+const TAU=2*Math.PI;
+const EPS=1e-9;
+export function parseGcodeToolpaths(source, options={}) {
+  if(typeof source!=="string" || source.length>(options.maxChars??20_000_000))
     throw new Error("Invalid or oversized G-code preview input");
-  const maxSegments = options.maxSegments ?? 200_000;
-  const byZ = new Map();
-  const state = {x:0,y:0,z:0,e:0, absoluteXYZ:true, absoluteE:true, units:1};
-  let count=0, deposited=0, travels=0, skippedArcs=0;
-  const lines=source.split(/\r?\n/);
-  for (const input of lines) {
-    const line = input.split(";")[0].replace(/\([^)]*\)/g,"").trim().toUpperCase();
-    if (!line) continue;
-    const m = /^(?:N\d+\s+)?(G\d+|M\d+)(?=\s|$)/.exec(line);
-    if (!m) continue;
-    const cmd=m[1];
-    if (cmd==="G90"){state.absoluteXYZ=true;continue;}
-    if (cmd==="G91"){state.absoluteXYZ=false;continue;}
-    if (cmd==="M82"){state.absoluteE=true;continue;}
-    if (cmd==="M83"){state.absoluteE=false;continue;}
-    if (cmd==="G20"){state.units=25.4;continue;}
-    if (cmd==="G21"){state.units=1;continue;}
-    if (cmd==="G2" || cmd==="G3"){skippedArcs++; continue;}
-    if (!["G0","G1","G00","G01","G92"].includes(cmd)) continue;
+  const maxSegments=options.maxSegments??200_000;
+  if(!Number.isSafeInteger(maxSegments)||maxSegments<0||maxSegments>1_000_000)
+    throw new Error("Invalid preview segment budget");
+  const byZ=new Map();
+  const state={x:0,y:0,z:0,e:0,absoluteXYZ:true,absoluteE:true,units:1,plane:"G17",absoluteArcCenters:false};
+  let count=0,deposited=0,travels=0,skippedArcs=0,renderedArcs=0;
+  function append(x1,y1,x2,y2,z,extrusion){
+    if(![x1,y1,x2,y2,z].every(Number.isFinite) ||
+       Math.max(Math.abs(x1),Math.abs(y1),Math.abs(x2),Math.abs(y2),Math.abs(z))>100_000)
+      throw new Error("Toolpath coordinate exceeds preview limits");
+    if(++count>maxSegments)throw new Error("Toolpath too complex for this preview");
+    const layerZ=Math.round(z*1000)/1000;
+    const key=String(layerZ);
+    if(!byZ.has(key))byZ.set(key,{z:layerZ,segments:[]});
+    byZ.get(key).segments.push({x1,y1,x2,y2,extrusion});
+    extrusion?deposited++:travels++;
+  }
+  for(const input of source.split(/\r?\n/)){
+    const line=input.split(";")[0].replace(/\([^)]*\)/g,"").trim().toUpperCase();
+    if(!line)continue;
+    const m=/^(?:N\d+\s+)?(G\d+(?:\.\d+)?|M\d+)(?=\s|$)/.exec(line);
+    if(!m)continue;
+    let cmd=m[1];
+    // Accept leading-zero G-codes, e.g. G02/G03, without rewriting G90.1.
+    if(/^G\d+$/.test(cmd))cmd="G"+String(Number(cmd.slice(1)));
+    if(cmd==="G90"){state.absoluteXYZ=true;continue;}
+    if(cmd==="G91"){state.absoluteXYZ=false;continue;}
+    if(cmd==="G90.1"){state.absoluteArcCenters=true;continue;}
+    if(cmd==="G91.1"){state.absoluteArcCenters=false;continue;}
+    if(cmd==="M82"){state.absoluteE=true;continue;}
+    if(cmd==="M83"){state.absoluteE=false;continue;}
+    if(cmd==="G20"){state.units=25.4;continue;}
+    if(cmd==="G21"){state.units=1;continue;}
+    if(["G17","G18","G19"].includes(cmd)){state.plane=cmd;continue;}
+    const isArc=cmd==="G2"||cmd==="G3";
+    if(!isArc && !["G0","G1","G92"].includes(cmd))continue;
     const words={};
     const body=line.slice(m[0].length);
-    for (const part of body.matchAll(/([XYZE])\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:E[+-]?\d+)?)/g)) {
+    for(const part of body.matchAll(/([XYZEIJR])\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:E[+-]?\d+)?)/g)){
       const v=Number(part[2]);
-      if(Number.isFinite(v)) words[part[1]]=v*state.units;
+      if(Number.isFinite(v))words[part[1]]=v*state.units;
     }
     if(cmd==="G92"){
-      for(const axis of ["X","Y","Z","E"]) if(axis in words) state[axis.toLowerCase()]=words[axis];
+      for(const axis of ["X","Y","Z","E"])if(axis in words)state[axis.toLowerCase()]=words[axis];
       continue;
     }
     const start={...state};
@@ -41,18 +61,49 @@ export function parseGcodeToolpaths(source, options = {}) {
       const absolute=axis==="E"?state.absoluteE:state.absoluteXYZ;
       state[lower]=absolute?words[axis]:state[lower]+words[axis];
     }
-    if (["x","y","z"].every(axis=>Math.abs(state[axis]-start[axis])<1e-9)) continue;
-    if (![state.x,state.y,state.z,state.e].every(Number.isFinite)) throw new Error("Non-finite toolpath coordinate");
-    if(Math.max(Math.abs(state.x),Math.abs(state.y),Math.abs(state.z))>100_000)
+    if(![state.x,state.y,state.z,state.e].every(Number.isFinite) ||
+       Math.max(Math.abs(state.x),Math.abs(state.y),Math.abs(state.z))>100_000)
       throw new Error("Toolpath coordinate exceeds preview limits");
     const extrusion=state.e>start.e+1e-7;
-    const layerZ=Math.round(state.z*1000)/1000;
-    const key=String(layerZ);
-    if(!byZ.has(key)) byZ.set(key,{z:layerZ,segments:[]});
-    byZ.get(key).segments.push({x1:start.x,y1:start.y,x2:state.x,y2:state.y,extrusion});
-    count++; extrusion?deposited++:travels++;
-    if(count>maxSegments)throw new Error("Toolpath too complex for this preview");
+    if(!isArc){
+      if(Math.abs(state.x-start.x)>EPS||Math.abs(state.y-start.y)>EPS||Math.abs(state.z-start.z)>EPS)
+        append(start.x,start.y,state.x,state.y,state.z,extrusion);
+      continue;
+    }
+    // R arcs, non-XY planes, and helices are skipped explicitly. Still update
+    // the modal endpoint above: the NEXT move must not start at a stale point.
+    if(state.plane!=="G17"||("R" in words)||(!("I" in words)&&!("J" in words))||
+       Math.abs(state.z-start.z)>EPS){
+      skippedArcs++;continue;
+    }
+    const cx=state.absoluteArcCenters?(words.I??start.x):start.x+(words.I??0);
+    const cy=state.absoluteArcCenters?(words.J??start.y):start.y+(words.J??0);
+    const r0=Math.hypot(start.x-cx,start.y-cy);
+    const r1=Math.hypot(state.x-cx,state.y-cy);
+    if(!Number.isFinite(r0)||!Number.isFinite(r1)||r0<EPS||
+       Math.abs(r0-r1)>Math.max(0.05,r0*0.001)){
+      skippedArcs++;continue;
+    }
+    const a0=Math.atan2(start.y-cy,start.x-cx);
+    const a1=Math.atan2(state.y-cy,state.x-cx);
+    let sweep=cmd==="G3"?((a1-a0)%TAU+TAU)%TAU:-((a0-a1)%TAU+TAU)%TAU;
+    const fullCircle=Math.hypot(state.x-start.x,state.y-start.y)<1e-7;
+    if(Math.abs(sweep)<1e-9 && fullCircle)sweep=cmd==="G3"?TAU:-TAU;
+    if(Math.abs(sweep)<1e-9){skippedArcs++;continue;}
+    // At least one segment per millimeter or 10 degrees. Large arcs fail
+    // closed rather than silently drawing a grossly simplified trajectory.
+    const steps=Math.ceil(Math.max(Math.abs(sweep)*r0,Math.abs(sweep)/(Math.PI/18)));
+    if(steps>4096){skippedArcs++;continue;}
+    let px=start.x,py=start.y;
+    for(let i=1;i<=steps;i++){
+      const a=a0+sweep*i/steps;
+      const x=i===steps?state.x:cx+r0*Math.cos(a);
+      const y=i===steps?state.y:cy+r0*Math.sin(a);
+      append(px,py,x,y,state.z,extrusion);
+      px=x;py=y;
+    }
+    renderedArcs++;
   }
   const layers=[...byZ.values()].sort((a,b)=>a.z-b.z);
-  return {layers,segments:count,extrusions:deposited,travels,skippedArcs};
+  return {layers,segments:count,extrusions:deposited,travels,renderedArcs,skippedArcs};
 }
