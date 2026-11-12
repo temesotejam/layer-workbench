@@ -369,6 +369,17 @@ new_validation = (
 )
 if bridge_source.count(old_validation) != 1:
     raise SystemExit("Expected pinned OrcaWasm Print::validate bridge anchor missing or duplicated")
+# The pinned OrcaWasm bridge advertises its former v2.4.2 engine
+# version literally. Update the capability metadata to the actual source
+# tag being compiled; avoid presenting a successful 2.5.0 port as 2.4.2.
+# This is metadata alignment, not evidence of full desktop feature parity.
+old_engine_version = '"engine":{"family":"OrcaSlicer","version":"2.4.2"}'
+new_engine_version = '"engine":{"family":"OrcaSlicer","version":"2.5.0"}'
+if bridge_source.count(old_engine_version) != 1:
+    raise SystemExit("Expected pinned OrcaWasm engine version metadata anchor missing")
+bridge_source = bridge_source.replace(old_engine_version, new_engine_version, 1)
+if bridge_source.count(new_engine_version) != 1:
+    raise SystemExit("OrcaSlicer v2.5.0 engine version metadata not unique")
 bridge.write_text(
     bridge_source.replace(old_validation, new_validation, 1), encoding="utf-8"
 )
