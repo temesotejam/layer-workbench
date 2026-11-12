@@ -226,13 +226,12 @@ try {
     const rawOrca = [
       {type:'machine',name:'test machine base',nozzle_diameter:'0.4',printable_height:'250',machine_start_gcode:'G28'},
       {type:'machine',name:'TestPrinter 0.4 nozzle',inherits:'test machine base'},
-      {type:'filament',name:'Generic PLA @System',nozzle_temperature:'210',bed_temperature:'55',hot_plate_temp:['65']},
+      {type:'filament',name:'Generic PLA @System',nozzle_temperature:'210',bed_temperature:'55',hot_plate_temp:['65'],hot_plate_temp_initial_layer:['75']},
       {type:'filament',name:'Generic PLA @TestPrinter',inherits:'Generic PLA @System',nozzle_temperature:'215',compatible_printers:['TestPrinter 0.4 nozzle']},
       {type:'process',name:'process base',layer_height:'0.2',wall_loops:'2'},
       {type:'process',name:'0.16 Fine @TestPrinter',inherits:'process base',layer_height:'0.16',wall_loops:'4',compatible_printers:['TestPrinter 0.4 nozzle']},
     ];
-    await prepare.locator('#lab-orca-profiles').setInputFiles({
-      name:'orca-records.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({
+    const indexedRawOrca={
         vendor_index:{
           name:'Test Vendor',version:'01.00.00.00',
           machine_model_list:[],
@@ -241,8 +240,12 @@ try {
           process_list:rawOrca.filter(p=>p.type==='process').map(p=>({name:p.name,sub_path:'process/'+p.name+'.json'})),
         },
         files:Object.fromEntries(rawOrca.map(p=>[p.type+'/'+p.name+'.json',p])),
-      })),
+    };
+    const uploadRawOrca=async()=>prepare.locator('#lab-orca-profiles').setInputFiles({
+      name:'orca-records.json',mimeType:'application/json',
+      buffer:Buffer.from(JSON.stringify(indexedRawOrca)),
     });
+    await uploadRawOrca();
     await prepare.locator('#lab-orca-machine').fill('TestPrinter 0.4 nozzle');
     await prepare.locator('#lab-orca-filament').fill('Generic PLA @TestPrinter');
     await prepare.locator('#lab-orca-process').fill('0.16 Fine @TestPrinter');
@@ -273,6 +276,7 @@ try {
     const hotStatus=await prepare.locator('#lab-status').innerText();
     assert.ok(hotStatus.startsWith('PASS: 2 STL model(s)'),hotStatus);
     assert.match(hotStatus,/explicitly mapped hot bed 65/);
+    assert.match(hotStatus,/native first-layer hot bed 75/);
     assert.match(hotStatus,/1 unsupported keys excluded/);
     const hotHash=await prepare.locator('#lab-download').evaluate(async link=>{
       const digest=await crypto.subtle.digest('SHA-256',await(await fetch(link.href)).arrayBuffer());
@@ -280,6 +284,28 @@ try {
     });
     assert.notEqual(hotHash,nativeHash,'Explicit hot-plate temperature must change actual WASM output');
     console.log('PASS: explicit selected hot plate (65 C) changes real WASM G-code');
+
+    // Change ONLY the explicit initial layer hot-bed temperature. A SHA
+    // difference alone does not prove the G-code contains thermal commands:
+    // the generated header can include config text without driving heaters.
+    const hotText=await prepare.locator('#lab-download').evaluate(async link=>await(await fetch(link.href)).text());
+    rawOrca[2].hot_plate_temp_initial_layer=['85'];
+    await uploadRawOrca();
+    await prepare.locator('#lab-slice').click();
+    await prepare.waitForFunction(() => {
+      const text=document.querySelector('#lab-status')?.textContent||'';
+      return text.startsWith('PASS:')||text.startsWith('FAILED');
+    },null,{timeout:120000});
+    const warmerStatus=await prepare.locator('#lab-status').innerText();
+    assert.match(warmerStatus,/native first-layer hot bed 85/);
+    const warmerText=await prepare.locator('#lab-download').evaluate(async link=>await(await fetch(link.href)).text());
+    const thermalCommands=text=>text.split(/\\r?\\n/).filter(line=>/^M(?:140|190)\\b/i.test(line.trim()));
+    const before=thermalCommands(hotText);
+    const after=thermalCommands(warmerText);
+    console.log('HOT_PLATE_THERMAL_COMMANDS',JSON.stringify({before:before.slice(0,8),after:after.slice(0,8)}));
+    assert.notDeepEqual(after,before,'Initial layer hot plate temperature must change real bed heater G-code (not merely metadata)');
+    console.log('PASS: explicit first-layer hot plate temperature changes real WASM bed heater commands');
+
 
 
   } finally {
