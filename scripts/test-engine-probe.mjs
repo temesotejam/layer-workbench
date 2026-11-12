@@ -322,17 +322,16 @@ try {
     const toolBefore=toolHeaterCommands(warmerText);
     const toolAfter=toolHeaterCommands(warmerNozzleText);
     console.log('FIRST_LAYER_NOZZLE_COMMANDS',JSON.stringify({before:toolBefore.slice(0,10),after:toolAfter.slice(0,10)}));
-    if(toolBefore.length || toolAfter.length){
-      assert.ok(toolBefore.length && toolAfter.length,'Tool heater commands must be present in both test outputs');
-      assert.notDeepEqual(toolAfter,toolBefore,'Initial layer nozzle temperature must change real M104/M109 commands (not just metadata)');
-      console.log('PASS: inherited first-layer nozzle temperature changes actual WASM tool heater commands');
-    } else {
-      // This generic-development fixture intentionally does not import the
-      // manufacturer's machine_start_gcode. It emits no M104/M109 at all.
-      // Native value forwarding is unit-tested independently, but never
-      // label this as confirmed real tool heating.
-      console.log('LIMITATION: generic fixture has no M104/M109; first-layer nozzle heating not verified');
-    }
+    // Actual pinned WASM logs show generated M104 S235 → M104 S245 for
+    // the initial layer, while the later steady M104 S215 is unchanged.
+    // Match commands specifically: a different file hash or G-code comment
+    // is NOT proof of a real tool-heater command.
+    assert.match(toolBefore.join('\n'),/^M104 S235\b/m);
+    assert.match(toolAfter.join('\n'),/^M104 S245\b/m);
+    assert.match(toolBefore.join('\n'),/^M104 S215\b/m);
+    assert.match(toolAfter.join('\n'),/^M104 S215\b/m);
+    assert.notDeepEqual(toolAfter,toolBefore,'Initial layer nozzle temperature must change real M104/M109 commands (not just metadata)');
+    console.log('PASS: initial-layer M104 S235 -> S245; later M104 S215 unchanged in real WASM G-code');
 
 
 
