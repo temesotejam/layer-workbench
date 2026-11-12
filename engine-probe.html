@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#202329">
+<link rel="icon" href="data:,">
+<title>Layer Workbench — Local WASM Engine Probe</title>
+<style>
+:root{color-scheme:dark;font:14px system-ui;background:#20252c;color:#e8edf3}
+body{max-width:720px;margin:6vh auto;padding:0 20px}
+h1{font-size:24px}p{line-height:1.6;color:#b8c4d0}
+section{border:1px solid #4a5663;border-radius:8px;padding:20px;background:#292f38}
+label{display:block;margin:14px 0;font-weight:600}
+input{display:block;margin:6px 0 0;width:100%;font:inherit}
+button{border:0;border-radius:5px;background:#238463;color:white;font-weight:650;padding:10px 20px;cursor:pointer}
+button:disabled{opacity:.5;cursor:not-allowed}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#171d23;border-radius:6px;padding:14px;min-height:110px}
+a{color:#9ddbc7}
+</style>
+<script type="module" src="./scripts/probe-engine.mjs"></script>
+</head>
+<body>
+<a href="./">← Back to workspace</a>
+<h1>Local OrcaSlicer WASM engine probe</h1>
+<p>Development-only test. Select the <code>slicer-mt.js</code> and <code>slicer-mt.wasm</code> from the verified GitHub Actions artifact. They remain on your computer and are not uploaded to a server. This page does not enable slicing or modify the public workspace.</p>
+<section>
+<p id="isolation">Checking cross-origin isolation…</p>
+<label>Engine JavaScript<input id="engine-js" type="file" accept=".js"></label>
+<label>Engine WebAssembly<input id="engine-wasm" type="file" accept=".wasm"></label>
+<button id="probe" disabled>Load and inspect engine</button>
+<pre id="probe-output" role="status" aria-live="polite">Select the two files to begin.</pre>
+</section>
+<p>Multithreaded Emscripten requires <code>SharedArrayBuffer</code> and cross-origin isolation. Ordinary GitHub Pages responses do not provide the necessary COOP/COEP headers. Use the isolated local development server described in the documentation for this test.</p>
+</body>
+</html>
