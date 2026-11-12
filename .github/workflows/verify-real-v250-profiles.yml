@@ -8,6 +8,8 @@ on:
       - "scripts/orca-profile-collection.mjs"
       - "scripts/orca-vendor-index.mjs"
       - "scripts/test-orca-profile-collection.mjs"
+      - "scripts/test-hot-plate-bridge.mjs"
+      - "scripts/slice-stl.mjs"
       - "scripts/test-orca-vendor-index.mjs"
       - "scripts/fetch-upstream-v250-fixture.py"
       - "scripts/test-upstream-v250-profiles.mjs"
@@ -30,6 +32,7 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/test-orca-profile-collection.mjs
+          node scripts/test-hot-plate-bridge.mjs
           node scripts/test-orca-vendor-index.mjs
       - name: Fetch pinned actual v2.5.0 upstream profile records
         run: python3 scripts/fetch-upstream-v250-fixture.py
