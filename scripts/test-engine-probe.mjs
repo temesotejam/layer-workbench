@@ -39,6 +39,33 @@ try {
   assert.equal(capabilities.engine.family, 'OrcaSlicer');
   assert.equal(capabilities.engine.version, '2.5.0');
   console.log('PASS: browser loaded pthread WASM engine with isolated headers and v2.5.0 capabilities');
+  // A reproducible 12-triangle cube, identical to the standalone Prepare
+  // browser smoke fixture. Verify the actual engine exports a G-code asset.
+  const triangles = [
+    [[0,0,0],[20,0,0],[20,20,0]], [[0,0,0],[20,20,0],[0,20,0]],
+    [[0,0,20],[20,20,20],[20,0,20]], [[0,0,20],[0,20,20],[20,20,20]],
+    [[0,0,0],[20,0,20],[20,0,0]], [[0,0,0],[0,0,20],[20,0,20]],
+    [[0,20,0],[20,20,0],[20,20,20]], [[0,20,0],[20,20,20],[0,20,20]],
+    [[0,0,0],[0,20,0],[0,20,20]], [[0,0,0],[0,20,20],[0,0,20]],
+    [[20,0,0],[20,0,20],[20,20,20]], [[20,0,0],[20,20,20],[20,20,0]],
+  ];
+  const cube = Buffer.alloc(84 + 50 * triangles.length);
+  cube.writeUInt32LE(triangles.length, 80);
+  triangles.forEach((tri, i) => tri.forEach((vertex, v) => vertex.forEach((value, axis) =>
+    cube.writeFloatLE(value, 84 + i * 50 + 12 + v * 12 + axis * 4))));
+  await page.locator('#slice-stl').setInputFiles({
+    name: 'cube-test.stl', mimeType: 'model/stl', buffer: cube,
+  });
+  await page.locator('#slice-model').click();
+  await page.waitForFunction(() => {
+    const text = document.querySelector('#slice-output')?.textContent ?? '';
+    return text.startsWith('PASS:') || text.startsWith('FAILED:');
+  }, null, {timeout: 120000});
+  const sliceResult = await page.locator('#slice-output').innerText();
+  if (sliceResult.startsWith('FAILED:')) throw new Error(sliceResult);
+  assert.match(sliceResult, /PASS: G-code generated/);
+  assert.equal(await page.locator('#download-gcode').isVisible(), true);
+  console.log('PASS: browser STL → WASM project → slice → G-code asset');
 } finally {
   await browser.close();
 }
