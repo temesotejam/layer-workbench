@@ -12,6 +12,7 @@ on:
       - "scripts/test-process-profile-unit.mjs"
       - "scripts/gcode-preview-parser.mjs"
       - "scripts/gcode-layer-preview.mjs"
+      - "scripts/gcode-3d-preview.mjs"
       - "scripts/test-gcode-preview-parser.mjs"
       - "scripts/multi-stl.mjs"
       - "scripts/test-multi-stl.mjs"
@@ -59,6 +60,7 @@ jobs:
           node scripts/test-multi-stl.mjs
           node scripts/test-process-profile-unit.mjs
           node scripts/test-gcode-preview-parser.mjs
+          node --check scripts/gcode-3d-preview.mjs
           node --check scripts/slice-stl.mjs
           node --check scripts/probe-engine.mjs
           node --check scripts/test-engine-probe.mjs
