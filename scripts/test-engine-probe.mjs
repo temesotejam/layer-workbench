@@ -152,6 +152,25 @@ try {
     });
     assert.notEqual(multiHash,transformedHash,'Adding second native model must change G-code');
     console.log('PASS: two Prepare STL objects → one native plate → distinct WASM G-code');
+    // Process override must be applied through the actual one-slicer-api
+    // profile operation, not merely reflected in the DOM.
+    await prepare.locator('#lab-process').setInputFiles({
+      name:'test-process.json', mimeType:'application/json',
+      buffer:Buffer.from(JSON.stringify({layer_height:0.3,wall_loops:3})),
+    });
+    await prepare.locator('#lab-slice').click();
+    await prepare.waitForFunction(() => {
+      const text=document.querySelector('#lab-status')?.textContent || '';
+      return text.startsWith('PASS:') || text.startsWith('FAILED');
+    },null,{timeout:120000});
+    const overrideStatus=await prepare.locator('#lab-status').innerText();
+    assert.ok(overrideStatus.startsWith('PASS: 2 STL model(s)'),overrideStatus);
+    const overrideHash = await prepare.locator('#lab-download').evaluate(async link => {
+      const digest=await crypto.subtle.digest('SHA-256',await (await fetch(link.href)).arrayBuffer());
+      return [...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');
+    });
+    assert.notEqual(overrideHash,multiHash,'Process override must alter actual native G-code');
+    console.log('PASS: local process override → native applyProfile → distinct G-code');
   } finally {
     await prepare.close();
   }
