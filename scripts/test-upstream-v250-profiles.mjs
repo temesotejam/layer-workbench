@@ -20,6 +20,16 @@ assert.ok(resolved.unsupported.includes("filament_flow_ratio"),
   "Native filament flow-ratio handling must remain explicitly unsupported");
 assert.deepEqual(resolved.compatible,[]);
 assert.equal(resolved.record.name,"Generic PLA @System");
+const hotBed=resolveOrcaProfileFamily(indexed.records,"filament","Generic PLA @System",{plateType:"hot"});
+assert.equal(hotBed.settings.nozzle_temperature,"220");
+assert.equal(hotBed.settings.bed_temperature,"55");
+assert.equal(hotBed.selectedBed.plateType,"hot");
+assert.equal(hotBed.selectedBed.source,"fdm_filament_pla");
+assert.ok(!hotBed.unsupported.includes("hot_plate_temp"));
+assert.ok(hotBed.unsupported.includes("hot_plate_temp_initial_layer"),
+  "Initial layer bed temperature is not implemented in generic WASM test config");
+console.log("PASS: official inherited hot-plate temperature 55 C selected explicitly (initial layer still unsupported)");
+
 assert.ok(resolved.unsupported.length>=10,
   "Real shipped preset must not be misrepresented as fully supported");
 console.log("PASS: pinned real OrcaSlicer v2.5.0 Generic PLA @System indexed inheritance");
