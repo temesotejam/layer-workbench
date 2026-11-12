@@ -232,7 +232,16 @@ try {
       {type:'process',name:'0.16 Fine @TestPrinter',inherits:'process base',layer_height:'0.16',wall_loops:'4',compatible_printers:['TestPrinter 0.4 nozzle']},
     ];
     await prepare.locator('#lab-orca-profiles').setInputFiles({
-      name:'orca-records.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({profiles:rawOrca})),
+      name:'orca-records.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({
+        vendor_index:{
+          name:'Test Vendor',version:'01.00.00.00',
+          machine_model_list:[],
+          machine_list:rawOrca.filter(p=>p.type==='machine').map(p=>({name:p.name,sub_path:'machine/'+p.name+'.json'})),
+          filament_list:rawOrca.filter(p=>p.type==='filament').map(p=>({name:p.name,sub_path:'filament/'+p.name+'.json'})),
+          process_list:rawOrca.filter(p=>p.type==='process').map(p=>({name:p.name,sub_path:'process/'+p.name+'.json'})),
+        },
+        files:Object.fromEntries(rawOrca.map(p=>[p.type+'/'+p.name+'.json',p])),
+      })),
     });
     await prepare.locator('#lab-orca-machine').fill('TestPrinter 0.4 nozzle');
     await prepare.locator('#lab-orca-filament').fill('Generic PLA @TestPrinter');
@@ -251,7 +260,7 @@ try {
       return [...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');
     });
     assert.notEqual(nativeHash,inheritedHash,'Three-domain raw Orca settings must change WASM output');
-    console.log('PASS: raw Orca machine+filament+process inheritance and compatibility → WASM G-code');
+    console.log('PASS: indexed Orca vendor machine+filament+process inheritance → WASM G-code');
 
   } finally {
     await prepare.close();
