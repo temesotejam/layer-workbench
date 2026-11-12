@@ -318,7 +318,7 @@ try {
     const warmerNozzleStatus=await prepare.locator('#lab-status').innerText();
     assert.ok(warmerNozzleStatus.startsWith('PASS: 2 STL model(s)'),warmerNozzleStatus);
     const warmerNozzleText=await prepare.locator('#lab-download').evaluate(async link=>await(await fetch(link.href)).text());
-    const toolHeaterCommands=text=>text.split(/\\r?\\n/).filter(line=>/^M(?:104|109)\\b/i.test(line.trim()));
+    const toolHeaterCommands=text=>text.split(/\r?\n/).filter(line=>/^M(?:104|109)\b/i.test(line.trim()));
     const toolBefore=toolHeaterCommands(warmerText);
     const toolAfter=toolHeaterCommands(warmerNozzleText);
     console.log('FIRST_LAYER_NOZZLE_COMMANDS',JSON.stringify({before:toolBefore.slice(0,10),after:toolAfter.slice(0,10)}));
