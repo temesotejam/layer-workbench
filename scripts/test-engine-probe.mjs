@@ -109,6 +109,16 @@ try {
     assert.ok(Number(await prepare.locator('#lab-toolpath-canvas').getAttribute('data-segment-count'))>0);
     await prepare.locator('#lab-layer-range').fill('0');
     assert.match(await prepare.locator('#lab-layer-info').innerText(),/^1\//);
+    assert.equal(await prepare.locator('.gcode-3d-preview').isVisible(),true);
+    assert.equal(await prepare.locator('#lab-3d-canvas canvas').isVisible(),true);
+    assert.ok(Number(await prepare.locator('#lab-3d-canvas').getAttribute('data-segment-count'))>0);
+    const initial3DMax=Number(await prepare.locator('#lab-3d-layer-range').getAttribute('max'));
+    assert.ok(initial3DMax>0);
+    await prepare.locator('#lab-3d-layer-range').fill('0');
+    assert.equal(await prepare.locator('#lab-3d-canvas').getAttribute('data-visible-layers'),'1');
+    await prepare.locator('#lab-3d-layer-range').fill(String(initial3DMax));
+    assert.equal(await prepare.locator('#lab-3d-canvas').getAttribute('data-visible-layers'),String(initial3DMax+1));
+    console.log('PASS: 3D WASM G-code toolpaths, orbit canvas, and adjustable visible layer range');
     console.log('PASS: actual WASM G-code rendered as navigable layer toolpaths');
     console.log('PASS: Prepare UI selected STL → local WASM → G-code download');
     const initialHash = await prepare.locator('#lab-download').evaluate(async link => {
