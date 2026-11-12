@@ -24,3 +24,11 @@
 .gcode-layer-preview input[type=range]{width:100%;accent-color:#e5a067}
 .gcode-layer-preview output{display:block;font-size:10px;color:#d3dde6;margin:5px 0}
 .gcode-layer-preview[hidden]{display:none}
+
+.gcode-3d-preview{border-top:1px solid #46535f;margin-top:12px;padding-top:12px}
+.gcode-3d-preview[hidden]{display:none}
+.gcode-3d-preview h3{font-size:12px;margin:0 0 8px}
+.gcode-3d-preview input[type=range]{width:100%;accent-color:#e5a067}
+.gcode-3d-preview output{display:block;margin:4px 0 8px;font-size:10px}
+#lab-3d-canvas{width:100%;aspect-ratio:1;overflow:hidden;border:1px solid #46535f;border-radius:5px;background:#171d24}
+#lab-3d-canvas canvas{display:block;width:100%;height:100%}
