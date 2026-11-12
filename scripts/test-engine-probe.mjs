@@ -368,6 +368,59 @@ try {
     assert.ok(changed>=10,'Actual numeric E extrusion values must respond to native flow ratio; G-code metadata alone is insufficient');
     console.log('PASS: native filament_flow_ratio 0.80 -> 1.20 changes '+changed+' real XY G1 E extrusion numbers');
 
+    // The official v2.5.0 Generic PLA multi-value max flow setting uses
+    // extruder VARIANTS, not multiple filament slots. Test the actual WASM
+    // G-code F feedrate, not the config trailer/hash or a fake session.
+    rawOrca[3].filament_extruder_variant=[
+      'Direct Drive Standard','Direct Drive High Flow','Direct Drive Extra High Flow',
+      'Bowden Standard','Bowden High Flow','Bowden Extra High Flow',
+    ];
+    // Use two far-apart, bounded diagnostic caps to expose a real slowdown.
+    rawOrca[3].filament_max_volumetric_speed=['0.7','40','40','0.7','40','40'];
+    rawOrca[2].filament_flow_ratio=['0.98'];
+    await uploadRawOrca();
+    const sliceWithVariant=async variant=>{
+      await prepare.locator('#lab-orca-filament-variant').fill(variant);
+      await prepare.locator('#lab-slice').click();
+      await prepare.waitForFunction(()=>{
+        const s=document.querySelector('#lab-status')?.textContent||'';
+        return s.startsWith('PASS:')||s.startsWith('FAILED');
+      },null,{timeout:120000});
+      const state=await prepare.locator('#lab-status').innerText();
+      assert.ok(state.startsWith('PASS: 2 STL model(s)'),state);
+      return prepare.locator('#lab-download').evaluate(async link=>await(await fetch(link.href)).text());
+    };
+    const limitedText=await sliceWithVariant('Direct Drive Standard');
+    const fastText=await sliceWithVariant('Direct Drive High Flow');
+    // Track modal F of XY+E moves; Orca often sets F on only the first move
+    // of a path. Exclude travel-only and pure E retract commands.
+    const extrusionFeeds=text=>{
+      let feed=NaN;
+      const rates=[];
+      for(const line of text.split(/\r?\n/)){
+        const code=line.split(';')[0].trim();
+        if(!/^G1(?:\s|$)/i.test(code))continue;
+        const f=code.match(/(?:^|\s)F(\d+(?:\.\d+)?)/i);
+        if(f)feed=Number(f[1]);
+        if(/(?:^|\s)E-?\d/.test(code)&&/(?:^|\s)[XY]-?\d/.test(code)&&Number.isFinite(feed))
+          rates.push(feed);
+      }
+      return rates;
+    };
+    const slow=extrusionFeeds(limitedText),quick=extrusionFeeds(fastText);
+    const median=values=>[...values].sort((a,b)=>a-b)[Math.floor(values.length/2)];
+    console.log('MAX_VOLUMETRIC_SPEED_FEEDS',JSON.stringify({
+      slowCount:slow.length,quickCount:quick.length,
+      slowMedian:median(slow),quickMedian:median(quick),
+      slowMax:Math.max(...slow),quickMax:Math.max(...quick),
+      slowSample:slow.slice(0,8),quickSample:quick.slice(0,8)
+    }));
+    assert.ok(slow.length>=20&&quick.length>=20,'Missing real extrusion feedrates');
+    assert.ok(median(slow)<median(quick),
+      'Selected native volumetric cap must change actual XY extrusion F rate, not merely metadata');
+    console.log('PASS: explicit extruder-variant 0.7 vs 40 mm3/s changes median native G1 extrusion feedrate');
+
+
 
 
 
