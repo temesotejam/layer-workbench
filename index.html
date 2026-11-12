@@ -35,6 +35,11 @@
         <span class="toolbar-divider"></span>
         <button class="tool-button" disabled title="Undo is not connected">↶</button>
         <button class="tool-button" disabled title="Redo is not connected">↷</button>
+        <span class="toolbar-divider"></span>
+        <button class="tool-button edit-mode active-tool" data-transform="translate" disabled title="Move the selected model (G)">Move</button>
+        <button class="tool-button edit-mode" data-transform="rotate" disabled title="Rotate the selected model (R)">Rotate</button>
+        <button class="tool-button edit-mode" data-transform="scale" disabled title="Scale the selected model (S)">Scale</button>
+        <button class="tool-button" id="remove-object" disabled title="Remove selected model (Delete)">Delete</button>
       </div>
       <div class="tool-group view-tools">
         <span class="toolbar-label">View</span><button class="tool-button selected">3D</button><button class="tool-button" disabled>Top</button><button class="tool-button" disabled>Front</button>
@@ -46,13 +51,13 @@
       <aside class="sidebar left-panel">
         <div class="panel-heading"><span>Objects</span><button class="subtle-button" disabled>＋</button></div>
         <div class="object-tree" id="object-tree"><div class="empty-object"><span class="cube-icon">◇</span><strong>No objects yet</strong><small>Import an STL, 3MF or OBJ file to begin.</small></div></div>
-        <div class="panel-bottom"><span>Plate 1</span><span class="muted">0 objects</span></div>
+        <div class="panel-bottom"><span>Plate 1</span><span id="object-count" class="muted">0 objects</span></div>
       </aside>
 
       <section class="viewport" aria-label="3D viewport">
-        <div class="viewport-top"><div class="plate-title"><span class="green-dot"></span> Plate 1 <span class="muted">· 256 × 256 mm</span></div><div class="viewport-controls"><button disabled title="Fit view">Fit</button><button disabled title="View options">⚙</button></div></div>
+        <div class="viewport-top"><div class="plate-title"><span class="green-dot"></span> Plate 1 <span class="muted">· 256 × 256 mm</span></div><div class="viewport-controls"><button id="fit-view" title="Fit selected model or plate">Fit</button><button disabled title="View options">⚙</button></div></div>
         <div class="scene" id="scene">
-          <div class="scene-watermark">3D VIEWPORT · THREE.JS</div>
+          <div class="scene-watermark">PREPARE · 3D VIEWPORT</div>
           <div id="viewport-canvas" class="viewport-canvas" aria-label="Interactive 3D model viewport"></div>
           <div class="scene-empty" id="scene-empty"><div class="scene-cube">◇</div><strong>Build plate is empty</strong><span>Drop an STL, OBJ or 3MF file here.</span></div>
           <div class="view-cube"><span>3D</span><small>X&nbsp; Y&nbsp; Z</small></div>
@@ -71,6 +76,8 @@
           <select id="filament" disabled><option>Choose filament profile</option></select>
           <label class="field-label" for="process">Process</label>
           <select id="process" disabled><option>Choose process profile</option></select>
+          <div class="settings-section"><span>Selected object</span><span class="muted">Viewer only</span></div>
+          <p id="transform-status" class="field-note">Select an imported model to move, rotate or scale it. Browser-only changes are not saved into OrcaSlicer projects.</p>
           <div class="settings-section"><span>Quality</span><span class="muted">Profile required</span></div>
           <div class="setting-row"><span>Layer height</span><span>— mm</span></div>
           <div class="setting-row"><span>First layer height</span><span>— mm</span></div>
