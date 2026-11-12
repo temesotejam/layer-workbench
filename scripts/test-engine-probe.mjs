@@ -226,7 +226,7 @@ try {
     const rawOrca = [
       {type:'machine',name:'test machine base',nozzle_diameter:'0.4',printable_height:'250',machine_start_gcode:'G28'},
       {type:'machine',name:'TestPrinter 0.4 nozzle',inherits:'test machine base'},
-      {type:'filament',name:'Generic PLA @System',nozzle_temperature:'210',bed_temperature:'55',hot_plate_temp:['65'],hot_plate_temp_initial_layer:['75']},
+      {type:'filament',name:'Generic PLA @System',nozzle_temperature:'210',nozzle_temperature_initial_layer:['235'],bed_temperature:'55',hot_plate_temp:['65'],hot_plate_temp_initial_layer:['75']},
       {type:'filament',name:'Generic PLA @TestPrinter',inherits:'Generic PLA @System',nozzle_temperature:'215',compatible_printers:['TestPrinter 0.4 nozzle']},
       {type:'process',name:'process base',layer_height:'0.2',wall_loops:'2'},
       {type:'process',name:'0.16 Fine @TestPrinter',inherits:'process base',layer_height:'0.16',wall_loops:'4',compatible_printers:['TestPrinter 0.4 nozzle']},
@@ -305,6 +305,26 @@ try {
     console.log('HOT_PLATE_THERMAL_COMMANDS',JSON.stringify({before:before.slice(0,8),after:after.slice(0,8)}));
     assert.notDeepEqual(after,before,'Initial layer hot plate temperature must change real bed heater G-code (not merely metadata)');
     console.log('PASS: explicit first-layer hot plate temperature changes real WASM bed heater commands');
+    // Independent initial nozzle temperature. The WASM test must observe
+    // M104/M109 tool-heater commands, not merely config comments or a new
+    // generated G-code hash. The steady nozzle temperature stays unchanged.
+    rawOrca[2].nozzle_temperature_initial_layer=['245'];
+    await uploadRawOrca();
+    await prepare.locator('#lab-slice').click();
+    await prepare.waitForFunction(() => {
+      const text=document.querySelector('#lab-status')?.textContent||'';
+      return text.startsWith('PASS:')||text.startsWith('FAILED');
+    },null,{timeout:120000});
+    const warmerNozzleStatus=await prepare.locator('#lab-status').innerText();
+    assert.ok(warmerNozzleStatus.startsWith('PASS: 2 STL model(s)'),warmerNozzleStatus);
+    const warmerNozzleText=await prepare.locator('#lab-download').evaluate(async link=>await(await fetch(link.href)).text());
+    const toolHeaterCommands=text=>text.split(/\\r?\\n/).filter(line=>/^M(?:104|109)\\b/i.test(line.trim()));
+    const toolBefore=toolHeaterCommands(warmerText);
+    const toolAfter=toolHeaterCommands(warmerNozzleText);
+    console.log('FIRST_LAYER_NOZZLE_COMMANDS',JSON.stringify({before:toolBefore.slice(0,10),after:toolAfter.slice(0,10)}));
+    assert.notDeepEqual(toolAfter,toolBefore,'Initial layer nozzle temperature must change real M104/M109 commands (not just metadata)');
+    console.log('PASS: inherited first-layer nozzle temperature changes actual WASM tool heater commands');
+
 
 
 
