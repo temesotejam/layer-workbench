@@ -10,6 +10,9 @@ on:
       - "scripts/slice-stl.mjs"
       - "scripts/test-process-profile.mjs"
       - "scripts/test-process-profile-unit.mjs"
+      - "scripts/gcode-preview-parser.mjs"
+      - "scripts/gcode-layer-preview.mjs"
+      - "scripts/test-gcode-preview-parser.mjs"
       - "scripts/multi-stl.mjs"
       - "scripts/test-multi-stl.mjs"
       - "scripts/transform-matrix.mjs"
@@ -55,6 +58,7 @@ jobs:
           node scripts/test-transform-matrix.mjs
           node scripts/test-multi-stl.mjs
           node scripts/test-process-profile-unit.mjs
+          node scripts/test-gcode-preview-parser.mjs
           node --check scripts/slice-stl.mjs
           node --check scripts/probe-engine.mjs
           node --check scripts/test-engine-probe.mjs
