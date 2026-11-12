@@ -152,6 +152,26 @@ jobs:
           set -o pipefail
           python3 patches/apply.py 2>&1 | tee "$GITHUB_WORKSPACE/patch-audit.log"
 
+      - name: Verify Boost.Log uses the pthread ABI end-to-end
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'STAMP="${INSTALL}/.boost_built_mt_native_eh_v4"' orcawasm/scripts/build-local-wsl.sh
+          if grep -Fq 'define=BOOST_LOG_NO_THREADS=1' orcawasm/scripts/build-local-wsl.sh; then
+            echo "::error::Boost.Log library is still built with its single-thread ABI"
+            exit 1
+          fi
+          if grep -Fq 'BOOST_LOG_NO_THREADS' orcawasm/cmake/wasm_find_paths.cmake; then
+            echo "::error::Boost.Log consumers still request the single-thread ABI"
+            exit 1
+          fi
+          grep -Fq 'asynchronous_sink<boost::log::sinks::text_ostream_backend>' orcawasm/orca/src/libslic3r/utils.cpp
+          grep -Fq 'synchronous_sink<boost::log::sinks::text_file_backend>' orcawasm/orca/src/libslic3r/utils.cpp
+          if grep -Fq 'unlocked_sink<boost::log::sinks::text_file_backend>' orcawasm/orca/src/libslic3r/utils.cpp; then
+            echo "::error::Unsafe unlocked Boost.Log sink patch still applied"
+            exit 1
+          fi
+
       - name: Fail if a required patch anchor no longer matches
         if: always()
         run: |
