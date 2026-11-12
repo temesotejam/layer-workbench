@@ -1,0 +1,22 @@
+name: Test native versus WASM G-code comparator
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/compare_gcode.py"
+      - "scripts/test_compare_gcode.py"
+      - ".github/workflows/test-gcode-parity.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  comparator-unit-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exercise equality and mismatch detection
+        run: python3 -m unittest discover -s scripts -p test_compare_gcode.py -v
