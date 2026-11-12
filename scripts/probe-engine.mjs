@@ -1,3 +1,4 @@
+import { sliceStlWithEngine } from "./slice-stl.mjs";
 // Browser-only development probe for local, user-selected WASM artifacts.
 // No remote engine binaries are fetched; no project files are uploaded.
 // API contract reference: pinned Hiosdra/OrcaWasm engine-binding.js.
@@ -73,6 +74,13 @@ const jsInput = document.querySelector("#engine-js");
 const wasmInput = document.querySelector("#engine-wasm");
 const output = document.querySelector("#probe-output");
 const isolation = document.querySelector("#isolation");
+const sliceInput = document.querySelector("#slice-stl");
+const sliceButton = document.querySelector("#slice-model");
+const sliceOutput = document.querySelector("#slice-output");
+const downloadLink = document.querySelector("#download-gcode");
+let loadedDiagnostic = null;
+let lastDownloadUrl = null;
+
 if (button && jsInput && wasmInput && output && isolation) {
   const supported = checkIsolation();
   isolation.textContent = supported
@@ -90,9 +98,44 @@ if (button && jsInput && wasmInput && output && isolation) {
       // Keep the runtime and worker URL alive for this diagnostic tab.
       // No slicing requests are issued from this page.
       window.__layerDiagnosticEngine = result;
+      loadedDiagnostic = result;
+      if (sliceInput?.files?.length) sliceButton.disabled = false;
     } catch (error) {
       output.textContent = "FAILED: " + error.message;
       update();
+    }
+  });
+}
+
+if (sliceInput && sliceButton && sliceOutput && downloadLink) {
+  sliceInput.addEventListener("change", () => {
+    sliceButton.disabled = !loadedDiagnostic || !sliceInput.files?.length;
+  });
+  sliceButton.addEventListener("click", async () => {
+    sliceButton.disabled = true;
+    downloadLink.hidden = true;
+    if (lastDownloadUrl) URL.revokeObjectURL(lastDownloadUrl);
+    lastDownloadUrl = null;
+    sliceOutput.textContent = "Slicing selected STL in the locally loaded WASM engine…";
+    try {
+      const file = sliceInput.files?.[0];
+      if (!file || !file.name.toLowerCase().endsWith(".stl") || file.size > 20 * 1024 * 1024)
+        throw new Error("Choose an STL file smaller than 20 MB for this proof.");
+      const input = new Uint8Array(await file.arrayBuffer());
+      const { gcode, statistics } = await sliceStlWithEngine(
+        loadedDiagnostic.engine,
+        input,
+        progress => { sliceOutput.textContent = "Slicing: " + (progress?.percent ?? "?") + "% · " + (progress?.stage ?? ""); },
+      );
+      lastDownloadUrl = URL.createObjectURL(new Blob([gcode], {type: "text/plain"}));
+      downloadLink.href = lastDownloadUrl;
+      downloadLink.hidden = false;
+      sliceOutput.textContent = "PASS: G-code generated (" + gcode.byteLength + " bytes). Generic PLA test profile only. " +
+        (statistics ? "Statistics: " + JSON.stringify(statistics).slice(0, 1200) : "");
+    } catch (error) {
+      sliceOutput.textContent = "FAILED: " + error.message;
+    } finally {
+      sliceButton.disabled = !loadedDiagnostic || !sliceInput.files?.length;
     }
   });
 }
