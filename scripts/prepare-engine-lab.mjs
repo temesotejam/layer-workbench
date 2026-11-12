@@ -25,6 +25,11 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
     <label>Optional raw Orca machine/filament/process collection (.json) <input id="lab-orca-profiles" type="file" accept=".json"></label>
     <label>Machine preset name <input id="lab-orca-machine" type="text" maxlength="160"></label>
     <label>Filament preset name <input id="lab-orca-filament" type="text" maxlength="160"></label>
+    <label>Test bed mapping <select id="lab-orca-plate">
+      <option value="none">No plate-specific mapping (fixture defaults)</option>
+      <option value="hot">Orca hot plate only (explicit)</option>
+    </select></label>
+    <small>Only hot_plate_temp is mapped to the generic test bed_temperature. Initial-layer temperature, other plates and full material settings remain unsupported; generated G-code is not print-ready.</small>
     <label>Process preset name <input id="lab-orca-process" type="text" maxlength="160"></label>
     <button id="lab-slice" disabled>Slice STL plate (test only)</button>
     <a id="lab-download" hidden download="prepare-test.gcode">Download test G-code</a>
@@ -43,6 +48,7 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
   const rawProfiles = $("#lab-orca-profiles");
   const rawMachine = $("#lab-orca-machine");
   const rawFilament = $("#lab-orca-filament");
+  const rawPlate = $("#lab-orca-plate");
   const rawProcess = $("#lab-orca-process");
   const download = $("#lab-download");
   const status = $("#lab-status");
@@ -109,7 +115,7 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
       const nativeCollection = rawProfiles.files?.length
         ? await readOrcaProfileCollection(rawProfiles.files[0],{
           machine:rawMachine.value.trim(),filament:rawFilament.value.trim(),process:rawProcess.value.trim(),
-        })
+        }, {plateType:rawPlate.value==="hot" ? "hot" : undefined})
         : null;
       const chosenPreset = presetBundle.files?.length
         ? await readProcessPresetBundle(presetBundle.files[0],presetName.value.trim())
@@ -128,10 +134,11 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
       } catch (previewError) {
         previewInfo = " Preview unavailable: " + previewError.message;
       }
+      const bedInfo = nativeCollection?.filament.selectedBed;
       const unsupported = nativeCollection
         ? [nativeCollection.machine,nativeCollection.filament,nativeCollection.process].reduce((n,v)=>n+v.unsupported.length,0) : 0;
       status.textContent = "PASS: " + selected.length + " STL model(s) → " + result.gcode.byteLength +
-        " G-code bytes. Restricted test profiles with " + (nativeCollection ? "Orca raw preset selection ("+rawMachine.value+" / "+rawFilament.value+" / "+rawProcess.value+"), "+unsupported+" unsupported keys excluded" : chosenPreset ? "inherited process preset (" + chosenPreset.chain.join(" > ") + ")" : processOverrides ? "test overrides" : "default process") + ";" + previewInfo + " Do not print without validating.";
+        " G-code bytes. Restricted test profiles with " + (nativeCollection ? "Orca raw preset selection ("+rawMachine.value+" / "+rawFilament.value+" / "+rawProcess.value+"), "+unsupported+" unsupported keys excluded"+(bedInfo ? ", explicitly mapped hot bed "+bedInfo.bed_temperature+" °C (first layer unsupported)" : "") : chosenPreset ? "inherited process preset (" + chosenPreset.chain.join(" > ") + ")" : processOverrides ? "test overrides" : "default process") + ";" + previewInfo + " Do not print without validating.";
       onStatus("Test WASM sliced all imported STL models and their displayed transforms on one plate; generic PLA settings only.");
     } catch (error) {
       status.textContent = "FAILED slicing: " + error.message;
