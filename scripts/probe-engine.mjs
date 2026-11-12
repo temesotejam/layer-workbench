@@ -41,7 +41,7 @@ export async function loadSelectedEngine(jsFile, wasmFile, environment = globalT
         onAbort: reason => console.error("[Orca WASM abort]", reason),
       }
     });
-    const capabilities = await engine.getCapabilities();
+    const capabilities = engine.capabilities;
     if (capabilities?.api?.version !== "0.7.0" ||
         capabilities?.engine?.family !== "OrcaSlicer" ||
         capabilities?.engine?.version !== "2.5.0") {
