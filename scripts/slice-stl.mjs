@@ -1,3 +1,4 @@
+import {viewerMatrixToNative} from "./transform-matrix.mjs";
 // Experimental end-to-end bridge for an isolated browser host.
 // Uses the vendored one-slicer-api 0.7.0 interface, not display-only meshes.
 const encode = value => new TextEncoder().encode(JSON.stringify(value));
@@ -19,7 +20,7 @@ export const GENERIC_PLA_TEST_CONFIG = Object.freeze({
   bed_temperature: 55,
 });
 
-export function makeSingleStlManifest(stlBytes) {
+export function makeSingleStlManifest(stlBytes, viewerElements = null) {
   if (!(stlBytes instanceof Uint8Array) || stlBytes.byteLength < 134)
     throw new Error("Input must be non-empty STL bytes");
   return {
@@ -31,24 +32,21 @@ export function makeSingleStlManifest(stlBytes) {
       id: "instance-0",
       objectId: "object-0",
       plateId: "plate-0",
-      transform: { matrix: [
-        1,0,0,128,
-        0,1,0,128,
-        0,0,1,0,
-        0,0,0,1,
-      ] },
+      transform: { matrix: viewerElements
+        ? viewerMatrixToNative(viewerElements)
+        : [1,0,0,128, 0,1,0,128, 0,0,1,0, 0,0,0,1] },
     }],
     modifierVolumes: [],
   };
 }
 
-export async function sliceStlWithEngine(engine, stlBytes, onProgress) {
+export async function sliceStlWithEngine(engine, stlBytes, onProgress, viewerElements = null) {
   if (!engine || typeof engine.createSession !== "function")
     throw new Error("Verified OrcaSlicer engine must be loaded before slicing.");
   const session = await engine.createSession();
   try {
     await session.init(encode(GENERIC_PLA_TEST_CONFIG));
-    await session.setObjects(stlBytes, makeSingleStlManifest(stlBytes));
+    await session.setObjects(stlBytes, makeSingleStlManifest(stlBytes, viewerElements));
     const response = await session.slice({
       schemaVersion: "0.7.0",
       plateSelection: "selected",
