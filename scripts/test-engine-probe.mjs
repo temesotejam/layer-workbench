@@ -351,10 +351,10 @@ try {
     const highFlowText=await sliceWithFlowRatio('1.20');
     // Select XY extrusion motions, not M104/M140 commands, header metadata,
     // pure E retracts or travel-only moves.
-    const extrusionValues=text=>text.split(/\\r?\\n/).map(line=>{
+    const extrusionValues=text=>text.split(/\r?\n/).map(line=>{
       const code=line.split(';')[0].trim();
-      if(!/^G1\\s/i.test(code)||!/\\b[XY]-?\\d/.test(code))return null;
-      const match=code.match(/(?:^|\\s)E(-?\\d+(?:\\.\\d+)?)/i);
+      if(!/^G1\s/i.test(code)||!/\b[XY]-?\d/.test(code))return null;
+      const match=code.match(/(?:^|\s)E(-?\d+(?:\.\d+)?)/i);
       return match?Number(match[1]):null;
     }).filter(n=>n!==null&&Number.isFinite(n));
     const lowE=extrusionValues(lowFlowText).slice(0,120);
