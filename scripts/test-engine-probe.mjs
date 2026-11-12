@@ -121,7 +121,7 @@ try {
       return text.startsWith('PASS:') || text.startsWith('FAILED');
     }, null, {timeout:120000});
     const transformedResult = await prepare.locator('#lab-status').innerText();
-    assert.match(transformedResult,/^PASS: prepare-cube\\.stl/);
+    assert.ok(transformedResult.startsWith('PASS: prepare-cube.stl'), transformedResult);
     const transformedHash = await prepare.locator('#lab-download').evaluate(async link => {
       const bytes = await (await fetch(link.href)).arrayBuffer();
       const digest = await crypto.subtle.digest('SHA-256',bytes);
