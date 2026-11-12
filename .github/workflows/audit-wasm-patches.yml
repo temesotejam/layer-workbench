@@ -122,6 +122,17 @@ jobs:
           grep -Fq '#include <CGAL/Surface_sweep_2_algorithms.h>' "$file"
           grep -Fq '#if !defined(SLIC3R_WASM)' "$file"
 
+      - name: Verify OrcaSlicer v2.5 bridge validation API
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          bridge = Path("orcawasm/bridge/slicer.cpp").read_text(encoding="utf-8")
+          expected = "Slic3r::StringObjectException validation_error = print.validate();"
+          if bridge.count(expected) != 1 or "print.validate(&warning)" in bridge:
+              raise SystemExit("v2.5.0 Print::validate bridge adaptation missing")
+          PY
+
       - name: Validate pinned Assimp WASM dependency recipe
         run: |
           set -euo pipefail
