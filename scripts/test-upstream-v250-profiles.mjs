@@ -27,6 +27,8 @@ assert.equal(hotBed.selectedBed.plateType,"hot");
 assert.equal(hotBed.selectedBed.source,"fdm_filament_pla");
 assert.ok(!hotBed.unsupported.includes("hot_plate_temp"));
 assert.deepEqual(hotBed.settings.hot_plate_temp_initial_layer,["55"]);
+assert.deepEqual(hotBed.settings.hot_plate_temp,["55"]);
+assert.equal(hotBed.settings.curr_bed_type,"High Temp Plate");
 assert.equal(hotBed.selectedBed.initialLayerSource,"fdm_filament_pla");
 assert.equal(hotBed.selectedBed.initialLayerTemperature,"55");
 assert.ok(!hotBed.unsupported.includes("hot_plate_temp_initial_layer"));
