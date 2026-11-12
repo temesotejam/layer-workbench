@@ -26,20 +26,18 @@ function validateNum(key,raw,limits){
     throw new Error('Setting out of test limits: '+key);
   return String(n);
 }
-export function resolveOrcaProfileCollection(records, selection) {
-  if(!Array.isArray(records)||records.length===0||records.length>MAX_RECORDS)throw new Error('Invalid profile collection size');
-  if(!dict(selection))throw new Error('Expected machine/filament/process names');
+export function resolveOrcaProfileFamily(records,type,selected) {
+  if(!Object.hasOwn(SPECS,type))throw new Error("Unknown Orca profile type");
+  if(!Array.isArray(records)||records.length===0||records.length>MAX_RECORDS)throw new Error("Invalid profile collection size");
   const registry=new Map();
-  for(const rec of records){
-    if(!dict(rec)||!SPECS[rec.type])throw new Error('Unknown Orca profile type');
+  for(const rec of records) {
+    if(!dict(rec)||!SPECS[rec.type])throw new Error("Unknown Orca profile type");
     const key=rec.type+':'+name(rec.name);
-    if(registry.has(key))throw new Error('Duplicate profile '+key);
+    if(registry.has(key))throw new Error("Duplicate profile "+key);
     if(rec.inherits!=null&&rec.inherits!=='')name(rec.inherits);
-    if(rec.compatible_printers!=null&&(!Array.isArray(rec.compatible_printers)||rec.compatible_printers.some(p=>typeof p!=='string')))
-      throw new Error('Invalid compatible_printers');
     registry.set(key,rec);
   }
-  function resolve(type,selected){
+  function resolve(){
     const chain=[],visited=new Set();
     function walk(n,depth){
       if(depth>MAX_DEPTH)throw new Error('Profile inheritance too deep');
@@ -64,9 +62,24 @@ export function resolveOrcaProfileCollection(records, selection) {
     const compatible=[...chain].reverse().find(p=>Object.hasOwn(p,'compatible_printers'))?.compatible_printers;
     return {type,name:selected,chain:chain.map(p=>p.name),settings:{...settings},unsupported:[...unsupported].sort(),record:chain.at(-1),compatible};
   }
-  const machine=resolve('machine',selection.machine);
-  const filament=resolve('filament',selection.filament);
-  const process=resolve('process',selection.process);
+  return resolve();
+}
+export function resolveOrcaProfileCollection(records, selection) {
+  if(!Array.isArray(records)||records.length===0||records.length>MAX_RECORDS)throw new Error('Invalid profile collection size');
+  if(!dict(selection))throw new Error('Expected machine/filament/process names');
+  const registry=new Map();
+  for(const rec of records){
+    if(!dict(rec)||!SPECS[rec.type])throw new Error('Unknown Orca profile type');
+    const key=rec.type+':'+name(rec.name);
+    if(registry.has(key))throw new Error('Duplicate profile '+key);
+    if(rec.inherits!=null&&rec.inherits!=='')name(rec.inherits);
+    if(rec.compatible_printers!=null&&(!Array.isArray(rec.compatible_printers)||rec.compatible_printers.some(p=>typeof p!=='string')))
+      throw new Error('Invalid compatible_printers');
+    registry.set(key,rec);
+  }
+  const machine=resolveOrcaProfileFamily(records,'machine',selection.machine);
+  const filament=resolveOrcaProfileFamily(records,'filament',selection.filament);
+  const process=resolveOrcaProfileFamily(records,'process',selection.process);
   const printer=machine.name;
   for(const item of [filament,process]){
     const allowed=item.compatible;
