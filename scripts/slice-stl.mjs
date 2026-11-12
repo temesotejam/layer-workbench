@@ -46,12 +46,19 @@ export async function sliceStlWithEngine(engine, stlBytes, onProgress, viewerEle
   return sliceMultiStlWithEngine(engine, [{bytes:stlBytes,viewerElements}], onProgress);
 }
 
-export async function sliceMultiStlWithEngine(engine, items, onProgress, processOverrides = null) {
+export async function sliceMultiStlWithEngine(engine, items, onProgress, processOverrides = null, profileCollection = null) {
   if (!engine || typeof engine.createSession !== "function")
     throw new Error("Verified OrcaSlicer engine must be loaded before slicing.");
   const session = await engine.createSession();
   try {
-    await session.init(encode(GENERIC_PLA_TEST_CONFIG));
+    // Apply only explicitly vetted numeric machine/filament fragments.
+    // Unsupported full Orca settings are NOT silently forwarded.
+    const base = profileCollection ? {
+      ...GENERIC_PLA_TEST_CONFIG,
+      ...profileCollection.machine.settings,
+      ...profileCollection.filament.settings,
+    } : GENERIC_PLA_TEST_CONFIG;
+    await session.init(encode(base));
     if (processOverrides !== null) {
       // Apply a restricted flat process fragment. Full OrcaSlicer profile
       // inheritance/machine compatibility requires a separate validated path.
