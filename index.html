@@ -12,10 +12,15 @@
 <body>
   <header class="appbar">
     <a class="brand" href="./" aria-label="Layer Workbench"><span class="brand-icon">L</span><span>Layer Workbench</span></a>
-    <nav class="workspace-tabs" aria-label="Workspace">
-      <button class="tab active" data-view="prepare">Prepare</button>
-      <button class="tab" data-view="preview" disabled title="Available after engine integration">Preview</button>
-      <button class="tab" data-view="device" disabled title="Device integration is not available yet">Device</button>
+    <nav class="workspace-tabs" aria-label="OrcaSlicer workspace">
+      <button class="tab" data-view="home" disabled title="Home page integration pending">Home</button>
+      <button class="tab" data-view="design" disabled title="Optional CAD/Design module is not built in the current WASM engine">Design</button>
+      <button class="tab active" data-view="prepare" aria-current="page">Prepare</button>
+      <button class="tab" data-view="preview" disabled title="G-code preview integration pending">Preview</button>
+      <button class="tab" data-view="device" disabled title="Printer device integration pending">Device</button>
+      <button class="tab" data-view="multi-device" disabled title="Multi-device integration pending">Multi-device</button>
+      <button class="tab" data-view="project" disabled title="Project panel integration pending">Project</button>
+      <button class="tab" data-view="calibration" disabled title="Calibration workflows pending">Calibration</button>
     </nav>
     <div class="app-actions"><span class="engine-state"><i></i> Engine candidate built · not connected</span><a class="icon-button" href="https://github.com/temesotejam/layer-workbench" aria-label="Source repository" title="Source repository">↗</a></div>
   </header>
