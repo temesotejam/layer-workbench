@@ -20,4 +20,26 @@ assert.throws(()=>resolve(profiles,{...selection,machine:'wrong printer'}),/Miss
 assert.throws(()=>resolve(profiles.map(p=>p.name==='Generic PLA @TestPrinter'?{...p,compatible_printers:['Other printer']}:p),selection),/not compatible/);
 assert.throws(()=>resolve([...profiles,{...profiles[0]}],selection),/Duplicate/);
 assert.throws(()=>resolve(profiles.map(p=>p.name==='fdm_process_common'?{...p,inherits:'0.16mm Fine @TestPrinter'}:p),selection),/cycle/);
+// Explicit plate selection is required: never silently treat hot_plate_temp
+// as a generic bed temperature, and do not map initial-layer temperatures.
+const withPlate=profiles.map(p=>p.name==='Generic PLA @System'
+  ? {...p,hot_plate_temp:['65'],hot_plate_temp_initial_layer:['70']} : p);
+const implicit=resolve(withPlate,selection);
+assert.equal(implicit.filament.settings.bed_temperature,'55');
+assert.equal(implicit.filament.selectedBed,null);
+assert.ok(implicit.filament.unsupported.includes('hot_plate_temp'));
+const explicit=resolve(withPlate,selection,{plateType:'hot'});
+assert.equal(explicit.filament.settings.bed_temperature,'65');
+assert.deepEqual(explicit.filament.selectedBed,{
+  plateType:'hot',source:'Generic PLA @System',bed_temperature:'65'
+});
+assert.ok(!explicit.filament.unsupported.includes('hot_plate_temp'));
+assert.ok(explicit.filament.unsupported.includes('hot_plate_temp_initial_layer'));
+assert.throws(()=>resolve(withPlate,selection,{plateType:'textured'}),/Unsupported Orca plate type/);
+assert.throws(()=>resolve(withPlate.map(p=>p.name==='Generic PLA @System'
+  ? {...p,hot_plate_temp:['150']} : p),selection,{plateType:'hot'}),/test limits/);
+assert.throws(()=>resolve(withPlate.map(p=>p.name==='Generic PLA @System'
+  ? {...p,hot_plate_temp:['55','65']} : p),selection,{plateType:'hot'}),/Multi-extruder/);
+assert.throws(()=>resolve(profiles,selection,{plateType:'hot'}),/Selected hot plate temperature missing/);
+console.log('PASS: explicit inherited Orca hot-plate temperature selection and fail-closed validation');
 console.log('PASS: Orca-style three-domain inheritance, compatibility and unsupported option reporting');
