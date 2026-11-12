@@ -1,0 +1,58 @@
+name: Verify v2.5.0 WASM candidate in isolated Chrome
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "engine-probe.html"
+      - "scripts/probe-engine.mjs"
+      - "scripts/serve-isolated.py"
+      - "scripts/test-engine-probe.mjs"
+      - ".github/workflows/verify-engine-browser.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Playwright controller
+        run: npm install --no-save --no-package-lock playwright@1.56.1
+      - name: Download only the previously verified candidate artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: layer-workbench-orcaslicer-v2.5.0-wasm
+          repository: temesotejam/layer-workbench
+          run-id: 43144590877
+          github-token: ${{ github.token }}
+          path: engine-test-artifacts
+      - name: Verify artifact files are present
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s engine-test-artifacts/slicer-mt.js
+          test -s engine-test-artifacts/slicer-mt.wasm
+          test "$(wc -c < engine-test-artifacts/slicer-mt.js)" -eq 150560
+          test "$(wc -c < engine-test-artifacts/slicer-mt.wasm)" -eq 31294942
+          node --check scripts/probe-engine.mjs
+          node --check scripts/test-engine-probe.mjs
+      - name: Launch isolated local server and probe engine in Chrome
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/serve-isolated.py --port 8766 > /tmp/isolated-layer-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..25}; do
+            if curl -fsS http://127.0.0.1:8766/engine-probe.html >/dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/test-engine-probe.mjs
