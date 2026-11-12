@@ -79,6 +79,15 @@
           <select id="process" disabled><option>Choose process profile</option></select>
           <div class="settings-section"><span>Selected object</span><span class="muted">Viewer only</span></div>
           <p id="transform-status" class="field-note">Select an imported model to move, rotate or scale it. Browser-only changes are not saved into OrcaSlicer projects.</p>
+          <div class="numeric-transform" aria-label="Model transform inputs">
+            <label>X (mm)<input id="transform-x" type="number" step="1" disabled></label>
+            <label>Y (mm)<input id="transform-y" type="number" step="1" disabled></label>
+            <label>Z (mm)<input id="transform-z" type="number" step="1" disabled></label>
+            <label>Rot Z (°)<input id="transform-rz" type="number" step="1" disabled></label>
+            <label>Scale X<input id="transform-sx" type="number" step="0.1" min="0.01" disabled></label>
+            <label>Scale Y<input id="transform-sy" type="number" step="0.1" min="0.01" disabled></label>
+            <label>Scale Z<input id="transform-sz" type="number" step="0.1" min="0.01" disabled></label>
+          </div>
           <div class="settings-section"><span>Quality</span><span class="muted">Profile required</span></div>
           <div class="setting-row"><span>Layer height</span><span>— mm</span></div>
           <div class="setting-row"><span>First layer height</span><span>— mm</span></div>
