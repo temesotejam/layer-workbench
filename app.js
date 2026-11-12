@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { STLLoader } from "three/addons/loaders/STLLoader.js";
 import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
 import { ThreeMFLoader } from "three/addons/loaders/3MFLoader.js";
@@ -13,11 +14,19 @@ const sliceNote = document.querySelector("#slice-note");
 const scene = document.querySelector("#scene");
 const canvasHost = document.querySelector("#viewport-canvas");
 const emptyHint = document.querySelector("#scene-empty");
+const transformButtons = [...document.querySelectorAll("[data-transform]")];
+const deleteButton = document.querySelector("#remove-object");
+const fitButton = document.querySelector("#fit-view");
+const transformStatus = document.querySelector("#transform-status");
+const objectCount = document.querySelector("#object-count");
 const MAX_FILE_BYTES = 200 * 1024 * 1024;
 const accepted = new Set(["stl", "3mf", "obj"]);
 const entries = [];
 let selectedId = null;
-let renderer, camera, controls, modelRoot;
+let renderer, camera, controls, transformControls;
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+let pointerDown = null;
 let rendererReady = false;
 
 const world = new THREE.Scene();
@@ -69,6 +78,39 @@ try {
   controls.minDistance = 25;
   controls.maxDistance = 1800;
   controls.update();
+  transformControls = new TransformControls(camera, renderer.domElement);
+  world.add(transformControls.getHelper());
+  transformControls.addEventListener("dragging-changed", event => {
+    controls.enabled = !event.value;
+    if (!event.value) updateTransformStatus();
+  });
+  transformControls.addEventListener("objectChange", updateTransformStatus);
+  renderer.domElement.addEventListener("pointerdown", event => {
+    pointerDown = { x: event.clientX, y: event.clientY };
+  });
+  renderer.domElement.addEventListener("pointerup", event => {
+    if (!pointerDown || event.button !== 0 || transformControls.dragging) return;
+    const movement = Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y);
+    pointerDown = null;
+    if (movement > 4) return;
+    const rect = renderer.domElement.getBoundingClientRect();
+    pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1,
+                -((event.clientY - rect.top) / rect.height) * 2 + 1);
+    raycaster.setFromCamera(pointer, camera);
+    const hits = raycaster.intersectObjects(entries.map(entry => entry.object), true);
+    if (hits.length) {
+      const hit = hits[0].object;
+      const entry = entries.find(candidate => {
+        let node = hit;
+        while (node) {
+          if (node === candidate.object) return true;
+          node = node.parent;
+        }
+        return false;
+      });
+      if (entry) selectEntry(entry.id);
+    }
+  });
   rendererReady = true;
   const resizeObserver = new ResizeObserver(() => {
     if (!rendererReady) return;
@@ -97,6 +139,7 @@ function escapeText(value) {
   return String(value).replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[char]);
 }
 function renderObjects() {
+  objectCount.textContent = entries.length + (entries.length === 1 ? " object" : " objects");
   if (!entries.length) {
     tree.innerHTML = '<div class="empty-object"><span class="cube-icon">◇</span><strong>No objects yet</strong><small>Import an STL, 3MF or OBJ file to begin.</small></div>';
     return;
@@ -112,11 +155,90 @@ function selectEntry(id) {
   selectedId = id;
   renderObjects();
   const entry = entries.find(item => item.id === id);
-  if (entry && entry.object) {
-    entries.forEach(item => item.object?.traverse(node => {
-      if (node.isMesh && node.material?.emissive) node.material.emissive.set(item.id === id ? 0x172b24 : 0x000000);
-    }));
+  if (transformControls) {
+    transformControls.detach();
+    if (entry) transformControls.attach(entry.object);
   }
+  transformButtons.forEach(button => { button.disabled = !entry; });
+  deleteButton.disabled = !entry;
+  entries.forEach(item => item.object?.traverse(node => {
+    if (!node.isMesh) return;
+    const materials = Array.isArray(node.material) ? node.material : [node.material];
+    materials.forEach(material => {
+      if (material?.emissive) material.emissive.set(item.id === id ? 0x172b24 : 0x000000);
+    });
+  }));
+  updateTransformStatus();
+}
+
+function updateTransformStatus() {
+  const entry = entries.find(item => item.id === selectedId);
+  if (!entry) {
+    transformStatus.textContent = "Select an imported model to move, rotate or scale it. Browser-only edits are not saved.";
+    return;
+  }
+  const p = entry.object.position;
+  const r = entry.object.rotation;
+  const sc = entry.object.scale;
+  const fmt = value => Number(value).toFixed(1);
+  transformStatus.textContent = `${entry.name} · Position: ${fmt(p.x)}, ${fmt(p.y)}, ${fmt(p.z)} mm · Rotation: ${fmt(THREE.MathUtils.radToDeg(r.x))}°, ${fmt(THREE.MathUtils.radToDeg(r.y))}°, ${fmt(THREE.MathUtils.radToDeg(r.z))}° · Scale: ${fmt(sc.x)}, ${fmt(sc.y)}, ${fmt(sc.z)} (viewer only)`;
+}
+
+function setTransformMode(mode) {
+  if (!transformControls || !entries.some(item => item.id === selectedId)) return;
+  if (!["translate", "rotate", "scale"].includes(mode)) return;
+  transformControls.setMode(mode);
+  transformButtons.forEach(button => button.classList.toggle("active-tool", button.dataset.transform === mode));
+}
+
+transformButtons.forEach(button => button.addEventListener("click", () => setTransformMode(button.dataset.transform)));
+deleteButton?.addEventListener("click", () => {
+  const index = entries.findIndex(item => item.id === selectedId);
+  if (index < 0) return;
+  const entry = entries[index];
+  transformControls?.detach();
+  world.remove(entry.object);
+  entries.splice(index, 1);
+  selectEntry(entries.at(-1)?.id || null);
+  if (!entries.length) {
+    emptyHint.hidden = false;
+    sceneFile.textContent = "No model loaded";
+    projectLabel.textContent = "Untitled project";
+  } else {
+    sceneFile.textContent = entries.length + " model(s) loaded";
+  }
+  status.textContent = "Removed " + entry.name + " from the browser viewport (original file unchanged)";
+});
+fitButton?.addEventListener("click", () => {
+  const entry = entries.find(item => item.id === selectedId);
+  if (entry) fitCameraToObject(entry.object);
+  else {
+    controls.target.set(0, 0, 35);
+    camera.position.set(330, -420, 310);
+    controls.update();
+  }
+});
+document.addEventListener("keydown", event => {
+  if (event.ctrlKey || event.metaKey || event.altKey) return;
+  if (["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) return;
+  if (event.key.toLowerCase() === "g") setTransformMode("translate");
+  if (event.key.toLowerCase() === "r") setTransformMode("rotate");
+  if (event.key.toLowerCase() === "s") setTransformMode("scale");
+  if (event.key === "Delete" && !deleteButton.disabled) deleteButton.click();
+});
+
+function fitCameraToObject(object) {
+  const bounds = new THREE.Box3().setFromObject(object);
+  const size = bounds.getSize(new THREE.Vector3());
+  const center = bounds.getCenter(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z, 1);
+  const distance = Math.max(260, maxDim * 2.35);
+  controls.target.copy(center);
+  camera.position.set(center.x + distance * 0.78, center.y - distance, center.z + distance * 0.72);
+  camera.near = Math.max(0.1, distance / 500);
+  camera.far = Math.max(5000, distance * 20);
+  camera.updateProjectionMatrix();
+  controls.update();
 }
 function centerAndFit(object) {
   const bounds = new THREE.Box3().setFromObject(object);
@@ -126,13 +248,7 @@ function centerAndFit(object) {
   object.position.y -= center.y;
   object.position.z -= bounds.min.z;
   const maxDim = Math.max(size.x, size.y, size.z, 1);
-  const distance = Math.max(260, maxDim * 2.35);
-  controls.target.set(0, 0, Math.max(size.z * 0.42, 12));
-  camera.position.set(distance * 0.78, -distance, distance * 0.72);
-  camera.near = Math.max(0.1, distance / 500);
-  camera.far = Math.max(5000, distance * 20);
-  camera.updateProjectionMatrix();
-  controls.update();
+  fitCameraToObject(object);
 }
 function prepareMaterials(object) {
   object.traverse(node => {
@@ -185,9 +301,8 @@ async function addFiles(selected) {
         object.position.y -= center.y;
         object.position.z -= bounds.min.z;
       }
-      selectedId = entry.id;
       emptyHint.hidden = true;
-      renderObjects();
+      selectEntry(entry.id);
       projectLabel.textContent = entries.length === 1 ? file.name : entries.length + " objects";
       sceneFile.textContent = entries.length + " model(s) loaded";
       status.textContent = "Loaded " + file.name + " · " + humanSize(file.size);
