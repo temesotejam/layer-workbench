@@ -30,7 +30,7 @@ function validateNum(key,raw,limits){
     throw new Error('Setting out of test limits: '+key);
   return String(n);
 }
-export function resolveOrcaProfileFamily(records,type,selected) {
+export function resolveOrcaProfileFamily(records,type,selected,options={}) {
   if(!Object.hasOwn(SPECS,type))throw new Error("Unknown Orca profile type");
   if(!Array.isArray(records)||records.length===0||records.length>MAX_RECORDS)throw new Error("Invalid profile collection size");
   const registry=new Map();
@@ -62,13 +62,26 @@ export function resolveOrcaProfileFamily(records,type,selected) {
         else if(!META.has(key))unsupported.add(key);
       }
     }
+    // A real Orca filament has plate-specific bed temperatures, not a generic
+    // 'bed_temperature' field. Only map an explicitly selected hot plate in
+    // this local development proof. Never assume other plate types are equal.
+    let selectedBed=null;
+    if(type==="filament" && options.plateType!=null) {
+      if(options.plateType!=="hot")throw new Error("Unsupported Orca plate type");
+      const source=[...chain].reverse().find(p=>Object.hasOwn(p,"hot_plate_temp"));
+      if(!source)throw new Error("Selected hot plate temperature missing");
+      const temp=validateNum("bed_temperature",source.hot_plate_temp,SPECS.filament.bed_temperature);
+      settings.bed_temperature=temp;
+      unsupported.delete("hot_plate_temp");
+      selectedBed={plateType:"hot",source:source.name,bed_temperature:temp};
+    }
     // Compatibility may be inherited from the nearest ancestor that defines it.
     const compatible=[...chain].reverse().find(p=>Object.hasOwn(p,'compatible_printers'))?.compatible_printers;
-    return {type,name:selected,chain:chain.map(p=>p.name),settings:{...settings},unsupported:[...unsupported].sort(),record:chain.at(-1),compatible};
+    return {type,name:selected,chain:chain.map(p=>p.name),settings:{...settings},unsupported:[...unsupported].sort(),record:chain.at(-1),compatible,selectedBed};
   }
   return resolve();
 }
-export function resolveOrcaProfileCollection(records, selection) {
+export function resolveOrcaProfileCollection(records, selection, options={}) {
   if(!Array.isArray(records)||records.length===0||records.length>MAX_RECORDS)throw new Error('Invalid profile collection size');
   if(!dict(selection))throw new Error('Expected machine/filament/process names');
   const registry=new Map();
@@ -82,7 +95,7 @@ export function resolveOrcaProfileCollection(records, selection) {
     registry.set(key,rec);
   }
   const machine=resolveOrcaProfileFamily(records,'machine',selection.machine);
-  const filament=resolveOrcaProfileFamily(records,'filament',selection.filament);
+  const filament=resolveOrcaProfileFamily(records,'filament',selection.filament,options);
   const process=resolveOrcaProfileFamily(records,'process',selection.process);
   const printer=machine.name;
   for(const item of [filament,process]){
@@ -95,11 +108,11 @@ export function resolveOrcaProfileCollection(records, selection) {
   // excluded from this local test. Never silently label result full parity.
   return result;
 }
-export async function readOrcaProfileCollection(file,selection){
+export async function readOrcaProfileCollection(file,selection,options={}){
   if(!file||!file.name.toLowerCase().endsWith('.json')||file.size>512*1024)
     throw new Error('Expected local JSON profile collection under 512 KB');
   const raw=JSON.parse(await file.text());
   if(raw.vendor_index && raw.files)
-    return resolveIndexedOrcaProfiles(raw.vendor_index,raw.files,selection);
-  return resolveOrcaProfileCollection(raw.profiles,selection);
+    return resolveIndexedOrcaProfiles(raw.vendor_index,raw.files,selection,options);
+  return resolveOrcaProfileCollection(raw.profiles,selection,options);
 }
