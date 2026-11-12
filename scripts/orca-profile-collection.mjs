@@ -1,3 +1,4 @@
+import {resolveIndexedOrcaProfiles} from "./orca-vendor-index.mjs";
 // Restricted reader for OrcaSlicer's REAL flat JSON profile record shape.
 // A vendor index references files under machine/, filament/, process/; this
 // tool accepts an explicitly selected local collection of those JSON records.
@@ -81,5 +82,7 @@ export async function readOrcaProfileCollection(file,selection){
   if(!file||!file.name.toLowerCase().endsWith('.json')||file.size>512*1024)
     throw new Error('Expected local JSON profile collection under 512 KB');
   const raw=JSON.parse(await file.text());
+  if(raw.vendor_index && raw.files)
+    return resolveIndexedOrcaProfiles(raw.vendor_index,raw.files,selection);
   return resolveOrcaProfileCollection(raw.profiles,selection);
 }
