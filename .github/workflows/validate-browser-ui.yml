@@ -1,0 +1,38 @@
+name: Validate browser Prepare workspace
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "index.html"
+      - "app.js"
+      - "styles.css"
+      - ".github/workflows/validate-browser-ui.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static-validation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+      - name: Validate module syntax
+        run: node --check app.js
+      - name: Verify real viewport and model loaders are wired
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'id="viewport-canvas"' index.html
+          grep -Fq 'type="importmap"' index.html
+          grep -Fq 'three@0.180.0' index.html
+          grep -Fq 'new STLLoader().parse(buffer)' app.js
+          grep -Fq 'new OBJLoader().parse(text)' app.js
+          grep -Fq 'new ThreeMFLoader().parse(buffer)' app.js
+          grep -Fq 'new OrbitControls(camera, renderer.domElement)' app.js
+          grep -Fq 'Slicing is not connected yet' app.js
