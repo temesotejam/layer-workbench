@@ -19,6 +19,9 @@ const deleteButton = document.querySelector("#remove-object");
 const fitButton = document.querySelector("#fit-view");
 const transformStatus = document.querySelector("#transform-status");
 const objectCount = document.querySelector("#object-count");
+const transformInputs = Object.fromEntries(["x","y","z","rz","sx","sy","sz"].map(key =>
+  [key, document.querySelector("#transform-" + key)]
+));
 const MAX_FILE_BYTES = 200 * 1024 * 1024;
 const accepted = new Set(["stl", "3mf", "obj"]);
 const entries = [];
@@ -177,6 +180,14 @@ function selectEntry(id) {
 
 function updateTransformStatus() {
   const entry = entries.find(item => item.id === selectedId);
+  Object.values(transformInputs).forEach(input => { input.disabled = !entry; });
+  if (entry) {
+    const p = entry.object.position, r = entry.object.rotation, sc = entry.object.scale;
+    const values = {x:p.x, y:p.y, z:p.z, rz:THREE.MathUtils.radToDeg(r.z), sx:sc.x, sy:sc.y, sz:sc.z};
+    for (const [key, input] of Object.entries(transformInputs)) {
+      if (document.activeElement !== input) input.value = String(Math.round(values[key] * 1000) / 1000);
+    }
+  }
   if (!entry) {
     transformStatus.textContent = "Select an imported model to move, rotate or scale it. Browser-only edits are not saved.";
     return;
@@ -186,6 +197,25 @@ function updateTransformStatus() {
   const sc = entry.object.scale;
   const fmt = value => Number(value).toFixed(1);
   transformStatus.textContent = `${entry.name} · Position: ${fmt(p.x)}, ${fmt(p.y)}, ${fmt(p.z)} mm · Rotation: ${fmt(THREE.MathUtils.radToDeg(r.x))}°, ${fmt(THREE.MathUtils.radToDeg(r.y))}°, ${fmt(THREE.MathUtils.radToDeg(r.z))}° · Scale: ${fmt(sc.x)}, ${fmt(sc.y)}, ${fmt(sc.z)} (viewer only)`;
+}
+
+for (const [key, input] of Object.entries(transformInputs)) {
+  input.addEventListener("change", () => {
+    const entry = entries.find(item => item.id === selectedId);
+    if (!entry) return;
+    const value = Number(input.value);
+    if (!Number.isFinite(value) || Math.abs(value) > 5000 ||
+        (key.startsWith("s") && (value <= 0.01 || value > 20))) {
+      updateTransformStatus();
+      return;
+    }
+    if (["x","y","z"].includes(key)) entry.object.position[key] = value;
+    if (key === "rz") entry.object.rotation.z = THREE.MathUtils.degToRad(value);
+    if (["sx","sy","sz"].includes(key)) entry.object.scale[key.slice(1)] = value;
+    entry.object.updateMatrixWorld(true);
+    entry.modified = true;
+    updateTransformStatus();
+  });
 }
 
 function setTransformMode(mode) {
@@ -336,6 +366,7 @@ if (new URLSearchParams(location.search).has("engineLab")) {
   import("./scripts/prepare-engine-lab.mjs").then(({installPrepareEngineLab}) =>
     installPrepareEngineLab({
       getSelection: () => entries.find(entry => entry.id === selectedId) ?? null,
+      getEntryCount: () => entries.length,
       onStatus: message => { sliceNote.textContent = message; },
     })
   ).catch(error => {
