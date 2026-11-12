@@ -194,6 +194,32 @@ try {
     assert.ok(afterOverrideLayers>0);
     console.log('PASS: process override produces fresh layer preview ('+afterOverrideLayers+' Z levels)');
     console.log('PASS: local process override → native applyProfile → distinct G-code');
+    // Resolve 3 levels of a restricted Orca-style inherited process bundle,
+    // apply its final settings and prove the actual output differs.
+    await prepare.locator('#lab-process').setInputFiles([]);
+    await prepare.locator('#lab-preset-bundle').setInputFiles({
+      name:'process-bundle.json',mimeType:'application/json',
+      buffer:Buffer.from(JSON.stringify({presets:[
+        {name:'Base',type:'process',settings:{layer_height:0.2,wall_loops:2}},
+        {name:'Fine',type:'process',inherits:'Base',settings:{layer_height:0.12}},
+        {name:'Strong Fine',type:'process',inherits:'Fine',settings:{wall_loops:4,sparse_infill_density:24}},
+      ]})),
+    });
+    await prepare.locator('#lab-preset-name').fill('Strong Fine');
+    await prepare.locator('#lab-slice').click();
+    await prepare.waitForFunction(() => {
+      const text=document.querySelector('#lab-status')?.textContent || '';
+      return text.startsWith('PASS:') || text.startsWith('FAILED');
+    },null,{timeout:120000});
+    const inheritedStatus=await prepare.locator('#lab-status').innerText();
+    assert.ok(inheritedStatus.startsWith('PASS: 2 STL model(s)'),inheritedStatus);
+    assert.match(inheritedStatus,/Base > Fine > Strong Fine/);
+    const inheritedHash=await prepare.locator('#lab-download').evaluate(async link=>{
+      const digest=await crypto.subtle.digest('SHA-256',await(await fetch(link.href)).arrayBuffer());
+      return [...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');
+    });
+    assert.notEqual(inheritedHash,overrideHash,'Inherited preset must alter actual WASM G-code');
+    console.log('PASS: 3-level process inheritance → native applyProfile → distinct G-code');
   } finally {
     await prepare.close();
   }
