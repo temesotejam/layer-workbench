@@ -18,8 +18,11 @@ assert.deepEqual(resolved.settings.nozzle_temperature_initial_layer,["220"]);
 assert.ok(!resolved.unsupported.includes("nozzle_temperature_initial_layer"));
 assert.ok(resolved.unsupported.includes("hot_plate_temp"),
   "Native bed-type temperature handling must remain explicitly unsupported");
-assert.ok(resolved.unsupported.includes("filament_flow_ratio"),
-  "Native filament flow-ratio handling must remain explicitly unsupported");
+assert.deepEqual(resolved.settings.filament_flow_ratio,["0.98"],
+  "Pinned official PLA inherits the 0.98 single-filament native flow ratio");
+assert.ok(!resolved.unsupported.includes("filament_flow_ratio"));
+assert.ok(resolved.unsupported.includes("filament_max_volumetric_speed"),
+  "Official Generic PLA defines a multi-value volumetric limit vector; do not silently reduce it");
 assert.deepEqual(resolved.compatible,[]);
 assert.equal(resolved.record.name,"Generic PLA @System");
 const hotBed=resolveOrcaProfileFamily(indexed.records,"filament","Generic PLA @System",{plateType:"hot"});
@@ -40,4 +43,5 @@ assert.ok(resolved.unsupported.length>=10,
   "Real shipped preset must not be misrepresented as fully supported");
 console.log("PASS: pinned real OrcaSlicer v2.5.0 Generic PLA @System indexed inheritance");
 console.log("Confirmed native nozzle temperature:",resolved.settings.nozzle_temperature);
+console.log("Confirmed native inherited flow ratio:",JSON.stringify(resolved.settings.filament_flow_ratio));
 console.log("Unsupported official fields across selected chain:",resolved.unsupported.length);
