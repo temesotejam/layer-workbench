@@ -35,6 +35,9 @@ assert.deepEqual(explicit.filament.selectedBed,{
   initialLayerSource:'Generic PLA @System',initialLayerTemperature:'70'
 });
 assert.deepEqual(explicit.filament.settings.hot_plate_temp_initial_layer,['70']);
+assert.deepEqual(explicit.filament.settings.hot_plate_temp,['65']);
+assert.equal(explicit.filament.settings.curr_bed_type,'High Temp Plate');
+assert.equal(implicit.filament.settings.curr_bed_type,undefined);
 assert.ok(!explicit.filament.unsupported.includes('hot_plate_temp'));
 assert.ok(!explicit.filament.unsupported.includes('hot_plate_temp_initial_layer'));
 assert.ok(!Object.hasOwn(implicit.filament.settings,'hot_plate_temp_initial_layer'));
