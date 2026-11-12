@@ -101,6 +101,15 @@ try {
     const result = await prepare.locator('#lab-status').innerText();
     assert.match(result, /^PASS: 1 STL model\(s\)/);
     assert.equal(await prepare.locator('#lab-download').isVisible(), true);
+    assert.equal(await prepare.locator('.gcode-layer-preview').isVisible(),true);
+    const previewLayerCount=await prepare.locator('#lab-layer-range').getAttribute('max');
+    assert.ok(Number(previewLayerCount)>0,'Expected multiple G-code layers');
+    const initialPreviewStats=await prepare.locator('#lab-preview-stats').innerText();
+    assert.match(initialPreviewStats,/extrusion segments/);
+    assert.ok(Number(await prepare.locator('#lab-toolpath-canvas').getAttribute('data-segment-count'))>0);
+    await prepare.locator('#lab-layer-range').fill('0');
+    assert.match(await prepare.locator('#lab-layer-info').innerText(),/^1\//);
+    console.log('PASS: actual WASM G-code rendered as navigable layer toolpaths');
     console.log('PASS: Prepare UI selected STL → local WASM → G-code download');
     const initialHash = await prepare.locator('#lab-download').evaluate(async link => {
       const bytes = await (await fetch(link.href)).arrayBuffer();
@@ -170,6 +179,10 @@ try {
       return [...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');
     });
     assert.notEqual(overrideHash,multiHash,'Process override must alter actual native G-code');
+    assert.equal(await prepare.locator('.gcode-layer-preview').isVisible(),true);
+    const afterOverrideLayers=Number(await prepare.locator('#lab-layer-range').getAttribute('max'))+1;
+    assert.ok(afterOverrideLayers>0);
+    console.log('PASS: process override produces fresh layer preview ('+afterOverrideLayers+' Z levels)');
     console.log('PASS: local process override → native applyProfile → distinct G-code');
   } finally {
     await prepare.close();
