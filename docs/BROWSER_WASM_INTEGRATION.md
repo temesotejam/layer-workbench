@@ -139,3 +139,15 @@ Source and provenance:
 - [Pinned Generic PLA profile](https://github.com/OrcaSlicer/OrcaSlicer/blob/40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19/resources/profiles/OrcaFilamentLibrary/filament/Generic%20PLA%20%40System.json)
 
 The existing browser-integrated test still uses restricted fixture settings and is not ready to apply all native PLA settings. **Next:** verify actual machine/process and filament cross-bundle inheritance, carry over vector-valued parameters and selected plate temperatures correctly, then run same-fixture native desktop vs WebAssembly G-code comparisons. An isolated unit test accepting a small set of real source files is not feature parity with all vendor profiles.
+
+## 2026-11-13: real pinned printer + filament + process chains
+
+Extended the existing source-verified CI workflow to fetch the **actual v2.5.0 Creality vendor index** at commit `40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19` and six records (three machine, three process) alongside the previous official Generic PLA chain. The records are downloaded inside GitHub Actions only and not redistributed or added to the public site.
+
+[Upstream real-profile run #43252945626](https://github.com/temesotejam/layer-workbench/actions/runs/43252945626) **PASS** for the original chains:
+- Machine: `fdm_machine_common → fdm_creality_common → Creality CR-10 0.4 nozzle`. Supported resolved values: `nozzle_diameter=0.4`, `printable_height=400`.
+- Process: `fdm_process_common → fdm_process_creality_common → 0.20mm Standard @Creality CR-10 0.4 nozzle`. Supported resolved values: `layer_height=0.2`, `wall_loops=2`, `sparse_infill_density=15`. The original source uses `15%`, so the reader now normalizes this official numeric percentage format.
+- Filament: `fdm_filament_common → fdm_filament_pla → Generic PLA @System`; supported `nozzle_temperature=220`.
+- Combined compatibility across **two real upstream vendor indices** (Creality plus OrcaFilamentLibrary) passed the selected exact printer name.
+
+The audit reports **106 unsupported machine keys, 233 unsupported process keys and 67 unsupported filament keys** across these selected inheritance chains. These counts describe unsupported **distinct keys in the selected chain**, not missing files, and some are critical to actual printing. The test checks correct source/schema resolution, **not** native OrcaSlicer-vs-WASM G-code equivalence or physical printer safety. Full vendor inheritance, material/plate temperature mapping, scripts, speeds and nozzle vector semantics remain release blockers. `scripts/test-upstream-v250-creality.mjs` and `scripts/fetch-upstream-v250-fixture.py` are the reproducible audit.
