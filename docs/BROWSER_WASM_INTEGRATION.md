@@ -174,3 +174,21 @@ Validation:
 - [Real isolated Chrome WASM test #43279766346](https://github.com/temesotejam/layer-workbench/actions/runs/43279766346) **PASS**: a local synthetic filament collection with inherited `hot_plate_temp = 65` produced a different actual WASM G-code SHA-256 **only after** explicitly selecting the hot plate, compared with its prior default `bed_temperature = 55`. All prior native browser transform, two-model slice, process inheritance and G-code Preview checks also passed.
 
 Changes: `scripts/orca-profile-collection.mjs`, `scripts/orca-vendor-index.mjs`, `scripts/prepare-engine-lab.mjs`, `scripts/test-orca-profile-collection.mjs`, `scripts/test-hot-plate-bridge.mjs`, `scripts/test-upstream-v250-profiles.mjs`, `scripts/test-engine-probe.mjs` and the pinned-profile CI workflow. **Still not proof of correct native desktop parity**: required future steps include initial-layer bed and nozzle temperature semantics, all plate types, material flow and speed limits, complete startup/shutdown scripts, multi-extruder vector mapping, and same-full-profile G-code comparisons.
+
+## 2026-11-13: actual first-layer hot-plate heater command check
+
+The opt-in localhost plate importer now recognizes the inherited official `hot_plate_temp_initial_layer` vector as distinct from `hot_plate_temp`. It requires a single safe numeric value and rejects invalid/out-of-range/multi-extruder values. The initial temperature is **never inferred** when an upstream field is missing, and no plate-specific fields are forwarded in the default unselected mode.
+
+This check uncovered an important trap: **changing a config key or a G-code hash is not sufficient to prove that bed-heating commands changed.** In official v2.5.0, `PrintConfig.cpp` selects the active `curr_bed_type` (the High Temp Plate variant has `hot_plate_temp` and `hot_plate_temp_initial_layer`), and `GCode.cpp::_print_first_layer_bed_temperature` uses that selected plate to emit heater commands. Therefore an explicit hot-plate choice forwards `curr_bed_type="High Temp Plate"` and native single-filament arrays for both hot-bed temperatures; the restricted compatibility `bed_temperature` also remains in the test config.
+
+[Real Chrome WASM CI #43288582338](https://github.com/temesotejam/layer-workbench/actions/runs/43288582338) **PASS**: holding the steady hot-plate temperature at **65 °C** while changing only the first-layer value **75 → 85 °C** changed the *actual heater commands*, not just G-code comments or file hashes:
+
+```gcode
+# first-layer 75 °C              # first-layer 85 °C
+M190 S75 ; wait for bed         M190 S85 ; wait for bed
+M140 S65 ; steady bed           M140 S65 ; steady bed
+```
+
+The older separate real-source [profile verification #43288371612](https://github.com/temesotejam/layer-workbench/actions/runs/43288371612) also **PASS** and confirms that the pinned official Generic PLA base contains `hot_plate_temp = ["55"]` and `hot_plate_temp_initial_layer = ["55"]`. The test includes malformed vectors and ensures no active-plate mapping without explicit selection. Source files are fetched only on CI runners and not published.
+
+**Important limitations:** This proves a narrow, local, opt-in native heater-command effect for a synthetic controlled WASM fixture—not correct printer start/end scripts or the entire real vendor profile, and **not** safe real-printer output. Other plate types, native nozzle-first-layer behavior, volumetric speed, material flow ratio and multi-extruder semantics remain unsupported. Exact native desktop vs WASM G-code parity is still unverified.
