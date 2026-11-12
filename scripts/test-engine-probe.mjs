@@ -220,6 +220,39 @@ try {
     });
     assert.notEqual(inheritedHash,overrideHash,'Inherited preset must alter actual WASM G-code');
     console.log('PASS: 3-level process inheritance → native applyProfile → distinct G-code');
+    // Select actual Orca-style flat machine/filament/process JSON record shapes,
+    // inherited from named bases. Unsupported executable G-code keys excluded.
+    await prepare.locator('#lab-preset-bundle').setInputFiles([]);
+    const rawOrca = [
+      {type:'machine',name:'test machine base',nozzle_diameter:'0.4',printable_height:'250',machine_start_gcode:'G28'},
+      {type:'machine',name:'TestPrinter 0.4 nozzle',inherits:'test machine base'},
+      {type:'filament',name:'Generic PLA @System',nozzle_temperature:'210',bed_temperature:'55'},
+      {type:'filament',name:'Generic PLA @TestPrinter',inherits:'Generic PLA @System',nozzle_temperature:'215',compatible_printers:['TestPrinter 0.4 nozzle']},
+      {type:'process',name:'process base',layer_height:'0.2',wall_loops:'2'},
+      {type:'process',name:'0.16 Fine @TestPrinter',inherits:'process base',layer_height:'0.16',wall_loops:'4',compatible_printers:['TestPrinter 0.4 nozzle']},
+    ];
+    await prepare.locator('#lab-orca-profiles').setInputFiles({
+      name:'orca-records.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({profiles:rawOrca})),
+    });
+    await prepare.locator('#lab-orca-machine').fill('TestPrinter 0.4 nozzle');
+    await prepare.locator('#lab-orca-filament').fill('Generic PLA @TestPrinter');
+    await prepare.locator('#lab-orca-process').fill('0.16 Fine @TestPrinter');
+    await prepare.locator('#lab-slice').click();
+    await prepare.waitForFunction(() => {
+      const text=document.querySelector('#lab-status')?.textContent || '';
+      return text.startsWith('PASS:') || text.startsWith('FAILED');
+    },null,{timeout:120000});
+    const nativeStatus=await prepare.locator('#lab-status').innerText();
+    assert.ok(nativeStatus.startsWith('PASS: 2 STL model(s)'),nativeStatus);
+    assert.match(nativeStatus,/Orca raw preset selection/);
+    assert.match(nativeStatus,/1 unsupported keys excluded/);
+    const nativeHash=await prepare.locator('#lab-download').evaluate(async link=>{
+      const digest=await crypto.subtle.digest('SHA-256',await(await fetch(link.href)).arrayBuffer());
+      return [...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');
+    });
+    assert.notEqual(nativeHash,inheritedHash,'Three-domain raw Orca settings must change WASM output');
+    console.log('PASS: raw Orca machine+filament+process inheritance and compatibility → WASM G-code');
+
   } finally {
     await prepare.close();
   }
