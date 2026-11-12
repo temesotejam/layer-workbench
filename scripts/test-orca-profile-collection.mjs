@@ -74,6 +74,23 @@ for(const bad of [['235','245'],['305'],['0'],['oops']]){
     ? {...p,nozzle_temperature_initial_layer:bad} : p),selection),
     /Multi-extruder|Invalid numeric value|test limits/);
 }
+// Native filament flow factor is a per-extruder vector. Validate its
+// actual profile inheritance, overrides, single-filament shape, and bounds.
+const flowBase=profiles.map(p=>p.name==='Generic PLA @System'
+  ? {...p,filament_flow_ratio:['0.98']} : p);
+const inheritedFlow=resolve(flowBase,selection);
+assert.deepEqual(inheritedFlow.filament.settings.filament_flow_ratio,['0.98']);
+assert.ok(!inheritedFlow.filament.unsupported.includes('filament_flow_ratio'));
+const flowChild=flowBase.map(p=>p.name==='Generic PLA @TestPrinter'
+  ? {...p,filament_flow_ratio:['1.05']} : p);
+assert.deepEqual(resolve(flowChild,selection).filament.settings.filament_flow_ratio,['1.05']);
+assert.equal(resolve(profiles,selection).filament.settings.filament_flow_ratio,undefined);
+for(const bad of [['1','1.2'],['0.49'],['1.51'],['NaN'],[],['-1'],{}]){
+  assert.throws(()=>resolve(flowBase.map(p=>p.name==='Generic PLA @System'
+    ? {...p,filament_flow_ratio:bad} : p),selection),
+    /Multi-extruder|Invalid|test limits/);
+}
+console.log('PASS: native single-filament flow ratio inherited/overridden as vector; invalid inputs rejected');
 console.log('PASS: separate inherited native first-layer nozzle temperature vector and bounds');
 console.log('PASS: explicit inherited steady and first-layer hot plate temperatures, native vector shape, fail-closed validation');
 console.log('PASS: Orca-style three-domain inheritance, compatibility and unsupported option reporting');
