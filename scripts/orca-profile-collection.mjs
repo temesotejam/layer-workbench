@@ -13,6 +13,11 @@ const META=new Set(['type','name','inherits','instantiation','from','compatible_
 function dict(x){return x!==null&&typeof x==='object'&&!Array.isArray(x)&&Object.getPrototypeOf(x)===Object.prototype;}
 function name(x){if(typeof x!=='string'||!x||x.length>160||['__proto__','constructor','prototype'].includes(x))throw new Error('Invalid profile name');return x;}
 function validateNum(key,raw,limits){
+  // OrcaSlicer often represents single-nozzle options as one-element arrays.
+  if(Array.isArray(raw)){
+    if(raw.length!==1)throw new Error('Multi-extruder setting not supported: '+key);
+    raw=raw[0];
+  }
   if(typeof raw!=='number'&&typeof raw!=='string')throw new Error('Invalid value for '+key);
   if(typeof raw==='string'&&!/^\s*\d+(?:\.\d+)?\s*$/.test(raw))throw new Error('Invalid numeric value for '+key);
   const n=Number(raw);
@@ -54,14 +59,16 @@ export function resolveOrcaProfileCollection(records, selection) {
         else if(!META.has(key))unsupported.add(key);
       }
     }
-    return {type,name:selected,chain:chain.map(p=>p.name),settings:{...settings},unsupported:[...unsupported].sort(),record:chain.at(-1)};
+    // Compatibility may be inherited from the nearest ancestor that defines it.
+    const compatible=[...chain].reverse().find(p=>Object.hasOwn(p,'compatible_printers'))?.compatible_printers;
+    return {type,name:selected,chain:chain.map(p=>p.name),settings:{...settings},unsupported:[...unsupported].sort(),record:chain.at(-1),compatible};
   }
   const machine=resolve('machine',selection.machine);
   const filament=resolve('filament',selection.filament);
   const process=resolve('process',selection.process);
   const printer=machine.name;
   for(const item of [filament,process]){
-    const allowed=item.record.compatible_printers;
+    const allowed=item.compatible;
     if(Array.isArray(allowed)&&allowed.length&&!allowed.includes(printer))
       throw new Error(item.type+' preset is not compatible with printer '+printer);
   }
