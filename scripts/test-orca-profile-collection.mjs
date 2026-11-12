@@ -57,5 +57,23 @@ assert.throws(()=>resolve(withPlate.map(p=>p.name==='Generic PLA @System'
 assert.throws(()=>resolve(withPlate.map(p=>p.name==='Generic PLA @System'
   ? {...p,hot_plate_temp_initial_layer:['140']} : p),selection,{plateType:'hot'}),/test limits/);
 assert.throws(()=>resolve(profiles,selection,{plateType:'hot'}),/Selected hot plate temperature missing/);
+// Nozzle temperature's first-layer native vector is separate from steady
+// nozzle_temperature. Inheritance and child overrides must preserve that.
+const nozzleBase=profiles.map(p=>p.name==='Generic PLA @System'
+  ? {...p,nozzle_temperature_initial_layer:['235']} : p);
+const inheritedNozzle=resolve(nozzleBase,selection);
+assert.deepEqual(inheritedNozzle.filament.settings.nozzle_temperature_initial_layer,['235']);
+assert.equal(inheritedNozzle.filament.settings.nozzle_temperature,'215');
+assert.ok(!inheritedNozzle.filament.unsupported.includes('nozzle_temperature_initial_layer'));
+const nozzleChild=nozzleBase.map(p=>p.name==='Generic PLA @TestPrinter'
+  ? {...p,nozzle_temperature_initial_layer:['245']} : p);
+assert.deepEqual(resolve(nozzleChild,selection).filament.settings.nozzle_temperature_initial_layer,['245']);
+assert.equal(resolve(profiles,selection).filament.settings.nozzle_temperature_initial_layer,undefined);
+for(const bad of [['235','245'],['305'],['0'],['oops']]){
+  assert.throws(()=>resolve(nozzleBase.map(p=>p.name==='Generic PLA @System'
+    ? {...p,nozzle_temperature_initial_layer:bad} : p),selection),
+    /Multi-extruder|Invalid numeric value|test limits/);
+}
+console.log('PASS: separate inherited native first-layer nozzle temperature vector and bounds');
 console.log('PASS: explicit inherited steady and first-layer hot plate temperatures, native vector shape, fail-closed validation');
 console.log('PASS: Orca-style three-domain inheritance, compatibility and unsupported option reporting');
