@@ -354,5 +354,24 @@ wasm_find_paths.write_text(
     find_source.replace(old_find_define, "", 1), encoding="utf-8"
 )
 
+# OrcaSlicer v2.5.0 changed Print::validate's optional warnings output from
+# StringObjectException* to std::vector<StringObjectException>*. The bridge
+# only uses its returned validation error, so preserve validation semantics
+# and use the API default (null warning collector). Do not discard errors.
+bridge = build_script.parent.parent / "bridge" / "slicer.cpp"
+bridge_source = bridge.read_text(encoding="utf-8")
+old_validation = (
+    "        Slic3r::StringObjectException warning;\n"
+    "        Slic3r::StringObjectException validation_error = print.validate(&warning);"
+)
+new_validation = (
+    "        Slic3r::StringObjectException validation_error = print.validate();"
+)
+if bridge_source.count(old_validation) != 1:
+    raise SystemExit("Expected pinned OrcaWasm Print::validate bridge anchor missing or duplicated")
+bridge.write_text(
+    bridge_source.replace(old_validation, new_validation, 1), encoding="utf-8"
+)
+
 path.write_text(source, encoding="utf-8")
 print(f"Adapted OrcaWasm patcher for v2.5.0: {path}")
