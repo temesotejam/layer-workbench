@@ -1,0 +1,37 @@
+name: Verify pinned real OrcaSlicer v2.5.0 profiles
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/orca-profile-collection.mjs"
+      - "scripts/orca-vendor-index.mjs"
+      - "scripts/test-orca-profile-collection.mjs"
+      - "scripts/test-orca-vendor-index.mjs"
+      - "scripts/fetch-upstream-v250-fixture.py"
+      - "scripts/test-upstream-v250-profiles.mjs"
+      - ".github/workflows/verify-real-v250-profiles.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  source-verified-profile-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate existing isolated profile parsers
+        run: |
+          set -euo pipefail
+          node scripts/test-orca-profile-collection.mjs
+          node scripts/test-orca-vendor-index.mjs
+      - name: Fetch pinned actual v2.5.0 upstream profile records
+        run: python3 scripts/fetch-upstream-v250-fixture.py
+      - name: Validate real index and three-level PLA inheritance
+        run: node scripts/test-upstream-v250-profiles.mjs
+      # No upload-artifact: upstream profile JSON stays confined to the runner.
