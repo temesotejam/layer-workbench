@@ -1,3 +1,4 @@
+import {makeMultiStlProject} from "./multi-stl.mjs";
 import {viewerMatrixToNative} from "./transform-matrix.mjs";
 // Experimental end-to-end bridge for an isolated browser host.
 // Uses the vendored one-slicer-api 0.7.0 interface, not display-only meshes.
@@ -41,12 +42,17 @@ export function makeSingleStlManifest(stlBytes, viewerElements = null) {
 }
 
 export async function sliceStlWithEngine(engine, stlBytes, onProgress, viewerElements = null) {
+  return sliceMultiStlWithEngine(engine, [{bytes:stlBytes,viewerElements}], onProgress);
+}
+
+export async function sliceMultiStlWithEngine(engine, items, onProgress) {
   if (!engine || typeof engine.createSession !== "function")
     throw new Error("Verified OrcaSlicer engine must be loaded before slicing.");
   const session = await engine.createSession();
   try {
     await session.init(encode(GENERIC_PLA_TEST_CONFIG));
-    await session.setObjects(stlBytes, makeSingleStlManifest(stlBytes, viewerElements));
+    const project = makeMultiStlProject(items);
+    await session.setObjects(project.blob, project.manifest);
     const response = await session.slice({
       schemaVersion: "0.7.0",
       plateSelection: "selected",
