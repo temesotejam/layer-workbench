@@ -73,7 +73,20 @@ export function resolveOrcaProfileFamily(records,type,selected,options={}) {
       const temp=validateNum("bed_temperature",source.hot_plate_temp,SPECS.filament.bed_temperature);
       settings.bed_temperature=temp;
       unsupported.delete("hot_plate_temp");
-      selectedBed={plateType:"hot",source:source.name,bed_temperature:temp};
+      // The pinned OrcaWasm one-slicer-api bridge accepts native per-filament
+      // temperature vectors (see its smoke-test.mjs). Unlike the steady-state
+      // bridge value, the first-layer temperature must retain the native key
+      // and one-element vector shape; NEVER replace it with bed_temperature.
+      // There is deliberately no inferred default if the field is absent.
+      const initial=[...chain].reverse().find(p=>Object.hasOwn(p,"hot_plate_temp_initial_layer"));
+      let initialLayerTemp=null;
+      if(initial){
+        initialLayerTemp=validateNum("bed_temperature",initial.hot_plate_temp_initial_layer,SPECS.filament.bed_temperature);
+        settings.hot_plate_temp_initial_layer=[initialLayerTemp];
+        unsupported.delete("hot_plate_temp_initial_layer");
+      }
+      selectedBed={plateType:"hot",source:source.name,bed_temperature:temp,
+        initialLayerSource:initial?.name??null,initialLayerTemperature:initialLayerTemp};
     }
     // Compatibility may be inherited from the nearest ancestor that defines it.
     const compatible=[...chain].reverse().find(p=>Object.hasOwn(p,'compatible_printers'))?.compatible_printers;
