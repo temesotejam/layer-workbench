@@ -112,3 +112,15 @@ The importer resolves `inherits` within a matching type, detects cycles, missing
 [Chrome CI #43249816653](https://github.com/temesotejam/layer-workbench/actions/runs/43249816653) **PASS**: inheritance and compatibility unit tests plus real browser session init with restricted machine+filament values, process application through `session.applyProfile`, and distinct G-code for a two-STL plate. All earlier tests (3D toolpaths, 2D preview, process overrides, transformations and multi-object registration) remained passing.
 
 **Next gate:** ingest pinned upstream vendor indexes and actual profile JSON files, implement global filament inheritance and per-printer alias precedence, validate settings schemas/vectors, and compare generated G-code to native OrcaSlicer v2.5.0 with the exact same full profile and mesh. Until those pass, this remains a developer proof only.
+
+## 2026-11-12: indexed Orca vendor profile bundle acceptance
+
+The localhost proof now recognizes an **indexed offline profile collection** in addition to its earlier flat `profiles` collection. The new `scripts/orca-vendor-index.mjs` validates a vendor index containing `machine_model_list`, `machine_list`, `filament_list`, and `process_list`, and resolves each relative `sub_path` against explicitly supplied in-memory files. It verifies exact indexed name/type correspondence, correct folder per type, duplicate/missing/unlisted records and unsafe traversal paths. Machine models remain metadata and are not forwarded to the slicer.
+
+`scripts/orca-profile-collection.mjs` now accepts singleton-array numerical values used by many native machine and filament presets (but rejects unsupported multi-extruder arrays), and resolves inherited `compatible_printers` when the child omits it. The existing numeric allowlist remains deliberately restricted: the index loader is **not** a full native OrcaSlicer preset interpreter.
+
+The local lab can use a JSON bundle shaped like `{ "vendor_index": {...}, "files": {"machine/...json": {...}, ...} }` with selected machine/filament/process names. Its files are selected by the user and stay in the browser; no arbitrary vendor paths are fetched, no binaries or unvalidated engine are published.
+
+[Chrome CI #43250788956](https://github.com/temesotejam/layer-workbench/actions/runs/43250788956) **PASS**: vendor index unit tests (paths, registration, metadata, single-value vectors) plus an isolated real Chrome two-STL slice with indexed machine, filament and process settings produced G-code. All prior editor/2D+3D preview/profile tests passed.
+
+**Caveat:** the test bundle consists of synthetic Orca-style fixture records matching the documented schema, *not an exhaustive import of actual shipped v2.5.0 vendor profile resources*. The next critical step is pinned upstream fixture ingestion with explicit licensing/provenance, exact vendor inheritance and alias resolution, typed multi-extruder settings, followed by native desktop vs WASM G-code parity testing.
