@@ -7,7 +7,8 @@
   <meta name="description" content="Browser-based 3D printing workspace inspired by the OrcaSlicer workflow.">
   <title>Layer Workbench</title>
   <link rel="stylesheet" href="./styles.css">
-  <script src="./app.js" defer></script>
+  <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}</script>
+  <script type="module" src="./app.js"></script>
 </head>
 <body>
   <header class="appbar">
@@ -51,10 +52,10 @@
       <section class="viewport" aria-label="3D viewport">
         <div class="viewport-top"><div class="plate-title"><span class="green-dot"></span> Plate 1 <span class="muted">· 256 × 256 mm</span></div><div class="viewport-controls"><button disabled title="Fit view">Fit</button><button disabled title="View options">⚙</button></div></div>
         <div class="scene" id="scene">
-          <div class="scene-watermark">3D VIEWPORT</div>
-          <div class="build-plate"><div class="plate-grid"></div><div class="axis axis-x">X</div><div class="axis axis-y">Y</div><div class="plate-center"><span>256 mm</span></div></div>
-          <div class="scene-empty"><div class="scene-cube">◇</div><strong>Build plate is empty</strong><span>Import a model to start preparing your print.</span></div>
-          <div class="view-cube"><span>TOP</span><small>X&nbsp; Y&nbsp; Z</small></div>
+          <div class="scene-watermark">3D VIEWPORT · THREE.JS</div>
+          <div id="viewport-canvas" class="viewport-canvas" aria-label="Interactive 3D model viewport"></div>
+          <div class="scene-empty" id="scene-empty"><div class="scene-cube">◇</div><strong>Build plate is empty</strong><span>Drop an STL, OBJ or 3MF file here.</span></div>
+          <div class="view-cube"><span>3D</span><small>X&nbsp; Y&nbsp; Z</small></div>
           <div class="scene-footer"><span>Perspective</span><span>Units: mm</span><span id="scene-file">No model loaded</span></div>
         </div>
       </section>
