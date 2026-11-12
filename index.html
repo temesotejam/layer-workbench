@@ -3,39 +3,84 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#151922">
-  <meta name="description" content="A personal workspace for 3D-print preparation.">
+  <meta name="theme-color" content="#202329">
+  <meta name="description" content="Browser-based 3D printing workspace inspired by the OrcaSlicer workflow.">
   <title>Layer Workbench</title>
   <link rel="stylesheet" href="./styles.css">
   <script src="./app.js" defer></script>
 </head>
 <body>
-  <header class="topbar">
-    <a class="brand" href="./" aria-label="Layer Workbench home"><span class="brand-mark">L</span><span>Layer Workbench</span></a>
-    <span class="status"><span class="status-dot"></span> Personal workspace</span>
+  <header class="appbar">
+    <a class="brand" href="./" aria-label="Layer Workbench"><span class="brand-icon">L</span><span>Layer Workbench</span></a>
+    <nav class="workspace-tabs" aria-label="Workspace">
+      <button class="tab active" data-view="prepare">Prepare</button>
+      <button class="tab" data-view="preview" disabled title="Available after engine integration">Preview</button>
+      <button class="tab" data-view="device" disabled title="Device integration is not available yet">Device</button>
+    </nav>
+    <div class="app-actions"><span class="engine-state"><i></i> Engine candidate built · not connected</span><a class="icon-button" href="https://github.com/temesotejam/layer-workbench" aria-label="Source repository" title="Source repository">↗</a></div>
   </header>
-  <main class="layout">
-    <section class="intro">
-      <p class="eyebrow">3D PRINT WORKSPACE</p>
-      <h1>Prepare your next print.</h1>
-      <p class="lead">A browser-based workspace focused on retaining the upstream slicer's settings, project behavior, and slicing results.</p>
+
+  <main class="app-shell">
+    <section class="toolbar" aria-label="Project tools">
+      <div class="tool-group">
+        <label class="primary-button" for="model-file">＋ Import</label>
+        <input id="model-file" type="file" accept=".stl,.3mf,.obj" multiple hidden>
+        <button class="tool-button" disabled title="Save is not connected">Save project</button>
+        <span class="toolbar-divider"></span>
+        <button class="tool-button" disabled title="Undo is not connected">↶</button>
+        <button class="tool-button" disabled title="Redo is not connected">↷</button>
+      </div>
+      <div class="tool-group view-tools">
+        <span class="toolbar-label">View</span><button class="tool-button selected">3D</button><button class="tool-button" disabled>Top</button><button class="tool-button" disabled>Front</button>
+      </div>
+      <div class="tool-group"><span class="project-label" id="project-label">Untitled project</span></div>
     </section>
-    <section class="notice" aria-live="polite">
-      <div class="notice-icon">i</div>
-      <div><h2>Engine integration is not complete yet</h2>
-      <p>This is the initial website shell. No model slicing is performed yet. The next milestone is integrating and validating the WebAssembly engine.</p></div>
-    </section>
-    <section class="workspace">
-      <div class="workspace-head"><div><p class="eyebrow">WORKSPACE</p><h2>Project</h2></div><span class="version">Engine: not installed</span></div>
-      <label class="dropzone" id="dropzone" for="model-file">
-        <span class="upload-icon">↑</span>
-        <strong>Choose a 3D model</strong>
-        <span>STL / 3MF — file selection preview only at this stage</span>
-        <input id="model-file" type="file" accept=".stl,.3mf,.obj" hidden>
-      </label>
-      <p id="file-status" class="file-status">No file selected</p>
-    </section>
-    <footer><span>Personal project · Not an official upstream product</span><a href="https://github.com/temesotejam/layer-workbench">Source repository</a></footer>
+
+    <div class="main-grid">
+      <aside class="sidebar left-panel">
+        <div class="panel-heading"><span>Objects</span><button class="subtle-button" disabled>＋</button></div>
+        <div class="object-tree" id="object-tree"><div class="empty-object"><span class="cube-icon">◇</span><strong>No objects yet</strong><small>Import an STL, 3MF or OBJ file to begin.</small></div></div>
+        <div class="panel-bottom"><span>Plate 1</span><span class="muted">0 objects</span></div>
+      </aside>
+
+      <section class="viewport" aria-label="3D viewport">
+        <div class="viewport-top"><div class="plate-title"><span class="green-dot"></span> Plate 1 <span class="muted">· 256 × 256 mm</span></div><div class="viewport-controls"><button disabled title="Fit view">Fit</button><button disabled title="View options">⚙</button></div></div>
+        <div class="scene" id="scene">
+          <div class="scene-watermark">3D VIEWPORT</div>
+          <div class="build-plate"><div class="plate-grid"></div><div class="axis axis-x">X</div><div class="axis axis-y">Y</div><div class="plate-center"><span>256 mm</span></div></div>
+          <div class="scene-empty"><div class="scene-cube">◇</div><strong>Build plate is empty</strong><span>Import a model to start preparing your print.</span></div>
+          <div class="view-cube"><span>TOP</span><small>X&nbsp; Y&nbsp; Z</small></div>
+          <div class="scene-footer"><span>Perspective</span><span>Units: mm</span><span id="scene-file">No model loaded</span></div>
+        </div>
+      </section>
+
+      <aside class="sidebar right-panel">
+        <div class="panel-heading settings-heading"><span>Process settings</span><button class="subtle-button" disabled>⋯</button></div>
+        <div class="settings-content">
+          <label class="field-label" for="printer">Printer</label>
+          <select id="printer" disabled><option>Choose printer profile</option></select>
+          <p class="field-note">Printer profiles will be loaded from the engine.</p>
+          <div class="setting-tabs"><button class="setting-tab active">Global</button><button class="setting-tab" disabled>Objects</button></div>
+          <label class="field-label" for="filament">Filament</label>
+          <select id="filament" disabled><option>Choose filament profile</option></select>
+          <label class="field-label" for="process">Process</label>
+          <select id="process" disabled><option>Choose process profile</option></select>
+          <div class="settings-section"><span>Quality</span><span class="muted">Profile required</span></div>
+          <div class="setting-row"><span>Layer height</span><span>— mm</span></div>
+          <div class="setting-row"><span>First layer height</span><span>— mm</span></div>
+          <div class="settings-section"><span>Strength</span><span class="muted">Profile required</span></div>
+          <div class="setting-row"><span>Wall loops</span><span>—</span></div>
+          <div class="setting-row"><span>Top shell layers</span><span>—</span></div>
+          <div class="settings-section"><span>Speed</span><span class="muted">Profile required</span></div>
+          <div class="setting-row"><span>Print speed</span><span>— mm/s</span></div>
+          <div class="settings-section"><span>Support</span><span class="muted">Profile required</span></div>
+          <div class="setting-row"><span>Enable support</span><span>—</span></div>
+        </div>
+        <div class="slice-area"><div class="slice-note" id="slice-note">Connect the validated WASM engine and load profiles to enable slicing.</div><button class="slice-button" disabled>Slice plate</button></div>
+      </aside>
+    </div>
+
+    <footer class="statusbar"><span id="file-status">Ready · No model loaded</span><span>Layer Workbench · Browser UI preview</span><span><a href="https://github.com/temesotejam/layer-workbench">Source</a></span></footer>
   </main>
 </body>
 </html>
