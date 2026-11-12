@@ -99,7 +99,7 @@ try {
       return text.startsWith('PASS:') || text.startsWith('FAILED');
     }, null, {timeout:120000});
     const result = await prepare.locator('#lab-status').innerText();
-    assert.match(result, /^PASS: prepare-cube\.stl/);
+    assert.match(result, /^PASS: 1 STL model\(s\)/);
     assert.equal(await prepare.locator('#lab-download').isVisible(), true);
     console.log('PASS: Prepare UI selected STL → local WASM → G-code download');
     const initialHash = await prepare.locator('#lab-download').evaluate(async link => {
@@ -121,7 +121,7 @@ try {
       return text.startsWith('PASS:') || text.startsWith('FAILED');
     }, null, {timeout:120000});
     const transformedResult = await prepare.locator('#lab-status').innerText();
-    assert.ok(transformedResult.startsWith('PASS: prepare-cube.stl'), transformedResult);
+    assert.ok(transformedResult.startsWith('PASS: 1 STL model(s)'), transformedResult);
     const transformedHash = await prepare.locator('#lab-download').evaluate(async link => {
       const bytes = await (await fetch(link.href)).arrayBuffer();
       const digest = await crypto.subtle.digest('SHA-256',bytes);
@@ -129,6 +129,29 @@ try {
     });
     assert.notEqual(transformedHash,initialHash,'Native output must change after Prepare transform');
     console.log('PASS: numeric Prepare position/rotation/scale alter real WASM G-code');
+    // A second STL must appear as another native object, and change the
+    // generated G-code. Keep the translated objects separated on the plate.
+    await prepare.locator('#model-file').setInputFiles({
+      name: 'second-cube.stl', mimeType: 'model/stl', buffer: cube,
+    });
+    await prepare.locator('#object-count').getByText('2 objects').waitFor({timeout:30000});
+    await prepare.locator('#transform-x').fill('45');
+    await prepare.locator('#transform-x').press('Tab');
+    assert.equal(await prepare.locator('#lab-slice').isEnabled(), true);
+    await prepare.locator('#lab-slice').click();
+    await prepare.waitForFunction(() => {
+      const text = document.querySelector('#lab-status')?.textContent || '';
+      return text.startsWith('PASS:') || text.startsWith('FAILED');
+    }, null, {timeout:120000});
+    const multiStatus = await prepare.locator('#lab-status').innerText();
+    assert.ok(multiStatus.startsWith('PASS: 2 STL model(s)'), multiStatus);
+    const multiHash = await prepare.locator('#lab-download').evaluate(async link => {
+      const bytes = await (await fetch(link.href)).arrayBuffer();
+      const digest = await crypto.subtle.digest('SHA-256', bytes);
+      return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2,'0')).join('');
+    });
+    assert.notEqual(multiHash,transformedHash,'Adding second native model must change G-code');
+    console.log('PASS: two Prepare STL objects → one native plate → distinct WASM G-code');
   } finally {
     await prepare.close();
   }
