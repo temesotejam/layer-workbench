@@ -102,6 +102,33 @@ try {
     assert.match(result, /^PASS: prepare-cube\.stl/);
     assert.equal(await prepare.locator('#lab-download').isVisible(), true);
     console.log('PASS: Prepare UI selected STL → local WASM → G-code download');
+    const initialHash = await prepare.locator('#lab-download').evaluate(async link => {
+      const bytes = await (await fetch(link.href)).arrayBuffer();
+      const digest = await crypto.subtle.digest('SHA-256',bytes);
+      return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2,'0')).join('');
+    });
+    // Make a genuine UI edit and ensure it affects the native WASM result.
+    await prepare.locator('#transform-x').fill('10');
+    await prepare.locator('#transform-x').press('Tab');
+    await prepare.locator('#transform-rz').fill('90');
+    await prepare.locator('#transform-rz').press('Tab');
+    await prepare.locator('#transform-sx').fill('1.2');
+    await prepare.locator('#transform-sx').press('Tab');
+    assert.equal(await prepare.locator('#lab-slice').isEnabled(),true);
+    await prepare.locator('#lab-slice').click();
+    await prepare.waitForFunction(() => {
+      const text = document.querySelector('#lab-status')?.textContent || '';
+      return text.startsWith('PASS:') || text.startsWith('FAILED');
+    }, null, {timeout:120000});
+    const transformedResult = await prepare.locator('#lab-status').innerText();
+    assert.match(transformedResult,/^PASS: prepare-cube\\.stl/);
+    const transformedHash = await prepare.locator('#lab-download').evaluate(async link => {
+      const bytes = await (await fetch(link.href)).arrayBuffer();
+      const digest = await crypto.subtle.digest('SHA-256',bytes);
+      return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2,'0')).join('');
+    });
+    assert.notEqual(transformedHash,initialHash,'Native output must change after Prepare transform');
+    console.log('PASS: numeric Prepare position/rotation/scale alter real WASM G-code');
   } finally {
     await prepare.close();
   }
