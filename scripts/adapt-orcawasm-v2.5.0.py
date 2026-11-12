@@ -271,7 +271,70 @@ if old_math_stamp not in build_source:
 build_source = build_source.replace(
     old_math_stamp, '.math_built_mt_native_eh_v2_cgal_6_2_1', 1
 )
+
+# OrcaWasm's older single-threaded Boost.Log workaround is incompatible with
+# v2.5.0: utils.cpp now uses asynchronous sinks and current_thread_id. These
+# require a threaded Boost.Log build. Restore the upstream logging code rather
+# than suppressing errors or making a pthread engine use unlocked sinks.
+utils_patch_begin = "# 7. utils.cpp — Boost.Log ABI compatibility\n"
+utils_patch_end = "\n# =============================================================================\n# 8. Arachne/SkeletalTrapezoidation.cpp"
+if source.count(utils_patch_begin) != 1 or source.count(utils_patch_end) != 1:
+    raise SystemExit("Expected pinned OrcaWasm Boost.Log patch section missing")
+utils_begin = source.index(utils_patch_begin)
+utils_end = source.index(utils_patch_end, utils_begin)
+source = (
+    source[:utils_begin]
+    + "# 7. utils.cpp — retain original thread-safe Boost.Log sinks\n"
+    + source[utils_end:]
+)
+
+# Cache restores may contain the old single-thread Boost.Log. Force a rebuilt
+# pthread-capable static Boost install by updating its completion stamp.
+old_boost_define = """  # Always on — see the step comment above for why this must match
+  # libslic3r's own (unconditional, upstream) compile flags.
+  "define=BOOST_LOG_NO_THREADS=1"
+"""
+if build_source.count(old_boost_define) != 1:
+    raise SystemExit("Expected old Boost.Log b2 flags missing or duplicated")
+build_source = build_source.replace(old_boost_define, "", 1)
+old_boost_stamp = 'STAMP="${INSTALL}/.boost_built_mt_native_eh_v3"'
+if build_source.count(old_boost_stamp) != 1:
+    raise SystemExit("Expected old Boost.Log dependency stamp missing or duplicated")
+build_source = build_source.replace(
+    old_boost_stamp, 'STAMP="${INSTALL}/.boost_built_mt_native_eh_v4"', 1
+)
+old_boost_comment = """# _v3 suffix: manually bumped, not tied to BOOST_VERSION — the
+# BOOST_LOG_NO_THREADS fix above changed Boost's build *flags*,
+# not its pinned version, so BOOST_VERSION alone wouldn't
+# invalidate a stale cached build. Restore-keys below prefix-match
+# regardless of this suffix (see "Restore dep cache"'s own
+# comment on why a version bump alone isn't sufficient), so
+# without this the job could restore its OLD, wrongly-built
+# libboost_log.a from cache and skip rebuilding it entirely.
+"""
+new_boost_comment = """# _v4 stamp: require a pthread-enabled Boost.Log build after restoring
+# caches containing the former BOOST_LOG_NO_THREADS single-thread ABI.
+"""
+if build_source.count(old_boost_comment) != 1:
+    raise SystemExit("Expected old Boost.Log cache explanation not found")
+build_source = build_source.replace(old_boost_comment, new_boost_comment, 1)
 build_script.write_text(build_source, encoding="utf-8")
+
+# Remove the pinned port's global single-thread Boost.Log definition. All
+# consumers must use the same pthread-enabled Boost.Log ABI as the new b2 build.
+wasm_find_paths = build_script.parent.parent / "cmake" / "wasm_find_paths.cmake"
+find_source = wasm_find_paths.read_text(encoding="utf-8")
+old_find_define = """    # OrcaSlicer's Boost.Log ABI uses BOOST_LOG_NO_THREADS=1 even in the
+    # pthread-enabled engine. The define selects its v2s_st symbols; without
+    # it, consumers reference v2s_mt_posix and wasm-ld reports undefined
+    # boost::log symbols at link time.
+    BOOST_LOG_NO_THREADS=1
+"""
+if find_source.count(old_find_define) != 1:
+    raise SystemExit("Expected old Boost.Log global CMake definition missing")
+wasm_find_paths.write_text(
+    find_source.replace(old_find_define, "", 1), encoding="utf-8"
+)
 
 path.write_text(source, encoding="utf-8")
 print(f"Adapted OrcaWasm patcher for v2.5.0: {path}")
