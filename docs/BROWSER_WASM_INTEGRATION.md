@@ -234,5 +234,12 @@ lengths, duplicate names, unknown choices and out-of-range values reject.
 Single-value profile limits are supported as one-filament native vectors.
 
 Tests cover the official pinned index, parser validation and session.init
-forwarding. Actual WASM feed-rate change and true machine/nozzle variant
-compatibility are not yet established; do not print the generated G-code.
+forwarding. A bounded two-model isolated Chrome test has now verified **actual G-code**
+feedrate response, not just config JSON, metadata or output hashes.
+[Chrome CI #43315594359](https://github.com/temesotejam/layer-workbench/actions/runs/43315594359)
+**PASS** at commit `619f75a`: explicit variant settings of 0.7 vs 40 mm³/s
+produced 9,883 comparable XY+E moves in each run. Median modal G1 feedrate
+was **644.409 vs 6000 mm/min** (max 758.106 vs 6000 mm/min).
+These are intentionally extreme synthetic diagnostic limits, **not** approved
+material settings. Actual printer/nozzle variant compatibility and full
+native G-code parity remain unverified; never print this test G-code.
