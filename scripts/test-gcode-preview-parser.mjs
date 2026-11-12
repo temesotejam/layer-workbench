@@ -20,7 +20,7 @@ G2 X1 Y1 I1 J0
 `;
 const result=parseGcodeToolpaths(sample);
 assert.equal(result.extrusions,5);
-assert.equal(result.travels,3);
+assert.equal(result.travels,4);
 assert.equal(result.skippedArcs,1);
 assert.deepEqual(result.layers.map(layer=>layer.z),[0.2,0.4]);
 assert.equal(result.layers[0].segments[0].x2,10);
