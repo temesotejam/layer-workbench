@@ -33,3 +33,13 @@ The renderer currently centers each imported model and places its lowest bound o
 4. Add native transform operations and actual gizmo interaction.
 5. Add printer-profile-derived bed geometry and size.
 6. Connect profiles and slicing only after SharedArrayBuffer/pthread hosting and the WASM loader are verified on the deployed Pages origin.
+
+## 2026-11-12: real Chrome browser verification
+
+Added a reproducible headless-Chrome workflow: [browser-e2e.yml](../.github/workflows/browser-e2e.yml), running [test-browser-ui.mjs](../scripts/test-browser-ui.mjs).
+
+The initial Chrome run exposed an incidental missing favicon request (HTTP 404). A harmless data-URL favicon was added to the page, while the browser test was enhanced to report error response URLs.
+
+[Browser E2E #43218225115](https://github.com/temesotejam/layer-workbench/actions/runs/43218225115) **PASSED** in Google Chrome 156. Verified WebGL canvas creation, binary STL cube import and rendering, object selection, Move/Rotate/Scale mode switching, Fit and Delete. A screenshot of the loaded model is retained as a CI artifact. [Static UI validation #43218227878](https://github.com/temesotejam/layer-workbench/actions/runs/43218227878) and [Pages deployment #43218225418](https://github.com/temesotejam/layer-workbench/actions/runs/43218225418) also passed.
+
+**Limits:** this does not prove that dragging a transform gizmo produces identical native transform values, nor does it validate ThreeMFLoader against native OrcaSlicer projects, printer profiles, G-code preview or the WASM browser bridge. The successful engine artifact remains separate from the public browser UI.
