@@ -1,3 +1,4 @@
+import {createThreeDToolpathPreview} from "./gcode-3d-preview.mjs";
 import {parseGcodeToolpaths} from "./gcode-preview-parser.mjs";
 
 // 2D, per-Z-layer read-only toolpath viewer for the isolated development lab.
@@ -17,6 +18,7 @@ export function createLayerPreview(container) {
     <p>Orange: extrusion; gray dashed: travel. Linear G0/G1 only; curves and firmware commands are not rendered. This is a diagnostic view, not a validated OrcaSlicer preview.</p>
   `;
   container.appendChild(section);
+  const threeD=createThreeDToolpathPreview(container);
   const canvas=section.querySelector("canvas");
   const slider=section.querySelector("#lab-layer-range");
   const info=section.querySelector("#lab-layer-info");
@@ -71,8 +73,9 @@ export function createLayerPreview(container) {
       stats.textContent=`${parsed.layers.length} Z levels · ${parsed.extrusions} extrusion segments · ${parsed.travels} travel segments · ${parsed.skippedArcs} unsupported arcs`;
       section.hidden=false;
       render(Number(slider.value));
+      threeD.show(parsed);
       return parsed;
     },
-    clear() {parsed=null;section.hidden=true;canvas.dataset.segmentCount="0";},
+    clear() {parsed=null;section.hidden=true;canvas.dataset.segmentCount="0";threeD.clear();},
   };
 }
