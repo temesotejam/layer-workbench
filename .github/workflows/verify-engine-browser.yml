@@ -10,6 +10,8 @@ on:
       - "scripts/slice-stl.mjs"
       - "scripts/test-process-profile.mjs"
       - "scripts/test-process-profile-unit.mjs"
+      - "scripts/process-preset-inheritance.mjs"
+      - "scripts/test-process-preset-inheritance.mjs"
       - "scripts/gcode-preview-parser.mjs"
       - "scripts/gcode-layer-preview.mjs"
       - "scripts/gcode-3d-preview.mjs"
@@ -59,6 +61,7 @@ jobs:
           node scripts/test-transform-matrix.mjs
           node scripts/test-multi-stl.mjs
           node scripts/test-process-profile-unit.mjs
+          node scripts/test-process-preset-inheritance.mjs
           node scripts/test-gcode-preview-parser.mjs
           node --check scripts/gcode-3d-preview.mjs
           node --check scripts/slice-stl.mjs
