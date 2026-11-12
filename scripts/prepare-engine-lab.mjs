@@ -3,6 +3,7 @@
 // The proof accepts one STL plus checked native affine transforms; real profiles remain unimplemented.
 import { loadSelectedEngine, checkIsolation } from "./probe-engine.mjs";
 import { sliceMultiStlWithEngine } from "./slice-stl.mjs";
+import {readTestProcessFile} from "./test-process-profile.mjs";
 
 export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
   const panel = document.querySelector(".slice-area");
@@ -15,6 +16,7 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
     <label>Verified slicer-mt.js <input id="lab-js" type="file" accept=".js"></label>
     <label>Verified slicer-mt.wasm <input id="lab-wasm" type="file" accept=".wasm"></label>
     <button id="lab-load" disabled>Load local engine</button>
+    <label>Optional process overrides (.json, restricted test fields) <input id="lab-process" type="file" accept=".json"></label>
     <button id="lab-slice" disabled>Slice STL plate (test only)</button>
     <a id="lab-download" hidden download="prepare-test.gcode">Download test G-code</a>
     <p id="lab-status" role="status" aria-live="polite">No engine loaded.</p>
@@ -25,6 +27,7 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
   const wasm = $("#lab-wasm");
   const load = $("#lab-load");
   const slice = $("#lab-slice");
+  const processFile = $("#lab-process");
   const download = $("#lab-download");
   const status = $("#lab-status");
   const isolated = checkIsolation();
@@ -84,14 +87,15 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
           viewerElements:Array.from(e.object.matrixWorld.elements),
         };
       }));
+      const processOverrides = await readTestProcessFile(processFile.files?.[0]);
       const result = await sliceMultiStlWithEngine(loaded.engine, models, progress => {
         status.textContent = "Slicing: " + (progress?.percent ?? "?") + "% · " + (progress?.stage ?? "");
-      });
+      }, processOverrides);
       downloadUrl = URL.createObjectURL(new Blob([result.gcode], {type: "text/plain"}));
       download.href = downloadUrl;
       download.hidden = false;
       status.textContent = "PASS: " + selected.length + " STL model(s) → " + result.gcode.byteLength +
-        " G-code bytes. Generic PLA test profile only; do not print without validating.";
+        " G-code bytes. Generic PLA base with " + (processOverrides ? "test overrides" : "default process") + "; do not print without validating.";
       onStatus("Test WASM sliced all imported STL models and their displayed transforms on one plate; generic PLA settings only.");
     } catch (error) {
       status.textContent = "FAILED slicing: " + error.message;
