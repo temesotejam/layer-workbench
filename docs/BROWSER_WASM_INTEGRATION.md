@@ -58,3 +58,15 @@ The Prepare UI includes numeric XYZ position, Z rotation, and XYZ scale fields a
 - a changed G-code SHA-256 after applying those edits.
 
 This establishes that the edited Prepare transform affects the native output on the tested cube, **not** exact correspondence to desktop OrcaSlicer's transform/pivot behavior or a lossless native 3MF round-trip. A hash difference is a smoke-test signal, not a quantified toolpath parity test. Native source profile semantics, complete object hierarchies, multi-plate support, displacement, printer connection and G-code Preview remain unimplemented.
+
+## 2026-11-12: multiple STL objects on one native plate
+
+The isolated Prepare proof now builds a **single one-slicer-api project from multiple STL files**. `scripts/multi-stl.mjs` concatenates each original file into one binary blob, creates unique mesh/object/instance IDs, checks the data ranges, and maps each displayed instance's affine matrix into native coordinates. The local lab accepts 1–24 STL files (80 MB combined limit), and refuses non-STL projects or unsupported plate configurations rather than silently omitting objects. The fixed generic PLA test profile is unchanged.
+
+[Isolated Chrome CI #43245760666](https://github.com/temesotejam/layer-workbench/actions/runs/43245760666) **passed**:
+- two-object manifest byte-offset, unique ID and native position unit tests;
+- a working single-model slice and a transformed single-model slice;
+- importing a second STL through Prepare, moving it on the plate, and generating G-code from one native project containing both objects;
+- the two-object G-code hash differed from the single-object G-code hash.
+
+**This does not establish desktop parity or a production multi-plate slicer.** It does not preserve complete 3MF metadata, support native filament presets, independently verify geometry paths for every object, or reproduce automatic arrangement/collision handling. Official profiles, G-code Preview, 3MF semantic round-trip and printer verification remain release blockers.
