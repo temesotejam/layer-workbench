@@ -2,9 +2,9 @@
 // previously verified candidate, without deploying that binary to Pages.
 // The proof accepts one STL plus checked native affine transforms; real profiles remain unimplemented.
 import { loadSelectedEngine, checkIsolation } from "./probe-engine.mjs";
-import { sliceStlWithEngine } from "./slice-stl.mjs";
+import { sliceMultiStlWithEngine } from "./slice-stl.mjs";
 
-export function installPrepareEngineLab({getSelection, getEntryCount, onStatus}) {
+export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
   const panel = document.querySelector(".slice-area");
   if (!panel) throw new Error("Prepare slice panel not found.");
   const root = document.createElement("section");
@@ -15,7 +15,7 @@ export function installPrepareEngineLab({getSelection, getEntryCount, onStatus})
     <label>Verified slicer-mt.js <input id="lab-js" type="file" accept=".js"></label>
     <label>Verified slicer-mt.wasm <input id="lab-wasm" type="file" accept=".wasm"></label>
     <button id="lab-load" disabled>Load local engine</button>
-    <button id="lab-slice" disabled>Slice selected STL (test only)</button>
+    <button id="lab-slice" disabled>Slice STL plate (test only)</button>
     <a id="lab-download" hidden download="prepare-test.gcode">Download test G-code</a>
     <p id="lab-status" role="status" aria-live="polite">No engine loaded.</p>
   `;
@@ -36,9 +36,10 @@ export function installPrepareEngineLab({getSelection, getEntryCount, onStatus})
   let busy = false;
   const refresh = () => {
     load.disabled = busy || !isolated || !js.files?.length || !wasm.files?.length || !!loaded;
-    const chosen = getSelection();
-    slice.disabled = busy || !loaded || !chosen || chosen.format !== "stl" ||
-      getEntryCount() !== 1 || !chosen.file || chosen.file.size > 20 * 1024 * 1024;
+    const entries = getEntries();
+    slice.disabled = busy || !loaded || entries.length === 0 || entries.length > 24 ||
+      entries.some(e => e.format !== "stl" || !e.file || e.file.size > 20 * 1024 * 1024) ||
+      entries.reduce((sum,e)=>sum+e.file.size,0) > 80 * 1024 * 1024;
   };
   js.addEventListener("change", refresh);
   wasm.addEventListener("change", refresh);
@@ -54,7 +55,7 @@ export function installPrepareEngineLab({getSelection, getEntryCount, onStatus})
     try {
       loaded = await loadSelectedEngine(js.files[0], wasm.files[0]);
       status.textContent = "Ready: " + loaded.capabilities.engine.family + " " + loaded.capabilities.engine.version;
-      onStatus("Local engine loaded. One STL plus viewer transforms can be sliced using generic PLA test settings.");
+      onStatus("Local engine loaded. STL objects on one plate can be sliced using generic PLA test settings.");
     } catch (error) {
       status.textContent = "FAILED loading engine: " + error.message;
     } finally {
@@ -63,9 +64,10 @@ export function installPrepareEngineLab({getSelection, getEntryCount, onStatus})
     }
   });
   slice.addEventListener("click", async () => {
-    const chosen = getSelection();
-    if (!loaded || !chosen || chosen.format !== "stl" || getEntryCount() !== 1) {
-      status.textContent = "This test requires exactly one STL model.";
+    const selected = getEntries();
+    if (!loaded || selected.length === 0 || selected.length > 24 ||
+        selected.some(e => e.format !== "stl" || !e.file)) {
+      status.textContent = "This test supports up to 24 STL models on one plate.";
       return;
     }
     busy = true;
@@ -73,20 +75,24 @@ export function installPrepareEngineLab({getSelection, getEntryCount, onStatus})
     download.hidden = true;
     if (downloadUrl) URL.revokeObjectURL(downloadUrl);
     downloadUrl = null;
-    status.textContent = "Slicing " + chosen.name + "…";
+    status.textContent = "Slicing " + selected.length + " model(s)…";
     try {
-      const raw = new Uint8Array(await chosen.file.arrayBuffer());
-      chosen.object.updateMatrixWorld(true);
-      const viewerMatrix = Array.from(chosen.object.matrixWorld.elements);
-      const result = await sliceStlWithEngine(loaded.engine, raw, progress => {
+      const models = await Promise.all(selected.map(async e => {
+        e.object.updateMatrixWorld(true);
+        return {
+          bytes:new Uint8Array(await e.file.arrayBuffer()),
+          viewerElements:Array.from(e.object.matrixWorld.elements),
+        };
+      }));
+      const result = await sliceMultiStlWithEngine(loaded.engine, models, progress => {
         status.textContent = "Slicing: " + (progress?.percent ?? "?") + "% · " + (progress?.stage ?? "");
-      }, viewerMatrix);
+      });
       downloadUrl = URL.createObjectURL(new Blob([result.gcode], {type: "text/plain"}));
       download.href = downloadUrl;
       download.hidden = false;
-      status.textContent = "PASS: " + chosen.name + " → " + result.gcode.byteLength +
+      status.textContent = "PASS: " + selected.length + " STL model(s) → " + result.gcode.byteLength +
         " G-code bytes. Generic PLA test profile only; do not print without validating.";
-      onStatus("Test WASM sliced the original STL using the selected viewer affine transform; generic PLA settings only.");
+      onStatus("Test WASM sliced all imported STL models and their displayed transforms on one plate; generic PLA settings only.");
     } catch (error) {
       status.textContent = "FAILED slicing: " + error.message;
     } finally {
