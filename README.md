@@ -16,9 +16,11 @@ This repository is maintained primarily for the owner's own use. It aims to prov
 
 ## Current status
 
-This repository is at the initial project-scaffolding stage. It does **not** yet contain a working slicer engine, printer profiles, or a functional slicing workflow. The initial website is only a project shell.
+The repository now has a successful **OrcaSlicer v2.5.0 headless WebAssembly engine candidate**. The pinned v2.5.0 source has passed the candidate build, one-slicer-api 0.7.0 conformance, asynchronous binding checks, and Node end-to-end smoke tests. This validates the tested engine/API paths; it does **not** establish full desktop feature parity or browser deployment readiness.
 
-The current stable integration target is **v2.5.0**, but it is **not yet supported** by this workspace. The existing WebAssembly engine candidate is based on v2.4.2 and requires a substantial compatibility audit and port before it can be considered for use. See [the engine audit](docs/ENGINE_AUDIT.md), [the detailed desktop-to-web source audit](docs/WEB_PORT_SOURCE_AUDIT.md), [the browser engine API plan](docs/BROWSER_ENGINE_API_PLAN.md), [the v2.5.0 integration issue](https://github.com/temesotejam/layer-workbench/issues/1), and [the first browser editor milestone](https://github.com/temesotejam/layer-workbench/issues/2).
+The public page is being rebuilt toward an OrcaSlicer-like Prepare workspace. The current UI is still a presentation shell: it can list locally selected STL/3MF/OBJ files, but it does not yet parse/render model geometry, load profiles, invoke the WASM engine, or slice. Preview, Device, save, editing tools, and slice controls remain disabled until their real implementations are connected.
+
+Known feature gaps include the desktop GUI/Gizmos, CAD/Parametric Design, Python plugins, OpenCV-backed texture-to-color conversion, full paint/texture workflows, complete 3MF semantic round-trip, and native-vs-WASM G-code equivalence. See the [engine audit](docs/ENGINE_AUDIT.md), [desktop-to-web source audit](docs/WEB_PORT_SOURCE_AUDIT.md), [browser engine API plan](docs/BROWSER_ENGINE_API_PLAN.md), and [evidence-based parity ledger](docs/V250_PARITY_LEDGER.md).
 
 ## Stable-release tracking
 
