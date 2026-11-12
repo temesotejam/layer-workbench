@@ -332,6 +332,42 @@ try {
     assert.match(toolAfter.join('\n'),/^M104 S215\b/m);
     assert.notDeepEqual(toolAfter,toolBefore,'Initial layer nozzle temperature must change real M104/M109 commands (not just metadata)');
     console.log('PASS: initial-layer M104 S235 -> S245; later M104 S215 unchanged in real WASM G-code');
+    // Verify actual numeric extrusion instead of merely a changed config
+    // footer/header or SHA. This controlled two-STL print differs ONLY in the
+    // single-extruder inherited native filament_flow_ratio (0.80 -> 1.20).
+    const sliceWithFlowRatio=async ratio=>{
+      rawOrca[2].filament_flow_ratio=[ratio];
+      await uploadRawOrca();
+      await prepare.locator('#lab-slice').click();
+      await prepare.waitForFunction(()=>{
+        const text=document.querySelector('#lab-status')?.textContent||'';
+        return text.startsWith('PASS:')||text.startsWith('FAILED');
+      },null,{timeout:120000});
+      const state=await prepare.locator('#lab-status').innerText();
+      assert.ok(state.startsWith('PASS: 2 STL model(s)'),state);
+      return prepare.locator('#lab-download').evaluate(async link=>await(await fetch(link.href)).text());
+    };
+    const lowFlowText=await sliceWithFlowRatio('0.80');
+    const highFlowText=await sliceWithFlowRatio('1.20');
+    // Select XY extrusion motions, not M104/M140 commands, header metadata,
+    // pure E retracts or travel-only moves.
+    const extrusionValues=text=>text.split(/\\r?\\n/).map(line=>{
+      const code=line.split(';')[0].trim();
+      if(!/^G1\\s/i.test(code)||!/\\b[XY]-?\\d/.test(code))return null;
+      const match=code.match(/(?:^|\\s)E(-?\\d+(?:\\.\\d+)?)/i);
+      return match?Number(match[1]):null;
+    }).filter(n=>n!==null&&Number.isFinite(n));
+    const lowE=extrusionValues(lowFlowText).slice(0,120);
+    const highE=extrusionValues(highFlowText).slice(0,120);
+    console.log('FLOW_RATIO_EXTRUSION_SAMPLES',JSON.stringify({
+      lowCount:lowE.length,highCount:highE.length,low:lowE.slice(0,8),high:highE.slice(0,8)
+    }));
+    assert.ok(lowE.length>=30,'Expected genuine XY extrusion movements for flow check');
+    assert.equal(lowE.length,highE.length,'Same print should retain comparable XY extrusion movements');
+    const changed=lowE.filter((value,i)=>Math.abs(value-highE[i])>0.00001).length;
+    assert.ok(changed>=10,'Actual numeric E extrusion values must respond to native flow ratio; G-code metadata alone is insufficient');
+    console.log('PASS: native filament_flow_ratio 0.80 -> 1.20 changes '+changed+' real XY G1 E extrusion numbers');
+
 
 
 
