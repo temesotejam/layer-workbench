@@ -7,6 +7,7 @@ on:
     paths:
       - "engine-probe.html"
       - "scripts/probe-engine.mjs"
+      - "scripts/slice-stl.mjs"
       - "scripts/serve-isolated.py"
       - "scripts/test-engine-probe.mjs"
       - ".github/workflows/verify-engine-browser.yml"
@@ -42,6 +43,7 @@ jobs:
           test -s engine-test-artifacts/slicer-mt.wasm
           test "$(wc -c < engine-test-artifacts/slicer-mt.js)" -eq 150560
           test "$(wc -c < engine-test-artifacts/slicer-mt.wasm)" -eq 31294942
+          node --check scripts/slice-stl.mjs
           node --check scripts/probe-engine.mjs
           node --check scripts/test-engine-probe.mjs
       - name: Launch isolated local server and probe engine in Chrome
