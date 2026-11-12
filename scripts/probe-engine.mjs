@@ -26,9 +26,12 @@ export async function loadSelectedEngine(jsFile, wasmFile, environment = globalT
   // passing Node conformance harness. Pthreads use this URL to load the same
   // JS on their workers. The content comes only from the locally selected file.
   const code = source + "\nexport default OneSlicerEngine;\n";
-  const blobUrl = URL.createObjectURL(new Blob([code], {type:"text/javascript"}));
+  // Dynamic import needs ESM, but Emscripten's pthreads load their entrypoint
+  // using importScripts(), which must remain a classic script (no export).
+  const moduleUrl = URL.createObjectURL(new Blob([code], {type:"text/javascript"}));
+  const workerUrl = URL.createObjectURL(new Blob([source], {type:"text/javascript"}));
   try {
-    const {default: artifact} = await import(blobUrl);
+    const {default: artifact} = await import(moduleUrl);
     if (!artifact || artifact.apiVersion !== "0.7.0" ||
         typeof artifact.createEngine !== "function") {
       throw new Error("Engine binding is not compatible with one-slicer-api 0.7.0.");
@@ -36,7 +39,7 @@ export async function loadSelectedEngine(jsFile, wasmFile, environment = globalT
     const engine = await artifact.createEngine({
       runtime: {
         wasmBinary,
-        mainScriptUrlOrBlob: blobUrl,
+        mainScriptUrlOrBlob: workerUrl,
         printErr: message => console.warn("[Orca WASM]", message),
         onAbort: reason => console.error("[Orca WASM abort]", reason),
       }
@@ -54,11 +57,13 @@ export async function loadSelectedEngine(jsFile, wasmFile, environment = globalT
       engine,
       release() {
         // Consumers must dispose all sessions before releasing the URL.
-        URL.revokeObjectURL(blobUrl);
+        URL.revokeObjectURL(moduleUrl);
+        URL.revokeObjectURL(workerUrl);
       },
     };
   } catch (error) {
-    URL.revokeObjectURL(blobUrl);
+    URL.revokeObjectURL(moduleUrl);
+    URL.revokeObjectURL(workerUrl);
     throw error;
   }
 }
