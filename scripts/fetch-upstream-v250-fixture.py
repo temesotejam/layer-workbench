@@ -7,6 +7,7 @@ four exact files at the immutable upstream commit (index + three parents).
 import hashlib
 import json
 import pathlib
+import urllib.parse
 import urllib.request
 
 COMMIT = "40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19"
@@ -28,7 +29,6 @@ def fetch(relative):
 
 
 def main():
-    import urllib.parse  # used by fetch after import
     index = fetch("OrcaFilamentLibrary.json")
     entries = [entry for entry in index["filament_list"] if entry["name"] in FILAMENTS]
     if len(entries) != 3:
