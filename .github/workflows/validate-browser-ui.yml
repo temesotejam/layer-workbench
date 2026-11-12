@@ -36,3 +36,10 @@ jobs:
           grep -Fq 'new ThreeMFLoader().parse(buffer)' app.js
           grep -Fq 'new OrbitControls(camera, renderer.domElement)' app.js
           grep -Fq 'Slicing is not connected yet' app.js
+          grep -Fq 'new TransformControls(camera, renderer.domElement)' app.js
+          grep -Fq 'raycaster.intersectObjects(entries.map(entry => entry.object), true)' app.js
+          grep -Fq 'transformControls.attach(entry.object)' app.js
+          grep -Fq 'data-transform="translate"' index.html
+          grep -Fq 'data-transform="rotate"' index.html
+          grep -Fq 'data-transform="scale"' index.html
+          grep -Fq 'Browser-only changes are not saved' index.html
