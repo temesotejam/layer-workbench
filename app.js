@@ -84,7 +84,11 @@ try {
     controls.enabled = !event.value;
     if (!event.value) updateTransformStatus();
   });
-  transformControls.addEventListener("objectChange", updateTransformStatus);
+  transformControls.addEventListener("objectChange", () => {
+    const entry = entries.find(item => item.id === selectedId);
+    if (entry) entry.modified = true;
+    updateTransformStatus();
+  });
   renderer.domElement.addEventListener("pointerdown", event => {
     pointerDown = { x: event.clientX, y: event.clientY };
   });
@@ -290,7 +294,7 @@ async function addFiles(selected) {
     try {
       const object = await parseModel(file);
       prepareMaterials(object);
-      const entry = { id: crypto.randomUUID(), name: file.name, size: file.size, object, format: extension };
+      const entry = { id: crypto.randomUUID(), name: file.name, size: file.size, object, format: extension, file, modified: false };
       entries.push(entry);
       world.add(object);
       if (entries.length === 1) centerAndFit(object);
@@ -325,3 +329,17 @@ document.querySelectorAll(".tab[data-view]").forEach(tab => tab.addEventListener
   if (tab.disabled) return;
   document.querySelectorAll(".tab[data-view]").forEach(item => item.classList.toggle("active", item === tab));
 }));
+
+// Explicit opt-in, isolated development preview only; the public site never
+// downloads or silently executes a WASM artifact.
+if (new URLSearchParams(location.search).has("engineLab")) {
+  import("./scripts/prepare-engine-lab.mjs").then(({installPrepareEngineLab}) =>
+    installPrepareEngineLab({
+      getSelection: () => entries.find(entry => entry.id === selectedId) ?? null,
+      onStatus: message => { sliceNote.textContent = message; },
+    })
+  ).catch(error => {
+    sliceNote.textContent = "Local engine lab could not initialize: " + error.message;
+    console.error(error);
+  });
+}
