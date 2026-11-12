@@ -42,11 +42,11 @@ const circle=parseGcodeToolpaths("G0 X10 Y0 Z0.2\nG2 I-10 J0 E1");
 assert.equal(circle.renderedArcs,1);
 assert.ok(circle.extrusions>=36);
 assert.ok(Math.abs(circle.layers[0].segments.at(-1).x2-10)<1e-8);
-// Skipped R arcs still advance X/Y/E so later lines have correct endpoints.
-const skipped=parseGcodeToolpaths("G0 X0 Y0 Z0.2\nG2 X10 Y0 R5 E1\nG1 X20 Y0 E2");
-assert.equal(skipped.renderedArcs,0);
-assert.equal(skipped.skippedArcs,1);
-assert.deepEqual([skipped.layers[0].segments.at(-1).x1,skipped.layers[0].segments.at(-1).x2],[10,20]);
+// A supported R semicircle is rendered; subsequent XY/E modal motion still aligns.
+const semicircleFollowed=parseGcodeToolpaths("G0 X0 Y0 Z0.2\nG2 X10 Y0 R5 E1\nG1 X20 Y0 E2");
+assert.equal(semicircleFollowed.renderedArcs,1);
+assert.equal(semicircleFollowed.skippedArcs,0);
+assert.deepEqual([semicircleFollowed.layers[0].segments.at(-1).x1,semicircleFollowed.layers[0].segments.at(-1).x2],[10,20]);
 // Unsupported helical and non-XY arcs must not draw misleading chords.
 const helix=parseGcodeToolpaths("G0 X10 Y0 Z0.2\nG3 X0 Y10 Z0.4 I-10 J0 E1\nG1 X0 Y20 E2");
 assert.equal(helix.skippedArcs,1);
