@@ -140,6 +140,19 @@ jobs:
             exit 1
           fi
 
+      - name: Verify v2.5.0 capability metadata matches pinned upstream
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          bridge = Path("orcawasm/bridge/slicer.cpp").read_text(encoding="utf-8")
+          expected = '"engine":{"family":"OrcaSlicer","version":"2.5.0"}'
+          if bridge.count(expected) != 1:
+              raise SystemExit("WASM engine does not advertise source tag v2.5.0")
+          if '"engine":{"family":"OrcaSlicer","version":"2.4.2"}' in bridge:
+              raise SystemExit("WASM engine still reports old v2.4.2 metadata")
+          PY
+
       - name: Verify OrcaSlicer v2.5 bridge validation API
         shell: bash
         run: |
