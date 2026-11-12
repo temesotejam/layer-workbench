@@ -73,6 +73,17 @@ export function resolveOrcaProfileFamily(records,type,selected,options={}) {
         settings.nozzle_temperature_initial_layer=[temp];
         unsupported.delete("nozzle_temperature_initial_layer");
       }
+      // Native OrcaSlicer stores flow ratio per filament/extruder, not as a
+      // generic scalar percentage. A missing ratio is left unspecified;
+      // never infer it from the nozzle, extrusion width or temperature.
+      // Deliberately limited to one filament and a bounded diagnostic range:
+      // passing a multi-value vendor vector as one extruder would be unsafe.
+      const flowSource=[...chain].reverse().find(p=>Object.hasOwn(p,"filament_flow_ratio"));
+      if(flowSource){
+        const ratio=validateNum("filament_flow_ratio",flowSource.filament_flow_ratio,[0.5,1.5]);
+        settings.filament_flow_ratio=[ratio];
+        unsupported.delete("filament_flow_ratio");
+      }
     }
     // A real Orca filament has plate-specific bed temperatures, not a generic
     // 'bed_temperature' field. Only map an explicitly selected hot plate in
