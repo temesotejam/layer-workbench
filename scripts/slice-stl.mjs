@@ -1,3 +1,4 @@
+import {parseTestProcessOverrides} from "./test-process-profile.mjs";
 import {makeMultiStlProject} from "./multi-stl.mjs";
 import {viewerMatrixToNative} from "./transform-matrix.mjs";
 // Experimental end-to-end bridge for an isolated browser host.
@@ -45,12 +46,18 @@ export async function sliceStlWithEngine(engine, stlBytes, onProgress, viewerEle
   return sliceMultiStlWithEngine(engine, [{bytes:stlBytes,viewerElements}], onProgress);
 }
 
-export async function sliceMultiStlWithEngine(engine, items, onProgress) {
+export async function sliceMultiStlWithEngine(engine, items, onProgress, processOverrides = null) {
   if (!engine || typeof engine.createSession !== "function")
     throw new Error("Verified OrcaSlicer engine must be loaded before slicing.");
   const session = await engine.createSession();
   try {
     await session.init(encode(GENERIC_PLA_TEST_CONFIG));
+    if (processOverrides !== null) {
+      // Apply a restricted flat process fragment. Full OrcaSlicer profile
+      // inheritance/machine compatibility requires a separate validated path.
+      const overrides = parseTestProcessOverrides(processOverrides);
+      await session.applyProfile("orca.native-json", encode(overrides));
+    }
     const project = makeMultiStlProject(items);
     await session.setObjects(project.blob, project.manifest);
     const response = await session.slice({
