@@ -50,7 +50,7 @@ export function resolveOrcaProfileCollection(records, selection) {
     const unsupported=new Set();
     for(const rec of chain){
       for(const [key,value] of Object.entries(rec)){
-        if(key in SPECS[type])settings[key]=validateNum(key,value,SPECS[type][key]);
+        if(Object.hasOwn(SPECS[type],key))settings[key]=validateNum(key,value,SPECS[type][key]);
         else if(!META.has(key))unsupported.add(key);
       }
     }
