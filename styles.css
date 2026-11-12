@@ -2,3 +2,13 @@
 .tool-button.active-tool{border-color:#27b18b;background:#1c5a49;color:#e3fff4}
 .tool-button.edit-mode:not(:disabled){cursor:pointer}
 #transform-status{line-height:1.65;overflow-wrap:anywhere;padding:5px 2px}
+
+.engine-lab{border-top:1px solid #47515a;margin-top:12px;padding-top:12px;color:#e3e8ec}
+.engine-lab h3{font-size:12px;margin:0 0 8px}
+.engine-lab p{font-size:10px;color:#aebbc4;line-height:1.45;overflow-wrap:anywhere}
+.engine-lab label{display:block;font-size:10px;margin:8px 0}
+.engine-lab input{display:block;width:100%;font-size:10px;margin:4px 0;color:#cdd9e1}
+.engine-lab button{display:block;width:100%;margin:7px 0;padding:8px;background:#277d65;border:0;border-radius:4px;color:white;font:inherit}
+.engine-lab button:disabled{opacity:.45}
+.engine-lab a{font-size:11px;color:#9ee6cb;display:block;margin:6px 0}
+.engine-lab a[hidden]{display:none}
