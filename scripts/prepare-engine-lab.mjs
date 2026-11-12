@@ -4,6 +4,7 @@
 import { loadSelectedEngine, checkIsolation } from "./probe-engine.mjs";
 import { sliceMultiStlWithEngine } from "./slice-stl.mjs";
 import {readTestProcessFile} from "./test-process-profile.mjs";
+import {createLayerPreview} from "./gcode-layer-preview.mjs";
 
 export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
   const panel = document.querySelector(".slice-area");
@@ -22,6 +23,7 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
     <p id="lab-status" role="status" aria-live="polite">No engine loaded.</p>
   `;
   panel.appendChild(root);
+  const preview=createLayerPreview(root);
   const $ = sel => root.querySelector(sel);
   const js = $("#lab-js");
   const wasm = $("#lab-wasm");
@@ -76,6 +78,7 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
     busy = true;
     refresh();
     download.hidden = true;
+    preview.clear();
     if (downloadUrl) URL.revokeObjectURL(downloadUrl);
     downloadUrl = null;
     status.textContent = "Slicing " + selected.length + " model(s)…";
@@ -94,8 +97,15 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
       downloadUrl = URL.createObjectURL(new Blob([result.gcode], {type: "text/plain"}));
       download.href = downloadUrl;
       download.hidden = false;
+      let previewInfo = "";
+      try {
+        const pathData = preview.show(new TextDecoder().decode(result.gcode));
+        previewInfo = " Preview: " + pathData.layers.length + " Z levels.";
+      } catch (previewError) {
+        previewInfo = " Preview unavailable: " + previewError.message;
+      }
       status.textContent = "PASS: " + selected.length + " STL model(s) → " + result.gcode.byteLength +
-        " G-code bytes. Generic PLA base with " + (processOverrides ? "test overrides" : "default process") + "; do not print without validating.";
+        " G-code bytes. Generic PLA base with " + (processOverrides ? "test overrides" : "default process") + ";" + previewInfo + " Do not print without validating.";
       onStatus("Test WASM sliced all imported STL models and their displayed transforms on one plate; generic PLA settings only.");
     } catch (error) {
       status.textContent = "FAILED slicing: " + error.message;
