@@ -183,11 +183,10 @@ This check uncovered an important trap: **changing a config key or a G-code hash
 
 [Real Chrome WASM CI #43288582338](https://github.com/temesotejam/layer-workbench/actions/runs/43288582338) **PASS**: holding the steady hot-plate temperature at **65 °C** while changing only the first-layer value **75 → 85 °C** changed the *actual heater commands*, not just G-code comments or file hashes:
 
-```gcode
-# first-layer 75 °C              # first-layer 85 °C
-M190 S75 ; wait for bed         M190 S85 ; wait for bed
-M140 S65 ; steady bed           M140 S65 ; steady bed
-```
+| First-layer preset | Emitted initial heater command | Emitted later steady-bed command |
+| --- | --- | --- |
+| 75 °C | `M190 S75 ; set bed temperature and wait for it to be reached` | `M140 S65 ; set bed temperature` |
+| 85 °C | `M190 S85 ; set bed temperature and wait for it to be reached` | `M140 S65 ; set bed temperature` |
 
 The older separate real-source [profile verification #43288371612](https://github.com/temesotejam/layer-workbench/actions/runs/43288371612) also **PASS** and confirms that the pinned official Generic PLA base contains `hot_plate_temp = ["55"]` and `hot_plate_temp_initial_layer = ["55"]`. The test includes malformed vectors and ensures no active-plate mapping without explicit selection. Source files are fetched only on CI runners and not published.
 
