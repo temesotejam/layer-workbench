@@ -21,7 +21,7 @@ assert.throws(()=>resolve(profiles.map(p=>p.name==='Generic PLA @TestPrinter'?{.
 assert.throws(()=>resolve([...profiles,{...profiles[0]}],selection),/Duplicate/);
 assert.throws(()=>resolve(profiles.map(p=>p.name==='fdm_process_common'?{...p,inherits:'0.16mm Fine @TestPrinter'}:p),selection),/cycle/);
 // Explicit plate selection is required: never silently treat hot_plate_temp
-// as a generic bed temperature, and do not map initial-layer temperatures.
+// as a generic bed temperature, nor forward first-layer temperatures implicitly.
 const withPlate=profiles.map(p=>p.name==='Generic PLA @System'
   ? {...p,hot_plate_temp:['65'],hot_plate_temp_initial_layer:['70']} : p);
 const implicit=resolve(withPlate,selection);
@@ -31,15 +31,28 @@ assert.ok(implicit.filament.unsupported.includes('hot_plate_temp'));
 const explicit=resolve(withPlate,selection,{plateType:'hot'});
 assert.equal(explicit.filament.settings.bed_temperature,'65');
 assert.deepEqual(explicit.filament.selectedBed,{
-  plateType:'hot',source:'Generic PLA @System',bed_temperature:'65'
+  plateType:'hot',source:'Generic PLA @System',bed_temperature:'65',
+  initialLayerSource:'Generic PLA @System',initialLayerTemperature:'70'
 });
+assert.deepEqual(explicit.filament.settings.hot_plate_temp_initial_layer,['70']);
 assert.ok(!explicit.filament.unsupported.includes('hot_plate_temp'));
-assert.ok(explicit.filament.unsupported.includes('hot_plate_temp_initial_layer'));
+assert.ok(!explicit.filament.unsupported.includes('hot_plate_temp_initial_layer'));
+assert.ok(!Object.hasOwn(implicit.filament.settings,'hot_plate_temp_initial_layer'));
+const withoutInitial=resolve(profiles.map(p=>p.name==='Generic PLA @System'
+  ? {...p,hot_plate_temp:['65']} : p),selection,{plateType:'hot'});
+assert.equal(withoutInitial.filament.selectedBed.initialLayerTemperature,null);
+assert.ok(!Object.hasOwn(withoutInitial.filament.settings,'hot_plate_temp_initial_layer'));
 assert.throws(()=>resolve(withPlate,selection,{plateType:'textured'}),/Unsupported Orca plate type/);
 assert.throws(()=>resolve(withPlate.map(p=>p.name==='Generic PLA @System'
   ? {...p,hot_plate_temp:['150']} : p),selection,{plateType:'hot'}),/test limits/);
 assert.throws(()=>resolve(withPlate.map(p=>p.name==='Generic PLA @System'
   ? {...p,hot_plate_temp:['55','65']} : p),selection,{plateType:'hot'}),/Multi-extruder/);
+assert.throws(()=>resolve(withPlate.map(p=>p.name==='Generic PLA @System'
+  ? {...p,hot_plate_temp_initial_layer:['75','80']} : p),selection,{plateType:'hot'}),/Multi-extruder/);
+assert.throws(()=>resolve(withPlate.map(p=>p.name==='Generic PLA @System'
+  ? {...p,hot_plate_temp_initial_layer:['-5']} : p),selection,{plateType:'hot'}),/Invalid numeric value|test limits/);
+assert.throws(()=>resolve(withPlate.map(p=>p.name==='Generic PLA @System'
+  ? {...p,hot_plate_temp_initial_layer:['140']} : p),selection,{plateType:'hot'}),/test limits/);
 assert.throws(()=>resolve(profiles,selection,{plateType:'hot'}),/Selected hot plate temperature missing/);
-console.log('PASS: explicit inherited Orca hot-plate temperature selection and fail-closed validation');
+console.log('PASS: explicit inherited steady and first-layer hot plate temperatures, native vector shape, fail-closed validation');
 console.log('PASS: Orca-style three-domain inheritance, compatibility and unsupported option reporting');
