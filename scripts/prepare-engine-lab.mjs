@@ -1,10 +1,10 @@
 // Opt-in localhost /?engineLab=1: bridge the Prepare selection to the
 // previously verified candidate, without deploying that binary to Pages.
-// IMPORTANT: this proof accepts one unmodified source STL only.
+// The proof accepts one STL plus checked native affine transforms; real profiles remain unimplemented.
 import { loadSelectedEngine, checkIsolation } from "./probe-engine.mjs";
 import { sliceStlWithEngine } from "./slice-stl.mjs";
 
-export function installPrepareEngineLab({getSelection, onStatus}) {
+export function installPrepareEngineLab({getSelection, getEntryCount, onStatus}) {
   const panel = document.querySelector(".slice-area");
   if (!panel) throw new Error("Prepare slice panel not found.");
   const root = document.createElement("section");
@@ -38,7 +38,7 @@ export function installPrepareEngineLab({getSelection, onStatus}) {
     load.disabled = busy || !isolated || !js.files?.length || !wasm.files?.length || !!loaded;
     const chosen = getSelection();
     slice.disabled = busy || !loaded || !chosen || chosen.format !== "stl" ||
-      chosen.modified || !chosen.file || chosen.file.size > 20 * 1024 * 1024;
+      getEntryCount() !== 1 || !chosen.file || chosen.file.size > 20 * 1024 * 1024;
   };
   js.addEventListener("change", refresh);
   wasm.addEventListener("change", refresh);
@@ -54,7 +54,7 @@ export function installPrepareEngineLab({getSelection, onStatus}) {
     try {
       loaded = await loadSelectedEngine(js.files[0], wasm.files[0]);
       status.textContent = "Ready: " + loaded.capabilities.engine.family + " " + loaded.capabilities.engine.version;
-      onStatus("Local test engine loaded. Select an unmodified STL to test slicing; generic PLA only.");
+      onStatus("Local engine loaded. One STL plus viewer transforms can be sliced using generic PLA test settings.");
     } catch (error) {
       status.textContent = "FAILED loading engine: " + error.message;
     } finally {
@@ -64,8 +64,8 @@ export function installPrepareEngineLab({getSelection, onStatus}) {
   });
   slice.addEventListener("click", async () => {
     const chosen = getSelection();
-    if (!loaded || !chosen || chosen.format !== "stl" || chosen.modified) {
-      status.textContent = "Only an unmodified source STL can be sliced in this test.";
+    if (!loaded || !chosen || chosen.format !== "stl" || getEntryCount() !== 1) {
+      status.textContent = "This test requires exactly one STL model.";
       return;
     }
     busy = true;
@@ -76,15 +76,17 @@ export function installPrepareEngineLab({getSelection, onStatus}) {
     status.textContent = "Slicing " + chosen.name + "…";
     try {
       const raw = new Uint8Array(await chosen.file.arrayBuffer());
+      chosen.object.updateMatrixWorld(true);
+      const viewerMatrix = Array.from(chosen.object.matrixWorld.elements);
       const result = await sliceStlWithEngine(loaded.engine, raw, progress => {
         status.textContent = "Slicing: " + (progress?.percent ?? "?") + "% · " + (progress?.stage ?? "");
-      });
+      }, viewerMatrix);
       downloadUrl = URL.createObjectURL(new Blob([result.gcode], {type: "text/plain"}));
       download.href = downloadUrl;
       download.hidden = false;
       status.textContent = "PASS: " + chosen.name + " → " + result.gcode.byteLength +
         " G-code bytes. Generic PLA test profile only; do not print without validating.";
-      onStatus("WASM generated test G-code from the selected original STL; native project transforms remain unsupported.");
+      onStatus("Test WASM sliced the original STL using the selected viewer affine transform; generic PLA settings only.");
     } catch (error) {
       status.textContent = "FAILED slicing: " + error.message;
     } finally {
