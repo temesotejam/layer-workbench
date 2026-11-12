@@ -7,7 +7,7 @@ const base = process.env.ENGINE_PROBE_URL || 'http://127.0.0.1:8766/';
 const artifactDir = process.env.ENGINE_ARTIFACT_DIR || 'engine-test-artifacts';
 const browser = await chromium.launch({
   channel: 'chrome', headless: true,
-  args: ['--no-sandbox', '--disable-dev-shm-usage'],
+  args: ['--no-sandbox', '--disable-dev-shm-usage', '--enable-webgl', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
 });
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 page.on('console', m => {
@@ -66,6 +66,45 @@ try {
   assert.match(sliceResult, /PASS: G-code generated/);
   assert.equal(await page.locator('#download-gcode').isVisible(), true);
   console.log('PASS: browser STL → WASM project → slice → G-code asset');
+
+  // Integration gate: the exact STL imported into the Prepare WebGL view
+  // is the file passed to WASM in an opt-in local-only test.
+  const prepare = await browser.newPage({ viewport: {width: 1440, height: 900} });
+  try {
+    const response = await prepare.goto(base + '?engineLab=1', {waitUntil: 'domcontentloaded'});
+    assert.equal(response.status(), 200);
+    await prepare.locator('#viewport-canvas canvas').waitFor({state:'visible', timeout:90000});
+    await prepare.locator('#model-file').setInputFiles({
+      name: 'prepare-cube.stl', mimeType: 'model/stl', buffer: cube,
+    });
+    await prepare.locator('#object-count').getByText('1 object').waitFor({timeout:30000});
+    await prepare.locator('#lab-js').setInputFiles({
+      name:'slicer-mt.js', mimeType:'text/javascript',
+      buffer:await readFile(artifactDir + '/slicer-mt.js'),
+    });
+    await prepare.locator('#lab-wasm').setInputFiles({
+      name:'slicer-mt.wasm', mimeType:'application/wasm',
+      buffer:await readFile(artifactDir + '/slicer-mt.wasm'),
+    });
+    await prepare.locator('#lab-load').click();
+    await prepare.waitForFunction(() => {
+      const text = document.querySelector('#lab-status')?.textContent || '';
+      return text.startsWith('Ready:') || text.startsWith('FAILED');
+    }, null, {timeout:120000});
+    const loaded = await prepare.locator('#lab-status').innerText();
+    assert.match(loaded, /^Ready: OrcaSlicer 2\.5\.0/);
+    await prepare.locator('#lab-slice').click();
+    await prepare.waitForFunction(() => {
+      const text = document.querySelector('#lab-status')?.textContent || '';
+      return text.startsWith('PASS:') || text.startsWith('FAILED');
+    }, null, {timeout:120000});
+    const result = await prepare.locator('#lab-status').innerText();
+    assert.match(result, /^PASS: prepare-cube\.stl/);
+    assert.equal(await prepare.locator('#lab-download').isVisible(), true);
+    console.log('PASS: Prepare UI selected STL → local WASM → G-code download');
+  } finally {
+    await prepare.close();
+  }
 } finally {
   await browser.close();
 }
