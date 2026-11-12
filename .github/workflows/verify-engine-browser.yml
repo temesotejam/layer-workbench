@@ -12,6 +12,8 @@ on:
       - "scripts/test-process-profile-unit.mjs"
       - "scripts/process-preset-inheritance.mjs"
       - "scripts/orca-profile-collection.mjs"
+      - "scripts/orca-vendor-index.mjs"
+      - "scripts/test-orca-vendor-index.mjs"
       - "scripts/test-orca-profile-collection.mjs"
       - "scripts/test-process-preset-inheritance.mjs"
       - "scripts/gcode-preview-parser.mjs"
@@ -65,6 +67,7 @@ jobs:
           node scripts/test-process-profile-unit.mjs
           node scripts/test-process-preset-inheritance.mjs
           node scripts/test-orca-profile-collection.mjs
+          node scripts/test-orca-vendor-index.mjs
           node scripts/test-gcode-preview-parser.mjs
           node --check scripts/gcode-3d-preview.mjs
           node --check scripts/slice-stl.mjs
