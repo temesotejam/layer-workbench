@@ -29,7 +29,7 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
       <option value="none">No plate-specific mapping (fixture defaults)</option>
       <option value="hot">Orca hot plate only (explicit)</option>
     </select></label>
-    <small>Explicit hot plate selection maps hot_plate_temp to test bed_temperature and, when present, forwards native hot_plate_temp_initial_layer as a single-filament vector. Inherited first-layer nozzle temperature is forwarded as a native vector; a synthetic Chrome test confirmed generated M104 changes. This does not verify manufacturer startup scripts or complete heater behavior. Other plates and full material settings remain unsupported; generated G-code is not print-ready.</small>
+    <small>Explicit hot plate selection maps hot_plate_temp to test bed_temperature and, when present, forwards native hot_plate_temp_initial_layer as a single-filament vector. Inherited first-layer nozzle temperature and bounded (0.5–1.5) single-filament flow ratio are forwarded as native vectors; isolated Chrome tests confirmed changes in actual M104 and G1 E commands. Multi-value flow ratios are rejected, and volumetric speed limits are still unsupported. Manufacturer startup scripts, other plates and full material settings remain unverified; generated G-code is not print-ready.</small>
     <label>Process preset name <input id="lab-orca-process" type="text" maxlength="160"></label>
     <button id="lab-slice" disabled>Slice STL plate (test only)</button>
     <a id="lab-download" hidden download="prepare-test.gcode">Download test G-code</a>
