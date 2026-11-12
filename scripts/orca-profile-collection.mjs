@@ -62,6 +62,18 @@ export function resolveOrcaProfileFamily(records,type,selected,options={}) {
         else if(!META.has(key))unsupported.add(key);
       }
     }
+    // Native OrcaSlicer exposes first-layer nozzle temperature as a
+    // per-filament vector. Resolve it independently of steady nozzle temp;
+    // forwarding a scalar or silently using the steady temperature would
+    // discard the shipped profile's initial-layer distinction.
+    if(type==="filament"){
+      const initialNozzle=[...chain].reverse().find(p=>Object.hasOwn(p,"nozzle_temperature_initial_layer"));
+      if(initialNozzle){
+        const temp=validateNum("nozzle_temperature",initialNozzle.nozzle_temperature_initial_layer,SPECS.filament.nozzle_temperature);
+        settings.nozzle_temperature_initial_layer=[temp];
+        unsupported.delete("nozzle_temperature_initial_layer");
+      }
+    }
     // A real Orca filament has plate-specific bed temperatures, not a generic
     // 'bed_temperature' field. Only map an explicitly selected hot plate in
     // this local development proof. Never assume other plate types are equal.
