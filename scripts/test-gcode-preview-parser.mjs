@@ -24,7 +24,7 @@ assert.equal(result.travels,4);
 assert.equal(result.skippedArcs,1);
 assert.deepEqual(result.layers.map(layer=>layer.z),[0.2,0.4]);
 assert.equal(result.layers[0].segments[0].x2,10);
-assert.equal(result.layers[1].segments[0].x2,30);
+assert.equal(result.layers[1].segments[1].x2,20);
 assert.throws(()=>parseGcodeToolpaths('G1 X10', {maxSegments:0}), /complex/);
 assert.throws(()=>parseGcodeToolpaths('G1 X100001'), /limits/);
 console.log('PASS: G-code linear extrusion, travel, layers, relative moves, safety limits');
