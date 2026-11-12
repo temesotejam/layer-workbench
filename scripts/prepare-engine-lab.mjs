@@ -29,7 +29,7 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
       <option value="none">No plate-specific mapping (fixture defaults)</option>
       <option value="hot">Orca hot plate only (explicit)</option>
     </select></label>
-    <small>Only hot_plate_temp is mapped to the generic test bed_temperature. Initial-layer temperature, other plates and full material settings remain unsupported; generated G-code is not print-ready.</small>
+    <small>Explicit hot plate selection maps hot_plate_temp to test bed_temperature and, when present, forwards native hot_plate_temp_initial_layer as a single-filament vector. Other plates and full material settings remain unsupported; generated G-code is not print-ready.</small>
     <label>Process preset name <input id="lab-orca-process" type="text" maxlength="160"></label>
     <button id="lab-slice" disabled>Slice STL plate (test only)</button>
     <a id="lab-download" hidden download="prepare-test.gcode">Download test G-code</a>
@@ -138,7 +138,7 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
       const unsupported = nativeCollection
         ? [nativeCollection.machine,nativeCollection.filament,nativeCollection.process].reduce((n,v)=>n+v.unsupported.length,0) : 0;
       status.textContent = "PASS: " + selected.length + " STL model(s) → " + result.gcode.byteLength +
-        " G-code bytes. Restricted test profiles with " + (nativeCollection ? "Orca raw preset selection ("+rawMachine.value+" / "+rawFilament.value+" / "+rawProcess.value+"), "+unsupported+" unsupported keys excluded"+(bedInfo ? ", explicitly mapped hot bed "+bedInfo.bed_temperature+" °C (first layer unsupported)" : "") : chosenPreset ? "inherited process preset (" + chosenPreset.chain.join(" > ") + ")" : processOverrides ? "test overrides" : "default process") + ";" + previewInfo + " Do not print without validating.";
+        " G-code bytes. Restricted test profiles with " + (nativeCollection ? "Orca raw preset selection ("+rawMachine.value+" / "+rawFilament.value+" / "+rawProcess.value+"), "+unsupported+" unsupported keys excluded"+(bedInfo ? ", explicitly mapped hot bed "+bedInfo.bed_temperature+" °C"+(bedInfo.initialLayerTemperature!==null ? " and native first-layer hot bed "+bedInfo.initialLayerTemperature+" °C" : " (first layer unspecified)") : "") : chosenPreset ? "inherited process preset (" + chosenPreset.chain.join(" > ") + ")" : processOverrides ? "test overrides" : "default process") + ";" + previewInfo + " Do not print without validating.";
       onStatus("Test WASM sliced all imported STL models and their displayed transforms on one plate; generic PLA settings only.");
     } catch (error) {
       status.textContent = "FAILED slicing: " + error.message;
