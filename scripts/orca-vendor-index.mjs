@@ -67,6 +67,6 @@ export function extractVendorProfileRecords(index,files,options={}) {
 }
 export function resolveIndexedOrcaProfiles(index,files,selection,options={}) {
   const extracted=extractVendorProfileRecords(index,files,options);
-  const result=resolveOrcaProfileCollection(extracted.records,selection);
+  const result=resolveOrcaProfileCollection(extracted.records,selection,options);
   return {...result,source:{vendor:extracted.vendor,version:extracted.version,entries:extracted.entryCount}};
 }
