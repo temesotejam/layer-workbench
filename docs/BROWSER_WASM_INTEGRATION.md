@@ -124,3 +124,18 @@ The local lab can use a JSON bundle shaped like `{ "vendor_index": {...}, "files
 [Chrome CI #43250788956](https://github.com/temesotejam/layer-workbench/actions/runs/43250788956) **PASS**: vendor index unit tests (paths, registration, metadata, single-value vectors) plus an isolated real Chrome two-STL slice with indexed machine, filament and process settings produced G-code. All prior editor/2D+3D preview/profile tests passed.
 
 **Caveat:** the test bundle consists of synthetic Orca-style fixture records matching the documented schema, *not an exhaustive import of actual shipped v2.5.0 vendor profile resources*. The next critical step is pinned upstream fixture ingestion with explicit licensing/provenance, exact vendor inheritance and alias resolution, typed multi-extruder settings, followed by native desktop vs WASM G-code parity testing.
+
+## 2026-11-13: actual pinned upstream v2.5.0 filament profile verification
+
+Introduced a **separate lightweight CI workflow** [Verify pinned real OrcaSlicer v2.5.0 profiles](../.github/workflows/verify-real-v250-profiles.yml). It downloads actual official `resources/profiles/OrcaFilamentLibrary.json` and three selected upstream JSON records directly from the immutable OrcaSlicer v2.5.0 source commit `40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19` inside the Actions runner. The upstream profile JSON files are **not copied into this repository, uploaded as artifacts or deployed to Pages**; fetch and SHA-256 audit logs retain provenance.
+
+[Real upstream fixture run #43251997734](https://github.com/temesotejam/layer-workbench/actions/runs/43251997734) **PASS**. It verified the real vendor index entries and three-level inheritance
+`fdm_filament_common → fdm_filament_pla → Generic PLA @System`, with supported `nozzle_temperature: 220`. The reader explicitly reports **67 other unsupported keys** in the combined official chain, including `hot_plate_temp` and `filament_flow_ratio` (which cannot be assumed equivalent to the generic bed temperature or ignored in a print-ready profile). An independent published source revision and per-file hashes are logged by CI.
+
+Source and provenance:
+- [Pinned official filament index](https://github.com/OrcaSlicer/OrcaSlicer/blob/40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19/resources/profiles/OrcaFilamentLibrary.json)
+- [Pinned common filament base](https://github.com/OrcaSlicer/OrcaSlicer/blob/40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19/resources/profiles/OrcaFilamentLibrary/filament/base/fdm_filament_common.json)
+- [Pinned PLA filament base](https://github.com/OrcaSlicer/OrcaSlicer/blob/40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19/resources/profiles/OrcaFilamentLibrary/filament/base/fdm_filament_pla.json)
+- [Pinned Generic PLA profile](https://github.com/OrcaSlicer/OrcaSlicer/blob/40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19/resources/profiles/OrcaFilamentLibrary/filament/Generic%20PLA%20%40System.json)
+
+The existing browser-integrated test still uses restricted fixture settings and is not ready to apply all native PLA settings. **Next:** verify actual machine/process and filament cross-bundle inheritance, carry over vector-valued parameters and selected plate temperatures correctly, then run same-fixture native desktop vs WebAssembly G-code comparisons. An isolated unit test accepting a small set of real source files is not feature parity with all vendor profiles.
