@@ -15,6 +15,9 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 const errors = [];
 page.on('pageerror', error => errors.push(error.message));
 page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });
+page.on('response', response => {
+  if (response.status() >= 400) errors.push(`HTTP ${response.status()}: ${response.url()}`);
+});
 
 function makeBinarySTL() {
   const result = Buffer.alloc(84 + 50 * 12);
