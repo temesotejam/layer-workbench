@@ -6,6 +6,7 @@ import {extractOrcaVendorCatalog,selectOrcaFilamentPreset} from "./orca-vendor-c
 import {resolveOrcaProfileFamily} from "./orca-profile-collection.mjs";
 import {resolveFullOrcaProfileFamily,inspectOrcaNozzleVector,inspectOrcaArraySettings} from "./orca-full-profile.mjs";
 import {inspectOrcaFilamentRouting} from "./orca-filament-routing.mjs";
+import {inspectOrcaFilamentMaterialVectors} from "./orca-filament-material-inspection.mjs";
 
 const multi=JSON.parse(readFileSync("upstream-v250-multi-vendor-fixture.json","utf8"));
 const global=JSON.parse(readFileSync("upstream-v250-filament-fixture.json","utf8"));
@@ -105,6 +106,20 @@ assert.ok(Object.keys(snapProcess.settings).length>10);
 const snapMaterial=resolveFullOrcaProfileFamily(snap.records,"filament","Snapmaker PLA Basic @U1");
 assert.equal(snapMaterial.chain.length,2);
 assert.deepEqual([...snapMaterial.settings.compatible_printers],["Snapmaker U1 (0.4 nozzle)"]);
+const u1Material=inspectOrcaFilamentMaterialVectors(snapMaterial);
+assert.deepEqual(u1Material.arrayLengths,[1,2],
+  "real U1 material has two thermal/flow variants but one filament diameter");
+assert.equal(u1Material.hasMixedArrayLengths,true);
+assert.deepEqual(u1Material.fields.find(f=>f.key==="nozzle_temperature").numericValues,[220,220]);
+assert.deepEqual(u1Material.fields.find(f=>f.key==="filament_flow_ratio").numericValues,[0.98,0.98]);
+assert.deepEqual(u1Material.fields.find(f=>f.key==="filament_max_volumetric_speed").numericValues,[15,15]);
+assert.equal(u1Material.usableForPrinting,false);
+const prusaMaterial=resolveFullOrcaProfileFamily(prusa.records,"filament","Generic PLA @Prusa MK4S");
+const prusaAudit=inspectOrcaFilamentMaterialVectors(prusaMaterial);
+assert.ok(prusaAudit.scalarNativeVectorKeys.includes("nozzle_temperature_initial_layer"),
+  "pinned Prusa leaf JSON uses a scalar where native ConfigDef declares coInts");
+assert.equal(prusaAudit.fields.find(f=>f.key==="nozzle_temperature_initial_layer").numericValues[0],230);
+
 const prusaFull=resolveFullOrcaProfileFamily(prusa.records,"machine","Prusa MK4S 0.4 nozzle");
 assert.equal(prusaFull.chain.length,4);
 assert.equal(inspectOrcaNozzleVector(prusaFull).toolCount,1);
