@@ -16,7 +16,7 @@ export function auditMultiMaterialGcode(source) {
   if(typeof source!=="string"||source.length>MAX_BYTES)throw new Error("Invalid or oversized G-code");
   const lines=source.split(/\r?\n/);
   if(lines.length>MAX_LINES)throw new Error("Too many G-code lines");
-  let inConfig=false; const config={}; const commands={tool:[],ams:{M620:0,M621:0,"M620.1":0},primeTower:{M624:0,M625:0}};
+  let inConfig=false; const config={}; const commands={tool:[],unloadSentinel:0,ams:{M620:0,M621:0,"M620.1":0},primeTower:{M624:0,M625:0}};
   for(const raw of lines) {
     const line=raw.trim();
     if(line==="; CONFIG_BLOCK_START"){inConfig=true;continue;}
@@ -27,7 +27,12 @@ export function auditMultiMaterialGcode(source) {
     }
     const code=line.split(";")[0].trim().toUpperCase();
     let m=/^T(\d+)\b/.exec(code);
-    if(m){const id=Number(m[1]);if(id<256)commands.tool.push(id);continue;}
+    if(m){
+      const id=Number(m[1]);
+      if(id===255)commands.unloadSentinel++; // X1E unload command, not a normal filament selector
+      else if(Number.isSafeInteger(id)&&id>=0&&id<255)commands.tool.push(id);
+      continue;
+    }
     m=/^(M620(?:\.1)?|M621|M624|M625)(?:\s|$)/.exec(code);
     if(m) {
       if(m[1]==="M620"||m[1]==="M621"||m[1]==="M620.1")commands.ams[m[1]]++;
@@ -56,6 +61,7 @@ export function auditMultiMaterialGcode(source) {
       primeTowerWidth:config.prime_tower_width===undefined?null:Number(config.prime_tower_width),
       nozzleVolumeType:config.nozzle_volume_type??null},
     commands:{toolCommandCount:commands.tool.length,distinctToolIds:distinctTools,
+      unloadToolSentinelCount:commands.unloadSentinel,
       ams:commands.ams,primeTower:commands.primeTower},
     classification:filamentMap&&nozzleDiameter?(
       nozzleDiameter.length===1&&filamentMap.length>1&&filamentMap.every(x=>x===1)
@@ -63,6 +69,7 @@ export function auditMultiMaterialGcode(source) {
         :nozzleDiameter.length>1?"multiple-physical-extruders":"single-extruder"
     ):"insufficient-config-data",
     warnings:["G-code command counting is syntactic; M620/M621 and T commands may be vendor-specific.",
+      "T255 is reported separately as a vendor unload sentinel; tools are not proven physical extruders.",
       "This audit does not resolve filament variant semantics, execute scripts, or certify print safety."]
   };
 }
