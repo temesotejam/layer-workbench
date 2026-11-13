@@ -4,7 +4,7 @@ import tempfile
 import unittest
 import zipfile
 
-from check_3mf_stl_bounds import compare, stl_geometry
+from check_3mf_stl_bounds import compare, stl_geometry, MAX_STL_BYTES
 
 NS = "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
 
@@ -86,6 +86,11 @@ class Test3mfToStlBounds(unittest.TestCase):
                 stl_geometry(p)
             p.write_bytes(bytes(84) + bytes(49))
             with self.assertRaisesRegex(ValueError,"count"):
+                stl_geometry(p)
+            with p.open("wb") as stream:
+                stream.seek(MAX_STL_BYTES)
+                stream.write(b"x")
+            with self.assertRaisesRegex(ValueError,"excessive"):
                 stl_geometry(p)
 
     def test_invalid_tolerance_and_unit(self):

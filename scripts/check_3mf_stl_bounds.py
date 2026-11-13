@@ -20,7 +20,10 @@ MAX_STL_BYTES = 84 + 50 * MAX_TRIANGLES
 
 
 def stl_geometry(path):
-    data = Path(path).read_bytes()
+    # Read at most the diagnostic limit plus one sentinel byte, even for a
+    # maliciously oversized or sparse input file.
+    with Path(path).open("rb") as stream:
+        data = stream.read(MAX_STL_BYTES + 1)
     if len(data) < 84 or len(data) > MAX_STL_BYTES:
         raise ValueError("Converted STL size is empty or excessive")
     triangles = struct.unpack_from("<I", data, 80)[0]
