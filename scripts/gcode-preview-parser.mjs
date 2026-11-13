@@ -13,6 +13,11 @@ export function parseGcodeToolpaths(source, options={}) {
     throw new Error("Invalid preview segment budget");
   const byZ=new Map();
   const state={x:0,y:0,z:0,e:0,absoluteXYZ:true,absoluteE:true,units:1,plane:"G17",absoluteArcCenters:false};
+  // Tool selectors in G-code label paths, NOT physical extruder IDs or filament colors.
+  // Reserved/vendor tool commands (e.g. T1000) intentionally do not change the label.
+  let activeTool=null;
+  const selectedTools=new Set();
+  const extrusionsByTool=new Map();
   let count=0,deposited=0,travels=0,skippedArcs=0,renderedArcs=0;
   function append(x1,y1,x2,y2,z,extrusion){
     if(![x1,y1,x2,y2,z].every(Number.isFinite) ||
@@ -22,12 +27,21 @@ export function parseGcodeToolpaths(source, options={}) {
     const layerZ=Math.round(z*1000)/1000;
     const key=String(layerZ);
     if(!byZ.has(key))byZ.set(key,{z:layerZ,segments:[]});
-    byZ.get(key).segments.push({x1,y1,x2,y2,extrusion});
-    extrusion?deposited++:travels++;
+    byZ.get(key).segments.push({x1,y1,x2,y2,extrusion,toolId:activeTool});
+    if(extrusion){
+      deposited++;
+      extrusionsByTool.set(activeTool,(extrusionsByTool.get(activeTool)??0)+1);
+    }else travels++;
   }
   for(const input of source.split(/\r?\n/)){
     const line=input.split(";")[0].replace(/\([^)]*\)/g,"").trim().toUpperCase();
     if(!line)continue;
+    const toolMatch=/^(?:N\d+\s+)?T(\d+)(?=\s|$)/.exec(line);
+    if(toolMatch){
+      const id=Number(toolMatch[1]);
+      if(Number.isSafeInteger(id)&&id<=255){activeTool=id;selectedTools.add(id);}
+      continue;
+    }
     const m=/^(?:N\d+\s+)?(G\d+(?:\.\d+)?|M\d+)(?=\s|$)/.exec(line);
     if(!m)continue;
     let cmd=m[1];
@@ -135,5 +149,7 @@ export function parseGcodeToolpaths(source, options={}) {
     renderedArcs++;
   }
   const layers=[...byZ.values()].sort((a,b)=>a.z-b.z);
-  return {layers,segments:count,extrusions:deposited,travels,renderedArcs,skippedArcs};
+  return {layers,segments:count,extrusions:deposited,travels,renderedArcs,skippedArcs,
+    selectedToolIds:[...selectedTools].sort((a,b)=>a-b),
+    extrusionSegmentsByTool:Object.fromEntries([...extrusionsByTool].map(([id,n])=>[id===null?"unselected":String(id),n]))};
 }
