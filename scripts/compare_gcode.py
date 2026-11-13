@@ -61,7 +61,7 @@ def count_extrusion_moves(commands):
             tokens = tokens[1:]
         if not tokens or not EXTRUSION_MOTION.fullmatch(tokens[0]):
             continue
-        code = tokens[0].upper().lstrip('G').split('.')[0]
+        code = str(int(Decimal(tokens[0][1:])))
         words = {}
         for token in tokens[1:]:
             match = PARAM.fullmatch(token)
