@@ -58,3 +58,16 @@ The latest candidate #43144590877 remains successful; no newer candidate run or 
 Current public-site [deployment #43157710791](https://github.com/temesotejam/layer-workbench/actions/runs/43157710791) and [browser Prepare static validation #43157686401](https://github.com/temesotejam/layer-workbench/actions/runs/43157686401) succeeded. These do **not** demonstrate the WASM engine running in-browser. The frontend uses Three.js and is not yet the full OrcaSlicer GUI.
 
 Remaining release blockers: real browser tests of STL/OBJ/3MF + native project manifest, pthread/SharedArrayBuffer hosting, 3MF semantics/texture and paint metadata, native-vs-WASM G-code comparison on pinned inputs, UI/Gizmo behavioral parity, device/printing features, and optional CAD/plugin paths. No candidate WASM was deployed to the public site.
+
+## 2026-11-13: fail-closed G-code comparison diagnostics
+
+The strict comparator now refuses to report a match for two identical empty,
+comment-only or non-motion inputs. Each side must contain at least one G0/G1/G2/G3
+motion command; this is only an input sanity gate, not a slicer or print-safety
+certification. Invalid UTF-8 is rejected instead of silently replacing distinct
+corrupt bytes with identical replacement characters. The JSON report retains
+the first 15 ordered command differences, counts **all** mismatching command
+positions, and adds exact decimal WASM-minus-native parameter deltas when
+numeric command words align. These changes do not weaken exact command checks.
+The comparator's unit tests exercise these guards. **No native v2.5.0 vs WASM
+paired golden-file comparison has been performed by these tests.**
