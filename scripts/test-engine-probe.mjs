@@ -57,11 +57,12 @@ try {
   triangles.forEach((tri, i) => tri.forEach((vertex, v) => vertex.forEach((value, axis) =>
     cube.writeFloatLE(value, 84 + i * 50 + 12 + v * 12 + axis * 4))));
   // Real 3MF archive path through the same trusted browser-loaded WASM:
-  // native export -> native project reimport -> renderable preview ->
+  // native export -> native project reimport -> geometry conversion ->
   // preservation=require export. This is deliberately a synthetic fixture.
   const native3mf = await checkBrowser3mfRoundTrip(page,cube);
   console.log('PASS: browser native WASM 3MF round-trip, ' +
-    native3mf.triangles+' preview triangles, sha256='+native3mf.sha256);
+    native3mf.triangles+' converted geometry triangles, mapped preview supported='+
+    native3mf.mappedPreviewSupported+', sha256='+native3mf.sha256);
   await page.locator('#slice-stl').setInputFiles({
     name: 'cube-test.stl', mimeType: 'model/stl', buffer: cube,
   });
