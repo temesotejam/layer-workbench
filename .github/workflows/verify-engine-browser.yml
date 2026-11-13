@@ -32,6 +32,9 @@ on:
       - "scripts/test-engine-probe.mjs"
       - "scripts/test-browser-3mf-roundtrip.mjs"
       - "scripts/test-browser-3mf-multiobject.mjs"
+      - "scripts/three-mf-viewport-items.mjs"
+      - "scripts/test-3mf-viewport-items.mjs"
+      - "scripts/make_3mf_two_build_fixture.py"
       - "scripts/three_mf_instance_expansion.py"
       - "scripts/audit_3mf_scene.py"
       - "scripts/check_3mf_stl_bounds.py"
@@ -77,6 +80,8 @@ jobs:
           node scripts/test-orca-profile-collection.mjs
           node scripts/test-orca-vendor-index.mjs
           node scripts/test-gcode-preview-parser.mjs
+          node scripts/test-3mf-viewport-items.mjs
+          node --check scripts/three-mf-viewport-items.mjs
           node --check scripts/gcode-3d-preview.mjs
           node --check scripts/gcode-layer-preview.mjs
           node --check scripts/gcode-tool-colors.mjs
@@ -97,6 +102,12 @@ jobs:
             if curl -fsS http://127.0.0.1:8766/engine-probe.html >/dev/null; then break; fi
             sleep 1
           done
+          # Independent Core 3MF with two build placements; local diagnostic only.
+          python3 scripts/make_3mf_two_build_fixture.py --output parity-output/two-build-items.3mf
+          python3 scripts/audit_3mf_scene.py \
+            --input parity-output/two-build-items.3mf \
+            --expected-build-items 2 --min-triangles 12 \
+            --report parity-output/two-build-items-scene.json
           node scripts/test-engine-probe.mjs
           # Compare actual 3MF bytes exported and re-imported by the browser
           # engine. This is not a desktop 3MF parity result.

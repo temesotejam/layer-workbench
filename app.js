@@ -4,6 +4,7 @@ import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { STLLoader } from "three/addons/loaders/STLLoader.js";
 import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
 import { ThreeMFLoader } from "three/addons/loaders/3MFLoader.js";
+import { get3mfViewportBuildItems } from "./scripts/three-mf-viewport-items.mjs";
 
 const picker = document.querySelector("#model-file");
 const status = document.querySelector("#file-status");
@@ -238,7 +239,13 @@ deleteButton?.addEventListener("click", () => {
   if (index < 0) return;
   const entry = entries[index];
   transformControls?.detach();
-  world.remove(entry.object);
+  if (entry.sourceRoot) {
+    entry.object.removeFromParent();
+    // Remove the original grouped 3MF scene only after its last build item
+    // is removed; deleting one build item must leave siblings untouched.
+    if (!entries.some((item, i) => i !== index && item.sourceRoot === entry.sourceRoot))
+      world.remove(entry.sourceRoot);
+  } else world.remove(entry.object);
   entries.splice(index, 1);
   selectEntry(entries.at(-1)?.id || null);
   if (!entries.length) {
@@ -331,32 +338,44 @@ async function addFiles(selected) {
     try {
       const object = await parseModel(file);
       prepareMaterials(object);
-      const entry = { id: crypto.randomUUID(), name: file.name, size: file.size, object, format: extension, file, modified: false };
-      entries.push(entry);
-      world.add(object);
       if (extension === "3mf" && isolated3mfViewportLab) {
-        // The 3MF Loader applies the 3MF build-item transforms. Shift only
-        // the plate origin (lower-left -> centered WebGL); do not center each
-        // imported 3MF or move its geometry to Z=0, which loses placement.
+        // ThreeMFLoader r180 creates one root child per 3MF <build> item.
+        // Preserve its nested component transforms and original archive bytes.
+        // This only separates browser selection, NOT native project objects.
+        const parts = get3mfViewportBuildItems(object);
         object.position.x -= 128;
         object.position.y -= 128;
         object.updateMatrixWorld(true);
-        if (entries.length === 1) fitCameraToObject(object);
-      } else if (entries.length === 1) centerAndFit(object);
-      else {
-        const bounds = new THREE.Box3().setFromObject(object);
-        const center = bounds.getCenter(new THREE.Vector3());
-        object.position.x -= center.x;
-        object.position.y -= center.y;
-        object.position.z -= bounds.min.z;
+        const partEntries = parts.map(({object:part, buildIndex}) => ({
+          id:crypto.randomUUID(), name:file.name + " · build " + buildIndex,
+          size:file.size, object:part, sourceRoot:object, buildIndex,
+          format:extension, file, modified:false,
+        }));
+        world.add(object);
+        entries.push(...partEntries);
+        if (entries.length === partEntries.length) fitCameraToObject(object);
+        emptyHint.hidden = true;
+        selectEntry(partEntries[0].id);
+      } else {
+        const entry = {id:crypto.randomUUID(),name:file.name,size:file.size,object,format:extension,file,modified:false};
+        entries.push(entry);
+        world.add(object);
+        if (entries.length === 1) centerAndFit(object);
+        else {
+          const bounds = new THREE.Box3().setFromObject(object);
+          const center = bounds.getCenter(new THREE.Vector3());
+          object.position.x -= center.x;
+          object.position.y -= center.y;
+          object.position.z -= bounds.min.z;
+        }
+        emptyHint.hidden = true;
+        selectEntry(entry.id);
       }
-      emptyHint.hidden = true;
-      selectEntry(entry.id);
       projectLabel.textContent = entries.length === 1 ? file.name : entries.length + " objects";
       sceneFile.textContent = entries.length + " model(s) loaded";
       status.textContent = "Loaded " + file.name + " · " + humanSize(file.size) +
         (extension === "3mf" && isolated3mfViewportLab
-          ? " · isolated 3MF plate-origin diagnostic (one grouped viewer entry; no native edit/save)"
+          ? " · isolated 3MF build-item selection (viewer only; no native edit/save)"
           : "");
       sliceNote.textContent = "3D geometry loaded in the browser. Slicing is not connected yet; engine and printer profiles remain separate work.";
     } catch (error) {
@@ -380,7 +399,7 @@ document.querySelectorAll(".tab[data-view]").forEach(tab => tab.addEventListener
 
 // Explicit opt-in, isolated development preview only; the public site never
 // downloads or silently executes a WASM artifact.
-if (new URLSearchParams(location.search).has("engineLab")) {
+if (isolated3mfViewportLab) {
   import("./scripts/prepare-engine-lab.mjs").then(({installPrepareEngineLab}) =>
     installPrepareEngineLab({
       getSelection: () => entries.find(entry => entry.id === selectedId) ?? null,
@@ -405,7 +424,9 @@ if (isolated3mfViewportLab) {
       entry.object.traverse(node => { if (node.isMesh) meshes++; });
       return {
         name: entry.name, meshCount: meshes,
-        viewerPosition: entry.object.position.toArray(),
+        buildIndex: entry.buildIndex ?? null,
+        viewerPosition: (entry.sourceRoot ?? entry.object).position.toArray(),
+        buildWorldPosition: entry.object.getWorldPosition(new THREE.Vector3()).toArray(),
         boundsMm: {min: bounds.min.toArray(), max: bounds.max.toArray()},
         mode: "isolated-3mf-plate-origin-only",
       };

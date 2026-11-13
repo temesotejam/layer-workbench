@@ -309,3 +309,25 @@ still imports the 3MF as one selectable entry; there is **no proof of native
 multi-object editability, arbitrary desktop 3MF metadata preservation, full
 3MF model coordinate semantics, native transform editing, save/reopen, or
 G-code parity**. The published page does not load WASM automatically.
+
+## 2026-11-14: local per-build-item 3MF viewport selection (staged)
+
+In the isolated localhost `?engineLab=1` diagnostic, the Three.js r180
+`ThreeMFLoader` project root exposes a child per 3MF Core `<build>` item.
+The local viewer now creates **one selectable entry per top-level build item**
+without flattening component descendants, re-centering individual objects,
+or changing the source archive. Numeric X/Y/Z movement, rotation and scale
+are **browser scene edits only**; deletion of one entry leaves its sibling
+in the viewport. Inputs with no renderable build geometry or more than 64
+items fail closed. Public normal-mode imports stay grouped as before.
+The engine-lab panel now loads only on isolated localhost with explicit opt-in.
+
+An independent, deterministic, synthetic Core 3MF fixture has **two build
+items** for the same cube resource at native X=90 and X=150 mm. CI first checks
+its source structure using `audit_3mf_scene.py`, then the actual Chrome
+viewport checks two separately selectable meshes, individual world bounds,
+a +5 mm edit of only the second viewer item and selective removal. This
+does NOT repair the WASM candidate's observed two-object native 3MF export
+collapse (2 objects → 1) or provide native project transform/save parity.
+No desktop-created project, metadata preservation, mapped face IDs or real
+printer G-code is certified by this test.

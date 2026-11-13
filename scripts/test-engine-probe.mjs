@@ -513,7 +513,7 @@ try {
       buffer:await readFile('parity-output/wasm-multiobject-3mf.3mf'),
     });
     await mfPage.locator('#object-count').getByText('1 object').waitFor({timeout:30000});
-    assert.match(await mfPage.locator('#file-status').innerText(),/isolated 3MF plate-origin diagnostic/);
+    assert.match(await mfPage.locator('#file-status').innerText(),/isolated 3MF build-item selection/);
     const bounds = await mfPage.evaluate(() => globalThis.__layer3mfViewportAudit?.());
     assert.ok(Array.isArray(bounds) && bounds.length===1,'Isolated 3MF diagnostics missing');
     const item=bounds[0];
@@ -527,6 +527,42 @@ try {
     assert.ok(item.boundsMm.min[0]<-30 && item.boundsMm.max[0]>30,
       'Two WASM 3MF geometry clusters did not map to expected centered plate coordinates');
     console.log('PASS: isolated 3MF viewport native build placement (80 mm X extent, lower-left to centered plate mapping); grouping limitation remains');
+
+    // Independent 3MF Core fixture with TWO distinct <build> placements.
+    // Unlike the native exporter above, this scene preserves both build
+    // entries. Test opt-in viewer selection/transform on each separately.
+    await mfPage.locator('#remove-object').click();
+    await mfPage.locator('#object-count').getByText('0 objects').waitFor();
+    await mfPage.locator('#model-file').setInputFiles({
+      name:'synthetic-two-build.3mf',mimeType:'model/3mf',
+      buffer:await readFile('parity-output/two-build-items.3mf'),
+    });
+    await mfPage.locator('#object-count').getByText('2 objects').waitFor({timeout:30000});
+    const before=await mfPage.evaluate(()=>globalThis.__layer3mfViewportAudit?.());
+    assert.deepEqual(before.map(item=>item.buildIndex),[1,2]);
+    assert.ok(before.every(item=>item.meshCount>0),'Expected a renderable mesh per build entry');
+    assert.ok(Math.abs(before[0].boundsMm.min[0]+38)<0.01);
+    assert.ok(Math.abs(before[0].boundsMm.max[0]+18)<0.01);
+    assert.ok(Math.abs(before[1].boundsMm.min[0]-22)<0.01);
+    assert.ok(Math.abs(before[1].boundsMm.max[0]-42)<0.01);
+    await mfPage.locator('#object-tree [data-object-id]').nth(1).click();
+    assert.ok(Math.abs(Number(await mfPage.locator('#transform-x').inputValue())-150)<0.01,
+      'Build 2 transform input must expose its original 3MF X position');
+    await mfPage.locator('#transform-x').fill('155');
+    await mfPage.locator('#transform-x').press('Tab');
+    const edited=await mfPage.evaluate(()=>globalThis.__layer3mfViewportAudit?.());
+    assert.ok(Math.abs(edited[1].boundsMm.min[0]-before[1].boundsMm.min[0]-5)<0.01,
+      'Editing build 2 must translate only its own mesh in the viewer');
+    assert.deepEqual(edited[0].boundsMm,before[0].boundsMm,
+      'Editing build 2 must not move build 1');
+    await mfPage.locator('#remove-object').click();
+    await mfPage.locator('#object-count').getByText('1 object').waitFor();
+    const afterDelete=await mfPage.evaluate(()=>globalThis.__layer3mfViewportAudit?.());
+    assert.equal(afterDelete.length,1);
+    assert.equal(afterDelete[0].buildIndex,1);
+    assert.deepEqual(afterDelete[0].boundsMm,before[0].boundsMm);
+    console.log('PASS: isolated two-build 3MF viewport has separate selectable/editable viewer instances; native export/save remains unavailable');
+
   } finally {
     await mfPage.close();
   }
