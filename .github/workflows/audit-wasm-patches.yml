@@ -9,6 +9,8 @@ on:
       - "upstream/stable.json"
       - "docs/WEB_PORT_SOURCE_AUDIT.md"
       - "scripts/adapt-orcawasm-v2.5.0.py"
+      - "scripts/patch-orcawasm-3mf-object-export.py"
+      - "scripts/test_patch_orcawasm_3mf_object_export.py"
       - "scripts/build-assimp-wasm.sh"
       - "scripts/build-draco-wasm.sh"
       - "scripts/prepare-wasm-runner.sh"
@@ -76,6 +78,29 @@ jobs:
 
       - name: Adapt known compatibility patch anchors for v2.5.0
         run: python3 scripts/adapt-orcawasm-v2.5.0.py orcawasm/patches/apply.py orcawasm/orca/CMakeLists.txt orcawasm/scripts/build-local-wsl.sh
+
+      - name: Unit-test experimental 3MF native export patch
+        run: python3 -m unittest discover -s scripts -p 'test_patch_orcawasm_3mf_object_export.py' -v
+
+      - name: Apply staged hierarchy-preserving native 3MF export patch (audit only)
+        run: python3 scripts/patch-orcawasm-3mf-object-export.py orcawasm/bridge/slicer.cpp
+
+      - name: Audit native 3MF export branch without building or publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'This is an experimental candidate, NOT desktop 3MF parity.' orcawasm/bridge/slicer.cpp
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('orcawasm/bridge/slicer.cpp').read_text()
+          start = text.index('oneslicer_status_t oneslicer_project_export(')
+          end = text.index('oneslicer_status_t oneslicer_project_get_asset(', start) if 'oneslicer_status_t oneslicer_project_get_asset(' in text[start:] else -1
+          fragment = text[start:] if end < 0 else text[start:end]
+          if 'write_single_mesh_3mf(' in fragment:
+              raise SystemExit('The portable 3MF export still flattens objects')
+          if fragment.count('write_project_model_3mf(') < 2:
+              raise SystemExit('Expected both modifier and ordinary native project exports')
+          PY
 
       - name: Verify v2.5.0 dependency compatibility settings
         run: |

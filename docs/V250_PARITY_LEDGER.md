@@ -331,3 +331,22 @@ does NOT repair the WASM candidate's observed two-object native 3MF export
 collapse (2 objects → 1) or provide native project transform/save parity.
 No desktop-created project, metadata preservation, mapped face IDs or real
 printer G-code is certified by this test.
+
+## 2026-11-14: staged native 3MF object-preservation patch (not yet a verified engine)
+
+The observed native WASM 3MF export path merged all manifest instances into a
+single binary STL mesh before writing a 3MF. A **fail-closed patch candidate**
+in `scripts/patch-orcawasm-3mf-object-export.py` now replaces only that
+pinned export branch, constructing a separate native `ModelObject` for each
+manifest instance via the existing `build_project_plate_model` bridge helper,
+then invoking `write_project_model_3mf`. The desktop upstream source is left
+untouched, and the patch is **not** applied to the published application.
+
+The patch's three unit tests exercise the exact branch, reject changed/duplicate
+anchors and reject a second application. The lightweight audit clones the pinned
+OrcaWasm source, validates these anchors, and applies the patch in a disposable
+checkout. This is **source-path preparation only**: correctness, object hierarchy
+on exported files, runtime errors, metadata, and desktop compatibility cannot
+be declared until a **new** candidate WASM build, isolated Chrome multi-object
+round-trip, and desktop-created 3MF comparisons pass. The previously verified
+WASM candidate #43144590877 is unchanged.
