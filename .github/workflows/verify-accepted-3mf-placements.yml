@@ -1,0 +1,71 @@
+name: Verify accepted WASM candidate 3MF absolute placements
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/test-browser-3mf-multiobject.mjs"
+      - "scripts/test-candidate-browser-3mf.mjs"
+      - ".github/workflows/verify-accepted-3mf-placements.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+# Runs only a fresh Chrome acceptance test against the successful candidate.
+# Does not trigger a heavy engine build and never deploys a binary.
+jobs:
+  check-placements:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install isolated Chrome test controller
+        run: npm install --no-save --no-package-lock playwright@1.56.1
+      - name: Fetch only pinned successful candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: layer-workbench-orcaslicer-v2.5.0-wasm
+          repository: temesotejam/layer-workbench
+          run-id: 43517364379
+          github-token: ${{ github.token }}
+          path: engine-test-artifacts
+      - name: Check pinned artifact and test syntax
+        run: |
+          set -euo pipefail
+          test -s engine-test-artifacts/slicer-mt.js
+          test -s engine-test-artifacts/slicer-mt.wasm
+          node --check scripts/test-browser-3mf-multiobject.mjs
+          node --check scripts/test-candidate-browser-3mf.mjs
+      - name: Assert each cube's own XYZ placement in isolated Chrome
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/serve-isolated.py --port 8766 > /tmp/isolated-layer-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..25}; do
+            if curl -fsS http://127.0.0.1:8766/engine-probe.html >/dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/test-candidate-browser-3mf.mjs
+          python3 scripts/audit_3mf_scene.py \
+            --input parity-output/wasm-multiobject-3mf.3mf \
+            --expected-build-items 2 --min-triangles 24 \
+            --report parity-output/accepted-candidate-3mf-scene.json
+          python3 scripts/check_3mf_stl_bounds.py \
+            --input parity-output/wasm-multiobject-3mf.3mf \
+            --stl parity-output/wasm-multiobject-converted.stl \
+            --report parity-output/accepted-candidate-3mf-stl-comparison.json
+      - name: Retain diagnostic evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: accepted-candidate-3mf-placement-evidence
+          path: parity-output/
+          if-no-files-found: warn
+          retention-days: 14
