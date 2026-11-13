@@ -30,6 +30,7 @@ on:
       - "index.html"
       - "scripts/serve-isolated.py"
       - "scripts/test-engine-probe.mjs"
+      - "scripts/test-browser-3mf-roundtrip.mjs"
       - ".github/workflows/verify-engine-browser.yml"
 
 permissions:
@@ -76,6 +77,7 @@ jobs:
           node --check scripts/slice-stl.mjs
           node --check scripts/probe-engine.mjs
           node --check scripts/test-engine-probe.mjs
+          node --check scripts/test-browser-3mf-roundtrip.mjs
       - name: Launch isolated local server and probe engine in Chrome
         shell: bash
         run: |
@@ -88,6 +90,12 @@ jobs:
             sleep 1
           done
           node scripts/test-engine-probe.mjs
+          # Compare actual 3MF bytes exported and re-imported by the browser
+          # engine. This is not a desktop 3MF parity result.
+          python3 scripts/compare_3mf_metadata.py \
+            --baseline parity-output/wasm-native-3mf.3mf \
+            --candidate parity-output/wasm-native-3mf-preserved.3mf \
+            --scope all --report parity-output/browser-3mf-preservation.json
       - name: Archive actual WASM G-code diagnostic output
         if: always()
         uses: actions/upload-artifact@v4
