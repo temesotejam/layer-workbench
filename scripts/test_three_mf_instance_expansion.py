@@ -1,5 +1,6 @@
 import unittest
-from three_mf_instance_expansion import IDENTITY_3MF, compose_3mf, expand_scene
+from three_mf_instance_expansion import (IDENTITY_3MF, compose_3mf, expand_scene,
+                                         conservative_bounds_3mf)
 
 
 def obj(mesh=False, triangles=0, components=()):
@@ -51,6 +52,31 @@ class TestExpansion(unittest.TestCase):
             objs[str(i)] = obj(components=[(str(i-1), IDENTITY_3MF)]*2)
         with self.assertRaisesRegex(ValueError,'exceed audit limit'):
             expand_scene(objs,[{'objectId':'19','transform3mf':IDENTITY_3MF}],max_instances=16)
+
+    def test_conservative_world_bounds_with_rotation_and_translation(self):
+        # Row-vector 90-degree rotation: (x, y) -> (-y, x).
+        rotate_translate = [0, 1, 0, -1, 0, 0, 0, 0, 1, 10, 20, 5]
+        bounds = {"min": [0, 0, -1], "max": [2, 3, 1]}
+        self.assertEqual(conservative_bounds_3mf(bounds, rotate_translate),
+                         {"min": [7, 20, 4], "max": [10, 22, 6]})
+        self.assertIsNone(conservative_bounds_3mf(None, IDENTITY_3MF))
+        self.assertEqual(conservative_bounds_3mf(
+            {"min": [1, 2, 3], "max": [1, 2, 3]}, trans(5, 6, 7)),
+            {"min": [6, 8, 10], "max": [6, 8, 10]})
+
+    def test_conservative_bounds_fail_closed_for_bad_numbers(self):
+        for invalid in (
+            {"min": [0, 0, float("nan")], "max": [1, 1, 1]},
+            {"min": [2, 0, 0], "max": [1, 1, 1]},
+            {"min": [0, 0, 0], "max": [1e9, 1, 1]},
+        ):
+            with self.subTest(bounds=invalid):
+                if invalid["max"][0] == 1e9:
+                    with self.assertRaisesRegex(ValueError, "Excessive"):
+                        conservative_bounds_3mf(invalid, trans(1e12, 0, 0))
+                else:
+                    with self.assertRaises(ValueError):
+                        conservative_bounds_3mf(invalid, IDENTITY_3MF)
 
     def test_overlarge_composed_translation_fails_closed(self):
         with self.assertRaisesRegex(ValueError,'Excessive'):

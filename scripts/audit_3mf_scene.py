@@ -78,6 +78,7 @@ def audit(path):
                 if mesh is not None and components is not None:
                     raise ValueError("Object has both mesh and components")
                 vertex_count = triangle_count = 0
+                local_bounds = None
                 references = []
                 component_instances = []
                 if mesh is not None:
@@ -90,6 +91,23 @@ def audit(path):
                     element_count += vertex_count + triangle_count
                     if vertex_count > MAX_SCENE_ELEMENTS or triangle_count > MAX_SCENE_ELEMENTS:
                         raise ValueError("3MF geometry exceeds scene audit limit")
+                    low = [math.inf, math.inf, math.inf]
+                    high = [-math.inf, -math.inf, -math.inf]
+                    for vertex in vertices:
+                        if vertex.tag != CORE + "vertex":
+                            raise ValueError("Unexpected element in 3MF vertices")
+                        for axis, key in enumerate(("x", "y", "z")):
+                            raw_value = vertex.get(key)
+                            try:
+                                value = float(raw_value) if raw_value is not None else math.nan
+                            except ValueError as exc:
+                                raise ValueError("Invalid 3MF vertex coordinate") from exc
+                            if not math.isfinite(value) or abs(value) > 1_000_000_000:
+                                raise ValueError("Invalid or excessive 3MF vertex coordinate")
+                            low[axis] = min(low[axis], value)
+                            high[axis] = max(high[axis], value)
+                    if vertex_count:
+                        local_bounds = {"min": low, "max": high}
                     for tri in triangles:
                         if tri.tag != CORE + "triangle":
                             raise ValueError("Unexpected element in 3MF triangles")
@@ -111,6 +129,7 @@ def audit(path):
                 objects[oid] = {"id": oid, "vertices": vertex_count,
                                 "triangles": triangle_count, "components": references,
                                 "mesh": mesh is not None,
+                                "localBounds": local_bounds,
                                 "componentInstances": component_instances}
                 if len(objects) + element_count > MAX_SCENE_ELEMENTS:
                     raise ValueError("3MF scene exceeds element limit")

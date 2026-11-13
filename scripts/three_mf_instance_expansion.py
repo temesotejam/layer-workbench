@@ -11,6 +11,46 @@ IDENTITY_3MF = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0,
 MAX_DEPTH = 64
 MAX_INSTANCES = 4096
 MAX_TRANSFORM_VALUE = 1_000_000_000
+# Diagnostic-only ceiling. Core 3MF geometry is measured in the model's
+# declared unit; these values are NOT automatically converted to millimetres.
+MAX_WORLD_BOUND_VALUE = 1_000_000_000_000
+
+
+def conservative_bounds_3mf(local_bounds, transform):
+    """Transform eight corners of a local AABB by a 3MF row-vector affine map.
+
+    The result encloses all transformed mesh vertices but can be larger than
+    their exact world AABB after rotation. This is a read-only diagnostic, not
+    a mesh transformation or native slicer placement calculation.
+    """
+    if local_bounds is None:
+        return None
+    if not isinstance(local_bounds, dict) or len(transform) != 12:
+        raise ValueError("Invalid 3MF bounds input")
+    lo, hi = local_bounds.get("min"), local_bounds.get("max")
+    if not isinstance(lo, (list, tuple)) or not isinstance(hi, (list, tuple)) or len(lo) != 3 or len(hi) != 3:
+        raise ValueError("Invalid 3MF local bounds")
+    if any(not isinstance(v, (int, float)) or isinstance(v, bool) or not math.isfinite(v)
+           for v in (*lo, *hi, *transform)):
+        raise ValueError("Non-finite 3MF bounds or transform")
+    if any(lo[i] > hi[i] for i in range(3)):
+        raise ValueError("Inverted 3MF local bounds")
+    mins = [math.inf, math.inf, math.inf]
+    maxs = [-math.inf, -math.inf, -math.inf]
+    for x in (lo[0], hi[0]):
+        for y in (lo[1], hi[1]):
+            for z in (lo[2], hi[2]):
+                values = [
+                    x * transform[0] + y * transform[3] + z * transform[6] + transform[9],
+                    x * transform[1] + y * transform[4] + z * transform[7] + transform[10],
+                    x * transform[2] + y * transform[5] + z * transform[8] + transform[11],
+                ]
+                if any(not math.isfinite(v) or abs(v) > MAX_WORLD_BOUND_VALUE for v in values):
+                    raise ValueError("Excessive 3MF transformed bounds")
+                for i, v in enumerate(values):
+                    mins[i] = min(mins[i], v)
+                    maxs[i] = max(maxs[i], v)
+    return {"min": mins, "max": maxs}
 
 
 def compose_3mf(inner, outer):
@@ -72,9 +112,13 @@ def expand_scene(objects, build_items, max_instances=MAX_INSTANCES):
             oid, world, path = pending.pop()
             obj = objects[oid]
             if obj["mesh"]:
-                instances.append({"buildItemIndex": i, "objectId": oid,
-                                  "objectPath": path, "transform3mf": world,
-                                  "triangles": obj["triangles"]})
+                instance = {"buildItemIndex": i, "objectId": oid,
+                            "objectPath": path, "transform3mf": world,
+                            "triangles": obj["triangles"]}
+                if "localBounds" in obj:
+                    instance["conservativeWorldBounds"] = conservative_bounds_3mf(
+                        obj["localBounds"], world)
+                instances.append(instance)
                 if len(instances) > max_instances:
                     raise ValueError("3MF mesh instances exceed audit limit")
             else:

@@ -39,6 +39,11 @@ class Test3MFScene(unittest.TestCase):
             self.assertEqual(result["scenes"][0]["objects"][1]["components"], ["1"])
             self.assertEqual(result["totalResolvedMeshInstances"], 1)
             self.assertEqual(result["totalResolvedTriangleInstances"], 1)
+            self.assertEqual(result["scenes"][0]["objects"][0]["localBounds"],
+                             {"min": [0.0, 0.0, 0.0], "max": [20.0, 20.0, 0.0]})
+            self.assertEqual(
+                result["scenes"][0]["resolvedMeshInstances"][0]["conservativeWorldBounds"],
+                {"min": [128.0, 128.0, 0.0], "max": [148.0, 148.0, 0.0]})
             self.assertEqual(result["scenes"][0]["resolvedMeshInstances"][0]["objectPath"],
                              ["2", "1"])
             self.assertEqual(result["scenes"][0]["resolvedMeshInstances"][0]["transform3mf"][-3:],
@@ -60,6 +65,12 @@ class Test3MFScene(unittest.TestCase):
                 (scene(build='<item objectid="2" transform="NaN"/>'), "12 numbers"),
                 (scene(build='<item objectid="2" transform="1 0 0 0 1 0 0 0 1 nan 0 0"/>'), "Non-finite"),
                 (scene(build='<item objectid="2" path="/3D/a.model"/>'), "External-part"),
+                (scene().replace('x="20"', 'x="nan"'), "vertex coordinate"),
+                (scene().replace('x="20"', 'x="1e10000"'), "vertex coordinate"),
+                (scene().replace('x="20"', 'x="1000000001"'), "vertex coordinate"),
+                (scene().replace('x="20"', 'x="text"'), "vertex coordinate"),
+                (scene().replace('x="20"', 'w="20"'), "vertex coordinate"),
+                (scene().replace('<vertex x="20"', '<notvertex x="20"'), "vertices"),
                 ('<!DOCTYPE model [<!ENTITY x "bad">]>' + scene(), "DTD/entities"),
             ):
                 archive(p, model)

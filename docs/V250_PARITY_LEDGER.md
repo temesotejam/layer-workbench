@@ -174,3 +174,23 @@ To make the native 3MF → editable browser viewport acceptance gate more precis
 The transform composition follows the [3MF Core Specification §3.3](https://github.com/3MFConsortium/spec_core/blob/master/3MF%20Core%20Specification.md): 12-number row-major affine 4×4 matrices with row-vector application, where a child component's transform precedes its parent and the build-item transform. The source inspector does **not** pretend this is a native Orca/WASM matrix representation. Unresolved or external component parts, cycles (including unused cyclic resources), excessive nesting, transformed coordinate overflow and exponential instance expansion are rejected rather than flattened silently. Expansion is capped at 4096 mesh instances and 64 component levels, so valid but unusually large projects may be refused by this diagnostic.
 
 [3MF lightweight CI #43418231408](https://github.com/temesotejam/layer-workbench/actions/runs/43418231408) **PASS** (4 archive-comparison + 4 integrated scene-audit + 6 composition/graph unit tests); existing Chrome source changes also trigger its browser probe but do not change the WASM engine or published application. A real browser-generated 3MF must still be treated as a self-consistency fixture, not a desktop-authored document. **Not demonstrated:** mesh face-ID preview, full import of desktop 3MF, applying a native transform edit, semantic settings/metadata preservation after edits, desktop reopen or multi-tool printing. This audit is an inspection aid and does not certify printer-ready output.
+
+## 2026-11-13: 3MF scene vertex bounds and conservative instance extents
+
+The read-only `audit_3mf_scene.py` now validates all core mesh vertex
+`x/y/z` coordinates as present, finite and within a diagnostic magnitude
+limit, instead of accepting NaN/Infinity or missing coordinates simply because
+triangle indices were in range. For each mesh resource it records local vertex
+axis-aligned bounds. The existing same-part component/build expansion now
+applies the **3MF row-vector** transform to the eight corners of those local
+bounds and reports `conservativeWorldBounds` for every resolved mesh instance.
+This reports a guaranteed enclosing AABB, **not** the exact post-rotation
+vertex AABB or a viewport rendering; quantities remain in the model's source
+coordinate unit, not assumed millimetres. Empty vertex lists report null
+bounds; extreme transformed coordinates are rejected.
+
+Added rotated/translated, repeated-placement and malformed-vertex regression
+coverage. This is a safety/geometry-inspection step toward comparing a
+native 3MF scene with a future WebGL viewport; it neither implements 3MF
+editing nor proves parity with desktop OrcaSlicer. The pinned WASM candidate
+and the published application remain unchanged.
