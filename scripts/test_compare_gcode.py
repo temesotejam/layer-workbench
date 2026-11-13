@@ -68,37 +68,37 @@ class ComparatorTests(unittest.TestCase):
 
 
     def test_optional_extrusion_gate_rejects_identical_travel_only(self):
-        report = self.run_compare('G0 X1\\nG1 X2\\n', 'G0 X1\\nG1 X2\\n', min_extrusion_moves=1)
+        report = self.run_compare('G0 X1\nG1 X2\n', 'G0 X1\nG1 X2\n', min_extrusion_moves=1)
         self.assertFalse(report['match'])
         self.assertEqual(report['mismatched_commands'], 0)
         self.assertEqual(len(report['input_issues']), 2)
 
     def test_optional_gate_accepts_positive_xy_extrusion(self):
-        gcode = 'N1 G01 X1 E0.5\\nG1 Y2 E1.0\\n'
+        gcode = 'N1 G01 X1 E0.5\nG1 Y2 E1.0\n'
         report = self.run_compare(gcode, gcode, min_extrusion_moves=2)
         self.assertTrue(report['match'])
         self.assertEqual(report['native_extrusion_moves'], 2)
 
     def test_optional_gate_rejects_priming_retraction_and_negative_e(self):
-        gcode = 'G1 E10\\nG1 X1 E-0.5\\nG0 X3 E5\\nG1 X4 E0\\n'
+        gcode = 'G1 E10\nG1 X1 E-0.5\nG0 X3 E5\nG1 X4 E0\n'
         report = self.run_compare(gcode, gcode, min_extrusion_moves=1)
         self.assertFalse(report['match'])
         self.assertEqual(report['native_extrusion_moves'], 0)
 
     def test_optional_gate_requires_threshold_on_both_inputs(self):
-        report = self.run_compare('G1 X1 E1\\nG1 X2 E2\\n',
-                                  'G1 X1 E1\\n', min_extrusion_moves=2)
+        report = self.run_compare('G1 X1 E1\nG1 X2 E2\n',
+                                  'G1 X1 E1\n', min_extrusion_moves=2)
         self.assertFalse(report['match'])
         self.assertEqual(report['native_extrusion_moves'], 2)
         self.assertEqual(report['wasm_extrusion_moves'], 1)
 
     def test_optional_gate_accepts_arc_extrusion(self):
-        gcode = 'G2 I1 J0 E1\\n'
+        gcode = 'G2 I1 J0 E1\n'
         self.assertTrue(self.run_compare(gcode, gcode, min_extrusion_moves=1)['match'])
 
     def test_negative_gate_rejected(self):
         with self.assertRaises(ValueError):
-            self.run_compare('G1 X1 E1\\n', 'G1 X1 E1\\n', min_extrusion_moves=-1)
+            self.run_compare('G1 X1 E1\n', 'G1 X1 E1\n', min_extrusion_moves=-1)
 
 if __name__ == '__main__':
     unittest.main()
