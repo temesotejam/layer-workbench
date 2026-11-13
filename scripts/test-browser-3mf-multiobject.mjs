@@ -63,7 +63,7 @@ export async function checkBrowserMultiObject3mf(page, cubeBytes, outputDir='par
         throw new Error('Native multi-object 3MF is empty, excessive, or not a ZIP');
     } finally { await source.dispose(); }
     const reopened = await engine.createSession();
-    let imported, converted, convertedCount, splitGapMm;
+    let imported, converted, convertedCount, splitGapMm, placedBoundsMm;
     try {
       await reopened.initProfile('project.3mf', original);
       imported = await reopened.getManifest();
@@ -82,21 +82,52 @@ export async function checkBrowserMultiObject3mf(page, cubeBytes, outputDir='par
       if (count !== 24) throw new Error('Native export dropped synthetic cube triangles');
       const centroids=[];
       const view=new DataView(converted.buffer,converted.byteOffset,converted.byteLength);
+      // An inter-object gap alone misses a common translation, misplaced
+      // Y/Z coordinates and unequal per-object geometry. Verify the exact
+      // placed XYZ extents of EACH 20 mm cube, not just the overall STL.
+      const regions=[0,1].map(()=>({
+        triangles:0,min:[Infinity,Infinity,Infinity],max:[-Infinity,-Infinity,-Infinity]
+      }));
       for(let i=0;i<count;i++) {
-        let x=0;
-        for(let v=0;v<3;v++) x+=view.getFloat32(84+i*50+12+v*12,true)/3;
-        centroids.push(x);
+        const vertices=[];
+        for(let v=0;v<3;v++) {
+          const offset=84+i*50+12+v*12;
+          vertices.push([0,1,2].map(axis=>view.getFloat32(offset+axis*4,true)));
+        }
+        if(vertices.some(point=>point.some(value=>!Number.isFinite(value))))
+          throw new Error('Non-finite coordinates in converted two-object STL');
+        const centroidX=vertices.reduce((sum,point)=>sum+point[0],0)/3;
+        centroids.push(centroidX);
+        const region=regions[centroidX<130?0:1];
+        region.triangles++;
+        for(const point of vertices)for(let axis=0;axis<3;axis++) {
+          region.min[axis]=Math.min(region.min[axis],point[axis]);
+          region.max[axis]=Math.max(region.max[axis],point[axis]);
+        }
       }
       centroids.sort((a,b)=>a-b);
       splitGapMm=centroids[12]-centroids[11];
       if (!Number.isFinite(splitGapMm) || splitGapMm < 30)
         throw new Error('Expected two spatially separated 3MF mesh clusters');
+      const expected=[
+        {min:[90,90,0],max:[110,110,20]},
+        {min:[150,90,0],max:[170,110,20]}
+      ];
+      for(let i=0;i<2;i++) {
+        if(regions[i].triangles!==12)
+          throw new Error('Object '+i+' lost or gained placed mesh triangles');
+        for(const side of ['min','max'])for(let axis=0;axis<3;axis++)
+          if(Math.abs(regions[i][side][axis]-expected[i][side][axis])>0.05)
+            throw new Error('Object '+i+' '+side+' XYZ'+axis+
+              ' differs from source placement: '+regions[i][side][axis]);
+      }
+      placedBoundsMm=regions;
     } finally { await reopened.dispose(); }
     return {
       archive:Array.from(original), stl:Array.from(converted),
       initialObjects:initial.objects.length, initialInstances:initial.instances.length,
       importedObjects:imported.objects.length, importedInstances:imported.instances.length,
-      stlTriangles:convertedCount, splitGapMm
+      stlTriangles:convertedCount, splitGapMm, placedBoundsMm
     };
   }, Array.from(cubeBytes));
   assert.equal(report.initialInstances, 2);
@@ -116,10 +147,12 @@ export async function checkBrowserMultiObject3mf(page, cubeBytes, outputDir='par
     reimportedObjects:report.importedObjects,reimportedInstances:report.importedInstances,
     flattenedTriangles:report.stlTriangles,
     measuredGapBetweenTriangleClustersMm:report.splitGapMm,
+    verifiedPerObjectPlacedBoundsMm:report.placedBoundsMm,
+    absolutePlacementVerified:true,
     multiObjectRoundTripSupported:report.importedInstances === 2 && report.importedObjects === 2 && report.stlTriangles === 24,
     limitations:'No desktop-authored 3MF, edit-and-resave transform, face-ID mesh preview, metadata parity or printer safety validated'
   },null,2)+'\n');
-  return {bytes:archive.length,sha256,instances:report.importedInstances,
+  return {bytes:archive.length,sha256,placementVerified:true,instances:report.importedInstances,
     triangles:report.stlTriangles, supported:report.importedInstances === 2 &&
     report.importedObjects === 2 && report.stlTriangles === 24};
 }
