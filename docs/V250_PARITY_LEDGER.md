@@ -137,3 +137,32 @@ The first trial runs FAILED because the project mapped-preview API returns `UNSU
 ## 2026-11-13: variant-index CI failure and source-backed fix
 
 [Profile CI #43390845126](https://github.com/temesotejam/layer-workbench/actions/runs/43390845126) FAILED on `Ambiguous Orca variant fallback`, caused by a JS port that rejected two variant entries sharing the same extruder ID. Pinned `PrintConfig.cpp::find_variant_index` instead takes the first matching ID (or `-1` if none), while `get_config_index_base` clamps missing-ID `-1` to zero. This was fixed and tested. The next CI failure exposed a stale real-U1 assertion: the inherited official `extruder_variant_list` has four strings, each `Direct Drive Standard,Direct Drive High Flow`, rather than being absent. The test now asserts the pinned values. [Profile run #43408017939](https://github.com/temesotejam/layer-workbench/actions/runs/43408017939) **PASS**. No multi-nozzle WASM setting forwarding was enabled.
+
+
+## 2026-11-13: inspect real WASM-exported 3MF core scene structure
+
+Added a read-only core-scene auditor, `scripts/audit_3mf_scene.py`, following the
+[3MF Core Specification](https://github.com/3MFConsortium/spec_core/blob/master/3MF%20Core%20Specification.md).
+Unlike the earlier ZIP member-hash comparator, this parses `3D/*.model` XML to
+inventory resource objects, direct mesh triangle/vertex counts, component
+references, `<build>` items and their raw **12-number 3MF transform vectors**
+without confusing 3MF row-vector matrices with native Orca/WASM transforms.
+The existing ZIP inventory enforces size/path bounds first; malformed IDs,
+unresolved component/build references, invalid triangle indices, DTD/entity
+markup, nonfinite transforms and external-part build references fail closed.
+Cross-part OPC relationships, assembly-cycle detection, textures, printer
+settings, image preservation and native editing are NOT implemented here.
+The report deliberately does not claim native/desktop semantic equivalence.
+
+[3MF audit unit CI #43413108463](https://github.com/temesotejam/layer-workbench/actions/runs/43413108463)
+**PASS**. [Isolated Chrome CI #43413188356](https://github.com/temesotejam/layer-workbench/actions/runs/43413188356)
+**PASS**: after real WASM 3MF export and untouched preservation testing, the
+new scene gate inspected the actual generated `.3mf` and verified exactly one
+build item and at least 12 mesh triangles. It writes
+`parity-output/browser-3mf-scene.json` to the CI-only diagnostic artifact.
+The same Chrome run continues to check native 3MF-to-STL conversion and
+existing Prepare/slice tests, while mapped face-ID preview remains unavailable.
+The geometry/build verification is stronger than identical ZIP bytes alone,
+but still uses a synthetic cube exported by WASM, not a desktop-created
+multi-object project. Transform changes followed by native export, face-ID
+mapping and desktop OrcaSlicer reopen remain outstanding.
