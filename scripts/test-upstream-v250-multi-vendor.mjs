@@ -118,7 +118,11 @@ assert.equal(u1Material.usableForPrinting,false);
 const u1VariantInputs=inspectOrcaVariantInputs(snapFull,snapMaterial);
 assert.equal(u1VariantInputs.physicalNozzleCount,4);
 assert.deepEqual(u1VariantInputs.machineInputs.extruder_type,null);
-assert.deepEqual(u1VariantInputs.machineInputs.extruder_variant_list,null);
+assert.deepEqual(u1VariantInputs.machineInputs.extruder_variant_list,
+  Array(4).fill("Direct Drive Standard,Direct Drive High Flow"),
+  "real pinned U1 has four comma-delimited variant declarations, not a missing list");
+assert.ok(u1VariantInputs.nativeResolutionInputsMissing.includes("machine.extruder_type"),
+  "real U1 still lacks this optional inspector input: never guess it from nozzle count");
 assert.equal(u1VariantInputs.selectedVariantIndex,null,
   "do not infer two filament material entries as four physical nozzle variants");
 assert.equal(u1VariantInputs.usableForPrinting,false);
