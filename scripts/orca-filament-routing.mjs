@@ -35,6 +35,10 @@ export function inspectOrcaFilamentRouting(machine, explicitFilamentMap) {
   if (!Array.isArray(explicitFilamentMap) ||
       explicitFilamentMap.length === 0 || explicitFilamentMap.length > 64)
     throw new Error("An explicit non-empty filament_map vector is required");
+  // A sparse JS array has no meaning in native JSON and must not skip a slot.
+  for (let i = 0; i < explicitFilamentMap.length; i++)
+    if (!Object.prototype.hasOwnProperty.call(explicitFilamentMap,i))
+      throw new Error("Invalid sparse filament_map vector");
   const routing = explicitFilamentMap.map((raw, filamentIndex) => {
     const extruderId = parseExtruderId(raw);
     if (extruderId < 1 || extruderId > nozzle.toolCount)
