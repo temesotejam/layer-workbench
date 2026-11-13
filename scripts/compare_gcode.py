@@ -49,29 +49,49 @@ def count_motion(commands):
 EXTRUSION_MOTION = re.compile(r'^G0*[123](?:\.0+)?$', re.I)
 
 def count_extrusion_moves(commands):
-    """Count positive-E XY/arc moves as an optional fixture sanity check.
+    """Count positive extrusion deltas on XY/arc moves for fixture sanity.
 
-    This is a syntax heuristic, not modal extrusion or deposited-volume proof.
-    E-only priming moves do not qualify.
+    Supports M82/M83 extrusion mode and G92 E resets. Assumes initial absolute
+    E, and does not simulate firmware-specific tool changes or volumetric mode.
+    This is not a deposited-volume, print-safety, or parity certification.
     """
     count = 0
+    absolute_e = True
+    e_position = Decimal(0)
     for _, command in commands:
         tokens = command.split()
         if tokens and re.fullmatch(r'N\d+', tokens[0], re.I):
             tokens = tokens[1:]
-        if not tokens or not EXTRUSION_MOTION.fullmatch(tokens[0]):
+        if not tokens:
             continue
-        code = str(int(Decimal(tokens[0][1:])))
+        opcode = tokens[0].upper()
+        if opcode in ('M82', 'M083', 'M82.0'):
+            absolute_e = True
+            continue
+        if opcode in ('M83', 'M083.0', 'M83.0'):
+            absolute_e = False
+            continue
         words = {}
         for token in tokens[1:]:
             match = PARAM.fullmatch(token)
             if match:
                 words[match[1].upper()] = Decimal(match[2])
-        if words.get('E', Decimal(0)) <= 0:
+        if opcode == 'G92':
+            if 'E' in words:
+                e_position = words['E']
             continue
-        if code == '1' and not ('X' in words or 'Y' in words):
+        if not MOTION.fullmatch(opcode):
             continue
-        if code in ('2', '3') and not any(k in words for k in ('X', 'Y', 'I', 'J', 'R')):
+        if 'E' not in words:
+            continue
+        delta = words['E'] - e_position if absolute_e else words['E']
+        e_position = words['E'] if absolute_e else e_position + words['E']
+        if delta <= 0 or not EXTRUSION_MOTION.fullmatch(opcode):
+            continue
+        code = int(Decimal(opcode[1:]))
+        if code == 1 and not ('X' in words or 'Y' in words):
+            continue
+        if code in (2, 3) and not any(k in words for k in ('X', 'Y', 'I', 'J', 'R')):
             continue
         count += 1
     return count
