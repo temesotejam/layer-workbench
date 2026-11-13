@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {extractOrcaVendorCatalog,selectOrcaFilamentPreset} from "./orca-vendor-catalog.mjs";
 import {resolveOrcaProfileFamily} from "./orca-profile-collection.mjs";
+import {resolveFullOrcaProfileFamily,inspectOrcaNozzleVector} from "./orca-full-profile.mjs";
 
 const multi=JSON.parse(readFileSync("upstream-v250-multi-vendor-fixture.json","utf8"));
 const global=JSON.parse(readFileSync("upstream-v250-filament-fixture.json","utf8"));
@@ -76,4 +77,25 @@ assert.equal(fallback.selectionReason,"global @System fallback");
 // Original multi-extruder shape must remain intact: this is not an approved
 // one-extruder nozzle diameter or printer-specific G-code configuration.
 assert.equal(u1.nozzle_diameter.length,4);
-console.log("PASS: actual v2.5.0 Snapmaker/Prusa full indexed ancestry, four-tool fail-closed import and filament precedence");
+
+// The source-only resolver merges EVERY indexed native setting without turning
+// the 4-nozzle printer into a single-extruder WASM configuration.
+const snapFull=resolveFullOrcaProfileFamily(snap.records,"machine","Snapmaker U1 (0.4 nozzle)");
+assert.deepEqual(snapFull.chain,["fdm_klipper","fdm_toolchanger","fdm_U1","Snapmaker U1 (0.4 nozzle)"]);
+assert.deepEqual([...snapFull.settings.nozzle_diameter],["0.4","0.4","0.4","0.4"]);
+assert.equal(snapFull.sourceByKey.nozzle_diameter,"Snapmaker U1 (0.4 nozzle)");
+assert.equal(snapFull.settings.machine_start_gcode,u1.machine_start_gcode);
+assert.deepEqual(inspectOrcaNozzleVector(snapFull).nozzleDiametersMm,[0.4,0.4,0.4,0.4]);
+assert.equal(inspectOrcaNozzleVector(snapFull).supportedBySingleToolWasmAdapter,false);
+assert.equal(snapFull.usableForPrinting,false);
+const snapProcess=resolveFullOrcaProfileFamily(snap.records,"process","0.20 Standard @Snapmaker U1 (0.4 nozzle)");
+assert.equal(snapProcess.chain.length,4);
+assert.ok(Object.keys(snapProcess.settings).length>10);
+const snapMaterial=resolveFullOrcaProfileFamily(snap.records,"filament","Snapmaker PLA Basic @U1");
+assert.equal(snapMaterial.chain.length,2);
+assert.deepEqual([...snapMaterial.settings.compatible_printers],["Snapmaker U1 (0.4 nozzle)"]);
+const prusaFull=resolveFullOrcaProfileFamily(prusa.records,"machine","Prusa MK4S 0.4 nozzle");
+assert.equal(prusaFull.chain.length,4);
+assert.equal(inspectOrcaNozzleVector(prusaFull).toolCount,1);
+
+console.log("PASS: actual v2.5.0 multi-vendor complete ancestry, full-option preservation, four-tool inspection and filament precedence");
