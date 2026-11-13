@@ -110,4 +110,10 @@ assert.equal(gcodeSelectorColor(0,false),gcodeSelectorColor(3,false));
 assert.notEqual(gcodeSelectorColor(0,true),gcodeSelectorColor(3,true));
 assert.equal(gcodeSelectorColor(null,true),gcodeSelectorColor(0,false));
 assert.throws(()=>gcodeSelectorColor(256,true),/selector/);
+// The supplied real X1E G-code unloads filament using M620 S255 / T255.
+// This vendor sentinel is not a third material. Subsequent deposition is unlabeled.
+const afterUnload=parseGcodeToolpaths("G90\nM82\nT0\nG1 X1 Y0 E1\nT255\nG1 X2 Y0 E2\nT1000\nG1 X3 Y0 E3");
+assert.deepEqual(afterUnload.selectedToolIds,[0]);
+assert.deepEqual(afterUnload.layers[0].segments.map(s=>s.toolId),[0,null,null]);
+assert.deepEqual(afterUnload.extrusionSegmentsByTool,{"0":1,unselected:2});
 console.log("PASS: tool-aware G-code toolpaths, vendor T1000 guard, 2D/3D palette mapping");
