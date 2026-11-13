@@ -1,0 +1,139 @@
+#!/usr/bin/env python3
+"""Read-only comparison of a browser-WASM 3MF-to-STL conversion with placed 3MF geometry.
+
+This diagnostic does not prove native desktop parity, preserve face IDs, or
+certify that the resulting STL is safe to print.
+"""
+import argparse
+import json
+import math
+from pathlib import Path
+import struct
+import sys
+import xml.etree.ElementTree as ET
+import zipfile
+
+from audit_3mf_scene import CORE, audit
+
+MAX_TRIANGLES = 200_000
+MAX_STL_BYTES = 84 + 50 * MAX_TRIANGLES
+
+
+def stl_geometry(path):
+    data = Path(path).read_bytes()
+    if len(data) < 84 or len(data) > MAX_STL_BYTES:
+        raise ValueError("Converted STL size is empty or excessive")
+    triangles = struct.unpack_from("<I", data, 80)[0]
+    if not 1 <= triangles <= MAX_TRIANGLES or len(data) != 84 + 50 * triangles:
+        raise ValueError("Invalid binary STL triangle count or byte length")
+    low = [math.inf] * 3
+    high = [-math.inf] * 3
+    for i in range(triangles):
+        xyz = struct.unpack_from("<9f", data, 84 + i * 50 + 12)
+        for axis in range(3):
+            for value in xyz[axis::3]:
+                if not math.isfinite(value) or abs(value) > 1e12:
+                    raise ValueError("Non-finite or excessive converted STL coordinate")
+                low[axis] = min(low[axis], value)
+                high[axis] = max(high[axis], value)
+    return triangles, {"min": low, "max": high}
+
+
+def expected_geometry(archive_path, scene):
+    """Exact bounds of used 3MF triangle vertices after same-part transforms."""
+    with zipfile.ZipFile(archive_path) as archive:
+        root = ET.fromstring(archive.read(scene["part"]))
+    meshes = {}
+    for obj in root.findall(CORE + "resources/" + CORE + "object"):
+        mesh = obj.find(CORE + "mesh")
+        if mesh is None:
+            continue
+        vertices_node = mesh.find(CORE + "vertices")
+        triangles_node = mesh.find(CORE + "triangles")
+        vertices = [
+            (float(v.get("x")), float(v.get("y")), float(v.get("z")))
+            for v in vertices_node
+        ]
+        faces = [
+            (int(t.get("v1")), int(t.get("v2")), int(t.get("v3")))
+            for t in triangles_node
+        ]
+        meshes[obj.get("id")] = (vertices, faces)
+    low = [math.inf] * 3
+    high = [-math.inf] * 3
+    total_triangles = 0
+    factor = scene["millimetersPerUnit"]
+    for instance in scene["resolvedMeshInstances"]:
+        vertices, faces = meshes[instance["objectId"]]
+        total_triangles += len(faces)
+        if total_triangles > MAX_TRIANGLES:
+            raise ValueError("3MF expanded geometry exceeds conversion audit limit")
+        m = instance["transform3mf"]
+        # Core 3MF row vectors: mesh vertex -> component -> build.
+        for a, b, c in faces:
+            for index in (a, b, c):
+                x, y, z = vertices[index]
+                transformed = (
+                    (x*m[0] + y*m[3] + z*m[6] + m[9]) * factor,
+                    (x*m[1] + y*m[4] + z*m[7] + m[10]) * factor,
+                    (x*m[2] + y*m[5] + z*m[8] + m[11]) * factor,
+                )
+                for axis, value in enumerate(transformed):
+                    if not math.isfinite(value) or abs(value) > 1e12:
+                        raise ValueError("Excessive world-space 3MF mesh vertex")
+                    low[axis] = min(low[axis], value)
+                    high[axis] = max(high[axis], value)
+    if total_triangles < 1:
+        raise ValueError("No placed 3MF triangles to compare")
+    return total_triangles, {"min": low, "max": high}
+
+
+def compare(archive_path, stl_path, tolerance_mm=0.05):
+    if not math.isfinite(tolerance_mm) or not 0 <= tolerance_mm <= 1:
+        raise ValueError("Invalid 3MF/STL comparison tolerance")
+    report = audit(archive_path)
+    if report["modelParts"] != 1:
+        raise ValueError("Only single-part core 3MF is supported by this comparison")
+    scene = report["scenes"][0]
+    expected_count, expected_bounds = expected_geometry(archive_path, scene)
+    converted_count, converted_bounds = stl_geometry(stl_path)
+    deltas = {
+        side: [converted_bounds[side][i] - expected_bounds[side][i] for i in range(3)]
+        for side in ("min", "max")
+    }
+    max_deviation = max(abs(value) for side in deltas.values() for value in side)
+    return {
+        "source3mf": str(archive_path), "convertedStl": str(stl_path),
+        "unit": scene["unit"], "triangles3mfPlaced": expected_count,
+        "trianglesStl": converted_count, "exactPlacedBoundsMm": expected_bounds,
+        "convertedStlBoundsMm": converted_bounds, "stlMinus3mfBoundsMm": deltas,
+        "maxDeviationMm": max_deviation, "toleranceMm": tolerance_mm,
+        "passed": expected_count == converted_count and max_deviation <= tolerance_mm,
+        "limitations": "Only placed triangle count and exact XYZ global extents; not correspondence, winding, metadata, face IDs, desktop 3MF parity or printer safety. STL is assumed millimetres."
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--input", type=Path, required=True)
+    parser.add_argument("--stl", type=Path, required=True)
+    parser.add_argument("--report", type=Path)
+    parser.add_argument("--tolerance-mm", type=float, default=0.05)
+    args = parser.parse_args()
+    try:
+        result = compare(args.input, args.stl, args.tolerance_mm)
+    except (OSError, ValueError, KeyError, IndexError, TypeError, zipfile.BadZipFile, ET.ParseError) as exc:
+        print(f"3MF/STL geometry check error: {exc}", file=sys.stderr)
+        return 2
+    output = json.dumps(result, ensure_ascii=False, indent=2) + "\n"
+    if args.report:
+        args.report.write_text(output, encoding="utf-8")
+    else:
+        print(output, end="")
+    if not result["passed"]:
+        print("3MF/STL conversion bounds or triangle count differ", file=sys.stderr)
+    return 0 if result["passed"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

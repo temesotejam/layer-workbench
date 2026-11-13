@@ -56,7 +56,7 @@ export async function checkBrowser3mfRoundTrip(page, stlBytes, outputDir="parity
       firstWarnings=exported.warnings??[];
     } finally { await first.dispose(); }
     const second=await engine.createSession();
-    let reexported,manifest,geometryTriangles,mappedPreviewSupported=true;
+    let reexported,manifest,geometryTriangles,convertedStl,mappedPreviewSupported=true;
     try {
       await second.initProfile("project.3mf",original);
       manifest=await second.getManifest();
@@ -68,6 +68,7 @@ export async function checkBrowser3mfRoundTrip(page, stlBytes, outputDir="parity
       const geometry=await engine.threeMfToStl(original);
       if(!(geometry instanceof Uint8Array)||geometry.byteLength<134)
         throw new Error("Native 3MF conversion produced no STL geometry");
+      convertedStl=Array.from(geometry);
       geometryTriangles=new DataView(geometry.buffer,geometry.byteOffset,
         geometry.byteLength).getUint32(80,true);
       if(geometryTriangles<1||geometry.byteLength!==84+50*geometryTriangles)
@@ -90,7 +91,7 @@ export async function checkBrowser3mfRoundTrip(page, stlBytes, outputDir="parity
         throw new Error("Untouched imported native 3MF was not preserved byte-for-byte");
     } finally { await second.dispose(); }
     return {
-      original:Array.from(original),preserved:Array.from(reexported),
+      original:Array.from(original),preserved:Array.from(reexported),convertedStl,
       initialInstanceCount:firstManifest.instances.length,
       reimportedInstanceCount:manifest.instances.length,
       reimportedMeshCount:manifest.meshes.length,
@@ -101,10 +102,12 @@ export async function checkBrowser3mfRoundTrip(page, stlBytes, outputDir="parity
   assert.equal(result.reimportedInstanceCount,1);
   assert.ok(result.geometryTriangles>0);
   const native=Buffer.from(result.original),preserved=Buffer.from(result.preserved);
+  const converted=Buffer.from(result.convertedStl);
   assert.deepEqual(preserved,native,"preservation=require must retain original bytes");
   await mkdir(outputDir,{recursive:true});
   await writeFile(outputDir+"/wasm-native-3mf.3mf",native);
   await writeFile(outputDir+"/wasm-native-3mf-preserved.3mf",preserved);
+  await writeFile(outputDir+"/wasm-3mf-converted.stl",converted);
   const sha256=createHash("sha256").update(native).digest("hex");
   await writeFile(outputDir+"/wasm-3mf-roundtrip-summary.json",JSON.stringify({
     fixture:"synthetic 12-triangle cube; generic PLA test profile only",

@@ -33,6 +33,8 @@ on:
       - "scripts/test-browser-3mf-roundtrip.mjs"
       - "scripts/three_mf_instance_expansion.py"
       - "scripts/audit_3mf_scene.py"
+      - "scripts/check_3mf_stl_bounds.py"
+      - "scripts/test_check_3mf_stl_bounds.py"
       - "scripts/compare_3mf_metadata.py"
       - ".github/workflows/verify-engine-browser.yml"
 
@@ -81,6 +83,7 @@ jobs:
           node --check scripts/probe-engine.mjs
           node --check scripts/test-engine-probe.mjs
           node --check scripts/test-browser-3mf-roundtrip.mjs
+          python3 -m unittest discover -s scripts -p test_check_3mf_stl_bounds.py -v
       - name: Launch isolated local server and probe engine in Chrome
         shell: bash
         run: |
@@ -106,6 +109,10 @@ jobs:
             --input parity-output/wasm-native-3mf.3mf \
             --expected-build-items 1 --min-triangles 12 \
             --report parity-output/browser-3mf-scene.json
+          python3 scripts/check_3mf_stl_bounds.py \
+            --input parity-output/wasm-native-3mf.3mf \
+            --stl parity-output/wasm-3mf-converted.stl \
+            --report parity-output/browser-3mf-stl-bounds.json
       - name: Archive actual WASM G-code diagnostic output
         if: always()
         uses: actions/upload-artifact@v4

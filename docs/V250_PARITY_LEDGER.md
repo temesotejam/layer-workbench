@@ -209,3 +209,7 @@ Unknown units and excessive normalized world bounds fail closed.
 This avoids treating a 1-inch cube as a 1-mm cube in a future viewport
 comparison. It is still a conservative AABB inspection, not a native
 WebGL/OrcaSlicer geometry or machine-printing parity result.
+
+## 2026-11-13: actual WASM 3MF-to-STL geometry comparison gate
+
+A new read-only `scripts/check_3mf_stl_bounds.py` and unit suite compare the **actual** converted STL from isolated Chrome `threeMfToStl()` with the original WASM-generated core 3MF. The script derives **exact used-triangle bounds** after same-part component/build transforms, converts the 3MF model unit into millimetres, and checks placed triangle count and global XYZ extents against binary STL vertices with 0.05 mm tolerance. This is not a comparison of conservative boxes: rotation and nontrivial parent transforms are covered in regression tests. The Chrome probe now archives both the actual 3MF and conversion STL plus a JSON deltas report. The gate rejects missing or non-finite STL vertices, excessive triangles and multi-part scenes outside supported cross-part semantics. Even if it passes, it is self-conversion of a synthetic cube, **not** a desktop-authored 3MF acceptance test, complete mesh correspondence, face-ID mapping, metadata parity, GUI rendering or print certification. The public page and engine build remain unchanged.
