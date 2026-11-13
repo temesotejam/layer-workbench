@@ -7,6 +7,7 @@ import {resolveOrcaProfileFamily} from "./orca-profile-collection.mjs";
 import {resolveFullOrcaProfileFamily,inspectOrcaNozzleVector,inspectOrcaArraySettings} from "./orca-full-profile.mjs";
 import {inspectOrcaFilamentRouting} from "./orca-filament-routing.mjs";
 import {inspectOrcaFilamentMaterialVectors} from "./orca-filament-material-inspection.mjs";
+import {inspectOrcaVariantInputs} from "./orca-variant-input-inspection.mjs";
 
 const multi=JSON.parse(readFileSync("upstream-v250-multi-vendor-fixture.json","utf8"));
 const global=JSON.parse(readFileSync("upstream-v250-filament-fixture.json","utf8"));
@@ -114,6 +115,13 @@ assert.deepEqual(u1Material.fields.find(f=>f.key==="nozzle_temperature").numeric
 assert.deepEqual(u1Material.fields.find(f=>f.key==="filament_flow_ratio").numericValues,[0.98,0.98]);
 assert.deepEqual(u1Material.fields.find(f=>f.key==="filament_max_volumetric_speed").numericValues,[15,15]);
 assert.equal(u1Material.usableForPrinting,false);
+const u1VariantInputs=inspectOrcaVariantInputs(snapFull,snapMaterial);
+assert.equal(u1VariantInputs.physicalNozzleCount,4);
+assert.deepEqual(u1VariantInputs.machineInputs.extruder_type,null);
+assert.deepEqual(u1VariantInputs.machineInputs.extruder_variant_list,null);
+assert.equal(u1VariantInputs.selectedVariantIndex,null,
+  "do not infer two filament material entries as four physical nozzle variants");
+assert.equal(u1VariantInputs.usableForPrinting,false);
 const prusaMaterial=resolveFullOrcaProfileFamily(prusa.records,"filament","Generic PLA @Prusa MK4S");
 const prusaAudit=inspectOrcaFilamentMaterialVectors(prusaMaterial);
 assert.ok(prusaAudit.scalarNativeVectorKeys.includes("nozzle_temperature_initial_layer"),
