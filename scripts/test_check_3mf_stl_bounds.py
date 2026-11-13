@@ -75,6 +75,41 @@ class Test3mfToStlBounds(unittest.TestCase):
             self.assertFalse(result["passed"])
             self.assertGreater(result["maxDeviationMm"], 1)
 
+    def test_interior_vertex_drift_with_unchanged_bounds_fails(self):
+        # Previous AABB/triangle-count gate missed this deformation: the
+        # triangle still occupies X=10..12 and Y=3..4, but one X changed.
+        with tempfile.TemporaryDirectory() as d:
+            src, dst = pathlib.Path(d)/"model.3mf", pathlib.Path(d)/"model.stl"
+            make_3mf(src, unit="millimeter")
+            changed = [(12,3,0),(11.5,4,0),(10,3,0)]
+            make_stl(dst, [changed])
+            result = compare(src, dst)
+            self.assertFalse(result["passed"], result)
+            self.assertLess(result["maxDeviationMm"], 1e-8)
+            self.assertAlmostEqual(result["maxAxisDistributionDeviationMm"], 0.5)
+            self.assertEqual(result["axisDistributionDeviationsMm"][1], 0.0)
+
+    def test_triangle_order_and_winding_do_not_trigger_false_failure(self):
+        with tempfile.TemporaryDirectory() as d:
+            src, dst = pathlib.Path(d)/"model.3mf", pathlib.Path(d)/"model.stl"
+            make_3mf(src, unit="millimeter", second_item=True)
+            shifted = [(12,3,0),(12,4,0),(10,3,0)]
+            origin = [(0,0,0),(1,0,0),(0,2,0)]
+            # Both triangle and vertex orders differ from the model source.
+            make_stl(dst, [list(reversed(origin)), [shifted[1], shifted[2], shifted[0]]])
+            result = compare(src, dst)
+            self.assertTrue(result["passed"], result)
+            self.assertLess(result["maxAxisDistributionDeviationMm"], 1e-8)
+
+    def test_sub_tolerance_float32_conversion_remains_accepted(self):
+        with tempfile.TemporaryDirectory() as d:
+            src, dst = pathlib.Path(d)/"model.3mf", pathlib.Path(d)/"model.stl"
+            make_3mf(src, unit="millimeter")
+            moved = [(12,3,0),(12,4.00002,0),(10,3,0)]
+            make_stl(dst, [moved])
+            self.assertTrue(compare(src, dst, tolerance_mm=0.05)["passed"])
+            self.assertFalse(compare(src, dst, tolerance_mm=0.000001)["passed"])
+
     def test_strict_binary_stl_and_nonfinite_guard(self):
         with tempfile.TemporaryDirectory() as d:
             p = pathlib.Path(d)/"bad.stl"
