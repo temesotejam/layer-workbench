@@ -1,7 +1,7 @@
 // Real browser smoke: probe the archived v2.5.0 candidate only on isolated
 // localhost, never by publishing a WASM engine to GitHub Pages.
 import { chromium } from 'playwright';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {parseGcodeToolpaths} from './gcode-preview-parser.mjs';
@@ -81,6 +81,17 @@ try {
   assert.ok(parsedGcode.layers.length >= 2, 'Expected multiple sliced Z layers');
   assert.ok(parsedGcode.extrusions > 10, 'Expected positive extrusion toolpaths');
   const actualGcodeHash = createHash('sha256').update(wasmGcode, 'utf8').digest('hex');
+  const parityDir = process.env.PARITY_OUTPUT_DIR || 'parity-output';
+  await mkdir(parityDir, {recursive:true});
+  await writeFile(parityDir + '/wasm.gcode', wasmGcode, 'utf8');
+  await writeFile(parityDir + '/wasm-gcode-summary.json', JSON.stringify({
+    engine:'OrcaSlicer WASM candidate', version:'2.5.0', api:'0.7.0',
+    fixture:'synthetic 12-triangle cube; generic PLA development profile only',
+    gcode_sha256:actualGcodeHash, bytes:Buffer.byteLength(wasmGcode,'utf8'),
+    layers:parsedGcode.layers.length, extrusion_segments:parsedGcode.extrusions,
+    travel_segments:parsedGcode.travels
+  }, null, 2) + '\\n');
+
   console.log('PASS: actual WASM G-code content: ' +
     parsedGcode.layers.length + ' layers, ' + parsedGcode.extrusions +
     ' extrusion segments; sha256=' + actualGcodeHash);
