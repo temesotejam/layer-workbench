@@ -7,9 +7,10 @@ const MAX_RECORDS=96,MAX_DEPTH=20;
 const SPECS={
   machine:{nozzle_diameter:[0.2,1.2],printable_height:[10,1000]},
   filament:{nozzle_temperature:[160,290],bed_temperature:[0,120]},
-  process:{layer_height:[0.06,0.4],wall_loops:[1,8],sparse_infill_density:[0,100]},
+  process:{layer_height:[0.06,0.4],wall_loops:[1,8],sparse_infill_density:[0,100],
+    top_shell_layers:[0,12],bottom_shell_layers:[0,12]},
 };
-const INTEGERS=new Set(['wall_loops']);
+const INTEGERS=new Set(['wall_loops','top_shell_layers','bottom_shell_layers']);
 const META=new Set(['type','name','inherits','instantiation','from','compatible_printers','setting_id','filament_id','alias']);
 function dict(x){return x!==null&&typeof x==='object'&&!Array.isArray(x)&&Object.getPrototypeOf(x)===Object.prototype;}
 function name(x){if(typeof x!=='string'||!x||x.length>160||['__proto__','constructor','prototype'].includes(x))throw new Error('Invalid profile name');return x;}
