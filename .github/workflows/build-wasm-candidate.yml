@@ -86,11 +86,11 @@ jobs:
           from pathlib import Path
           path = Path("orcawasm/scripts/build-local-wsl.sh")
           source = path.read_text(encoding="utf-8")
-          suffix = "(\\nnode scripts/smoke-test.mjs --wasm-dir artifacts\\n)\\n"
+          suffix = "(\nnode scripts/smoke-test.mjs --wasm-dir artifacts\n)\n"
           if not source.endswith(suffix) or source.count(suffix) != 1:
               raise SystemExit("pinned OrcaWasm embedded smoke trailer drifted; refuse to modify")
           path.write_text(
-              source[:-len(suffix)] + "# Smoke runs once in explicit CI gate below.\\n",
+              source[:-len(suffix)] + "# Smoke runs once in explicit CI gate below.\n",
               encoding="utf-8",
           )
           PY
