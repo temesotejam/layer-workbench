@@ -62,8 +62,9 @@ try {
   // preservation=require export. This is deliberately a synthetic fixture.
   const native3mf = await checkBrowser3mfRoundTrip(page,cube);
   const multi3mf = await checkBrowserMultiObject3mf(page,cube);
-  console.log('PASS: real browser two-object 3MF export/import and flattened STL: '+
-    multi3mf.instances+' instances, '+multi3mf.triangles+' triangles, sha256='+multi3mf.sha256);
+  console.log('MULTIOBJECT_3MF_DIAGNOSTIC '+JSON.stringify(multi3mf));
+  if (!multi3mf.supported) console.log('KNOWN GAP: native two-object 3MF reimport parity not established');
+  else console.log('PASS: two-object WASM native 3MF reimport and conversion');
   console.log('PASS: browser native WASM 3MF round-trip, ' +
     native3mf.triangles+' converted geometry triangles, mapped preview supported='+
     native3mf.mappedPreviewSupported+', sha256='+native3mf.sha256);
