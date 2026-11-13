@@ -391,3 +391,36 @@ two-object hierarchy acceptance result. Follow-up: read its native export test
 and smoke logs separately, investigate the support-enforcer assertion if it
 still fails, then require isolated Chrome and desktop-created 3MF fixtures
 before changing the candidate's release status.
+
+## 2026-11-14: independent 3MF hierarchy gate passes; support smoke still blocks release
+
+[Rebuilt candidate #43505545279](https://github.com/temesotejam/layer-workbench/actions/runs/43505545279)
+completed as **FAIL**. C++ build, API 0.7.0 conformance and asynchronous
+binding checks passed. Importantly, the previously unreachable independent
+native 3MF regression now ran and logged
+`PASS: rebuilt candidate preserves two native 3MF objects, two instances, 24 STL triangles`.
+That is direct **Node/WASM evidence for the synthetic two-object case**,
+NOT a clean candidate release or an isolated Chrome result. No artifact was
+released; the downstream workflow was skipped.
+
+The one blocking test was the original support modifier scenario, again
+failing on `support-enforcer did not change support output from the
+automatic-support baseline`. The same pinned smoke source passed twice
+against the earlier candidate #43144590877, so an engine regression cannot
+be excluded. Inspection of the pinned test found its generic-PLA test
+configuration set `support_type` and `support_threshold_angle` but did
+**not explicitly set `support_enable`**. The separate Voron modifier
+fixture explicitly enables supports and passed. This is a plausible source
+of test sensitivity, **not yet a proven root cause**.
+
+The next candidate stages a small fail-closed patch to **only the smoke
+fixture setup** in the disposable pinned OrcaWasm checkout, adding
+`support_enable: 1`. It retains the original strict requirement that
+support-enforcer and support-blocker actually change sliced G-code relative
+to baseline; no assertion or C++ engine behavior is weakened. Both the
+lightweight audit and candidate build unit-test the exact anchor and reject
+source drift. If this still fails, treat it as a real functional regression
+and investigate the native support-modifier pipeline, not as permission
+to skip the smoke gate. The experimental 3MF export patch is unchanged,
+and WASM is not published. An isolated Chrome acceptance and desktop
+3MF comparison remain required even if the next candidate passes.

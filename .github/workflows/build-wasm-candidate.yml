@@ -95,6 +95,15 @@ jobs:
           )
           PY
 
+      # The pinned generic-PLA modifier smoke previously relied on Orca's
+      # implicit support_enable default. Select it explicitly for this test
+      # fixture; DO NOT remove the baseline-vs-enforcer output assertion.
+      - name: Unit-test fail-closed support smoke fixture patch
+        run: python3 -m unittest discover -s scripts -p 'test_patch_orcawasm_support_smoke.py' -v
+
+      - name: Enable supports explicitly in pinned generic modifier smoke fixture
+        run: python3 scripts/patch-orcawasm-support-smoke.py orcawasm/scripts/smoke-test.mjs
+
       - name: Check fail-closed native 3MF export patch
         run: python3 -m unittest discover -s scripts -p 'test_patch_orcawasm_3mf_object_export.py' -v
 

@@ -11,6 +11,8 @@ on:
       - "scripts/adapt-orcawasm-v2.5.0.py"
       - "scripts/patch-orcawasm-3mf-object-export.py"
       - "scripts/test_patch_orcawasm_3mf_object_export.py"
+      - "scripts/patch-orcawasm-support-smoke.py"
+      - "scripts/test_patch_orcawasm_support_smoke.py"
       - "scripts/build-assimp-wasm.sh"
       - "scripts/build-draco-wasm.sh"
       - "scripts/prepare-wasm-runner.sh"
@@ -78,6 +80,12 @@ jobs:
 
       - name: Adapt known compatibility patch anchors for v2.5.0
         run: python3 scripts/adapt-orcawasm-v2.5.0.py orcawasm/patches/apply.py orcawasm/orca/CMakeLists.txt orcawasm/scripts/build-local-wsl.sh
+
+      - name: Unit-test fail-closed support smoke fixture patch
+        run: python3 -m unittest discover -s scripts -p 'test_patch_orcawasm_support_smoke.py' -v
+
+      - name: Verify pinned modifier smoke explicitly enables supports (audit only)
+        run: python3 scripts/patch-orcawasm-support-smoke.py orcawasm/scripts/smoke-test.mjs
 
       - name: Unit-test experimental 3MF native export patch
         run: python3 -m unittest discover -s scripts -p 'test_patch_orcawasm_3mf_object_export.py' -v
