@@ -14,6 +14,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 from compare_3mf_metadata import inventory
+from three_mf_instance_expansion import expand_scene
 
 CORE = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
 MAX_MODEL_PARTS = 32
@@ -78,6 +79,7 @@ def audit(path):
                     raise ValueError("Object has both mesh and components")
                 vertex_count = triangle_count = 0
                 references = []
+                component_instances = []
                 if mesh is not None:
                     vertices = mesh.find(CORE + "vertices")
                     triangles = mesh.find(CORE + "triangles")
@@ -99,11 +101,17 @@ def audit(path):
                     for comp in components:
                         if comp.tag != CORE + "component":
                             raise ValueError("Unexpected 3MF component element")
-                        references.append(positive_id(comp.get("objectid"), "component"))
-                        parse_transform(comp.get("transform"))
+                        if any(k.endswith("}path") or k == "path" for k in comp.attrib):
+                            raise ValueError("External-part component references are not supported")
+                        ref = positive_id(comp.get("objectid"), "component")
+                        references.append(ref)
+                        component_instances.append({"objectId": ref,
+                                                    "transform3mf": parse_transform(comp.get("transform"))})
                     element_count += len(references)
                 objects[oid] = {"id": oid, "vertices": vertex_count,
-                                "triangles": triangle_count, "components": references}
+                                "triangles": triangle_count, "components": references,
+                                "mesh": mesh is not None,
+                                "componentInstances": component_instances}
                 if len(objects) + element_count > MAX_SCENE_ELEMENTS:
                     raise ValueError("3MF scene exceeds element limit")
             for obj in objects.values():
@@ -125,16 +133,23 @@ def audit(path):
                               "transform3mf": parse_transform(item.get("transform"))})
                 if len(items) + len(objects) + element_count > MAX_SCENE_ELEMENTS:
                     raise ValueError("3MF scene exceeds element limit")
+            # Resolve same-part component and build transforms using 3MF's
+            # row-vector convention. Reject cycles and instancing bombs.
+            resolved = expand_scene(objects, items)
             scenes.append({"part": part, "objects": list(objects.values()),
                            "buildItems": items,
-                           "meshTriangles": sum(x["triangles"] for x in objects.values())})
+                           "meshTriangles": sum(x["triangles"] for x in objects.values()),
+                           "resolvedMeshInstances": resolved,
+                           "resolvedTriangleInstances": sum(x["triangles"] for x in resolved)})
     return {
         "archive": str(path), "modelParts": len(scenes),
         "totalObjects": sum(len(x["objects"]) for x in scenes),
         "totalBuildItems": sum(len(x["buildItems"]) for x in scenes),
         "totalMeshTriangles": sum(x["meshTriangles"] for x in scenes),
+        "totalResolvedMeshInstances": sum(len(x["resolvedMeshInstances"]) for x in scenes),
+        "totalResolvedTriangleInstances": sum(x["resolvedTriangleInstances"] for x in scenes),
         "scenes": scenes,
-        "limitations": "Core 3MF scene inventory only. No external OPC part references, metadata/texture parity, face IDs, native transform editing, desktop reopen or print certification."
+        "limitations": "Core 3MF scene inventory with same-part component transform expansion only. No external OPC part references, metadata/texture parity, face IDs, native transform editing, desktop reopen or print certification."
     }
 
 
