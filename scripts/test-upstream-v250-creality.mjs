@@ -18,6 +18,12 @@ assert.equal(machine.settings.nozzle_diameter,"0.4");
 assert.equal(machine.settings.printable_height,"400");
 assert.equal(process.settings.layer_height,"0.2");
 assert.equal(process.settings.wall_loops,"2");
+// Pinned Orca v2.5.0 ships child overrides: 5 top and 4 bottom solid layers.
+// These are tested native process keys, not inferred desktop GUI defaults.
+assert.equal(process.settings.top_shell_layers,"5");
+assert.equal(process.settings.bottom_shell_layers,"4");
+assert.ok(!process.unsupported.includes("top_shell_layers"));
+assert.ok(!process.unsupported.includes("bottom_shell_layers"));
 assert.equal(process.settings.sparse_infill_density,"15");
 assert.ok(process.compatible.includes("Creality CR-10 0.4 nozzle"));
 assert.ok(machine.unsupported.length>10);
