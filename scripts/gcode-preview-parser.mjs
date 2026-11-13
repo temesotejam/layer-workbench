@@ -14,7 +14,8 @@ export function parseGcodeToolpaths(source, options={}) {
   const byZ=new Map();
   const state={x:0,y:0,z:0,e:0,absoluteXYZ:true,absoluteE:true,units:1,plane:"G17",absoluteArcCenters:false};
   // Tool selectors in G-code label paths, NOT physical extruder IDs or filament colors.
-  // Reserved/vendor tool commands (e.g. T1000) intentionally do not change the label.
+  // Reserved/vendor tool commands (e.g. T1000) do not set a label.
+  // Bambu X1E emits T255 while unloading AMS filament: clear the label.
   let activeTool=null;
   const selectedTools=new Set();
   const extrusionsByTool=new Map();
@@ -39,7 +40,8 @@ export function parseGcodeToolpaths(source, options={}) {
     const toolMatch=/^(?:N\d+\s+)?T(\d+)(?=\s|$)/.exec(line);
     if(toolMatch){
       const id=Number(toolMatch[1]);
-      if(Number.isSafeInteger(id)&&id<=255){activeTool=id;selectedTools.add(id);}
+      if(id===255)activeTool=null; // vendor unload sentinel, not a material path
+      else if(Number.isSafeInteger(id)&&id>=0&&id<255){activeTool=id;selectedTools.add(id);}
       continue;
     }
     const m=/^(?:N\d+\s+)?(G\d+(?:\.\d+)?|M\d+)(?=\s|$)/.exec(line);
