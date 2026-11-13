@@ -7,6 +7,8 @@ on:
     paths:
       - "scripts/compare_3mf_metadata.py"
       - "scripts/test_compare_3mf_metadata.py"
+      - "scripts/three_mf_instance_expansion.py"
+      - "scripts/test_three_mf_instance_expansion.py"
       - "scripts/audit_3mf_scene.py"
       - "scripts/test_audit_3mf_scene.py"
       - ".github/workflows/test-3mf-parity.yml"
@@ -26,3 +28,4 @@ jobs:
           python3 -m py_compile scripts/compare_3mf_metadata.py
           python3 -m unittest discover -s scripts -p test_compare_3mf_metadata.py -v
           python3 -m unittest discover -s scripts -p test_audit_3mf_scene.py -v
+          python3 -m unittest discover -s scripts -p test_three_mf_instance_expansion.py -v
