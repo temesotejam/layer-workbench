@@ -269,3 +269,9 @@ override changes **G-code motion commands** (comments excluded). This is an
 integration proof for two additional native process options, **not** a full
 native-versus-WASM paired G-code parity result. Do not print the generic-PLA
 fixture G-code on a physical printer.
+
+## 2026-11-13: multi-vendor profile catalog foundation
+
+Added `scripts/orca-vendor-catalog.mjs` as a catalog layer over the existing strict single-vendor index reader. It accepts multiple independently supplied vendor index/file bundles, validates each with the existing path/name/type checks, and preserves a separate vendor namespace for every bundle. It deliberately does **not** merge common profile names across vendors: identical names may carry different machine geometry, firmware, nozzle and startup semantics. A caller must select a vendor namespace before resolving its machine/filament/process chain. CI tests cover duplicate vendor rejection and same-name/different-value isolation.
+
+This is the foundation for broad printer coverage, not yet an automatic download/import of every upstream vendor. The current production UI and WASM profile bridge still support only a restricted setting allowlist. Full multi-vendor support requires catalog discovery, machine-model/variant selection, per-vendor compatibility, global filament library alias precedence, multi-extruder vectors, and printer-specific start/end G-code semantics. Official upstream profile data remains CI/local supplied; do not redistribute it without reviewing upstream license terms.
