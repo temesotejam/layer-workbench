@@ -31,7 +31,7 @@ function aliasOf(name) {
   return name.split("@",1)[0].trim();
 }
 function compatibleWith(record,printerVariant) {
-  const list=record.compatible;
+  const list=record.compatible_printers;
   return Array.isArray(list)&&list.includes(printerVariant);
 }
 // Orca's global filament library is a separate bundle. A vendor-specific
