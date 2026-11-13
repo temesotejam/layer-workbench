@@ -49,20 +49,48 @@ def main():
         sections = {}
         files = {}
         for section, selected_name in selections.items():
-            matches = [item for item in source.get(section, [])
-                       if item.get("name") == selected_name]
-            if len(matches) != 1:
-                raise ValueError(f"{name} missing or ambiguous {section} {selected_name}")
-            entry = matches[0]
-            path = entry["sub_path"]
-            if not isinstance(path, str) or not path.startswith(
-                    {"machine_model_list": "machine/", "machine_list": "machine/",
-                     "filament_list": "filament/", "process_list": "process/"}[section]):
-                raise ValueError(f"{name} invalid profile path for {section}")
-            if path in files:
-                raise ValueError(f"{name} duplicate profile path: {path}")
-            files[path] = fetch(f"{name}/{path}")
-            sections[section] = [entry]
+            indexed = source.get(section, [])
+            if not isinstance(indexed, list):
+                raise ValueError(f"{name} invalid index section {section}")
+            expected_type = {"machine_model_list": "machine_model",
+                             "machine_list": "machine", "filament_list": "filament",
+                             "process_list": "process"}[section]
+            folder = "machine" if expected_type == "machine_model" else expected_type
+
+            def fetch_chain(preset, ancestors=()):
+                # Stay inside this vendor and the correct index section.
+                # Never fabricate missing ancestors or flatten tool vectors.
+                if not isinstance(preset, str) or not preset or len(preset) > 160:
+                    raise ValueError(f"{name} invalid {section} ancestor name")
+                if preset in ancestors:
+                    raise ValueError(f"{name} profile inheritance cycle: {preset}")
+                if len(ancestors) >= 16:
+                    raise ValueError(f"{name} profile inheritance exceeds depth limit")
+                matches = [item for item in indexed if isinstance(item, dict)
+                           and item.get("name") == preset]
+                if len(matches) != 1:
+                    raise ValueError(f"{name} missing or ambiguous {section} ancestor: {preset}")
+                entry = matches[0]
+                path = entry.get("sub_path")
+                if not isinstance(path, str) or not path.startswith(folder + "/"):
+                    raise ValueError(f"{name} invalid {section} profile path")
+                if path in files:
+                    raise ValueError(f"{name} duplicate profile path: {path}")
+                if len(files) >= 48:
+                    raise ValueError(f"{name} profile fixture exceeds record limit")
+                record = fetch(f"{name}/{path}")
+                if not isinstance(record, dict) or record.get("name") != preset or record.get("type") != expected_type:
+                    raise ValueError(f"{name} profile name/type mismatch: {path}")
+                files[path] = record
+                parent = record.get("inherits") if expected_type != "machine_model" else None
+                if parent in (None, ""):
+                    return [entry]
+                if not isinstance(parent, str):
+                    raise ValueError(f"{name} invalid inherited profile: {path}")
+                return fetch_chain(parent, ancestors + (preset,)) + [entry]
+
+            # Index the complete root-to-leaf chain for each selected preset.
+            sections[section] = fetch_chain(selected_name)
         vendors.append({
             "name": name,
             "index": {"name": source["name"], "version": source["version"], **sections},
