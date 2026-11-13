@@ -64,7 +64,7 @@ export async function checkBrowserMultiObject3mf(page, cubeBytes, outputDir='par
         throw new Error('Native multi-object 3MF is empty, excessive, or not a ZIP');
     } finally { await source.dispose(); }
     const reopened = await engine.createSession();
-    let imported, converted, convertedCount, splitGapMm, placedBoundsMm;
+    let imported, converted, convertedCount, splitGapMm, placedBoundsMm, absolutePlacementVerified=false;
     try {
       await reopened.initProfile('project.3mf', original);
       imported = await reopened.getManifest();
@@ -114,7 +114,7 @@ export async function checkBrowserMultiObject3mf(page, cubeBytes, outputDir='par
         {min:[90,90,0],max:[110,110,20]},
         {min:[150,90,0],max:[170,110,20]}
       ];
-      let absolutePlacementVerified=true;
+      absolutePlacementVerified=true;
       for(let i=0;i<2;i++) {
         if(regions[i].triangles!==12)
           throw new Error('Object '+i+' lost or gained placed mesh triangles');
