@@ -213,3 +213,34 @@ WebGL/OrcaSlicer geometry or machine-printing parity result.
 ## 2026-11-13: actual WASM 3MF-to-STL geometry comparison gate
 
 A new read-only `scripts/check_3mf_stl_bounds.py` and unit suite compare the **actual** converted STL from isolated Chrome `threeMfToStl()` with the original WASM-generated core 3MF. The script derives **exact used-triangle bounds** after same-part component/build transforms, converts the 3MF model unit into millimetres, and checks placed triangle count and global XYZ extents against binary STL vertices with 0.05 mm tolerance. This is not a comparison of conservative boxes: rotation and nontrivial parent transforms are covered in regression tests. The Chrome probe now archives both the actual 3MF and conversion STL plus a JSON deltas report. The gate rejects missing or non-finite STL vertices, excessive triangles and multi-part scenes outside supported cross-part semantics. Even if it passes, it is self-conversion of a synthetic cube, **not** a desktop-authored 3MF acceptance test, complete mesh correspondence, face-ID mapping, metadata parity, GUI rendering or print certification. The public page and engine build remain unchanged.
+
+## 2026-11-14: fail-closed 3MF → STL interior-vertex diagnostic
+
+The previous `check_3mf_stl_bounds.py` acceptance gate compared placed
+triangle counts and exact global XYZ bounds, which could incorrectly accept
+a deformed interior vertex without changing the overall bounding box.
+It now also compares the **sorted per-axis coordinates of every placed triangle
+vertex** (including repeated vertices), using the same explicit millimetre
+tolerance as the bounds check (default 0.05 mm). Sorting makes the test
+independent of triangle order, vertex order and winding; source triangle
+instances are expanded and transformed before comparison. The STL and expanded
+3MF remain subject to the 200,000-triangle diagnostic limit.
+
+A regression now deliberately moves one vertex 0.5 mm while preserving the
+triangle count and the entire XYZ bounding box: the new gate **fails**, while
+reordered/winding-reversed triangles and float32 rounding below tolerance
+**pass**. The JSON report includes
+`axisDistributionDeviationsMm` and
+`maxAxisDistributionDeviationMm`. A count mismatch fails without attempting
+an axis-rank comparison.
+
+[3MF unit tests #43462674350](https://github.com/temesotejam/layer-workbench/actions/runs/43462674350)
+**PASS**, and the
+[real isolated Chrome/WASM integration #43462674348](https://github.com/temesotejam/layer-workbench/actions/runs/43462674348)
+**PASS** on commit `5e4d60e`. This validates the existing WASM-generated
+synthetic 3MF-to-STL conversion more strictly, not native desktop compatibility.
+Independent XYZ multisets are **not** a full correspondence/topology proof:
+vertex positions can be exchanged between triangles without changing any
+axis-wise multiset. Face IDs, 3MF settings, edited-project export and native
+desktop round-trip are still unverified. Do not use this check to certify
+printer-ready G-code.
