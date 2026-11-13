@@ -115,7 +115,9 @@ def numeric_parameter_deltas(native_command, wasm_command):
                 })
     return deltas
 
-def compare(native, wasm):
+def compare(native, wasm, min_extrusion_moves=0):
+    if min_extrusion_moves < 0:
+        raise ValueError('minimum extrusion moves must not be negative')
     a, b = canonical(native), canonical(wasm)
     differences = []
     mismatch_count = 0
@@ -130,15 +132,23 @@ def compare(native, wasm):
                     entry['parameter_deltas'] = deltas
                 differences.append(entry)
     native_motion, wasm_motion = count_motion(a), count_motion(b)
+    native_extrusion = count_extrusion_moves(a)
+    wasm_extrusion = count_extrusion_moves(b)
     issues = []
     if native_motion == 0:
         issues.append('native input has no G0/G1/G2/G3 motion commands')
     if wasm_motion == 0:
         issues.append('wasm input has no G0/G1/G2/G3 motion commands')
+    if native_extrusion < min_extrusion_moves:
+        issues.append(f'native has {native_extrusion} extrusion moves; expected at least {min_extrusion_moves}')
+    if wasm_extrusion < min_extrusion_moves:
+        issues.append(f'wasm has {wasm_extrusion} extrusion moves; expected at least {min_extrusion_moves}')
     return {
         'native': str(native), 'wasm': str(wasm),
         'native_commands': len(a), 'wasm_commands': len(b),
         'native_motion_commands': native_motion, 'wasm_motion_commands': wasm_motion,
+        'native_extrusion_moves': native_extrusion, 'wasm_extrusion_moves': wasm_extrusion,
+        'minimum_extrusion_moves': min_extrusion_moves,
         'input_issues': issues,
         'native_sha256': hashlib.sha256(native.read_bytes()).hexdigest(),
         'wasm_sha256': hashlib.sha256(wasm.read_bytes()).hexdigest(),
@@ -152,8 +162,12 @@ def main():
     parser.add_argument('--native', type=Path, required=True)
     parser.add_argument('--wasm', type=Path, required=True)
     parser.add_argument('--report', type=Path)
+    parser.add_argument('--min-extrusion-moves', type=int, default=0,
+                        help='Optional minimum number of positive-E XY/arc moves on each side')
     args = parser.parse_args()
-    report = compare(args.native, args.wasm)
+    if args.min_extrusion_moves < 0:
+        parser.error('--min-extrusion-moves must be nonnegative')
+    report = compare(args.native, args.wasm, min_extrusion_moves=args.min_extrusion_moves)
     output = json.dumps(report, ensure_ascii=False, indent=2)
     print(output)
     if args.report:
