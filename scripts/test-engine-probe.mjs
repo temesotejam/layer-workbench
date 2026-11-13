@@ -5,6 +5,7 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {parseGcodeToolpaths} from './gcode-preview-parser.mjs';
+import {checkBrowser3mfRoundTrip} from './test-browser-3mf-roundtrip.mjs';
 const base = process.env.ENGINE_PROBE_URL || 'http://127.0.0.1:8766/';
 const artifactDir = process.env.ENGINE_ARTIFACT_DIR || 'engine-test-artifacts';
 const browser = await chromium.launch({
@@ -55,6 +56,12 @@ try {
   cube.writeUInt32LE(triangles.length, 80);
   triangles.forEach((tri, i) => tri.forEach((vertex, v) => vertex.forEach((value, axis) =>
     cube.writeFloatLE(value, 84 + i * 50 + 12 + v * 12 + axis * 4))));
+  // Real 3MF archive path through the same trusted browser-loaded WASM:
+  // native export -> native project reimport -> renderable preview ->
+  // preservation=require export. This is deliberately a synthetic fixture.
+  const native3mf = await checkBrowser3mfRoundTrip(page,cube);
+  console.log('PASS: browser native WASM 3MF round-trip, ' +
+    native3mf.triangles+' preview triangles, sha256='+native3mf.sha256);
   await page.locator('#slice-stl').setInputFiles({
     name: 'cube-test.stl', mimeType: 'model/stl', buffer: cube,
   });
