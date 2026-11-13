@@ -7,6 +7,8 @@ on:
     paths:
       - "scripts/orca-profile-collection.mjs"
       - "scripts/orca-full-profile.mjs"
+      - "scripts/orca-config-array-semantics.mjs"
+      - "scripts/test-orca-config-array-semantics.mjs"
       - "scripts/test-orca-full-profile.mjs"
       - "scripts/orca-vendor-index.mjs"
       - "scripts/orca-vendor-catalog.mjs"
@@ -42,6 +44,7 @@ jobs:
           node scripts/test-orca-vendor-index.mjs
           node scripts/test-orca-vendor-catalog.mjs
           node scripts/test-orca-full-profile.mjs
+          node scripts/test-orca-config-array-semantics.mjs
       - name: Fetch pinned actual v2.5.0 upstream profile records
         run: python3 scripts/fetch-upstream-v250-fixture.py
       - name: Validate real index and three-level PLA inheritance
