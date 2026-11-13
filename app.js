@@ -24,6 +24,13 @@ const transformInputs = Object.fromEntries(["x","y","z","rz","sx","sy","sz"].map
 ));
 const MAX_FILE_BYTES = 200 * 1024 * 1024;
 const accepted = new Set(["stl", "3mf", "obj"]);
+// Native 3MF scenes use an absolute plate-origin coordinate system. The public
+// app retains its original viewer-only auto-centering until tested full 3MF
+// semantics exist. This diagnostic mapping is opt-in on isolated localhost.
+const isolated3mfViewportLab = (location.hostname === "localhost" ||
+  location.hostname === "127.0.0.1") &&
+  globalThis.crossOriginIsolated === true &&
+  new URLSearchParams(location.search).get("engineLab") === "1";
 const entries = [];
 let selectedId = null;
 let renderer, camera, controls, transformControls;
@@ -327,7 +334,15 @@ async function addFiles(selected) {
       const entry = { id: crypto.randomUUID(), name: file.name, size: file.size, object, format: extension, file, modified: false };
       entries.push(entry);
       world.add(object);
-      if (entries.length === 1) centerAndFit(object);
+      if (extension === "3mf" && isolated3mfViewportLab) {
+        // The 3MF Loader applies the 3MF build-item transforms. Shift only
+        // the plate origin (lower-left -> centered WebGL); do not center each
+        // imported 3MF or move its geometry to Z=0, which loses placement.
+        object.position.x -= 128;
+        object.position.y -= 128;
+        object.updateMatrixWorld(true);
+        if (entries.length === 1) fitCameraToObject(object);
+      } else if (entries.length === 1) centerAndFit(object);
       else {
         const bounds = new THREE.Box3().setFromObject(object);
         const center = bounds.getCenter(new THREE.Vector3());
@@ -339,7 +354,10 @@ async function addFiles(selected) {
       selectEntry(entry.id);
       projectLabel.textContent = entries.length === 1 ? file.name : entries.length + " objects";
       sceneFile.textContent = entries.length + " model(s) loaded";
-      status.textContent = "Loaded " + file.name + " · " + humanSize(file.size);
+      status.textContent = "Loaded " + file.name + " · " + humanSize(file.size) +
+        (extension === "3mf" && isolated3mfViewportLab
+          ? " · isolated 3MF plate-origin diagnostic (one grouped viewer entry; no native edit/save)"
+          : "");
       sliceNote.textContent = "3D geometry loaded in the browser. Slicing is not connected yet; engine and printer profiles remain separate work.";
     } catch (error) {
       console.error(error);
@@ -372,5 +390,26 @@ if (new URLSearchParams(location.search).has("engineLab")) {
   ).catch(error => {
     sliceNote.textContent = "Local engine lab could not initialize: " + error.message;
     console.error(error);
+  });
+}
+
+// Isolated localhost + explicit opt-in only: a read-only viewport diagnostic
+// for CI to compare Three.js geometry with the archive's 3MF build placement.
+// This does not expose files or enable native editing on the public site.
+if (isolated3mfViewportLab) {
+  Object.defineProperty(globalThis, "__layer3mfViewportAudit", {
+    value: () => entries.filter(entry => entry.format === "3mf").map(entry => {
+      entry.object.updateMatrixWorld(true);
+      const bounds = new THREE.Box3().setFromObject(entry.object);
+      let meshes = 0;
+      entry.object.traverse(node => { if (node.isMesh) meshes++; });
+      return {
+        name: entry.name, meshCount: meshes,
+        viewerPosition: entry.object.position.toArray(),
+        boundsMm: {min: bounds.min.toArray(), max: bounds.max.toArray()},
+        mode: "isolated-3mf-plate-origin-only",
+      };
+    }),
+    writable: false, configurable: false,
   });
 }

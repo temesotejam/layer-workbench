@@ -499,6 +499,37 @@ try {
   } finally {
     await prepare.close();
   }
+  // Separate isolated, explicitly opted-in 3MF viewport acceptance gate.
+  // Use the ACTUAL two-cube 3MF emitted by the pinned WASM candidate above.
+  // The browser renders this via ThreeMFLoader: it does not edit a native
+  // C++ project, and the candidate exporter has already flattened objects.
+  const mfPage = await browser.newPage({viewport:{width:1440,height:900}});
+  try {
+    const response = await mfPage.goto(base + '?engineLab=1', {waitUntil:'domcontentloaded'});
+    assert.equal(response.status(),200);
+    await mfPage.locator('#viewport-canvas canvas').waitFor({state:'visible',timeout:90000});
+    await mfPage.locator('#model-file').setInputFiles({
+      name:'wasm-multiobject-native.3mf',mimeType:'model/3mf',
+      buffer:await readFile('parity-output/wasm-multiobject-3mf.3mf'),
+    });
+    await mfPage.locator('#object-count').getByText('1 object').waitFor({timeout:30000});
+    assert.match(await mfPage.locator('#file-status').innerText(),/isolated 3MF plate-origin diagnostic/);
+    const bounds = await mfPage.evaluate(() => globalThis.__layer3mfViewportAudit?.());
+    assert.ok(Array.isArray(bounds) && bounds.length===1,'Isolated 3MF diagnostics missing');
+    const item=bounds[0];
+    assert.ok(item.meshCount>=1,'ThreeMFLoader produced no visible mesh');
+    assert.equal(item.mode,'isolated-3mf-plate-origin-only');
+    assert.ok(Math.abs(item.viewerPosition[0]+128)<1e-5);
+    assert.ok(Math.abs(item.viewerPosition[1]+128)<1e-5);
+    assert.ok(item.boundsMm.min.every(Number.isFinite) && item.boundsMm.max.every(Number.isFinite));
+    const xExtent=item.boundsMm.max[0]-item.boundsMm.min[0];
+    assert.ok(Math.abs(xExtent-80)<2,'Unexpected 3MF build transform X extent: '+xExtent);
+    assert.ok(item.boundsMm.min[0]<-30 && item.boundsMm.max[0]>30,
+      'Two WASM 3MF geometry clusters did not map to expected centered plate coordinates');
+    console.log('PASS: isolated 3MF viewport native build placement (80 mm X extent, lower-left to centered plate mapping); grouping limitation remains');
+  } finally {
+    await mfPage.close();
+  }
 } finally {
   await browser.close();
 }

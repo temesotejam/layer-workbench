@@ -287,3 +287,26 @@ is to inspect and repair the v2.5.0 WASM native export/import model
 hierarchy path, while keeping the already-built engine isolated from
 public Pages until that bridge and its tests are validated.
 
+
+## 2026-11-14: opt-in native 3MF plate-origin viewport mapping (experimental)
+
+The existing public Prepare viewer previously auto-centered every imported file,
+including 3MF. That erased the absolute plate placement when the 3MF
+`<build>` already carries translations. The isolated localhost
+`?engineLab=1` viewport now keeps the ThreeMFLoader-provided build transforms,
+mapping only the native 256 mm plate origin by (-128, -128) in X/Y; it does
+**not** lower the original Z geometry to zero or independently center components.
+The normal public viewport behavior is unchanged.
+
+The same pinned WASM two-cube exported 3MF fixture used in the native API
+diagnostic is loaded into the actual browser WebGL viewer by a new Chrome
+acceptance check. The isolated read-only `__layer3mfViewportAudit` reports
+the imported scene bounds and verifies the 80 mm X extent and the two separated
+regions around the centered plate; it is inaccessible without isolated
+localhost and explicit `?engineLab=1`. The exact Chrome CI result must be
+checked after this commit. This is only **viewport geometry placement**.
+The current native exporter merges the two source objects, and the browser
+still imports the 3MF as one selectable entry; there is **no proof of native
+multi-object editability, arbitrary desktop 3MF metadata preservation, full
+3MF model coordinate semantics, native transform editing, save/reopen, or
+G-code parity**. The published page does not load WASM automatically.
