@@ -115,11 +115,12 @@ jobs:
             --input parity-output/wasm-native-3mf.3mf \
             --stl parity-output/wasm-3mf-converted.stl \
             --report parity-output/browser-3mf-stl-bounds.json
-          # Separate two-object native export/import/flattening gate. Keep the
-          # generated fixture isolated from desktop compatibility claims.
+          # Two input objects retain both 12-triangle geometric clusters but
+          # current 3MF exporter flattens hierarchy into one build item.
+          # This is a diagnostic only, NOT an object-preservation parity PASS.
           python3 scripts/audit_3mf_scene.py \
             --input parity-output/wasm-multiobject-3mf.3mf \
-            --min-triangles 1 \
+            --min-triangles 24 \
             --report parity-output/browser-multiobject-3mf-scene.json
           python3 scripts/check_3mf_stl_bounds.py \
             --input parity-output/wasm-multiobject-3mf.3mf \

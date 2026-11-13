@@ -63,7 +63,7 @@ export async function checkBrowserMultiObject3mf(page, cubeBytes, outputDir='par
         throw new Error('Native multi-object 3MF is empty, excessive, or not a ZIP');
     } finally { await source.dispose(); }
     const reopened = await engine.createSession();
-    let imported, converted, convertedCount;
+    let imported, converted, convertedCount, splitGapMm;
     try {
       await reopened.initProfile('project.3mf', original);
       imported = await reopened.getManifest();
@@ -77,16 +77,31 @@ export async function checkBrowserMultiObject3mf(page, cubeBytes, outputDir='par
       if (count < 1 || converted.byteLength !== 84+50*count)
         throw new Error('Two-object probe produced malformed binary STL');
       convertedCount=count;
+      // Two cubes must remain spatially separate even when the exporter
+      // collapses their source object hierarchy into one output mesh.
+      if (count !== 24) throw new Error('Native export dropped synthetic cube triangles');
+      const centroids=[];
+      const view=new DataView(converted.buffer,converted.byteOffset,converted.byteLength);
+      for(let i=0;i<count;i++) {
+        let x=0;
+        for(let v=0;v<3;v++) x+=view.getFloat32(84+i*50+12+v*12,true)/3;
+        centroids.push(x);
+      }
+      centroids.sort((a,b)=>a-b);
+      splitGapMm=centroids[12]-centroids[11];
+      if (!Number.isFinite(splitGapMm) || splitGapMm < 30)
+        throw new Error('Expected two spatially separated 3MF mesh clusters');
     } finally { await reopened.dispose(); }
     return {
       archive:Array.from(original), stl:Array.from(converted),
       initialObjects:initial.objects.length, initialInstances:initial.instances.length,
       importedObjects:imported.objects.length, importedInstances:imported.instances.length,
-      stlTriangles:convertedCount
+      stlTriangles:convertedCount, splitGapMm
     };
   }, Array.from(cubeBytes));
   assert.equal(report.initialInstances, 2);
-  assert.ok(report.stlTriangles >= 1);
+  assert.equal(report.stlTriangles, 24);
+  assert.ok(report.splitGapMm >= 30);
   const archive=Buffer.from(report.archive), stl=Buffer.from(report.stl);
   await mkdir(outputDir,{recursive:true});
   await writeFile(outputDir+'/wasm-multiobject-3mf.3mf',archive);
@@ -100,6 +115,7 @@ export async function checkBrowserMultiObject3mf(page, cubeBytes, outputDir='par
     initialObjects:report.initialObjects,initialInstances:report.initialInstances,
     reimportedObjects:report.importedObjects,reimportedInstances:report.importedInstances,
     flattenedTriangles:report.stlTriangles,
+    measuredGapBetweenTriangleClustersMm:report.splitGapMm,
     multiObjectRoundTripSupported:report.importedInstances === 2 && report.importedObjects === 2 && report.stlTriangles === 24,
     limitations:'No desktop-authored 3MF, edit-and-resave transform, face-ID mesh preview, metadata parity or printer safety validated'
   },null,2)+'\n');

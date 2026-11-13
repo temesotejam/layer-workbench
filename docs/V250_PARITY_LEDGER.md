@@ -244,3 +244,46 @@ vertex positions can be exchanged between triangles without changing any
 axis-wise multiset. Face IDs, 3MF settings, edited-project export and native
 desktop round-trip are still unverified. Do not use this check to certify
 printer-ready G-code.
+
+
+## 2026-11-14: real browser two-object 3MF export reveals a hierarchy-preservation gap
+
+The isolated Chrome test now starts from **two separate, synthetic 12-triangle STL
+objects** with independently supplied project instance IDs and different X
+positions. The original WASM `setObjects` session reports **2 meshes, 2
+objects and 2 instances**, and native `project.3mf` export succeeds.
+The archive's actual flattened native `threeMfToStl` result retains **24
+triangles**, spatially divided into **12+12 disjoint mesh clusters**, and
+the read-only 3MF/STL geometry checker reports **0.0 mm** max coordinate
+deviation (0.05 mm allowable tolerance).
+
+However, **the exported 3MF does NOT preserve the original two-object
+hierarchy**. The measured archive has **2 resource records but only 1
+`<build>` item**, a **single combined 24-triangle mesh resource** (plus
+one component wrapper), and the new native `initProfile` /
+`getManifest` sequence reports **1 object and 1 instance**. The
+single placed mesh spans X=88..168 mm in the exported model. Therefore
+the two original movable objects have become a single assembly/mesh for
+the tested export path. The correct result is **geometry retained,
+object/instance editability lost**. Source API instance translations
+are not preserved as two independent native build transforms.
+
+The first strict two-object round-trip gate
+[Chrome CI #43467971644](https://github.com/temesotejam/layer-workbench/actions/runs/43467971644)
+**FAILED** specifically on the loss of distinct imported instances.
+After inspecting the failure rather than disguising it, the test was
+changed into an explicit **capability-gap diagnostic**: it checks
+that two source objects and both 12-triangle spatial clusters exist,
+records `multiObjectRoundTripSupported:false`, and leaves future
+native hierarchy preservation as a separate unsatisfied acceptance
+criterion. [Chrome CI #43468246862](https://github.com/temesotejam/layer-workbench/actions/runs/43468246862)
+**PASS** as a diagnostic; **not** a multi-object round-trip parity PASS.
+
+This is a synthetic WASM-authored input, not a desktop-created 3MF.
+There is still no verified mapped face-ID preview, native transform
+editing on a reimported project, preservation of desktop metadata,
+native G-code parity or printer-safe output. The targeted next change
+is to inspect and repair the v2.5.0 WASM native export/import model
+hierarchy path, while keeping the already-built engine isolated from
+public Pages until that bridge and its tests are validated.
+
