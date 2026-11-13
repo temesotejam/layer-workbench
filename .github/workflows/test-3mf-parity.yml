@@ -7,6 +7,8 @@ on:
     paths:
       - "scripts/compare_3mf_metadata.py"
       - "scripts/test_compare_3mf_metadata.py"
+      - "scripts/audit_3mf_scene.py"
+      - "scripts/test_audit_3mf_scene.py"
       - ".github/workflows/test-3mf-parity.yml"
 
 permissions:
@@ -23,3 +25,4 @@ jobs:
           set -euo pipefail
           python3 -m py_compile scripts/compare_3mf_metadata.py
           python3 -m unittest discover -s scripts -p test_compare_3mf_metadata.py -v
+          python3 -m unittest discover -s scripts -p test_audit_3mf_scene.py -v
