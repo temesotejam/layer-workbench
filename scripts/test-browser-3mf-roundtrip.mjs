@@ -56,21 +56,30 @@ export async function checkBrowser3mfRoundTrip(page, stlBytes, outputDir="parity
       firstWarnings=exported.warnings??[];
     } finally { await first.dispose(); }
     const second=await engine.createSession();
-    let reexported,manifest,previewTriangles;
+    let reexported,manifest,geometryTriangles,mappedPreviewSupported=true;
     try {
       await second.initProfile("project.3mf",original);
       manifest=await second.getManifest();
       if(manifest?.schemaVersion!=="0.7.0"||manifest.instances?.length!==1
         ||!manifest.meshes?.length||!manifest.objects?.length)
         throw new Error("Re-imported native 3MF lost object hierarchy");
-      const preview=await second.getPreview(manifest.meshes[0].id);
-      if(preview?.schemaVersion!=="0.7.0"||!(preview.geometry instanceof Uint8Array)
-        ||preview.geometry.byteLength<134||preview.triangleFaceIds?.length<1)
-        throw new Error("Re-imported native 3MF has no renderable mesh preview");
-      previewTriangles=new DataView(preview.geometry.buffer,preview.geometry.byteOffset,
-        preview.geometry.byteLength).getUint32(80,true);
-      if(previewTriangles<1||previewTriangles!==preview.triangleFaceIds.length)
-        throw new Error("Native 3MF preview has inconsistent triangle count");
+      // A 3MF-to-STL converter is present in API 0.7.0, but mapped face-ID
+      // project previews are optional and this candidate lacks them.
+      const geometry=await engine.threeMfToStl(original);
+      if(!(geometry instanceof Uint8Array)||geometry.byteLength<134)
+        throw new Error("Native 3MF conversion produced no STL geometry");
+      geometryTriangles=new DataView(geometry.buffer,geometry.byteOffset,
+        geometry.byteLength).getUint32(80,true);
+      if(geometryTriangles<1||geometry.byteLength!==84+50*geometryTriangles)
+        throw new Error("Native 3MF conversion produced invalid binary STL");
+      try {
+        const preview=await second.getPreview(manifest.meshes[0].id);
+        if(preview?.schemaVersion!=="0.7.0"||preview.triangleFaceIds?.length<1)
+          throw new Error("Native mapped preview descriptor is invalid");
+      } catch(error) {
+        if(error?.code!=="UNSUPPORTED")throw error;
+        mappedPreviewSupported=false;
+      }
       const preserved=await second.export("project.3mf",{
         schemaVersion:"0.7.0",preservation:"require",includeSliceArtifacts:false
       });
@@ -85,12 +94,12 @@ export async function checkBrowser3mfRoundTrip(page, stlBytes, outputDir="parity
       initialInstanceCount:firstManifest.instances.length,
       reimportedInstanceCount:manifest.instances.length,
       reimportedMeshCount:manifest.meshes.length,
-      previewTriangles,firstWarnings
+      geometryTriangles,mappedPreviewSupported,firstWarnings
     };
   },Array.from(stlBytes));
   assert.equal(result.initialInstanceCount,1);
   assert.equal(result.reimportedInstanceCount,1);
-  assert.ok(result.previewTriangles>0);
+  assert.ok(result.geometryTriangles>0);
   const native=Buffer.from(result.original),preserved=Buffer.from(result.preserved);
   assert.deepEqual(preserved,native,"preservation=require must retain original bytes");
   await mkdir(outputDir,{recursive:true});
@@ -104,11 +113,13 @@ export async function checkBrowser3mfRoundTrip(page, stlBytes, outputDir="parity
     originalBytes:native.byteLength,sha256,
     reimportedInstances:result.reimportedInstanceCount,
     reimportedMeshes:result.reimportedMeshCount,
-    renderablePreviewTriangles:result.previewTriangles,
+    convertedGeometryTriangles:result.geometryTriangles,
+    mappedPreviewSupported:result.mappedPreviewSupported,
     firstExportWarnings:result.firstWarnings,
     preservationRequireByteIdentical:true,
-    limitations:"Not desktop 3MF parity, altered-transform round-trip or printer safety."
+    limitations:"3MF-to-STL conversion is flattened geometry; mapped mesh preview unsupported in current engine. Not desktop 3MF parity, transform-edit proof or printer safety."
   },null,2)+"\n");
-  return {bytes:native.byteLength,sha256,triangles:result.previewTriangles,
+  return {bytes:native.byteLength,sha256,triangles:result.geometryTriangles,
+    mappedPreviewSupported:result.mappedPreviewSupported,
     warnings:result.firstWarnings.length};
 }
