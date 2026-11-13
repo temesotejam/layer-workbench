@@ -249,3 +249,23 @@ native G-code parity remain unverified; never print this test G-code.
 The isolated local Preview now approximates common G17 XY-plane G2/G3 **R-radius** arcs as bounded line segments. Positive R chooses a minor (up to 180°) arc and negative R selects the major (over 180°) arc, for both clockwise and counter-clockwise motion. Radius units follow G20/G21. A semicircle with positive R is supported; ambiguous negative-R semicircles, coincident endpoints, impossible radii, simultaneous R and I/J, helices, and non-XY planes are **not** drawn. They still update modal XYZE endpoint state so subsequent moves do not jump back. The existing 4096-subdivision and global segment budgets still apply.
 
 The dedicated parser regression adds minor/major and clockwise paths, semicircle, imperial units, invalid/ambiguous geometry, skipped-arc endpoint safety and budget enforcement. This is a **diagnostic visualization** only, not firmware-exact motion simulation, G-code parity with native OrcaSlicer, or print safety validation. The unchanged archived WASM engine binary is not republished to the public site.
+
+
+## 2026-11-13: pinned process top/bottom shell counts
+
+The restricted Orca profile resolver now accepts bounded integer `top_shell_layers`
+and `bottom_shell_layers` (0–12), including inherited values and child overrides.
+These are already allowed by the local bridge's restricted process override
+validator; all other unsupported process keys remain excluded. The official
+OrcaSlicer v2.5.0 pinned Creality CR-10 0.4 nozzle / 0.20mm Standard process
+sets **5 top** and **4 bottom** shell layers. This was checked against the
+upstream revision `40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19`,
+without committing any upstream preset JSON.
+
+[Real pinned profiles CI #43346379703](https://github.com/temesotejam/layer-workbench/actions/runs/43346379703)
+passed with assertions for both settings; [isolated Chrome CI #43346460808](https://github.com/temesotejam/layer-workbench/actions/runs/43346460808)
+passed with a real WASM slice demonstrating that a local inherited solid-shell
+override changes **G-code motion commands** (comments excluded). This is an
+integration proof for two additional native process options, **not** a full
+native-versus-WASM paired G-code parity result. Do not print the generic-PLA
+fixture G-code on a physical printer.
