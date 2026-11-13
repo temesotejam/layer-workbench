@@ -102,3 +102,9 @@ The manifest generator, strict comparator and command-line fail-closed cases
 passed [CI #43339006849](https://github.com/temesotejam/layer-workbench/actions/runs/43339006849)
 after restoring the optional extrusion gate argument in commit
 [`ee6d841`](https://github.com/temesotejam/layer-workbench/commit/ee6d84125388f40c0ae09c5ac8c944784919c407).
+
+## 2026-11-13: preserve actual browser-WASM G-code for paired comparison
+
+The isolated Chrome probe now writes the **actual G-code bytes returned by the pinned WASM candidate** to `parity-output/wasm.gcode`, together with a summary containing the raw SHA-256, byte count, parsed layer count, extrusion-segment count and travel-segment count. The browser workflow archives this diagnostic output for 14 days. This makes the WASM side inspectable and reusable rather than only printing a transient console summary.
+
+The fixture is still the synthetic 12-triangle cube with the browser probe's generic PLA development profile. It is **not** the selected official Creality/OrcaFilamentLibrary full profile, and no matching native CLI G-code is produced by this workflow. The artifact is diagnostic only and must not be sent to a printer. The next acceptance gate is a separately built, source-pinned native v2.5.0 CLI on the exact same STL/profile/options, with native binary and toolchain hashes recorded before using `check_parity_pair.py`.
