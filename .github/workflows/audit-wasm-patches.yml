@@ -94,8 +94,10 @@ jobs:
           from pathlib import Path
           text = Path('orcawasm/bridge/slicer.cpp').read_text()
           start = text.index('oneslicer_status_t oneslicer_project_export(')
-          end = text.index('oneslicer_status_t oneslicer_project_get_asset(', start) if 'oneslicer_status_t oneslicer_project_get_asset(' in text[start:] else -1
-          fragment = text[start:] if end < 0 else text[start:end]
+          # Stop before the following helper definitions; some legitimately
+          # provide a single-mesh conversion API for other formats.
+          end = text.index('EMSCRIPTEN_KEEPALIVE', start + 1)
+          fragment = text[start:end]
           if 'write_single_mesh_3mf(' in fragment:
               raise SystemExit('The portable 3MF export still flattens objects')
           if fragment.count('write_project_model_3mf(') < 2:
