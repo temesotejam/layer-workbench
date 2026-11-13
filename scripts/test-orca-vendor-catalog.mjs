@@ -43,4 +43,4 @@ const ambiguous=extractOrcaVendorCatalog([
   filamentVendor("Vendor B",[{name:"Generic PLA @B",compatible_printers:["Printer X"]}])
 ]);
 assert.throws(()=>selectOrcaFilamentPreset(ambiguous,"Generic PLA","Printer X"),/Ambiguous/);
-\nconsole.log("PASS: multi-vendor namespaces, filament alias precedence and global fallback");
+console.log("PASS: multi-vendor namespaces, filament alias precedence and global fallback");
