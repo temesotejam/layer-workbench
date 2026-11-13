@@ -8,6 +8,17 @@ import {createHash} from 'node:crypto';
 export async function checkNativeManifestEditRoundTrip(page, cubeBytes, outputDir='parity-output') {
   assert.ok(cubeBytes instanceof Uint8Array && cubeBytes.byteLength >= 134);
   const outcome=await page.evaluate(async raw => {
+    // Playwright runs this body in Chrome, not Node: use browser-local
+    // assertions rather than capturing node:assert from the controller.
+    const assert={
+      equal(actual,expected,message='browser values differ'){
+        if(actual!==expected)throw new Error(message+': '+actual+' != '+expected);
+      },
+      deepEqual(actual,expected,message='browser structures differ'){
+        if(JSON.stringify(actual)!==JSON.stringify(expected))
+          throw new Error(message);
+      }
+    };
     if(!crossOriginIsolated)throw new Error('Isolated Chrome required');
     const engine=globalThis.__layerDiagnosticEngine?.engine;
     if(!engine?.createSession)throw new Error('Verified WASM engine is not loaded');
@@ -45,7 +56,7 @@ export async function checkNativeManifestEditRoundTrip(page, cubeBytes, outputDi
       await session.setObjects(blob,project);
       const initial=await session.getManifest();
       assert.equal(initial.instances.length,2);
-      // 90-degree rotation, nonuniform X scale (1.5), and translation
+      // 90-degree rotation, nonuniform local Y scale (1.5), and translation
       // on the SECOND instance only. Expected X range: 145..175 mm.
       const edited=editManifestInstanceTransform(initial,'instance-1',[
         0,-1.5,0,175, 1,0,0,90, 0,0,1,0, 0,0,0,1
