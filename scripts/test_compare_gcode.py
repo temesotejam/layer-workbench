@@ -100,5 +100,30 @@ class ComparatorTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.run_compare('G1 X1 E1\n', 'G1 X1 E1\n', min_extrusion_moves=-1)
 
+
+    def test_absolute_e_retraction_is_not_positive_deposition(self):
+        gcode = 'M82\nG1 X1 E1\nG1 X2 E0.5\nG1 X3 E0.8\n'
+        report = self.run_compare(gcode, gcode, min_extrusion_moves=2)
+        self.assertTrue(report['match'])
+        self.assertEqual(report['native_extrusion_moves'], 2)
+
+    def test_relative_e_and_g92_reset(self):
+        gcode = 'M82\nG1 X1 E1\nG92 E0\nG1 X2 E0.4\nM83\nG1 X3 E-0.2\nG1 X4 E0.1\n'
+        report = self.run_compare(gcode, gcode, min_extrusion_moves=3)
+        self.assertTrue(report['match'])
+        self.assertEqual(report['native_extrusion_moves'], 3)
+
+    def test_e_only_priming_updates_absolute_baseline(self):
+        gcode = 'M82\nG1 E4\nG1 X1 E3\nG1 X2 E4.5\n'
+        report = self.run_compare(gcode, gcode, min_extrusion_moves=1)
+        self.assertTrue(report['match'])
+        self.assertEqual(report['native_extrusion_moves'], 1)
+
+    def test_relative_retraction_is_not_deposition(self):
+        gcode = 'M83\nG1 X1 E0.4\nG1 X2 E-0.3\nG1 X3 E0.2\n'
+        report = self.run_compare(gcode, gcode, min_extrusion_moves=2)
+        self.assertTrue(report['match'])
+        self.assertEqual(report['native_extrusion_moves'], 2)
+
 if __name__ == '__main__':
     unittest.main()
