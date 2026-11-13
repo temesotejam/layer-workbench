@@ -85,3 +85,15 @@ Existing exact ordered command checks remain unchanged. No paired official-nativ
 ## 2026-11-13: extrusion-state fixture gate correction
 
 The optional `--min-extrusion-moves` gate now evaluates the **change in E** rather than treating every positive absolute E word as new extrusion. It handles `M82` (absolute E), `M83` (relative E), and `G92 E...` position resets; absolute-E retractions and relative-E negative moves do not increase the count. E-only priming updates the baseline without being counted as a deposition path. Four focused regression cases were added. Initial E mode is assumed absolute; tool switching, vendor-specific extrusion modes, E-unit conversion, and firmware side effects remain outside this simple fixture sanity check. **No native vs WASM official full-profile parity result is claimed.**
+
+## 2026-11-13: reproducible paired-fixture manifest generation
+
+The local CLI `scripts/make_parity_manifest.py` records SHA-256 digests for five **already generated** files in each of `native/` and `wasm/`: `model.stl`, `machine.json`, `filament.json`, `process.json`, and `gcode.gcode`. Each directory must contain its own input files, copied from the same fixed fixture. Example:
+
+```bash
+python3 scripts/make_parity_manifest.py --engine native --directory results/native
+python3 scripts/make_parity_manifest.py --engine wasm --directory results/wasm
+python3 scripts/check_parity_pair.py --native-manifest results/native/manifest.json --wasm-manifest results/wasm/manifest.json --min-extrusion-moves 100 --report results/parity.json
+```
+
+Generation is *not* G-code slicing; it verifies supplied files and cannot authenticate how they were produced. The upstream commit in this manifest is a declared pin, not a measurement of the actual binary. A genuine native-vs-WASM acceptance result additionally requires separately recorded CLI/binary hashes, toolchain provenance, exact slicer settings and real engine-generated G-code. The test suite uses synthetic fixtures and **does not establish G-code parity**. Never send this unvalidated G-code to a printer.
