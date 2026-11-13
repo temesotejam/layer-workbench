@@ -19,7 +19,7 @@ MAX_TRIANGLES = 200_000
 MAX_STL_BYTES = 84 + 50 * MAX_TRIANGLES
 
 
-def stl_geometry(path):
+def stl_geometry(path, include_axis_samples=False):
     # Read at most the diagnostic limit plus one sentinel byte, even for a
     # maliciously oversized or sparse input file.
     with Path(path).open("rb") as stream:
@@ -31,6 +31,9 @@ def stl_geometry(path):
         raise ValueError("Invalid binary STL triangle count or byte length")
     low = [math.inf] * 3
     high = [-math.inf] * 3
+    # Sample every placed triangle vertex, including repeated vertices. The
+    # bounded axis multisets reveal interior drift that identical AABBs miss.
+    axis_samples = [[], [], []] if include_axis_samples else None
     for i in range(triangles):
         xyz = struct.unpack_from("<9f", data, 84 + i * 50 + 12)
         for axis in range(3):
@@ -39,10 +42,13 @@ def stl_geometry(path):
                     raise ValueError("Non-finite or excessive converted STL coordinate")
                 low[axis] = min(low[axis], value)
                 high[axis] = max(high[axis], value)
-    return triangles, {"min": low, "max": high}
+                if axis_samples is not None:
+                    axis_samples[axis].append(value)
+    result = (triangles, {"min": low, "max": high})
+    return (*result, axis_samples) if axis_samples is not None else result
 
 
-def expected_geometry(archive_path, scene):
+def expected_geometry(archive_path, scene, include_axis_samples=False):
     """Exact bounds of used 3MF triangle vertices after same-part transforms."""
     with zipfile.ZipFile(archive_path) as archive:
         root = ET.fromstring(archive.read(scene["part"]))
@@ -65,6 +71,7 @@ def expected_geometry(archive_path, scene):
     low = [math.inf] * 3
     high = [-math.inf] * 3
     total_triangles = 0
+    axis_samples = [[], [], []] if include_axis_samples else None
     factor = scene["millimetersPerUnit"]
     for instance in scene["resolvedMeshInstances"]:
         vertices, faces = meshes[instance["objectId"]]
@@ -86,9 +93,12 @@ def expected_geometry(archive_path, scene):
                         raise ValueError("Excessive world-space 3MF mesh vertex")
                     low[axis] = min(low[axis], value)
                     high[axis] = max(high[axis], value)
+                    if axis_samples is not None:
+                        axis_samples[axis].append(value)
     if total_triangles < 1:
         raise ValueError("No placed 3MF triangles to compare")
-    return total_triangles, {"min": low, "max": high}
+    result = (total_triangles, {"min": low, "max": high})
+    return (*result, axis_samples) if axis_samples is not None else result
 
 
 def compare(archive_path, stl_path, tolerance_mm=0.05):
@@ -98,21 +108,39 @@ def compare(archive_path, stl_path, tolerance_mm=0.05):
     if report["modelParts"] != 1:
         raise ValueError("Only single-part core 3MF is supported by this comparison")
     scene = report["scenes"][0]
-    expected_count, expected_bounds = expected_geometry(archive_path, scene)
-    converted_count, converted_bounds = stl_geometry(stl_path)
+    expected_count, expected_bounds, expected_axis = expected_geometry(
+        archive_path, scene, include_axis_samples=True)
+    converted_count, converted_bounds, converted_axis = stl_geometry(
+        stl_path, include_axis_samples=True)
     deltas = {
         side: [converted_bounds[side][i] - expected_bounds[side][i] for i in range(3)]
         for side in ("min", "max")
     }
     max_deviation = max(abs(value) for side in deltas.values() for value in side)
+    # Sorting each coordinate axis independently is invariant to triangle
+    # ordering, vertex ordering and winding. For equal-size multisets, maximum
+    # rank-wise deviation is a necessary (not sufficient) geometry parity gate.
+    # It cannot prove vertex/triangle correspondence or topology.
+    axis_deviations = None
+    if expected_count == converted_count:
+        axis_deviations = [
+            max(abs(a-b) for a, b in zip(sorted(expected_axis[axis]),
+                                         sorted(converted_axis[axis])))
+            for axis in range(3)
+        ]
     return {
         "source3mf": str(archive_path), "convertedStl": str(stl_path),
         "unit": scene["unit"], "triangles3mfPlaced": expected_count,
         "trianglesStl": converted_count, "exactPlacedBoundsMm": expected_bounds,
         "convertedStlBoundsMm": converted_bounds, "stlMinus3mfBoundsMm": deltas,
-        "maxDeviationMm": max_deviation, "toleranceMm": tolerance_mm,
-        "passed": expected_count == converted_count and max_deviation <= tolerance_mm,
-        "limitations": "Only placed triangle count and exact XYZ global extents; not correspondence, winding, metadata, face IDs, desktop 3MF parity or printer safety. STL is assumed millimetres."
+        "maxDeviationMm": max_deviation,
+        "maxAxisDistributionDeviationMm": max(axis_deviations) if axis_deviations is not None else None,
+        "axisDistributionDeviationsMm": axis_deviations,
+        "toleranceMm": tolerance_mm,
+        "passed": (expected_count == converted_count
+                   and max_deviation <= tolerance_mm
+                   and max(axis_deviations) <= tolerance_mm),
+        "limitations": "Placed triangle count, exact XYZ bounds and order-independent per-axis vertex-coordinate distributions; NOT full vertex/triangle correspondence, topology, winding, metadata, face IDs, desktop 3MF parity or printer safety. STL is assumed millimetres."
     }
 
 
@@ -134,7 +162,7 @@ def main():
     else:
         print(output, end="")
     if not result["passed"]:
-        print("3MF/STL conversion bounds or triangle count differ", file=sys.stderr)
+        print("3MF/STL conversion bounds, axis coordinates or triangle count differ", file=sys.stderr)
     return 0 if result["passed"] else 1
 
 
