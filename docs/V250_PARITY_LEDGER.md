@@ -354,3 +354,40 @@ WASM candidate #43144590877 is unchanged.
 ## 2026-11-14: isolated Chrome acceptance for newly rebuilt native 3MF candidate
 
 A separate `verify-native-3mf-candidate.yml` workflow now triggers **only after a successful** `Build v2.5.0 WebAssembly candidate` run, downloads the artifact from that exact run, and uses `scripts/test-candidate-browser-3mf.mjs` in isolated Chrome. The strict gate requires two native objects, two reimported instances, 24 retained triangles and separate placements, followed by independent Core 3MF structure and STL geometry diagnostics. It cannot silently downgrade a hierarchy failure into a diagnostic PASS. The existing browser integration workflow remains pinned to the previous known-good candidate #43144590877. The new workflow does not publish any candidate to the Pages app. This is an **acceptance plan, not a passed runtime test** until the new candidate has finished building and the downstream Chrome workflow reports success. Desktop-created 3MF, metadata parity, full native G-code parity and print safety remain separate unverified gates.
+
+
+## 2026-11-14: rebuilt 3MF exporter compiles; independent smoke regression blocks release
+
+[Candidate run #43502341006](https://github.com/temesotejam/layer-workbench/actions/runs/43502341006)
+**FAILED** after the experimental per-instance 3MF exporter **compiled and linked**
+successfully (339/339 build steps, 30 MiB `slicer-mt.wasm`). Its pinned
+OrcaWasm `build-local-wsl.sh` then ran its embedded smoke suite and reported
+**one functional failure**:
+`support-enforcer did not change support output from the automatic-support baseline`.
+The remaining smoke cases displayed in the log passed, but that does not erase
+this failure. The smoke suite exited with code 1, so the build job was FAIL,
+no verified candidate WASM artifact was released, and the downstream Chrome
+verification was skipped. The exporter patch's native multi-object runtime
+assertions were **not reached**. This is not a C++ compile failure and must not
+be reported as a verified multi-object fix. The relationship between this
+support-enforcer failure and the exporter change is not yet established.
+
+To obtain independent evidence without weakening that smoke assertion, the
+candidate workflow now validates the **exact pinned terminal smoke invocation**
+in the disposable OrcaWasm builder script, removes only that embedded duplicate,
+then runs the *unchanged* upstream `scripts/smoke-test.mjs` once in its
+existing fail-closed CI test step. If the source trailer drifts, the workflow
+stops instead of silently removing a different block. The multi-object 3MF
+runtime test explicitly runs when compilation succeeded, even if the separate
+smoke gate failed. No artifact is released from a failed job. The heavy WASM
+build is still triggered only for source/CI changes, not for documentation or
+routine monitoring. This change is **test orchestration only**, not a confirmed
+engine or UI behavior fix.
+
+See [workflow commit dca4cc4](https://github.com/temesotejam/layer-workbench/commit/dca4cc472e9f92ba93464ddb6d4d9c050f327959)
+and [new candidate run #43505545279](https://github.com/temesotejam/layer-workbench/actions/runs/43505545279).
+At the time of this note the new run has not yet established the strict
+two-object hierarchy acceptance result. Follow-up: read its native export test
+and smoke logs separately, investigate the support-enforcer assertion if it
+still fails, then require isolated Chrome and desktop-created 3MF fixtures
+before changing the candidate's release status.
