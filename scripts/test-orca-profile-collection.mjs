@@ -115,6 +115,29 @@ assert.throws(()=>resolve(variantProfiles.map(p=>p.name==='Generic PLA @TestPrin
 const single=resolve(profiles.map(p=>p.name==='Generic PLA @System'
   ? {...p,filament_max_volumetric_speed:['12']}:p),selection);
 assert.deepEqual(single.filament.settings.filament_max_volumetric_speed,['12']);
+// Orca process presets inherit top/bottom solid shell counts independently.
+// Only bounded scalar single-extruder values are applied to the test bridge.
+const shellProfiles=profiles.map(p=>{
+  if(p.name==='fdm_process_common')
+    return {...p,top_shell_layers:'4',bottom_shell_layers:'3'};
+  if(p.name==='0.16mm Fine @TestPrinter')
+    return {...p,bottom_shell_layers:'2'};
+  return p;
+});
+const shellResult=resolve(shellProfiles,selection);
+assert.equal(shellResult.process.settings.top_shell_layers,'4');
+assert.equal(shellResult.process.settings.bottom_shell_layers,'2');
+assert.ok(!shellResult.process.unsupported.includes('top_shell_layers'));
+assert.ok(!shellResult.process.unsupported.includes('bottom_shell_layers'));
+assert.equal(resolve(profiles,selection).process.settings.top_shell_layers,undefined);
+for(const bad of ['-1','13','2.5','nan',[],['2','3'],{},null]) {
+  assert.throws(()=>resolve(shellProfiles.map(p=>p.name==='fdm_process_common'
+    ? {...p,top_shell_layers:bad}:p),selection),/Invalid|out of test limits|Multi-extruder/);
+}
+assert.throws(()=>resolve(shellProfiles.map(p=>p.name==='0.16mm Fine @TestPrinter'
+  ? {...p,bottom_shell_layers:'13'}:p),selection),/out of test limits/);
+console.log('PASS: real process field names top/bottom shell counts inherit and validate independently');
+
 console.log('PASS: exact filament extruder variant maps multi-value volumetric cap; no variant keeps unsupported');
 console.log('PASS: native single-filament flow ratio inherited/overridden as vector; invalid inputs rejected');
 console.log('PASS: separate inherited native first-layer nozzle temperature vector and bounds');
