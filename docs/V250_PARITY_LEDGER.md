@@ -98,35 +98,7 @@ python3 scripts/check_parity_pair.py --native-manifest results/native/manifest.j
 
 Generation is *not* G-code slicing; it verifies supplied files and cannot authenticate how they were produced. The upstream commit in this manifest is a declared pin, not a measurement of the actual binary. A genuine native-vs-WASM acceptance result additionally requires separately recorded CLI/binary hashes, toolchain provenance, exact slicer settings and real engine-generated G-code. The test suite uses synthetic fixtures and **does not establish G-code parity**. Never send this unvalidated G-code to a printer.
 
-
-## 2026-11-13: paired fixture provenance gate (local diagnostic only)
-
-A new fail-closed path uses \`scripts/make_parity_manifest.py\` to hash files in each
-fixture directory and \`scripts/check_parity_pair.py\` to compare a native/WASM pair.
-Each of \`results/native\` and \`results/wasm\` needs its own
-\`model.stl\`, \`machine.json\`, \`filament.json\`, \`process.json\`, and
-\`gcode.gcode\`. The first four must be **byte-identical** across both sides;
-the G-code file is deliberately allowed to differ and is compared strictly.
-The manifest records SHA-256 of all five files and the pinned upstream source
-revision \`40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19\`.
-
-\`\`\`bash
-python3 scripts/make_parity_manifest.py --directory results/native --engine native
-python3 scripts/make_parity_manifest.py --directory results/wasm --engine wasm
-python3 scripts/check_parity_pair.py \
-  --native-manifest results/native/manifest.json \
-  --wasm-manifest results/wasm/manifest.json \
-  --min-extrusion-moves 100 \
-  --report results/paired-gcode-parity.json
-\`\`\`
-
-Pick the extrusion threshold only after checking the expected fixture. The
-provenance fields are **self-reported** and do not prove which executable
-produced an output; pin and separately audit native and WASM toolchains.
-No vendor startup scripts, printer outputs, or engine binaries are published
-by these commands. The generated G-code must not be treated as validated for
-printing. As of this update, only synthetic local fixtures have been tested;
-**there is no confirmed native-desktop versus WASM identical-full-profile
-G-code result**. The optional extrusion gate in \`compare_gcode.py\` was
-restored after CI exposed a missing keyword argument; regression and CLI
-checks now pass (paired comparator [CI #43339006849](https://github.com/temesotejam/layer-workbench/actions/runs/43339006849)).
+The manifest generator, strict comparator and command-line fail-closed cases
+passed [CI #43339006849](https://github.com/temesotejam/layer-workbench/actions/runs/43339006849)
+after restoring the optional extrusion gate argument in commit
+[`ee6d841`](https://github.com/temesotejam/layer-workbench/commit/ee6d84125388f40c0ae09c5ac8c944784919c407).
