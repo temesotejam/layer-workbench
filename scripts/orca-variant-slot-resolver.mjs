@@ -16,23 +16,22 @@ function checkedParallel(list,ids,label) {
     throw new Error("Invalid "+label+" variant ID");
   return list;
 }
+// Mirrors PrintConfig.cpp::find_variant_index (pinned v2.5.0):
+// exact same-ID variant, else that ID's FIRST variant, else -1.
+// The get_config_index_base wrapper, not this function, clamps -1 to 0.
+// An ID below zero or an empty ID vector matches any ID.
 export function findOrcaVariantIndex(variant,id,variants,ids) {
   checkedParallel(variants,ids,"variant");
-  if(!Number.isSafeInteger(id)||id<1)throw new Error("Variant ID must be 1-based");
-  if(variants.length===0)return ids.length===0?0:Math.max(0,ids.findIndex(x=>x===id));
-  const exact=[];
-  for(let i=0;i<variants.length;i++) {
-    const entryId=ids.length>i?ids[i]:-1;
-    if((entryId===id||entryId===-1)&&variants[i]===variant)exact.push(i);
-  }
-  if(exact.length>1)throw new Error("Ambiguous duplicate Orca variant entry");
-  if(exact.length===1)return exact[0];
-  const fallback=[];
-  for(let i=0;i<variants.length;i++)if(ids.length>i&&ids[i]===id)fallback.push(i);
-  if(fallback.length>1)throw new Error("Ambiguous Orca variant fallback");
-  if(fallback.length===1)return fallback[0];
-  // Native contract: no variant for this ID falls back to slot zero.
-  return 0;
+  if(!Number.isSafeInteger(id)||id===0)
+    throw new Error("Variant ID must be 1-based or -1 (any ID)");
+  const count=variants.length===0?ids.length:variants.length;
+  if(count===0)return 0;
+  const sameId=index=>id<0||ids.length===0||(index<ids.length&&ids[index]===id);
+  for(let i=0;i<variants.length;i++)
+    if(variants[i]===variant&&sameId(i))return i;
+  for(let i=0;i<count;i++)
+    if(sameId(i))return i;
+  return -1;
 }
 export function resolveOrcaFilamentVariantSlot({extruderId,extruderType,nozzleVolumeType,
   filamentVariants,filamentVariantIds}) {
@@ -40,7 +39,7 @@ export function resolveOrcaFilamentVariantSlot({extruderId,extruderType,nozzleVo
   if(!VOLUME_NAMES.has(nozzleVolumeType)||nozzleVolumeType==="Hybrid")
     throw new Error("Hybrid/unknown is not a physical preset variant");
   const variant=extruderType+" "+nozzleVolumeType;
-  const index=findOrcaVariantIndex(variant,extruderId,filamentVariants,filamentVariantIds);
+  const index=Math.max(0,findOrcaVariantIndex(variant,extruderId,filamentVariants,filamentVariantIds));
   return {variant,index,extruderId,extruderType,nozzleVolumeType,
     source:"native v2.5.0 variant lookup contract",
     usableForPrinting:false};
