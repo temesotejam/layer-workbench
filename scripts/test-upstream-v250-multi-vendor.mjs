@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {extractOrcaVendorCatalog,selectOrcaFilamentPreset} from "./orca-vendor-catalog.mjs";
 import {resolveOrcaProfileFamily} from "./orca-profile-collection.mjs";
-import {resolveFullOrcaProfileFamily,inspectOrcaNozzleVector} from "./orca-full-profile.mjs";
+import {resolveFullOrcaProfileFamily,inspectOrcaNozzleVector,inspectOrcaArraySettings} from "./orca-full-profile.mjs";
 
 const multi=JSON.parse(readFileSync("upstream-v250-multi-vendor-fixture.json","utf8"));
 const global=JSON.parse(readFileSync("upstream-v250-filament-fixture.json","utf8"));
@@ -88,6 +88,9 @@ assert.equal(snapFull.settings.machine_start_gcode,u1.machine_start_gcode);
 assert.deepEqual(inspectOrcaNozzleVector(snapFull).nozzleDiametersMm,[0.4,0.4,0.4,0.4]);
 assert.equal(inspectOrcaNozzleVector(snapFull).supportedBySingleToolWasmAdapter,false);
 assert.equal(snapFull.usableForPrinting,false);
+const snapArrays=inspectOrcaArraySettings(snapFull);
+console.log("Snapmaker U1 inherited array settings:",JSON.stringify(snapArrays));
+assert.ok(snapArrays.possiblePerToolVectors.includes("nozzle_diameter"));
 const snapProcess=resolveFullOrcaProfileFamily(snap.records,"process","0.20 Standard @Snapmaker U1 (0.4 nozzle)");
 assert.equal(snapProcess.chain.length,4);
 assert.ok(Object.keys(snapProcess.settings).length>10);
