@@ -17,9 +17,34 @@ from compare_3mf_metadata import inventory
 from three_mf_instance_expansion import expand_scene
 
 CORE = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
+# Core 3MF §3.3: model/@unit applies to vertices and translations alike.
+# Retain the native unit in the report; add millimetre diagnostics separately.
+UNIT_TO_MM = {
+    "micron": 0.001, "millimeter": 1.0, "centimeter": 10.0,
+    "inch": 25.4, "foot": 304.8, "meter": 1000.0,
+}
 MAX_MODEL_PARTS = 32
 MAX_SCENE_ELEMENTS = 1_000_000
 POSITIVE_ID = re.compile(r"^[1-9][0-9]*$")
+
+
+def parse_model_unit(raw):
+    """Return the strict core 3MF unit and its millimetre multiplier."""
+    unit = "millimeter" if raw is None else raw
+    if unit not in UNIT_TO_MM:
+        raise ValueError(f"Unsupported 3MF model unit: {unit!r}")
+    return unit, UNIT_TO_MM[unit]
+
+
+def diagnostic_bounds_mm(bounds, factor):
+    """Scale a diagnostic AABB, never changing its 3MF source coordinates."""
+    if bounds is None:
+        return None
+    scaled = {side: [v * factor for v in bounds[side]] for side in ("min", "max")}
+    if any(not math.isfinite(v) or abs(v) > 1_000_000_000_000
+           for side in scaled.values() for v in side):
+        raise ValueError("Excessive 3MF millimetre bounds")
+    return scaled
 
 
 def positive_id(raw, kind):
@@ -63,6 +88,7 @@ def audit(path):
                 raise ValueError(f"Invalid 3MF model XML: {part}") from exc
             if root.tag != CORE + "model":
                 raise ValueError(f"Unexpected 3MF model root: {part}")
+            unit, mm_per_unit = parse_model_unit(root.get("unit"))
             resources = root.find(CORE + "resources")
             build = root.find(CORE + "build")
             if resources is None or build is None:
@@ -155,7 +181,13 @@ def audit(path):
             # Resolve same-part component and build transforms using 3MF's
             # row-vector convention. Reject cycles and instancing bombs.
             resolved = expand_scene(objects, items)
-            scenes.append({"part": part, "objects": list(objects.values()),
+            for instance in resolved:
+                if "conservativeWorldBounds" in instance:
+                    instance["conservativeWorldBoundsMm"] = diagnostic_bounds_mm(
+                        instance["conservativeWorldBounds"], mm_per_unit)
+            scenes.append({"part": part, "unit": unit,
+                           "millimetersPerUnit": mm_per_unit,
+                           "objects": list(objects.values()),
                            "buildItems": items,
                            "meshTriangles": sum(x["triangles"] for x in objects.values()),
                            "resolvedMeshInstances": resolved,

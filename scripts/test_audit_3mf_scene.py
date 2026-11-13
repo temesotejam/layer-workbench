@@ -3,7 +3,7 @@ import tempfile
 import unittest
 import zipfile
 
-from audit_3mf_scene import audit, parse_transform
+from audit_3mf_scene import audit, parse_transform, parse_model_unit
 
 NS = "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
 TYPES = b"<Types/>"
@@ -53,6 +53,43 @@ class Test3MFScene(unittest.TestCase):
             archive(p, scene(build='<item objectid="1"/>'))
             self.assertEqual(audit(p)["scenes"][0]["buildItems"][0]["transform3mf"],
                              parse_transform(None))
+
+    def test_core_units_and_bed_scale_diagnostics(self):
+        for unit, mm in (("micron", 0.001), ("millimeter", 1.0),
+                         ("centimeter", 10.0), ("inch", 25.4),
+                         ("foot", 304.8), ("meter", 1000.0)):
+            self.assertEqual(parse_model_unit(unit), (unit, mm))
+        self.assertEqual(parse_model_unit(None), ("millimeter", 1.0))
+        for invalid in ("", "mm", "Millimeter", "nan", "kilometer"):
+            with self.subTest(unit=invalid):
+                with self.assertRaisesRegex(ValueError, "unit"):
+                    parse_model_unit(invalid)
+
+        with tempfile.TemporaryDirectory() as d:
+            p = pathlib.Path(d) / "inch-scene.3mf"
+            inch_scene = scene().replace(
+                f'<model xmlns="{NS}">', f'<model xmlns="{NS}" unit="inch">')
+            archive(p, inch_scene)
+            result = audit(p)["scenes"][0]
+            self.assertEqual(result["unit"], "inch")
+            self.assertEqual(result["millimetersPerUnit"], 25.4)
+            item = result["resolvedMeshInstances"][0]
+            self.assertEqual(item["conservativeWorldBounds"],
+                             {"min": [128.0, 128.0, 0.0],
+                              "max": [148.0, 148.0, 0.0]})
+            for side, raw in item["conservativeWorldBounds"].items():
+                for actual, source in zip(item["conservativeWorldBoundsMm"][side], raw):
+                    self.assertAlmostEqual(actual, source * 25.4)
+            archive(p, scene())
+            default = audit(p)["scenes"][0]
+            self.assertEqual(default["unit"], "millimeter")
+            self.assertEqual(default["millimetersPerUnit"], 1.0)
+            self.assertEqual(
+                default["resolvedMeshInstances"][0]["conservativeWorldBoundsMm"],
+                default["resolvedMeshInstances"][0]["conservativeWorldBounds"])
+            archive(p, inch_scene.replace('unit="inch"', 'unit="furlong"'))
+            with self.assertRaisesRegex(ValueError, "model unit"):
+                audit(p)
 
     def test_invalid_reference_and_geometry_are_rejected(self):
         with tempfile.TemporaryDirectory() as d:

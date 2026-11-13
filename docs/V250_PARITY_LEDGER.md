@@ -194,3 +194,18 @@ coverage. This is a safety/geometry-inspection step toward comparing a
 native 3MF scene with a future WebGL viewport; it neither implements 3MF
 editing nor proves parity with desktop OrcaSlicer. The pinned WASM candidate
 and the published application remain unchanged.
+
+## 2026-11-13: source-unit-aware 3MF viewport extent diagnostic
+
+The read-only scene audit now validates the 3MF Core `model/@unit` enumeration
+(`micron`, `millimeter`, `centimeter`, `inch`, `foot`, `meter`),
+with the specification's default of millimetres when omitted
+([3MF Core §3.3](https://github.com/3MFConsortium/spec_core/blob/master/3MF%20Core%20Specification.md)).
+It exposes each model part's `unit` and `millimetersPerUnit`, and adds
+`conservativeWorldBoundsMm` for every resolved mesh instance. Original
+`transform3mf`, `localBounds` and `conservativeWorldBounds` retain their
+**source-file units**; no native transforms or mesh files are rewritten.
+Unknown units and excessive normalized world bounds fail closed.
+This avoids treating a 1-inch cube as a 1-mm cube in a future viewport
+comparison. It is still a conservative AABB inspection, not a native
+WebGL/OrcaSlicer geometry or machine-printing parity result.
