@@ -50,7 +50,7 @@ try {
   assert.equal(capability.engine.family,'OrcaSlicer');
   assert.equal(capability.engine.version,'2.5.0');
   assert.equal(capability.api.version,'0.7.0');
-  const result = await checkBrowserMultiObject3mf(page,cube);
+  const result = await checkBrowserMultiObject3mf(page,cube,'parity-output',{requireExactPlacement:true});
   assert.equal(result.supported,true,
     'Native 3MF reimport lost separate objects/instances; not parity');
   assert.equal(result.instances,2);
