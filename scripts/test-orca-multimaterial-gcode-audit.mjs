@@ -19,6 +19,8 @@ T3
 M624 AgAAAAAAAAA=
 M625
 T1000
+T1100
+T255
 `;
 const r=auditMultiMaterialGcode(fixture);
 assert.equal(r.classification,"multiple-filament-slots-single-physical-extruder");
@@ -29,6 +31,8 @@ assert.equal(r.config.flushMatrixSize,4);
 assert.equal(r.config.primeTowerEnabled,true);
 assert.equal(r.config.primeTowerWidth,35);
 assert.deepEqual(r.commands.distinctToolIds,[0,3]);
+assert.equal(r.commands.unloadToolSentinelCount,1);
+assert.equal(r.commands.toolCommandCount,2);
 assert.equal(r.commands.ams.M620,1);
 assert.equal(r.commands.ams.M621,1);
 assert.equal(r.commands.ams["M620.1"],1);
