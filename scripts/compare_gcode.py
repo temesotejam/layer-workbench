@@ -46,7 +46,7 @@ def count_motion(commands):
             count += 1
     return count
 
-EXTRUSION_MOTION = re.compile(r'^G0*[123](?:\\.0+)?
+EXTRUSION_MOTION = re.compile(r'^G0*[123](?:\.0+)?
     """Return diagnostic WASM-minus-native deltas for aligned numeric words."""
     if native_command is None or wasm_command is None:
         return []
@@ -138,7 +138,7 @@ def count_extrusion_moves(commands):
     count = 0
     for _, command in commands:
         tokens = command.split()
-        if tokens and re.fullmatch(r'N\\d+', tokens[0], re.I):
+        if tokens and re.fullmatch(r'N\d+', tokens[0], re.I):
             tokens = tokens[1:]
         if not tokens or not EXTRUSION_MOTION.fullmatch(tokens[0]):
             continue
