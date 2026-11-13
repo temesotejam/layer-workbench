@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {parseGcodeToolpaths} from './gcode-preview-parser.mjs';
 import {checkBrowser3mfRoundTrip} from './test-browser-3mf-roundtrip.mjs';
+import {checkBrowserMultiObject3mf} from './test-browser-3mf-multiobject.mjs';
 const base = process.env.ENGINE_PROBE_URL || 'http://127.0.0.1:8766/';
 const artifactDir = process.env.ENGINE_ARTIFACT_DIR || 'engine-test-artifacts';
 const browser = await chromium.launch({
@@ -60,6 +61,9 @@ try {
   // native export -> native project reimport -> geometry conversion ->
   // preservation=require export. This is deliberately a synthetic fixture.
   const native3mf = await checkBrowser3mfRoundTrip(page,cube);
+  const multi3mf = await checkBrowserMultiObject3mf(page,cube);
+  console.log('PASS: real browser two-object 3MF export/import and flattened STL: '+
+    multi3mf.instances+' instances, '+multi3mf.triangles+' triangles, sha256='+multi3mf.sha256);
   console.log('PASS: browser native WASM 3MF round-trip, ' +
     native3mf.triangles+' converted geometry triangles, mapped preview supported='+
     native3mf.mappedPreviewSupported+', sha256='+native3mf.sha256);
