@@ -1,13 +1,14 @@
 // Isolated Chrome proof of TWO separate native mesh objects in a 3MF project.
 // Uses only synthetic STL and the already verified v2.5.0 WASM candidate.
-// This is not an editor, native-desktop 3MF compatibility, or print validation.
+// Legacy candidate uses diagnostic placement reporting; accepted candidates
+// require exact per-object XYZ bounds. No native editor or print validation.
 import assert from 'node:assert/strict';
 import {mkdir, writeFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 
-export async function checkBrowserMultiObject3mf(page, cubeBytes, outputDir='parity-output') {
+export async function checkBrowserMultiObject3mf(page, cubeBytes, outputDir='parity-output', {requireExactPlacement=false}={}) {
   assert.ok(cubeBytes instanceof Uint8Array && cubeBytes.byteLength >= 134);
-  const report = await page.evaluate(async input => {
+  const report = await page.evaluate(async ({input,requireExactPlacement}) => {
     if (!globalThis.crossOriginIsolated) throw new Error('Isolated Chrome required');
     const engine = globalThis.__layerDiagnosticEngine?.engine;
     if (!engine || typeof engine.createSession !== 'function')
@@ -113,13 +114,17 @@ export async function checkBrowserMultiObject3mf(page, cubeBytes, outputDir='par
         {min:[90,90,0],max:[110,110,20]},
         {min:[150,90,0],max:[170,110,20]}
       ];
+      let absolutePlacementVerified=true;
       for(let i=0;i<2;i++) {
         if(regions[i].triangles!==12)
           throw new Error('Object '+i+' lost or gained placed mesh triangles');
         for(const side of ['min','max'])for(let axis=0;axis<3;axis++)
-          if(Math.abs(regions[i][side][axis]-expected[i][side][axis])>0.05)
-            throw new Error('Object '+i+' '+side+' XYZ'+axis+
-              ' differs from source placement: '+regions[i][side][axis]);
+          if(Math.abs(regions[i][side][axis]-expected[i][side][axis])>0.05) {
+            absolutePlacementVerified=false;
+            if(requireExactPlacement)
+              throw new Error('Object '+i+' '+side+' XYZ'+axis+
+                ' differs from source placement: '+regions[i][side][axis]);
+          }
       }
       placedBoundsMm=regions;
     } finally { await reopened.dispose(); }
@@ -127,9 +132,10 @@ export async function checkBrowserMultiObject3mf(page, cubeBytes, outputDir='par
       archive:Array.from(original), stl:Array.from(converted),
       initialObjects:initial.objects.length, initialInstances:initial.instances.length,
       importedObjects:imported.objects.length, importedInstances:imported.instances.length,
-      stlTriangles:convertedCount, splitGapMm, placedBoundsMm
+      stlTriangles:convertedCount, splitGapMm, placedBoundsMm,
+      absolutePlacementVerified
     };
-  }, Array.from(cubeBytes));
+  }, {input:Array.from(cubeBytes),requireExactPlacement});
   assert.equal(report.initialInstances, 2);
   assert.equal(report.stlTriangles, 24);
   assert.ok(report.splitGapMm >= 30);
@@ -148,11 +154,11 @@ export async function checkBrowserMultiObject3mf(page, cubeBytes, outputDir='par
     flattenedTriangles:report.stlTriangles,
     measuredGapBetweenTriangleClustersMm:report.splitGapMm,
     verifiedPerObjectPlacedBoundsMm:report.placedBoundsMm,
-    absolutePlacementVerified:true,
+    absolutePlacementVerified:report.absolutePlacementVerified,
     multiObjectRoundTripSupported:report.importedInstances === 2 && report.importedObjects === 2 && report.stlTriangles === 24,
     limitations:'No desktop-authored 3MF, edit-and-resave transform, face-ID mesh preview, metadata parity or printer safety validated'
   },null,2)+'\n');
-  return {bytes:archive.length,sha256,placementVerified:true,instances:report.importedInstances,
+  return {bytes:archive.length,sha256,placementVerified:report.absolutePlacementVerified,instances:report.importedInstances,
     triangles:report.stlTriangles, supported:report.importedInstances === 2 &&
     report.importedObjects === 2 && report.stlTriangles === 24};
 }
