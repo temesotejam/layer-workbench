@@ -1,3 +1,4 @@
+import {auditOrcaArrayOption} from "./orca-config-array-semantics.mjs";
 // Source-preserving, non-executable OrcaSlicer profile inheritance resolver.
 // Deliberately separate from the restricted WASM PrintConfig adapter: resolving
 // a full preset NEVER authorizes a printer profile or G-code for real printing.
@@ -119,9 +120,9 @@ export function inspectOrcaArraySettings(profile) {
   const arrays = Object.entries(profile.settings)
     .filter(([, value]) => Array.isArray(value))
     .map(([key, value]) => ({
-      key, length:value.length, source:profile.sourceByKey[key] ?? null,
-      // Matching nozzle count is only a candidate signal, never proof that
-      // Orca defines this option as per-extruder.
+      ...auditOrcaArrayOption(key,value),
+      source:profile.sourceByKey[key] ?? null,
+      // Length match is informational only; ConfigDef semantics are authoritative.
       sameLengthAsNozzles: Array.isArray(profile.settings.nozzle_diameter) &&
         value.length === profile.settings.nozzle_diameter.length
     }))
@@ -130,6 +131,6 @@ export function inspectOrcaArraySettings(profile) {
     arraySettingCount:arrays.length,
     arrays,
     possiblePerToolVectors:arrays.filter(item=>item.sameLengthAsNozzles).map(item=>item.key),
-    classification:"inspection-only; verify each option's upstream ConfigDef before applying"
+    classification:"inspection-only; classified keys use pinned upstream ConfigDef sets"
   };
 }
