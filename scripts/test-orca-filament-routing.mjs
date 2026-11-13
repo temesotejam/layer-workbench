@@ -23,6 +23,7 @@ assert.equal(inspectOrcaFilamentRouting(machine,["4"]).filamentCount,1,
   "a four-tool printer does not imply four loaded filaments");
 for (const invalid of [undefined,null,[],{},Array(65).fill(1)])
   assert.throws(()=>inspectOrcaFilamentRouting(machine,invalid),/explicit non-empty/);
+assert.throws(()=>inspectOrcaFilamentRouting(machine,Array(1)),/sparse filament_map/);
 for (const invalid of [0,-1,5,"0","5","02","2.0"," 2","2 ",NaN,Infinity,1.5,null,{},true])
   assert.throws(()=>inspectOrcaFilamentRouting(machine,[invalid]),/filament_map/);
 const one=resolveFullOrcaProfileFamily([
