@@ -326,3 +326,7 @@ The existing restricted one-tool importer still rejects the U1 vector.
 The source-only resolver is not connected to the public UI or WASM.
 Next: validated tool/filament vector schema and same-profile native/WASM
 G-code comparison.
+
+## 2026-11-13: audit inherited array-shaped options for multi-tool printers
+
+Added `inspectOrcaArraySettings` to the source-preserving resolver. It inventories every inherited array-valued setting, its length and source profile, and marks arrays whose length happens to equal the nozzle count as **possible** per-tool vectors. This is deliberately an inspection report only: array length alone cannot establish the native ConfigDef semantics, because compatibility lists, temperature tables and other non-tool arrays can have the same length. The real pinned Snapmaker U1 CI test now emits this inventory and asserts only that the four-element nozzle vector is retained. No array is forwarded to PrintConfig on the basis of this heuristic.
