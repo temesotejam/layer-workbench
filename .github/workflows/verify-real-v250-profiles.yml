@@ -10,6 +10,8 @@ on:
       - "scripts/orca-config-array-semantics.mjs"
       - "scripts/orca-filament-routing.mjs"
       - "scripts/orca-filament-material-inspection.mjs"
+      - "scripts/orca-variant-input-inspection.mjs"
+      - "scripts/test-orca-variant-input-inspection.mjs"
       - "scripts/test-orca-filament-material-inspection.mjs"
       - "scripts/test-orca-filament-routing.mjs"
       - "scripts/test-orca-config-array-semantics.mjs"
@@ -51,6 +53,7 @@ jobs:
           node scripts/test-orca-config-array-semantics.mjs
           node scripts/test-orca-filament-routing.mjs
           node scripts/test-orca-filament-material-inspection.mjs
+          node scripts/test-orca-variant-input-inspection.mjs
       - name: Fetch pinned actual v2.5.0 upstream profile records
         run: python3 scripts/fetch-upstream-v250-fixture.py
       - name: Validate real index and three-level PLA inheritance
