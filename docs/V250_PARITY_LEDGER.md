@@ -303,8 +303,7 @@ diagnostic is loaded into the actual browser WebGL viewer by a new Chrome
 acceptance check. The isolated read-only `__layer3mfViewportAudit` reports
 the imported scene bounds and verifies the 80 mm X extent and the two separated
 regions around the centered plate; it is inaccessible without isolated
-localhost and explicit `?engineLab=1`. The exact Chrome CI result must be
-checked after this commit. This is only **viewport geometry placement**.
+localhost and explicit `?engineLab=1`. Actual [isolated Chrome CI #43478647654](https://github.com/temesotejam/layer-workbench/actions/runs/43478647654) **PASS**; the job log contains the explicit `PASS: isolated 3MF viewport native build placement` assertion. [Public Prepare Chrome smoke #43478647657](https://github.com/temesotejam/layer-workbench/actions/runs/43478647657), [static validation #43478647860](https://github.com/temesotejam/layer-workbench/actions/runs/43478647860), and [Pages deployment #43478647579](https://github.com/temesotejam/layer-workbench/actions/runs/43478647579) also passed. These success results are limited to the tested synthetic scene and existing smoke; not full 3MF parity. This is only **viewport geometry placement**.
 The current native exporter merges the two source objects, and the browser
 still imports the 3MF as one selectable entry; there is **no proof of native
 multi-object editability, arbitrary desktop 3MF metadata preservation, full
