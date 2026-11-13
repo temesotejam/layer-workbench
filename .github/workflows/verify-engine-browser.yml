@@ -31,6 +31,8 @@ on:
       - "scripts/serve-isolated.py"
       - "scripts/test-engine-probe.mjs"
       - "scripts/test-browser-3mf-roundtrip.mjs"
+      - "scripts/audit_3mf_scene.py"
+      - "scripts/compare_3mf_metadata.py"
       - ".github/workflows/verify-engine-browser.yml"
 
 permissions:
@@ -96,6 +98,13 @@ jobs:
             --baseline parity-output/wasm-native-3mf.3mf \
             --candidate parity-output/wasm-native-3mf-preserved.3mf \
             --scope all --report parity-output/browser-3mf-preservation.json
+          # Inspect actual WASM-created core 3MF scene, including nonempty
+          # mesh triangles, build item count and raw instance transforms.
+          # This is a diagnostic check, not proof of desktop 3MF compatibility.
+          python3 scripts/audit_3mf_scene.py \
+            --input parity-output/wasm-native-3mf.3mf \
+            --expected-build-items 1 --min-triangles 12 \
+            --report parity-output/browser-3mf-scene.json
       - name: Archive actual WASM G-code diagnostic output
         if: always()
         uses: actions/upload-artifact@v4
