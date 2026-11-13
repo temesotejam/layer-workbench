@@ -1,0 +1,68 @@
+name: Verify rebuilt WASM native 3MF hierarchy in isolated Chrome
+
+on:
+  workflow_run:
+    workflows: ["Build v2.5.0 WebAssembly candidate"]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  verify-native-3mf:
+    # Only inspect successful artifacts from this repository, never PR forks.
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_repository.full_name == 'temesotejam/layer-workbench' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Playwright controller
+        run: npm install --no-save --no-package-lock playwright@1.56.1
+      - name: Download the successful candidate artifact by exact run ID
+        uses: actions/download-artifact@v4
+        with:
+          name: layer-workbench-orcaslicer-v2.5.0-wasm
+          repository: temesotejam/layer-workbench
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: engine-test-artifacts
+      - name: Verify candidate and test script
+        run: |
+          set -euo pipefail
+          test -s engine-test-artifacts/slicer-mt.js
+          test -s engine-test-artifacts/slicer-mt.wasm
+          node --check scripts/test-candidate-browser-3mf.mjs
+      - name: Run real isolated Chrome with strict two-object parity gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/serve-isolated.py --port 8766 > /tmp/isolated-layer-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..25}; do
+            if curl -fsS http://127.0.0.1:8766/engine-probe.html >/dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/test-candidate-browser-3mf.mjs
+          python3 scripts/audit_3mf_scene.py \
+            --input parity-output/wasm-multiobject-3mf.3mf \
+            --expected-build-items 2 --min-triangles 24 \
+            --report parity-output/rebuilt-native-3mf-scene.json
+          python3 scripts/check_3mf_stl_bounds.py \
+            --input parity-output/wasm-multiobject-3mf.3mf \
+            --stl parity-output/wasm-multiobject-converted.stl \
+            --report parity-output/rebuilt-native-3mf-stl-comparison.json
+      - name: Archive test-only 3MF evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rebuilt-candidate-native-3mf-evidence
+          path: parity-output/
+          if-no-files-found: warn
+          retention-days: 14

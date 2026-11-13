@@ -350,3 +350,7 @@ on exported files, runtime errors, metadata, and desktop compatibility cannot
 be declared until a **new** candidate WASM build, isolated Chrome multi-object
 round-trip, and desktop-created 3MF comparisons pass. The previously verified
 WASM candidate #43144590877 is unchanged.
+
+## 2026-11-14: isolated Chrome acceptance for newly rebuilt native 3MF candidate
+
+A separate `verify-native-3mf-candidate.yml` workflow now triggers **only after a successful** `Build v2.5.0 WebAssembly candidate` run, downloads the artifact from that exact run, and uses `scripts/test-candidate-browser-3mf.mjs` in isolated Chrome. The strict gate requires two native objects, two reimported instances, 24 retained triangles and separate placements, followed by independent Core 3MF structure and STL geometry diagnostics. It cannot silently downgrade a hierarchy failure into a diagnostic PASS. The existing browser integration workflow remains pinned to the previous known-good candidate #43144590877. The new workflow does not publish any candidate to the Pages app. This is an **acceptance plan, not a passed runtime test** until the new candidate has finished building and the downstream Chrome workflow reports success. Desktop-created 3MF, metadata parity, full native G-code parity and print safety remain separate unverified gates.
