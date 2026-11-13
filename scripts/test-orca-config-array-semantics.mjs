@@ -1,0 +1,15 @@
+import assert from "node:assert/strict";
+import {classifyOrcaArrayOption,auditOrcaArrayOption,ORCA_CONFIG_SOURCE} from "./orca-config-array-semantics.mjs";
+assert.equal(ORCA_CONFIG_SOURCE.commit,"40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19");
+assert.equal(classifyOrcaArrayOption("nozzle_diameter").classification,"printer-extruder");
+assert.equal(classifyOrcaArrayOption("extruder_offset").classification,"unclassified");
+assert.equal(classifyOrcaArrayOption("retraction_length").classification,"printer-variant-1");
+assert.equal(classifyOrcaArrayOption("machine_max_speed_x").classification,"printer-variant-2");
+assert.equal(classifyOrcaArrayOption("filament_retraction_length").classification,"filament-extruder-override");
+assert.equal(classifyOrcaArrayOption("filament_flow_ratio").classification,"unclassified");
+const nozzle=auditOrcaArrayOption("nozzle_diameter",["0.4","0.4","0.4","0.4"]);
+assert.equal(nozzle.length,4);
+assert.equal(nozzle.application.startsWith("not-forwarded"),true);
+assert.equal(auditOrcaArrayOption("layer_height",0.2).isArray,false);
+assert.throws(()=>classifyOrcaArrayOption(""),/Invalid/);
+console.log("PASS: array option semantics use pinned OrcaSlicer ConfigDef sets");
