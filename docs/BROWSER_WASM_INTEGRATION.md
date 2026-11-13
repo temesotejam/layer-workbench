@@ -300,3 +300,29 @@ The multi-vendor CI fixture now walks each selected machine, filament and proces
 - **Prusa MK4S** machine: `fdm_machine_common → fdm_machine_common_nextruder → fdm_machine_common_mk4s → Prusa MK4S 0.4 nozzle`; filament: `fdm_filament_common → fdm_filament_pla → Generic PLA @Prusa MK4S`; process: `fdm_process_common → process_common_mk4s → 0.20mm STRUCTURAL @MK4S 0.4`.
 
 The restricted one-nozzle config importer is explicitly tested to **reject** Snapmaker's four-nozzle machine vector instead of silently selecting a single extruder. This is a successful **source inheritance and safety-gate** test, not evidence that WASM can consume the full four-tool setup or that G-code matches native desktop output. Next: implement validated per-extruder vector handling and a source-preserving full-option inheritance model before enabling any printer-specific startup scripts.
+
+## 2026-11-13: source-preserving complete option inheritance (inspection only)
+
+Added `scripts/orca-full-profile.mjs`, a separate non-executable resolver for
+indexed machine/filament/process records. It retains every inherited option,
+including unknown keys, script strings and whole per-tool vectors. A child
+option replaces the parent option without concatenating vectors or selecting
+element zero. The result retains `sourceByKey` provenance and
+`usableForPrinting:false`. `inspectOrcaNozzleVector` reports all resolved
+nozzle diameters and tool count without applying them to the WASM adapter.
+
+The synthetic test `scripts/test-orca-full-profile.mjs` checks four-nozzle
+inheritance, option provenance, unmodified input, nested JSON values,
+missing/cyclic inheritance, duplicates, unsafe keys, invalid numbers and bad
+nozzle vectors. The pinned real-vendor CI additionally checks Snapmaker U1's
+four 0.4-mm nozzles and preserves `machine_start_gcode` as DATA only; Prusa
+MK4S should resolve a single nozzle. These real-source assertions require
+a successful CI run before being described as verified.
+
+Not implemented: passing four-tool settings into OrcaWasm PrintConfig,
+checking all native option types and vector lengths, interpreting machine
+startup scripts, tool changes, offsets, wipe towers, or printer-safe G-code.
+The existing restricted one-tool importer still rejects the U1 vector.
+The source-only resolver is not connected to the public UI or WASM.
+Next: validated tool/filament vector schema and same-profile native/WASM
+G-code comparison.
