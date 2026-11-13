@@ -1,0 +1,25 @@
+name: Verify 3MF archive preservation audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/compare_3mf_metadata.py"
+      - "scripts/test_compare_3mf_metadata.py"
+      - ".github/workflows/test-3mf-parity.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  archive-preservation-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check 3MF comparator syntax and unit tests
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/compare_3mf_metadata.py
+          python3 -m unittest discover -s scripts -p test_compare_3mf_metadata.py -v
