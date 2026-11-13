@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import {OrbitControls} from "three/addons/controls/OrbitControls.js";
+import {gcodeSelectorColor} from "./gcode-tool-colors.mjs";
 
 // Experimental G-code-derived 3D line preview in the *local isolated lab*.
 // Coordinates are native G-code millimeters, not reconstructed STL geometry.
@@ -13,7 +14,7 @@ export function createThreeDToolpathPreview(container) {
     <label>Visible through layer <input id="lab-3d-layer-range" type="range" min="0" max="0" value="0" step="1"></label>
     <output id="lab-3d-layer-info"></output>
     <div id="lab-3d-canvas" aria-label="3D G-code toolpath preview" role="img"></div>
-    <p>Orange: extrusion; blue-gray: travel. XY G2/G3 I/J and signed-R arcs appear as approximated line segments; helical, non-XY, ambiguous and invalid arcs are omitted. This is not native OrcaSlicer Preview or a print safety check.</p>
+    <p>Extrusion is orange for one/unknown T selector; multiple T selectors use distinct colors (not actual filament colors or physical nozzle identities). Blue-gray: travel. XY arcs are approximated; helical, non-XY and invalid arcs are omitted. Diagnostic only; not native OrcaSlicer Preview or a print safety check.</p>
   `;
   container.appendChild(section);
   const host=section.querySelector("#lab-3d-canvas");
@@ -34,6 +35,12 @@ export function createThreeDToolpathPreview(container) {
   scene.add(geometryGroup);
   const materialExtrusion=new THREE.LineBasicMaterial({color:0xffad61});
   const materialTravel=new THREE.LineBasicMaterial({color:0x7e98b1,transparent:true,opacity:0.35});
+  const materialByTool=new Map();
+  function toolMaterial(id) {
+    if(!materialByTool.has(id))
+      materialByTool.set(id,new THREE.LineBasicMaterial({color:gcodeSelectorColor(id,true)}));
+    return materialByTool.get(id);
+  }
   let layers=[],layerObjects=[];
   const cleanup=()=>{
     for(const group of layerObjects) {
@@ -81,22 +88,27 @@ export function createThreeDToolpathPreview(container) {
       cleanup();layers=data.layers;
       if(!layers.length)throw new Error("No layers for 3D preview");
       const extent=new THREE.Box3();
+      const multi=Array.isArray(data.selectedToolIds)&&data.selectedToolIds.length>1;
+      const selectors=multi?[null,...data.selectedToolIds]:[null];
       for(const layer of layers) {
         const group=new THREE.Group();
         for (const extrusion of [true,false]) {
-          const points=[];
-          for (const segment of layer.segments) {
-            if(segment.extrusion!==extrusion)continue;
-            const z=layer.z;
-            // Three.js Z-up matches the Prepare viewport.
-            points.push(segment.x1,segment.y1,z,segment.x2,segment.y2,z);
-            extent.expandByPoint(new THREE.Vector3(segment.x1,segment.y1,z));
-            extent.expandByPoint(new THREE.Vector3(segment.x2,segment.y2,z));
-          }
-          if(points.length) {
-            const geo=new THREE.BufferGeometry();
-            geo.setAttribute("position",new THREE.Float32BufferAttribute(points,3));
-            group.add(new THREE.LineSegments(geo,extrusion?materialExtrusion:materialTravel));
+          for(const toolId of extrusion?selectors:[null]){
+            const points=[];
+            for (const segment of layer.segments) {
+              if(segment.extrusion!==extrusion || (extrusion&&multi&&segment.toolId!==toolId))continue;
+              const z=layer.z;
+              // Three.js Z-up matches the Prepare viewport.
+              points.push(segment.x1,segment.y1,z,segment.x2,segment.y2,z);
+              extent.expandByPoint(new THREE.Vector3(segment.x1,segment.y1,z));
+              extent.expandByPoint(new THREE.Vector3(segment.x2,segment.y2,z));
+            }
+            if(points.length) {
+              const geo=new THREE.BufferGeometry();
+              geo.setAttribute("position",new THREE.Float32BufferAttribute(points,3));
+              const material=extrusion?(multi?toolMaterial(toolId):materialExtrusion):materialTravel;
+              group.add(new THREE.LineSegments(geo,material));
+            }
           }
         }
         geometryGroup.add(group);layerObjects.push(group);
