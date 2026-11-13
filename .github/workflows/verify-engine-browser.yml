@@ -31,6 +31,7 @@ on:
       - "scripts/serve-isolated.py"
       - "scripts/test-engine-probe.mjs"
       - "scripts/test-browser-3mf-roundtrip.mjs"
+      - "scripts/three_mf_instance_expansion.py"
       - "scripts/audit_3mf_scene.py"
       - "scripts/compare_3mf_metadata.py"
       - ".github/workflows/verify-engine-browser.yml"
