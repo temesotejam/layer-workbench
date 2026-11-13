@@ -330,3 +330,9 @@ G-code comparison.
 ## 2026-11-13: audit inherited array-shaped options for multi-tool printers
 
 Added `inspectOrcaArraySettings` to the source-preserving resolver. It inventories every inherited array-valued setting, its length and source profile, and marks arrays whose length happens to equal the nozzle count as **possible** per-tool vectors. This is deliberately an inspection report only: array length alone cannot establish the native ConfigDef semantics, because compatibility lists, temperature tables and other non-tool arrays can have the same length. The real pinned Snapmaker U1 CI test now emits this inventory and asserts only that the four-element nozzle vector is retained. No array is forwarded to PrintConfig on the basis of this heuristic.
+
+## 2026-11-13: array semantics classified from pinned native ConfigDef sets
+
+The earlier array-length inventory only identified candidates. Added `scripts/orca-config-array-semantics.mjs`, transcribed from the exact pinned v2.5.0 `src/libslic3r/PrintConfig.cpp` sets at `40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19`: `printer_extruder_options`, `printer_options_with_variant_1`, `printer_options_with_variant_2`, and `filament_extruder_override_keys` plus the explicit extra keys in `is_filament_extruder_override_key`. The full-profile array audit now annotates known arrays with these native classifications and source provenance. Unknown arrays remain unclassified; matching the nozzle count is informational only.
+
+This is materially safer than inferring semantics from array length. It still does not validate every option's ConfigDef storage type, cardinality, or runtime use, and does not forward any multi-tool vector into the WASM PrintConfig. The Snapmaker U1 startup/change-tool G-code remains inert data. The dedicated test is registered in the pinned real-profile CI.
