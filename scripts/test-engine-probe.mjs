@@ -283,6 +283,34 @@ try {
     });
     assert.notEqual(nativeHash,inheritedHash,'Three-domain raw Orca settings must change WASM output');
     console.log('PASS: indexed Orca vendor machine+filament+process inheritance → WASM G-code');
+
+    // These two real Orca process options were previously discarded as
+    // unsupported. Confirm that an inherited bounded override changes the
+    // sliced MOTION commands, not only G-code configuration comments.
+    const baselineShellGcode=await prepare.locator('#lab-download').evaluate(async link=>
+      await(await fetch(link.href)).text());
+    rawOrca[4].top_shell_layers='5';
+    rawOrca[4].bottom_shell_layers='4';
+    await uploadRawOrca();
+    await prepare.locator('#lab-slice').click();
+    await prepare.waitForFunction(() => {
+      const text=document.querySelector('#lab-status')?.textContent||'';
+      return text.startsWith('PASS:')||text.startsWith('FAILED');
+    },null,{timeout:120000});
+    const shellStatus=await prepare.locator('#lab-status').innerText();
+    assert.match(shellStatus,/^PASS: 2 STL model\(s\)/);
+    assert.match(shellStatus,/3 unsupported keys excluded/);
+    const shellGcode=await prepare.locator('#lab-download').evaluate(async link=>
+      await(await fetch(link.href)).text());
+    const motionOnly=text=>text.split(/\r?\n/).map(line=>line.split(';')[0].trim())
+      .filter(line=>/^(?:N\d+\s+)?G[0123]\b/i.test(line));
+    assert.notDeepEqual(motionOnly(shellGcode),motionOnly(baselineShellGcode),
+      'Inherited top/bottom solid shell settings must affect actual WASM movement, not only comments');
+    console.log('PASS: inherited Orca top/bottom shell counts change WASM G-code motion commands');
+    delete rawOrca[4].top_shell_layers;
+    delete rawOrca[4].bottom_shell_layers;
+    await uploadRawOrca();
+
     // Test the deliberately opt-in plate mapping through the *real* engine.
     // Default profile used 55C. Inherited upstream-style hot_plate_temp=65C
     // should be passed into session.init only after selecting the hot plate.
