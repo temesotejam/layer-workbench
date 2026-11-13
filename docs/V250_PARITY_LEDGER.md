@@ -461,3 +461,22 @@ Next blocker: expose and verify a native bridge operation that can apply a
 selective transform directly to an **imported** 3MF project while reporting
 whether settings, per-object metadata and non-native archive entries can be
 preserved. Do not conflate manifest replacement with lossless 3MF editing.
+
+**Verified outcome (2026-11-14 JST):** [isolated accepted-candidate Chrome run
+#43528571920](https://github.com/temesotejam/layer-workbench/actions/runs/43528571920)
+**PASS** for the new browser-native manifest edit test and existing strict
+placement test. The browser wrote a two-object native edited 3MF, reimported
+2 objects / 2 instances, retained 24 triangles, and satisfied the independent
+per-object STL bounds checks: unchanged first cube X=90..110 mm, changed second
+cube X=145..175 mm (local Y scale 1.5 with 90° Z rotation), both within
+0.05 mm of their expected XYZ bounds. The workflow also archived the edited
+3MF/STL pair and structural/geometry reports. Candidate source and WASM binary
+were unchanged; the published Pages app did not enable the experimental engine.
+
+The initial test run [#43528453883](https://github.com/temesotejam/layer-workbench/actions/runs/43528453883)
+**FAIL** because a Node assertion object was unavailable inside Playwright's
+browser evaluation context. It was replaced with browser-local fail-closed
+assertions in commit `d75083f`; the rerun passed. That test-harness error did
+not indicate a confirmed native-export defect. The remaining imported-3MF
+native editing and metadata-preservation acceptance criteria above are **still
+unmet**.
