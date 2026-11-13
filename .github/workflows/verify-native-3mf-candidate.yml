@@ -18,7 +18,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          # The verification workflow and script may be added after the candidate
+          # build was queued. Test code comes from main; binaries remain pinned
+          # to the exact successful workflow_run.id below.
+          ref: main
       - uses: actions/setup-node@v4
         with:
           node-version: 22
