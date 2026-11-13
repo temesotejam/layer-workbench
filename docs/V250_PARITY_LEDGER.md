@@ -71,3 +71,13 @@ positions, and adds exact decimal WASM-minus-native parameter deltas when
 numeric command words align. These changes do not weaken exact command checks.
 The comparator's unit tests exercise these guards. **No native v2.5.0 vs WASM
 paired golden-file comparison has been performed by these tests.**
+
+## 2026-11-13: optional extrusion-fixture acceptance gate
+
+The strict G-code comparator accepts `--min-extrusion-moves N` (default **0**, preserving the previous comparison behavior).
+For native-vs-WASM *slicing* fixture checks, supply a threshold such as `--min-extrusion-moves 100` only after examining that fixture's expected extrusion count.
+It requires each output to contain at least N G1/G2/G3 lines with a positive E word and an XY movement or arc radius/center; E-only priming, pure travels, retractions and zero E values do not satisfy the gate.
+The JSON output reports `native_extrusion_moves`, `wasm_extrusion_moves` and `minimum_extrusion_moves`.
+This is a limited syntactic check: absolute E values and firmware/modal behavior are **not** simulated, and matching counts do **not** imply correct deposition or machine safety.
+It prevents an identical all-travel fixture from being accepted as a representative printed G-code parity test.
+Existing exact ordered command checks remain unchanged. No paired official-native v2.5.0 vs WASM full-profile comparison has been performed.
