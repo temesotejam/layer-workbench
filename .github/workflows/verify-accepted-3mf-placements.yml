@@ -7,6 +7,9 @@ on:
     paths:
       - "scripts/test-browser-3mf-multiobject.mjs"
       - "scripts/test-candidate-browser-3mf.mjs"
+      - "scripts/native-manifest-edit.mjs"
+      - "scripts/test-native-manifest-edit.mjs"
+      - "scripts/test-browser-3mf-native-edit.mjs"
       - ".github/workflows/verify-accepted-3mf-placements.yml"
 
 permissions:
@@ -41,6 +44,9 @@ jobs:
           test -s engine-test-artifacts/slicer-mt.wasm
           node --check scripts/test-browser-3mf-multiobject.mjs
           node --check scripts/test-candidate-browser-3mf.mjs
+          node --check scripts/test-browser-3mf-native-edit.mjs
+          node --check scripts/native-manifest-edit.mjs
+          node scripts/test-native-manifest-edit.mjs
       - name: Assert each cube's own XYZ placement in isolated Chrome
         shell: bash
         run: |
@@ -53,6 +59,14 @@ jobs:
             sleep 1
           done
           node scripts/test-candidate-browser-3mf.mjs
+          python3 scripts/audit_3mf_scene.py \
+            --input parity-output/wasm-edited-manifest-instance.3mf \
+            --expected-build-items 2 --min-triangles 24 \
+            --report parity-output/accepted-edited-manifest-3mf-scene.json
+          python3 scripts/check_3mf_stl_bounds.py \
+            --input parity-output/wasm-edited-manifest-instance.3mf \
+            --stl parity-output/wasm-edited-manifest-instance.stl \
+            --report parity-output/accepted-edited-manifest-stl-comparison.json
           python3 scripts/audit_3mf_scene.py \
             --input parity-output/wasm-multiobject-3mf.3mf \
             --expected-build-items 2 --min-triangles 24 \

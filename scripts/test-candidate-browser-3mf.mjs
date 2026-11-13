@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {chromium} from 'playwright';
 import {checkBrowserMultiObject3mf} from './test-browser-3mf-multiobject.mjs';
+import {checkNativeManifestEditRoundTrip} from './test-browser-3mf-native-edit.mjs';
 
 const base = process.env.ENGINE_PROBE_URL ?? 'http://127.0.0.1:8766/';
 const artifactDir = process.env.ENGINE_ARTIFACT_DIR ?? 'engine-test-artifacts';
@@ -57,6 +58,9 @@ try {
   assert.equal(result.triangles,24);
   assert.equal(result.placementVerified,true,'3MF per-object world-space positions must match input');
   console.log('PASS: real isolated Chrome v2.5.0 WASM retains 2 objects, 2 instances and exact XYZ bounds of both 20 mm cubes');
+  const edited = await checkNativeManifestEditRoundTrip(page,cube);
+  assert.equal(edited.triangles,24);
+  console.log('PASS: native 3MF export/reimport after isolated instance-only rotation, scale and translation; source is synthetic STL, not desktop 3MF');
 } finally {
   await browser.close();
 }

@@ -434,3 +434,30 @@ The corresponding [isolated Chrome workflow #43519230388](https://github.com/tem
 The **older** approved-to-date isolated WASM binary (#43144590877) instead returned X=88 mm for the first cube in this stronger comparison, causing [legacy verification #43526450440](https://github.com/temesotejam/layer-workbench/actions/runs/43526450440) to **FAIL** when the new strict assertion was initially applied to both generations. This does *not* show a regression in the rebuilt exporter. The Chrome test now has explicit `requireExactPlacement` behavior: the legacy workflow retains its earlier geometry/hierarchy-gap diagnostic and reports whether exact placement matches, whereas the accepted-candidate workflow **must** reject any deviation greater than 0.05 mm. Do not interpret a legacy diagnostic PASS as newly validated absolute-placement support.
 
 **Still unverified:** desktop-authored OrcaSlicer 3MF round trips, project metadata/profile preservation, native transform editing after reimport, true mesh/face identity, same-full-profile desktop-vs-WASM G-code, multi-extruder support, production deployment and actual printer safety. The next feature milestone is independent edit-and-resave of one imported object through an upstream-native model transform API rather than rebuilding a flattened STL or modifying only the Three.js scene.
+
+## 2026-11-14: isolated native manifest instance edit → 3MF export/reimport gate
+
+A new strictly scoped test now edits the **second** 0.7.0 project manifest
+instance (Z 90° rotation, 1.5 nonuniform scale and translation) while leaving
+the first instance unchanged. It sends the original two synthetic STL blobs
+and edited manifest to the *existing* `session.setObjects` API, exports the
+new rebuilt v2.5.0 WASM candidate's native `project.3mf`, reimports that file,
+and independently checks 2 objects, 2 instances, 24 triangles and exact XYZ
+bounds of both bodies (0.05 mm tolerance). The source geometry is never edited
+in Three.js or flattened into one object for this test. The CI archives the
+actual edited 3MF, converted STL and diagnostic report, and validates their
+core structure and STL geometry using the existing read-only Python tools.
+
+**Critical scope limit:** This uses `setObjects` to replace a session whose
+source is *two synthetic STL blobs*. It is **not** a native instance-transform
+mutation on a project loaded via `initProfile('project.3mf',...)`, and cannot
+preserve its opaque metadata; the source is neither desktop-authored nor
+print-ready. The pure JS transform adapter rejects missing/duplicate IDs,
+non-finite/singular/perspective matrices and oversized inputs. Its acceptance
+workflow reuses candidate artifact #43517364379 and does **not** rebuild the
+heavy C++ engine, enable WASM on Pages, or claim desktop editing parity.
+
+Next blocker: expose and verify a native bridge operation that can apply a
+selective transform directly to an **imported** 3MF project while reporting
+whether settings, per-object metadata and non-native archive entries can be
+preserved. Do not conflate manifest replacement with lossless 3MF editing.
