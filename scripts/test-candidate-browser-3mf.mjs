@@ -55,7 +55,8 @@ try {
     'Native 3MF reimport lost separate objects/instances; not parity');
   assert.equal(result.instances,2);
   assert.equal(result.triangles,24);
-  console.log('PASS: real isolated Chrome v2.5.0 WASM 3MF export and reimport retains 2 objects and 2 placements, 24 triangles');
+  assert.equal(result.placementVerified,true,'3MF per-object world-space positions must match input');
+  console.log('PASS: real isolated Chrome v2.5.0 WASM retains 2 objects, 2 instances and exact XYZ bounds of both 20 mm cubes');
 } finally {
   await browser.close();
 }
