@@ -3,6 +3,8 @@
 import { chromium } from 'playwright';
 import { readFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+import {parseGcodeToolpaths} from './gcode-preview-parser.mjs';
 const base = process.env.ENGINE_PROBE_URL || 'http://127.0.0.1:8766/';
 const artifactDir = process.env.ENGINE_ARTIFACT_DIR || 'engine-test-artifacts';
 const browser = await chromium.launch({
@@ -65,6 +67,23 @@ try {
   if (sliceResult.startsWith('FAILED:')) throw new Error(sliceResult);
   assert.match(sliceResult, /PASS: G-code generated/);
   assert.equal(await page.locator('#download-gcode').isVisible(), true);
+  // Validate the ACTUAL G-code bytes returned by the engine, not only the
+  // presence of a download link. The fixture is generic/test-only, not printable.
+  const wasmGcode = await page.locator('#download-gcode').evaluate(async anchor => {
+    if (!anchor.href.startsWith('blob:')) throw new Error('Expected local G-code blob URL');
+    const response = await fetch(anchor.href);
+    if (!response.ok) throw new Error('Cannot read generated G-code');
+    return response.text();
+  });
+  assert.ok(wasmGcode.length > 1000 && wasmGcode.length < 20_000_000,
+    'Actual WASM G-code is empty or exceeds diagnostic limits');
+  const parsedGcode = parseGcodeToolpaths(wasmGcode);
+  assert.ok(parsedGcode.layers.length >= 2, 'Expected multiple sliced Z layers');
+  assert.ok(parsedGcode.extrusions > 10, 'Expected positive extrusion toolpaths');
+  const actualGcodeHash = createHash('sha256').update(wasmGcode, 'utf8').digest('hex');
+  console.log('PASS: actual WASM G-code content: ' +
+    parsedGcode.layers.length + ' layers, ' + parsedGcode.extrusions +
+    ' extrusion segments; sha256=' + actualGcodeHash);
   console.log('PASS: browser STL → WASM project → slice → G-code asset');
 
   // Integration gate: the exact STL imported into the Prepare WebGL view
