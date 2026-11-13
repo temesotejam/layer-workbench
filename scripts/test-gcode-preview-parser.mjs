@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {parseGcodeToolpaths} from './gcode-preview-parser.mjs';
+import {gcodeSelectorColor} from './gcode-tool-colors.mjs';
 const sample=`G21
 G90
 M82
@@ -88,3 +89,25 @@ assert.equal(inchRadius.renderedArcs,1);
 assert.throws(()=>parseGcodeToolpaths("G0 X10 Y0\nG3 X0 Y10 R10",{maxSegments:2}),/complex/);
 console.log('PASS: bounded XY arcs (CW, CCW, full circle, absolute and relative center), R minor/major/semicircles, skipped endpoint safety');
 console.log('PASS: G-code linear extrusion, travel, layers, relative moves, safety limits');
+
+// Material preview labels are the explicit T selectors, not filament slots or nozzle count.
+// T1000 (reserved vendor command) must not be reported as a material label.
+const multiToolGcode=[
+  "G90","M82","G0 X0 Y0 Z0.2","T0","G1 X10 Y0 E1",
+  "T3","G1 X20 Y0 E2","T1000","G1 X30 Y0 E3",
+  "N15 T2","G1 X40 Y0 E4"
+].join("\n");
+const labeled=parseGcodeToolpaths(multiToolGcode);
+assert.deepEqual(labeled.selectedToolIds,[0,2,3]);
+assert.deepEqual(labeled.extrusionSegmentsByTool,{"0":1,"2":1,"3":2});
+assert.deepEqual(labeled.layers[0].segments.filter(s=>s.extrusion).map(s=>s.toolId),[0,3,3,2]);
+assert.equal(labeled.extrusions,4);
+const noTool=parseGcodeToolpaths("G1 X1 Y1 E1");
+assert.deepEqual(noTool.selectedToolIds,[]);
+assert.deepEqual(noTool.extrusionSegmentsByTool,{unselected:1});
+assert.equal(noTool.layers[0].segments[0].toolId,null);
+assert.equal(gcodeSelectorColor(0,false),gcodeSelectorColor(3,false));
+assert.notEqual(gcodeSelectorColor(0,true),gcodeSelectorColor(3,true));
+assert.equal(gcodeSelectorColor(null,true),gcodeSelectorColor(0,false));
+assert.throws(()=>gcodeSelectorColor(256,true),/selector/);
+console.log("PASS: tool-aware G-code toolpaths, vendor T1000 guard, 2D/3D palette mapping");
