@@ -37,6 +37,12 @@ class Test3MFScene(unittest.TestCase):
             self.assertEqual((result["totalObjects"], result["totalBuildItems"],
                               result["totalMeshTriangles"]), (2, 1, 1))
             self.assertEqual(result["scenes"][0]["objects"][1]["components"], ["1"])
+            self.assertEqual(result["totalResolvedMeshInstances"], 1)
+            self.assertEqual(result["totalResolvedTriangleInstances"], 1)
+            self.assertEqual(result["scenes"][0]["resolvedMeshInstances"][0]["objectPath"],
+                             ["2", "1"])
+            self.assertEqual(result["scenes"][0]["resolvedMeshInstances"][0]["transform3mf"][-3:],
+                             [128.0, 128.0, 0.0])
             self.assertEqual(result["scenes"][0]["buildItems"][0]["transform3mf"][-3:],
                              [128.0, 128.0, 0.0])
             archive(p, scene(build='<item objectid="1"/>'))
@@ -60,6 +66,32 @@ class Test3MFScene(unittest.TestCase):
                 with self.subTest(message=message):
                     with self.assertRaisesRegex(ValueError, message):
                         audit(p)
+
+    def test_nested_component_translation_and_cycle_rejection(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = pathlib.Path(d) / "nested.3mf"
+            translated = scene().replace(
+                '<component objectid="1" transform="1 0 0 0 1 0 0 0 1 0 0 0"/>',
+                '<component objectid="1" transform="1 0 0 0 1 0 0 0 1 5 7 0"/>')
+            archive(p, translated)
+            r = audit(p)
+            self.assertEqual(r["scenes"][0]["resolvedMeshInstances"][0]["transform3mf"][-3:],
+                             [133.0, 135.0, 0.0])
+            self.assertEqual(r["totalMeshTriangles"], 1)
+            self.assertEqual(r["totalResolvedTriangleInstances"], 1)
+            # Cyclic component resources must fail even if the build references a
+            # different mesh. Silently expanding such archives is unsafe.
+            cyclic = scene(build='<item objectid="1"/>').replace(
+                '<component objectid="1" transform=', '<component objectid="2" transform=')
+            archive(p, cyclic)
+            with self.assertRaisesRegex(ValueError, "Cyclic"):
+                audit(p)
+            with_external = scene().replace(
+                '<component objectid="1" transform=',
+                '<component objectid="1" path="/3D/elsewhere.model" transform=')
+            archive(p, with_external)
+            with self.assertRaisesRegex(ValueError, "External-part component"):
+                audit(p)
 
     def test_no_geometry_fabricated_from_components(self):
         with tempfile.TemporaryDirectory() as d:
