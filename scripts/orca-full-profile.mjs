@@ -111,3 +111,25 @@ export function inspectOrcaNozzleVector(machine) {
     source:machine.sourceByKey.nozzle_diameter,
     supportedBySingleToolWasmAdapter:diameters.length === 1};
 }
+
+export function inspectOrcaArraySettings(profile) {
+  if (!profile || !profile.settings || !profile.sourceByKey ||
+      !profile.chain || !Array.isArray(profile.chain))
+    throw new Error("Expected resolved full Orca profile");
+  const arrays = Object.entries(profile.settings)
+    .filter(([, value]) => Array.isArray(value))
+    .map(([key, value]) => ({
+      key, length:value.length, source:profile.sourceByKey[key] ?? null,
+      // Matching nozzle count is only a candidate signal, never proof that
+      // Orca defines this option as per-extruder.
+      sameLengthAsNozzles: Array.isArray(profile.settings.nozzle_diameter) &&
+        value.length === profile.settings.nozzle_diameter.length
+    }))
+    .sort((a,b)=>a.key.localeCompare(b.key));
+  return {
+    arraySettingCount:arrays.length,
+    arrays,
+    possiblePerToolVectors:arrays.filter(item=>item.sameLengthAsNozzles).map(item=>item.key),
+    classification:"inspection-only; verify each option's upstream ConfigDef before applying"
+  };
+}
