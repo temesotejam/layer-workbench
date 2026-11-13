@@ -1,5 +1,6 @@
 import {createThreeDToolpathPreview} from "./gcode-3d-preview.mjs";
 import {parseGcodeToolpaths} from "./gcode-preview-parser.mjs";
+import {gcodeSelectorColor} from "./gcode-tool-colors.mjs";
 
 // 2D, per-Z-layer read-only toolpath viewer for the isolated development lab.
 // Does not pretend to be the native OrcaSlicer 3D G-code Preview.
@@ -15,7 +16,7 @@ export function createLayerPreview(container) {
     </div>
     <canvas id="lab-toolpath-canvas" width="360" height="360" role="img" aria-label="Generated G-code extrusion and travel toolpaths by layer"></canvas>
     <p id="lab-preview-stats"></p>
-    <p>Orange: extrusion; gray dashed: travel. G0/G1 and XY G2/G3 I/J or R arcs are shown as approximated line segments. Helical paths, non-XY planes, ambiguous or invalid arcs, and firmware macros are omitted. Diagnostic only; not a validated OrcaSlicer preview.</p>
+    <p>Extrusion is orange for one/unknown T selector; multiple T selectors use distinct colors. Gray dashed: travel. Colors identify G-code T numbers, not actual filament colors or physical nozzles. G0/G1 and XY G2/G3 I/J or R arcs are approximated; helical, non-XY, invalid arcs and firmware macros are omitted. Diagnostic only.</p>
   `;
   container.appendChild(section);
   const threeD=createThreeDToolpathPreview(container);
@@ -45,12 +46,25 @@ export function createLayerPreview(container) {
     const mapX=x=>(w-dx*scale)/2+(x-bounds.minX)*scale;
     const mapY=y=>h-((h-dy*scale)/2+(y-bounds.minY)*scale);
     ctx.lineWidth=1.25;
-    for (const extrusion of [false,true]) {
+    // Keep travel on one dashed pass. Multi-material labels color only
+    // extrusion paths, without interpreting vendor tool-change macros.
+    const multi=parsed.selectedToolIds.length>1;
+    const selected=multi?[null,...parsed.selectedToolIds]:[null];
+    ctx.beginPath();
+    ctx.strokeStyle="#718399";
+    ctx.setLineDash([3,3]);
+    for(const segment of layer.segments){
+      if(segment.extrusion)continue;
+      ctx.moveTo(mapX(segment.x1),mapY(segment.y1));
+      ctx.lineTo(mapX(segment.x2),mapY(segment.y2));
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+    for(const toolId of selected){
       ctx.beginPath();
-      ctx.strokeStyle=extrusion?"#f6a45c":"#718399";
-      ctx.setLineDash(extrusion?[]:[3,3]);
+      ctx.strokeStyle=gcodeSelectorColor(toolId,multi);
       for(const segment of layer.segments){
-        if(segment.extrusion!==extrusion)continue;
+        if(!segment.extrusion || (multi&&segment.toolId!==toolId))continue;
         ctx.moveTo(mapX(segment.x1),mapY(segment.y1));
         ctx.lineTo(mapX(segment.x2),mapY(segment.y2));
       }
@@ -70,7 +84,8 @@ export function createLayerPreview(container) {
       }
       slider.max=String(parsed.layers.length-1);
       slider.value=String(parsed.layers.length-1);
-      stats.textContent=`${parsed.layers.length} Z levels · ${parsed.extrusions} extrusion segments · ${parsed.travels} travel segments · ${parsed.renderedArcs} approximated XY arcs · ${parsed.skippedArcs} unsupported arcs`;
+      const selectors=parsed.selectedToolIds.length>1?` · T selectors: ${parsed.selectedToolIds.map(id=>"T"+id).join(", ")}`:"";
+      stats.textContent=`${parsed.layers.length} Z levels · ${parsed.extrusions} extrusion segments · ${parsed.travels} travel segments · ${parsed.renderedArcs} approximated XY arcs · ${parsed.skippedArcs} unsupported arcs${selectors}`;
       section.hidden=false;
       render(Number(slider.value));
       threeD.show(parsed);
