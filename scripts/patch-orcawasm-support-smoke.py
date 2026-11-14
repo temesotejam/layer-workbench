@@ -36,8 +36,12 @@ ENFORCER_OLD = """    {
     },"""
 ENFORCER_NEW = """    {
       role: 'support-enforcer',
-      position: [0, 0, 5],
-      size: [16, 16, 12],
+      // With a 10 mm-radius sphere centered on the mesh origin, a box
+      // spanning only Z=-1..11 mm misses most of its lower hemisphere.
+      // Cover the whole model in object-local coordinates so manual
+      // support enforcers can select downward-facing surface patches.
+      position: [0, 0, 0],
+      size: [30, 30, 30],
     },"""
 BLOCKER_OLD = """    {
       role: 'support-blocker',
@@ -73,6 +77,17 @@ LOOP_NEW = """  for (const modifier of cases) {
     const project = makeSupportModifierProject(meshBytes, modifier)"""
 COMPARE_OLD = "    const supportOutputChanged = modifiedSupports !== automaticSupports"
 COMPARE_NEW = "    const supportOutputChanged = modifiedSupports !== referenceSupports"
+FAIL_MESSAGE_OLD = "      throw new Error(modifier.role + ' did not change support output from the automatic-support baseline')"
+FAIL_MESSAGE_NEW = """      // A full G-code equality check is the existing strict gate. Report
+      // which baseline actually failed, plus diagnostic support annotations.
+      // These annotations are not used to turn a failure into a pass.
+      const label = modifier.role === 'support-enforcer' ? 'manual' : 'automatic'
+      const supportMarkers = (gcode) => gcode.split(/\\r?\\n/u)
+        .filter((line) => /;\\s*(?:TYPE|FEATURE)\\s*:\\s*support/iu.test(line)).length
+      throw new Error(modifier.role + ' did not change support output from the '
+        + label + ' baseline (bytes=' + referenceSupports.length + '/' + modifiedSupports.length
+        + ', support annotations=' + supportMarkers(referenceSupports) + '/'
+        + supportMarkers(modifiedSupports) + ')')"""
 
 
 def apply_patch(source: str) -> str:
@@ -86,6 +101,7 @@ def apply_patch(source: str) -> str:
         (BLOCKER_OLD, BLOCKER_NEW, "blocker full-footprint geometry"),
         (LOOP_OLD, LOOP_NEW, "role-specific reference baseline"),
         (COMPARE_OLD, COMPARE_NEW, "reference comparison"),
+        (FAIL_MESSAGE_OLD, FAIL_MESSAGE_NEW, "role-specific failure diagnostics"),
     )
     for old, new, label in patches:
         if source.count(old) != 1:
