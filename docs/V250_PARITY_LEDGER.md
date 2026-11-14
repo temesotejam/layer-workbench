@@ -664,3 +664,29 @@ This **does not execute G-code**, validate machine-specific syntax, establish
 any native OrcaSlicer v2.5.0 vs WASM output parity, or relax differences
 in the motion-command order. The true paired full-profile comparison is
 still outstanding; test and CI status must be checked independently.
+
+
+## 2026-11-14: bounded absolute process speed profile bridge (candidate CI)
+
+The opt-in localhost-only Orca profile adapter now recognizes three native
+process keys, `outer_wall_speed`, `inner_wall_speed`, and `travel_speed`,
+as **absolute numeric millimetres/second** values. The restricted flat
+process override parser accepts the same keys. The diagnostic input bounds
+are 1–800 mm/s for wall speeds and 1–1500 mm/s for travel speed; these are
+parser bounds, **not** a claim that any attached printer supports those speeds.
+Inheritance is resolved before forwarding. Percent-relative speed strings,
+multi-nozzle arrays, nonnumeric values and values outside the bounds are
+rejected rather than guessed. Existing unsupported fields remain excluded.
+
+A new isolated-Chrome regression compares actual candidate-WASM G-code
+generated with the same STL/transform, layer height and shell count before
+and after changing only these three process speed overrides. It requires
+the engine to finish and the G-code SHA-256 to change. Hash difference alone
+does not establish exact feedrate semantics, full-profile fidelity or native
+desktop G-code parity. The corresponding pinned upstream Creality fixture
+will continue running in its separate read-only CI job. **CI results for this
+new change must be observed separately, not assumed PASS.**
+
+No engine binary, production public-site slicing or printer-ready profile
+is enabled by this change. Next work remains true native in-place 3MF
+editing and full native-vs-WASM paired same-input comparison.
