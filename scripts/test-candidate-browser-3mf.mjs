@@ -2,6 +2,7 @@
 // candidate. Never publishes engine binaries, G-code or printer profiles.
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
+import {execFileSync} from 'node:child_process';
 import {chromium} from 'playwright';
 import {checkBrowserMultiObject3mf} from './test-browser-3mf-multiobject.mjs';
 import {checkNativeManifestEditRoundTrip} from './test-browser-3mf-native-edit.mjs';
@@ -63,7 +64,17 @@ try {
   const edited = await checkNativeManifestEditRoundTrip(page,cube);
   assert.equal(edited.triangles,24);
   console.log('PASS: native 3MF export/reimport after isolated instance-only rotation, scale and translation; source is synthetic STL, not desktop 3MF');
-  const independent=await readFile('parity-output/independent-core-two-build.3mf');
+  // This verification also runs after a standalone successful WASM build.
+  // Its CI job has a fresh filesystem; the build job's synthetic 3MF fixture
+  // is NOT included in the uploaded WASM artifact. Recreate it explicitly
+  // rather than accidentally depending on a previous job's working tree.
+  const independentPath='parity-output/independent-core-two-build.3mf';
+  execFileSync('python3',[
+    'scripts/make_3mf_two_build_fixture.py','--output',independentPath
+  ],{stdio:'inherit'});
+  const independent=await readFile(independentPath);
+  assert.ok(independent.length>300 && independent[0]===0x50 && independent[1]===0x4b,
+    'Independent Core 3MF fixture generation failed');
   const external=await probeIndependentCore3mfImport(page,new Uint8Array(independent));
   console.log('DIAGNOSTIC: independently generated 3MF Core native import status='+external.nativeProjectImport.status+
     ', flattened STL conversion='+external.flattenedConversion.status);
