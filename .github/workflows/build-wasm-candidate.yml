@@ -314,10 +314,32 @@ jobs:
         working-directory: orcawasm
         run: node scripts/binding-test.mjs --wasm-dir artifacts
 
+      # Run this safety assertion even if the unrelated modifier smoke later
+      # fails. A failed guard still fails the overall job and never publishes
+      # the WASM binary; only the tiny diagnostic JSON is archived.
+      - name: Verify imported 3MF provenance guard on rebuilt WASM (non-print)
+        if: ${{ !cancelled() && steps.wasm_build.outcome == 'success' }}
+        timeout-minutes: 6
+        run: |
+          set -euo pipefail
+          node --check scripts/test-v250-imported-replacement-guard.mjs
+          python3 scripts/make_3mf_two_build_fixture.py --output parity-output/independent-core-two-build.3mf
+          node scripts/test-v250-imported-replacement-guard.mjs
+
       - name: Run end-to-end engine smoke test
+        if: ${{ !cancelled() && steps.wasm_build.outcome == 'success' }}
         working-directory: orcawasm
         timeout-minutes: 20
         run: node scripts/smoke-test.mjs --wasm-dir artifacts
+
+      - name: Archive imported 3MF provenance result (report only, never WASM)
+        if: ${{ always() && steps.wasm_build.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: experimental-3mf-provenance-report
+          path: parity-output/rebuilt-import-replacement-guard.json
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Test native multi-object 3MF export on rebuilt WASM (non-print)
         # Run even if the independent smoke gate fails. No failed build is
