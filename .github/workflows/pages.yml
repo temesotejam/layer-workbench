@@ -12,7 +12,8 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  # Do not let a late older push event cancel a newer deployment.
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -37,6 +38,22 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      # GitHub may deliver older push events after newer ones. Do not
+      # overwrite the site with a stale commit even if the run is queued.
+      - name: Check main revision before publishing
+        id: current
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          latest="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq '.object.sha')"
+          if [[ "$latest" == "$GITHUB_SHA" ]]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping stale Pages run: $GITHUB_SHA (current: $latest)"
+          fi
       - name: Deploy
+        if: steps.current.outputs.deploy == 'true'
         id: deployment
         uses: actions/deploy-pages@v4
