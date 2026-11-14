@@ -859,8 +859,8 @@ Core archive exported byte-identically with `preservation=require`.
 
 ## 2026-11-14: local-axis nonuniform scale of a Core 3MF build item
 
-The offline diagnostic editor \`scripts/edit_3mf_build_transform.py\` now accepts
-\`--scale-local SX SY SZ\` with bounded strictly positive, dimensionless
+The offline diagnostic editor `scripts/edit_3mf_build_transform.py` now accepts
+`--scale-local SX SY SZ` with bounded strictly positive, dimensionless
 factors. It pre-multiplies the selected build-item matrix by a row-vector
 scale (local axes), preserving the existing build translation as the pivot.
 It does not interpret the pivot as the mesh center, decompose rotation/shear,
@@ -872,6 +872,5 @@ model unit independence, and invalid inputs.
 The pinned isolated-Chrome acceptance adds a nonuniform scale of a synthetic
 two-build Core 3MF and checks its resulting XYZ bounds and untouched native
 WASM re-export. This does **not** establish native-session edits or
-desktop-authored Orca 3MF metadata compatibility. The CI results must be
-confirmed from the run before claiming success. No candidate rebuild or
+desktop-authored Orca 3MF metadata compatibility. CI confirmed **PASS** in [archive preservation and 3MF edit unit tests #43603906325](https://github.com/temesotejam/layer-workbench/actions/runs/43603906325) (13 edit tests including 3 new scaling tests), and [isolated Chrome/WASM 3MF placement test #43603906304](https://github.com/temesotejam/layer-workbench/actions/runs/43603906304). The Chrome job logs explicitly show the nonuniform XYZ bounds and untouched export gate passing. No candidate rebuild or
 public engine deployment is required.
