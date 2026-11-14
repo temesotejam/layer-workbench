@@ -252,7 +252,7 @@ try {
       name:'test-process-speeds.json',mimeType:'application/json',
       buffer:Buffer.from(JSON.stringify({
         layer_height:0.3,wall_loops:3,
-        outer_wall_speed:35,inner_wall_speed:65,travel_speed:110,
+        outer_wall_speed:5,inner_wall_speed:8,travel_speed:20,
       })),
     });
     await prepare.locator('#lab-slice').click();
@@ -267,6 +267,8 @@ try {
       return [...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');
     });
     assert.notEqual(speedHash,overrideHash,'Native output must respond to speed-only process changes');
+    // Intentionally set speed ceilings below measured original extrusion F
+    // (which was ~12–25 mm/s) to make this a meaningful engine test.
     // A G-code SHA change could be *only* a profile comment. Inspect the
     // commanded extrusion feedrate words parsed from the actual native output.
     const positiveExtrusionFeedrates=code=>[...new Set(

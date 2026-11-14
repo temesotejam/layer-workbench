@@ -758,3 +758,17 @@ unchanged profile geometry and wall/travel-only speed overrides. This closes
 the prior gap where a changed G-code SHA could reflect metadata alone. These
 are G-code command values, **not** measured physical toolhead speeds or Orca
 desktop native-vs-WASM parity. CI outcome must be confirmed independently.
+
+## 2026-11-14: investigation of process speed smoke false positive (CI pending)
+
+[Chrome #43584553138](https://github.com/temesotejam/layer-workbench/actions/runs/43584553138)
+**FAIL**: when the diagnostic only raised outer/inner wall and travel speed
+limits (35/65/110 mm/s), the actual native WASM deposited extrusion F words
+were unchanged despite different output G-code hashes. Therefore the prior
+hash-only acceptance was too weak; we retract any claim that that specific
+speed-change fixture proved a real feedrate change. This can happen when
+other path/cooling/flow speed caps dominate, or when the native adapter does
+not apply the intended fields. The next safe fixture explicitly lowers the
+requested outer/inner wall speeds to 5/8 mm/s and travel speed to 20 mm/s,
+then compares physical G-code F words. If it also fails, native config
+application must be diagnosed rather than masking the failure.
