@@ -83,7 +83,7 @@ try {
   execFileSync('python3',[
     'scripts/edit_3mf_build_transform.py',
     '--input',independentPath,'--output',changedCorePath,
-    '--build-index','1','--transform','1 0 0 0 1 0 0 0 1 180 90 0'
+    '--build-index','1','--translate-mm','30','0','0'
   ],{stdio:'inherit'});
   const changedCore=await readFile(changedCorePath);
   assert.ok(changedCore.length>300 && !changedCore.equals(independent),

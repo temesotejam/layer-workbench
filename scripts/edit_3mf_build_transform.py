@@ -7,6 +7,7 @@ session mutation, full desktop 3MF edit, nor printer-ready conversion.
 """
 import argparse
 from pathlib import Path
+import math
 import re
 import sys
 import zipfile
@@ -149,16 +150,56 @@ def edit_core_build_item(source, destination, item_index, transform):
             'Unedited ZIP members are byte-identical after decompression; their semantics may depend on the edited transform. NOT desktop Orca-native 3MF parity.'}
 
 
+def translate_core_build_item(source, destination, item_index, delta_mm):
+    """Relative world-axis mm edit retaining the original rotation and scale.
+
+    A Core 3MF model's unit applies to both its vertex and build translations.
+    Only the last three coordinates of the selected 12-value transform change.
+    """
+    if not isinstance(item_index, int) or isinstance(item_index, bool) or item_index < 0:
+        raise ValueError('Build item index must be zero-based nonnegative integer')
+    if not isinstance(delta_mm, (list, tuple)) or len(delta_mm) != 3 or any(
+        isinstance(v, bool) or not isinstance(v, (int, float))
+        or not math.isfinite(v) or abs(v) > 1000000 for v in delta_mm
+    ):
+        raise ValueError('Relative translation requires three bounded finite mm values')
+    if not any(v != 0 for v in delta_mm):
+        raise ValueError('No relative translation requested')
+    scene = audit(source)
+    if scene['modelParts'] != 1 or scene['scenes'][0]['part'] != MODEL_PART:
+        raise ValueError('Only a single 3D/3dmodel.model Core part is supported')
+    part = scene['scenes'][0]
+    if item_index >= len(part['buildItems']):
+        raise ValueError('Selected build item out of range')
+    matrix = part['buildItems'][item_index]['transform3mf'][:]
+    unit_mm = part['millimetersPerUnit']
+    for axis in range(3):
+        matrix[9 + axis] += delta_mm[axis] / unit_mm
+    serialized = ' '.join(format(value, '.17g') for value in matrix)
+    validated_matrix(serialized)
+    result = edit_core_build_item(source, destination, item_index, serialized)
+    result['relativeTranslationMm'] = list(delta_mm)
+    result['modelUnit'] = part['unit']
+    return result
+
+
 def main():
     command = argparse.ArgumentParser(description=__doc__)
     command.add_argument('--input', required=True, type=Path)
     command.add_argument('--output', required=True, type=Path)
     command.add_argument('--build-index', type=int, required=True)
-    command.add_argument('--transform', required=True, help='12 numbers in Core 3MF row-vector order (source model units)')
+    edits = command.add_mutually_exclusive_group(required=True)
+    edits.add_argument('--transform', help='12 numbers in Core 3MF row-vector order (source model units)')
+    edits.add_argument('--translate-mm', nargs=3, type=float, metavar=('DX','DY','DZ'),
+                       help='Relative world-axis mm move; preserve existing rotation and scale')
     args = command.parse_args()
     try:
-        result = edit_core_build_item(args.input, args.output,
-                                      args.build_index, args.transform)
+        if args.translate_mm is not None:
+            result = translate_core_build_item(args.input, args.output,
+                                               args.build_index, args.translate_mm)
+        else:
+            result = edit_core_build_item(args.input, args.output,
+                                          args.build_index, args.transform)
     except (ValueError, OSError, zipfile.BadZipFile, RuntimeError, EOFError) as exc:
         print('Core 3MF transform edit refused:', exc, file=sys.stderr)
         return 2

@@ -804,3 +804,16 @@ and independent browser/desktop validation.
 ### 2026-11-14: edited Core archive imported by accepted native WASM
 
 [Isolated Chrome #43587544199](https://github.com/temesotejam/layer-workbench/actions/runs/43587544199) **PASS** with the previously accepted (not rebuilt) v2.5.0 WASM candidate. A separately generated Core 3MF was surgically edited at build index 1, shifting that 20 mm synthetic cube from X=150–170 to X=180–200 mm while retaining the first placement X=90–110 mm. The isolated browser imported the edited archive through the native 3MF project API, verified two native objects/instances, 24 flattened triangles with the changed XYZ bounds, and byte-identical `preservation=require` export of the **already edited, then untouched** archive. It does **not** demonstrate in-session native editing, editing a real desktop 3MF, semantics of opaque metadata after a change, or native-vs-WASM G-code parity. No new engine binary or public slicer behavior was enabled.
+
+## 2026-11-14: unit-aware relative Core build placement move (CI pending)
+
+The offline Core 3MF editor now accepts `--translate-mm DX DY DZ` as an
+alternative to replacing the full 12-value transform. The selected item's
+world-axis movement is converted from mm to the model's declared `unit`,
+and only translation slots 9–11 change; existing rotation, scale and sibling
+placements are retained. The synthetic regression covers a previously
+rotated/nonuniformly scaled item, an `inch` model, opaque-member retention,
+and invalid/no-op input rejection. The accepted-candidate isolated Chrome
+test now uses the relative +30 mm X operation to exercise actual WASM import
+of the edited 3MF. This is NOT native in-session 3MF editing, desktop 3MF
+parity, G-code parity, or print validation. CI results must be checked.

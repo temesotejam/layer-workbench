@@ -6,7 +6,7 @@ import zipfile
 
 from audit_3mf_scene import audit
 from compare_3mf_metadata import inventory
-from edit_3mf_build_transform import edit_core_build_item
+from edit_3mf_build_transform import edit_core_build_item, translate_core_build_item
 from make_3mf_two_build_fixture import make_file
 
 IDENTITY_180 = '1 0 0 0 1 0 0 0 1 180 90 0'
@@ -51,6 +51,70 @@ class Core3MFBuildTransformTests(unittest.TestCase):
                                 b'1 0 0 0 1 0 0 0 1 180 90 0'))
                 self.assertEqual(z1.read('Metadata/custom.config'),
                                  z2.read('Metadata/custom.config'))
+
+
+    def rewrite_core_model(self, source, replacements):
+        with zipfile.ZipFile(source) as archive:
+            entries = [(entry, archive.read(entry)) for entry in archive.infolist()]
+        with zipfile.ZipFile(source, 'w') as archive:
+            for entry, payload in entries:
+                if entry.filename == '3D/3dmodel.model':
+                    for old, new in replacements:
+                        self.assertEqual(payload.count(old), 1)
+                        payload = payload.replace(old, new, 1)
+                archive.writestr(entry, payload)
+
+    def test_relative_move_preserves_rotated_scaled_item_and_opaque_member(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source, dest = self.paths(folder)
+            self.rewrite_core_model(source, [(b'1 0 0 0 1 0 0 0 1 150 90 0',
+                                              b'0 2 0 -1 0 0 0 0 1 150 90 0')])
+            with zipfile.ZipFile(source, 'a') as archive:
+                archive.writestr('Metadata/vendor.bin', b'opaque-settings')
+            source_bytes, old = source.read_bytes(), inventory(source)
+            result = translate_core_build_item(source, dest, 1, (30, -10, 3))
+            self.assertEqual(result['relativeTranslationMm'], [30, -10, 3])
+            self.assertEqual(result['modelUnit'], 'millimeter')
+            self.assertEqual(source.read_bytes(), source_bytes)
+            a = audit(source)['scenes'][0]['buildItems']
+            b = audit(dest)['scenes'][0]['buildItems']
+            self.assertEqual(a[0], b[0])
+            self.assertEqual(a[1]['transform3mf'][:9], b[1]['transform3mf'][:9])
+            self.assertEqual(b[1]['transform3mf'][9:], [180., 80., 3.])
+            after = inventory(dest)
+            self.assertEqual(set(old), set(after))
+            for name in old:
+                if name != '3D/3dmodel.model':
+                    self.assertEqual(old[name], after[name], name)
+
+    def test_relative_move_obeys_non_mm_3mf_model_units(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source, dest = self.paths(folder)
+            self.rewrite_core_model(source, [
+                (b'unit="millimeter"', b'unit="inch"'),
+                (b'1 0 0 0 1 0 0 0 1 150 90 0',
+                 b'1 0 0 0 1 0 0 0 1 5 3 0')])
+            result = translate_core_build_item(source, dest, 1, (25.4, -12.7, 0))
+            self.assertEqual(result['modelUnit'], 'inch')
+            a = audit(source)['scenes'][0]['buildItems']
+            b = audit(dest)['scenes'][0]['buildItems']
+            self.assertEqual(a[0], b[0])
+            self.assertEqual(a[1]['transform3mf'][:9], b[1]['transform3mf'][:9])
+            self.assertEqual(b[1]['transform3mf'][9:], [6., 2.5, 0.])
+
+    def test_relative_move_invalid_inputs_leave_no_output(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source, dest = self.paths(folder)
+            for index, delta in (
+                (-1, (1, 0, 0)), (2, (1, 0, 0)), (True, (1, 0, 0)),
+                (1, (0, 0, 0)), (1, (float('nan'), 0, 0)),
+                (1, (float('inf'), 0, 0)), (1, (1_000_001, 0, 0)),
+                (1, (1, 2)), (1, (True, 0, 0))
+            ):
+                with self.subTest(index=index, delta=delta):
+                    with self.assertRaises(ValueError):
+                        translate_core_build_item(source, dest, index, delta)
+                    self.assertFalse(dest.exists())
 
     def test_refuses_missing_target_invalid_and_clobbering(self):
         with tempfile.TemporaryDirectory() as folder:
