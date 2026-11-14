@@ -747,3 +747,14 @@ This is **not** actual head speed or elapsed time: firmware acceleration,
 jerk, cooling, flow limits and printer execution are not simulated. No speed
 color mapping, verified machine profile, physical printer output or published
 WASM slicing is enabled. CI status must be inspected after this commit.
+
+## 2026-11-14: bounded Preview feedrange and stronger speed-effect gate (CI pending)
+
+The 2D layer's commanded-F minimum/maximum calculation now uses a constant-
+stack loop rather than spreading an untrusted segment array into Math.min/max,
+which can throw for a valid 200,000-segment diagnostic. The isolated Chrome
+acceptance test also compares distinct **deposited G-code F words** between
+unchanged profile geometry and wall/travel-only speed overrides. This closes
+the prior gap where a changed G-code SHA could reflect metadata alone. These
+are G-code command values, **not** measured physical toolhead speeds or Orca
+desktop native-vs-WASM parity. CI outcome must be confirmed independently.

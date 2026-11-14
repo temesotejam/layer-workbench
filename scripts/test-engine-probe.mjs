@@ -233,6 +233,8 @@ try {
     },null,{timeout:120000});
     const overrideStatus=await prepare.locator('#lab-status').innerText();
     assert.ok(overrideStatus.startsWith('PASS: 2 STL model(s)'),overrideStatus);
+    const overrideGcode=await prepare.locator('#lab-download').evaluate(async link =>
+      (await fetch(link.href)).text());
     const overrideHash = await prepare.locator('#lab-download').evaluate(async link => {
       const digest=await crypto.subtle.digest('SHA-256',await (await fetch(link.href)).arrayBuffer());
       return [...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');
@@ -265,7 +267,21 @@ try {
       return [...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');
     });
     assert.notEqual(speedHash,overrideHash,'Native output must respond to speed-only process changes');
-    console.log('PASS: bounded process speed overrides applied through native WASM and changed G-code');
+    // A G-code SHA change could be *only* a profile comment. Inspect the
+    // commanded extrusion feedrate words parsed from the actual native output.
+    const positiveExtrusionFeedrates=code=>[...new Set(
+      parseGcodeToolpaths(code).layers.flatMap(layer=>layer.segments)
+        .filter(s=>s.extrusion && Number.isFinite(s.feedrateMmMin) && s.feedrateMmMin>0)
+        .map(s=>Math.round(s.feedrateMmMin*100)/100)
+    )].sort((a,b)=>a-b);
+    const overrideFeeds=positiveExtrusionFeedrates(overrideGcode);
+    const speedGcode=await prepare.locator('#lab-download').evaluate(async link=>
+      (await fetch(link.href)).text());
+    const speedFeeds=positiveExtrusionFeedrates(speedGcode);
+    assert.ok(overrideFeeds.length>0 && speedFeeds.length>0,'Missing deposited feedrates in native output');
+    assert.notDeepEqual(speedFeeds,overrideFeeds,
+      'Process speed overrides changed only headers, not deposited G-code F values');
+    console.log('PASS: native WASM process speed overrides change commanded extrusion F values, not just metadata');
     // Change ONLY the first-layer height while retaining the previous layer,
     // wall and speed settings. Verify a changed physical extrusion Z, not just
     // a G-code hash/header difference. Generic test PLA; never printer-ready.

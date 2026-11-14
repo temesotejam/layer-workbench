@@ -73,11 +73,18 @@ export function createLayerPreview(container) {
     ctx.setLineDash([]);
     // F is the commanded modal G-code feedrate. Acceleration, cooling,
     // firmware limits and real elapsed speed cannot be inferred here.
-    const commanded=layer.segments.filter(s=>s.extrusion &&
-      Number.isFinite(s.feedrateMmMin) && s.feedrateMmMin>0)
-      .map(s=>s.feedrateMmMin/60);
-    const feedInfo=commanded.length
-      ? ` · commanded F ${Math.min(...commanded).toFixed(1)}–${Math.max(...commanded).toFixed(1)} mm/s`
+    // Avoid spreading an untrusted large layer into Math.min/Math.max:
+    // a 200k-segment diagnostic may otherwise exceed the JS argument limit.
+    let minFeed=Infinity,maxFeed=-Infinity;
+    for(const segment of layer.segments){
+      if(!segment.extrusion || !Number.isFinite(segment.feedrateMmMin) ||
+         segment.feedrateMmMin<=0)continue;
+      const mmPerSecond=segment.feedrateMmMin/60;
+      minFeed=Math.min(minFeed,mmPerSecond);
+      maxFeed=Math.max(maxFeed,mmPerSecond);
+    }
+    const feedInfo=Number.isFinite(minFeed)
+      ? ` · commanded F ${minFeed.toFixed(1)}–${maxFeed.toFixed(1)} mm/s`
       : " · commanded F unavailable";
     info.textContent=`${index+1}/${parsed.layers.length} · Z=${layer.z.toFixed(3)} mm · ${layer.segments.length} segments${feedInfo}`;
     canvas.dataset.segmentCount=String(layer.segments.length);
