@@ -119,6 +119,23 @@ export async function probeIndependentCore3mfImport(page, sourceBytes, outputDir
   await writeFile(outputDir+'/independent-core-import-diagnostic.json',
     JSON.stringify({...outcome,limitations:
       'Diagnostic only. No desktop-authored 3MF, selective imported-project editing, native metadata editing, G-code parity or print validation.'},null,2)+'\n');
+  // The initial exploratory Chrome run established that this deterministic
+  // Core fixture is accepted by the pinned candidate. Promote those observed
+  // invariants to an actual FAIL-on-regression acceptance gate. Write the
+  // diagnostic JSON first, so a future failure still retains evidence.
+  assert.equal(outcome.flattenedConversion.status,'pass',
+    'Independent 3MF conversion failed; see import diagnostic artifact');
+  assert.equal(outcome.nativeProjectImport.status,'accepted',
+    'Native import of independent Core 3MF failed');
+  assert.equal(outcome.nativeProjectImport.manifest?.schemaVersion,'0.7.0');
+  assert.equal(outcome.nativeProjectImport.manifest?.objects,2,
+    'Independent Core 3MF lost two native objects');
+  assert.equal(outcome.nativeProjectImport.manifest?.instances,2,
+    'Independent Core 3MF lost two build placements');
+  assert.equal(outcome.nativeProjectImport.twoPlacementsExposed,true);
+  assert.equal(outcome.nativeProjectImport.preservationRequireByteIdentical,true,
+    'Untouched independent Core 3MF did not survive preservation=require');
+  console.log('PASS: independently authored Core 3MF -> native import 2 objects/2 instances, exact STL bounds, untouched archive byte preservation');
   console.log('INDEPENDENT_CORE_3MF_DIAGNOSTIC '+JSON.stringify(outcome));
   return outcome;
 }
