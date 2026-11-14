@@ -25,7 +25,9 @@ NEW = """function runSupportModifierSmoke(module, session, configureSession = ()
     ...BASE_CONFIG,
     support_enable: 1,
     support_type: 'normal(auto)',
-    support_threshold_angle: 45,
+    // Low overhang threshold deliberately exercises the support-blocker gate.
+    // A 45-degree sphere slice previously generated identical G-code with/without blocker.
+    support_threshold_angle: 10,
   }))
 """
 ASSERTION = "if (assertSupportOutputChange && !supportOutputChanged)"
@@ -36,10 +38,9 @@ ENFORCER_OLD = """    {
     },"""
 ENFORCER_NEW = """    {
       role: 'support-enforcer',
-      // With a 10 mm-radius sphere centered on the mesh origin, a box
-      // spanning only Z=-1..11 mm misses most of its lower hemisphere.
-      // Cover the whole model in object-local coordinates so manual
-      // support enforcers can select downward-facing surface patches.
+      // sphereStl(2, 10) occupies Z≈0..20 mm; this Z=-15..15 box
+      // covers the lower hemisphere and most, but not all, of the sphere.
+      // The prior narrower box missed its outer XY areas.
       position: [0, 0, 0],
       size: [30, 30, 30],
     },"""

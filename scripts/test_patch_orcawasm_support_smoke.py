@@ -19,6 +19,9 @@ class SupportSmokeFixtureTests(unittest.TestCase):
     def test_enables_support_without_weakening_output_assertion(self):
         updated = module.apply_patch(self.pinned)
         self.assertIn("support_enable: 1,", updated)
+        self.assertIn("support_threshold_angle: 10,", updated)
+        self.assertNotIn("support_threshold_angle: 45,", updated)
+        self.assertIn("sphereStl(2, 10) occupies Z≈0..20 mm", updated)
         self.assertIn(module.ASSERTION, updated)
         self.assertEqual(updated.count("support_enable: 1,"), 1)
         self.assertEqual(updated.count(module.ASSERTION), 1)
