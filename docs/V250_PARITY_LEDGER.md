@@ -605,3 +605,22 @@ Commit [`76d4330`](https://github.com/temesotejam/layer-workbench/commit/76d4330
 A targeted **rerun of the failed Chrome job only**, using the exact previously successful WASM artifact, passed in [#43549216937, attempt 2](https://github.com/temesotejam/layer-workbench/actions/runs/43549216937). The log explicitly includes: independent Core import with two objects/two placements and correct bounds, untouched byte-identical source archive export, imported-project replacement strict refusal, and the best-effort metadata-loss warning. The independent accepted-candidate Chrome regression [#43554148587](https://github.com/temesotejam/layer-workbench/actions/runs/43554148587) and Pages [#43554148585](https://github.com/temesotejam/layer-workbench/actions/runs/43554148585) also passed after the script change.
 
 **Still not demonstrated:** native in-place mutation on an *imported* 3MF (without destructive `setObjects` replacement), desktop-authored full-project 3MF compatibility, opaque metadata preservation after editing, native desktop versus WASM full-profile G-code parity, or a production-isolated browser host. A successful strict **refusal** to discard metadata is a safety improvement, not lossless editing. The public Pages app still must not enable unverified WASM slicing.
+
+## 2026-11-14: strict placed-triangle membership diagnostic
+
+The independent read-only `check_3mf_stl_bounds.py` now compares **sorted
+3D vertex triples within each placed triangle** (and then sorts triangles),
+in addition to existing triangle count, AABB and independent per-axis vertex
+coordinate distributions. It reports `maxTriangleVertexDeviationMm` and
+fails if the new deviation exceeds the explicit millimetre tolerance.
+The new regression swaps complete XYZ vertices **between** two triangles:
+the old AABB and axis-distribution checks would both pass at zero error,
+but the changed triangle membership must now FAIL. Winding and triangle order
+remain intentionally irrelevant. The 200,000-triangle diagnostic cap remains.
+
+This sorted, tolerance-based comparison can conservatively reject near-tied
+vertices whose ordering changes under floating-point rounding; it does not
+prove indexed mesh topology, face/vertex identity, normals, material metadata,
+desktop OrcaSlicer parity or print safety. It is a stricter WASM 3MF→STL
+regression gate, **not** a native G-code comparison. CI execution results for
+this patch must be checked separately; success must not be presumed.

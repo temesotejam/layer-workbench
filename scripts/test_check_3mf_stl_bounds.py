@@ -89,6 +89,23 @@ class Test3mfToStlBounds(unittest.TestCase):
             self.assertAlmostEqual(result["maxAxisDistributionDeviationMm"], 0.5)
             self.assertEqual(result["axisDistributionDeviationsMm"][1], 0.0)
 
+    def test_changed_triangle_membership_with_same_vertex_multiset_fails(self):
+        # Swapping complete XYZ vertices between the two triangles keeps the
+        # AABB and every axis-coordinate distribution identical, but changes
+        # which three vertices form each triangle.
+        with tempfile.TemporaryDirectory() as d:
+            src, dst = pathlib.Path(d)/"model.3mf", pathlib.Path(d)/"model.stl"
+            make_3mf(src, unit="millimeter", second_item=True)
+            shifted = [(12,3,0),(12,4,0),(10,3,0)]
+            origin = [(0,0,0),(1,0,0),(0,2,0)]
+            make_stl(dst, [[shifted[0], origin[1], shifted[2]],
+                           [origin[0], shifted[1], origin[2]]])
+            result = compare(src, dst)
+            self.assertFalse(result["passed"], result)
+            self.assertEqual(result["maxDeviationMm"], 0.0)
+            self.assertEqual(result["maxAxisDistributionDeviationMm"], 0.0)
+            self.assertGreater(result["maxTriangleVertexDeviationMm"], 1.0)
+
     def test_triangle_order_and_winding_do_not_trigger_false_failure(self):
         with tempfile.TemporaryDirectory() as d:
             src, dst = pathlib.Path(d)/"model.3mf", pathlib.Path(d)/"model.stl"
@@ -100,6 +117,7 @@ class Test3mfToStlBounds(unittest.TestCase):
             result = compare(src, dst)
             self.assertTrue(result["passed"], result)
             self.assertLess(result["maxAxisDistributionDeviationMm"], 1e-8)
+            self.assertLess(result["maxTriangleVertexDeviationMm"], 1e-8)
 
     def test_sub_tolerance_float32_conversion_remains_accepted(self):
         with tempfile.TemporaryDirectory() as d:
