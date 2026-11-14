@@ -237,6 +237,29 @@ try {
     assert.ok(afterOverrideLayers>0);
     console.log('PASS: process override produces fresh layer preview ('+afterOverrideLayers+' Z levels)');
     console.log('PASS: local process override → native applyProfile → distinct G-code');
+    // Real one-slicer-api application: change ONLY process speed fields while
+    // retaining the existing layer/shell settings, then compare native output.
+    // This does not establish any machine's real print speed or G-code parity.
+    await prepare.locator('#lab-process').setInputFiles({
+      name:'test-process-speeds.json',mimeType:'application/json',
+      buffer:Buffer.from(JSON.stringify({
+        layer_height:0.3,wall_loops:3,
+        outer_wall_speed:35,inner_wall_speed:65,travel_speed:110,
+      })),
+    });
+    await prepare.locator('#lab-slice').click();
+    await prepare.waitForFunction(() => {
+      const text=document.querySelector('#lab-status')?.textContent || '';
+      return text.startsWith('PASS:') || text.startsWith('FAILED');
+    },null,{timeout:120000});
+    const speedStatus=await prepare.locator('#lab-status').innerText();
+    assert.ok(speedStatus.startsWith('PASS: 2 STL model(s)'),speedStatus);
+    const speedHash=await prepare.locator('#lab-download').evaluate(async link=>{
+      const digest=await crypto.subtle.digest('SHA-256',await (await fetch(link.href)).arrayBuffer());
+      return [...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');
+    });
+    assert.notEqual(speedHash,overrideHash,'Native output must respond to speed-only process changes');
+    console.log('PASS: bounded process speed overrides applied through native WASM and changed G-code');
     // Resolve 3 levels of a restricted Orca-style inherited process bundle,
     // apply its final settings and prove the actual output differs.
     await prepare.locator('#lab-process').setInputFiles([]);
