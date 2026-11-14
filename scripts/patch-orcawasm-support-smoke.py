@@ -43,6 +43,9 @@ LOOP_OLD = """  for (const modifier of cases) {
 LOOP_NEW = """  for (const modifier of cases) {
     let referenceSupports = automaticSupports
     if (assertSupportOutputChange) {
+      // Native modifier export/re-import can reinitialize the session profile.
+      // Restore the generic-PLA support fixture before EACH independent case.
+      configureSession()
       // Manual baseline exercises the enforcer; automatic baseline exercises
       // the blocker. Both must actually change sliced G-code (not just metadata).
       applyProfileOnce(module, session, {

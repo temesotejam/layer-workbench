@@ -25,6 +25,8 @@ class SupportSmokeFixtureTests(unittest.TestCase):
         self.assertIn("position: [0, 0, 5]", updated)
         self.assertIn("size: [16, 16, 12]", updated)
         self.assertIn("'normal(manual)' : 'normal(auto)'", updated)
+        self.assertIn("configureSession()\n      // Manual baseline", updated)
+        self.assertEqual(updated.count("      configureSession()"), 1)
         self.assertIn("modifiedSupports !== referenceSupports", updated)
         self.assertIn("projectSetObjectsOnce(module, session, baseline.blob, baseline.manifest)", updated)
         self.assertNotIn(module.COMPARE_OLD, updated)
