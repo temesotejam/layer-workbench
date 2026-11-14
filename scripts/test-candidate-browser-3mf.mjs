@@ -76,6 +76,23 @@ try {
   assert.ok(independent.length>300 && independent[0]===0x50 && independent[1]===0x4b,
     'Independent Core 3MF fixture generation failed');
   const external=await probeIndependentCore3mfImport(page,new Uint8Array(independent));
+  // Validate a genuine modified Core 3MF archive in the accepted native WASM
+  // importer. The offline edit changes exactly one build transform and leaves
+  // every other decompressed ZIP member intact. Still not desktop 3MF parity.
+  const changedCorePath='parity-output/edited-core-build.3mf';
+  execFileSync('python3',[
+    'scripts/edit_3mf_build_transform.py',
+    '--input',independentPath,'--output',changedCorePath,
+    '--build-index','1','--transform','1 0 0 0 1 0 0 0 1 180 90 0'
+  ],{stdio:'inherit'});
+  const changedCore=await readFile(changedCorePath);
+  assert.ok(changedCore.length>300 && !changedCore.equals(independent),
+    'Surgical Core edit did not change archive');
+  const changedImport=await probeIndependentCore3mfImport(
+    page,new Uint8Array(changedCore),'parity-output/edited-core',180);
+  assert.equal(changedImport.nativeProjectImport.preservationRequireByteIdentical,true);
+  console.log('PASS: standalone one-build Core 3MF transform edit -> native WASM import -> changed XYZ placement and untouched archive export');
+
   console.log('DIAGNOSTIC: independently generated 3MF Core native import status='+external.nativeProjectImport.status+
     ', flattened STL conversion='+external.flattenedConversion.status);
   if (process.env.CHECK_REPLACEMENT_GUARD === '1') {

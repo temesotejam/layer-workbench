@@ -5,18 +5,21 @@
 import assert from 'node:assert/strict';
 import {mkdir, writeFile} from 'node:fs/promises';
 
-export async function probeIndependentCore3mfImport(page, sourceBytes, outputDir='parity-output') {
+export async function probeIndependentCore3mfImport(page, sourceBytes, outputDir='parity-output', expectedSecondX=150) {
   assert.ok(sourceBytes instanceof Uint8Array && sourceBytes.length > 300 &&
     sourceBytes.length < 1_000_000, 'Bounded external 3MF fixture required');
   assert.equal(sourceBytes[0], 0x50, 'Expected ZIP archive');
   assert.equal(sourceBytes[1], 0x4b, 'Expected ZIP archive');
+  assert.ok(Number.isFinite(expectedSecondX) && expectedSecondX >= 130 && expectedSecondX <= 230,
+    'Expected second instance must remain within bounded Core fixture range');
   const outcome = await page.evaluate(async data => {
     if (!globalThis.crossOriginIsolated)
       throw new Error('Independent 3MF probe requires isolated Chrome');
     const engine=globalThis.__layerDiagnosticEngine?.engine;
     if (!engine?.createSession || typeof engine.threeMfToStl !== 'function')
       throw new Error('Verified native WASM engine not loaded');
-    const source=new Uint8Array(data);
+    const source=new Uint8Array(data.sourceBytes);
+    const secondX=data.secondX;
     const result={
       source:'independent synthetic 3MF Core file, not desktop OrcaSlicer',
       sourceBytes:source.byteLength,
@@ -52,7 +55,7 @@ export async function probeIndependentCore3mfImport(page, sourceBytes, outputDir
       }
       const expected=[
         {min:[90,90,0],max:[110,110,20]},
-        {min:[150,90,0],max:[170,110,20]}
+        {min:[secondX,90,0],max:[secondX+20,110,20]}
       ];
       for (let i=0;i<2;i++) {
         if (regions[i].triangles !== 12)
@@ -109,7 +112,7 @@ export async function probeIndependentCore3mfImport(page, sourceBytes, outputDir
       await session.dispose();
     }
     return result;
-  },Array.from(sourceBytes));
+  },{sourceBytes:Array.from(sourceBytes),secondX:expectedSecondX});
   await mkdir(outputDir,{recursive:true});
   if (outcome.convertedStl) {
     await writeFile(outputDir+'/independent-core-converted.stl',
