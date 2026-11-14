@@ -8,7 +8,10 @@ const SPECS={
   machine:{nozzle_diameter:[0.2,1.2],printable_height:[10,1000]},
   filament:{nozzle_temperature:[160,290],bed_temperature:[0,120]},
   process:{layer_height:[0.06,0.4],wall_loops:[1,8],sparse_infill_density:[0,100],
-    top_shell_layers:[0,12],bottom_shell_layers:[0,12]},
+    top_shell_layers:[0,12],bottom_shell_layers:[0,12],
+    // Absolute mm/s only; relative percentage-based speeds are not converted.
+    // These bounds constrain diagnostic inputs, not real printer capability.
+    outer_wall_speed:[1,800],inner_wall_speed:[1,800],travel_speed:[1,1500]},
 };
 const INTEGERS=new Set(['wall_loops','top_shell_layers','bottom_shell_layers']);
 const META=new Set(['type','name','inherits','instantiation','from','compatible_printers','setting_id','filament_id','alias']);
