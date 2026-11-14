@@ -10,6 +10,8 @@ on:
       - "scripts/native-manifest-edit.mjs"
       - "scripts/test-native-manifest-edit.mjs"
       - "scripts/test-browser-3mf-native-edit.mjs"
+      - "scripts/test-browser-3mf-independent-core-import.mjs"
+      - "scripts/make_3mf_two_build_fixture.py"
       - ".github/workflows/verify-accepted-3mf-placements.yml"
 
 permissions:
