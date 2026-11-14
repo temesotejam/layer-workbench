@@ -93,7 +93,7 @@ class Core3MFBuildTransformTests(unittest.TestCase):
                     archive.writestr(name, content)
             with self.assertRaisesRegex(ValueError, 'single'):
                 edit_core_build_item(source, dest, 0, IDENTITY_180)
-            self.assertFalse(dest.exists()
+            self.assertFalse(dest.exists())
 
     def test_refuses_unsafe_archive_and_dtd(self):
         with tempfile.TemporaryDirectory() as folder:
