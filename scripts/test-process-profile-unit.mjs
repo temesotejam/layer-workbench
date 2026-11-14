@@ -12,5 +12,13 @@ for(const bad of [{outer_wall_speed:'50%'},{travel_speed:0},{inner_wall_speed:-1
   {outer_wall_speed:801},{travel_speed:1501},{inner_wall_speed:['50','60']}]) {
   assert.throws(()=>parseTestProcessOverrides(bad),/Invalid|outside the safe test range/);
 }
+assert.deepEqual(parseTestProcessOverrides({
+  initial_layer_print_height:'0.26',layer_height:'0.3'
+}),{initial_layer_print_height:'0.26',layer_height:'0.3'});
+for(const bad of ['60%',0,-1,0.51,['0.2','0.3'],null]){
+  assert.throws(()=>parseTestProcessOverrides({initial_layer_print_height:bad}),
+    /Invalid|outside the safe test range/);
+}
+console.log('PASS: bounded initial-layer height (mm), no percentages or multi-nozzle vectors');
 console.log('PASS: bounded absolute mm/s test process speeds; percentages and multi-nozzle values rejected');
 console.log('PASS: bounded test process overrides and invalid preset rejection');

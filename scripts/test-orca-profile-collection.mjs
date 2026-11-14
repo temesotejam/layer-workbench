@@ -136,6 +136,32 @@ for(const bad of ['-1','13','2.5','nan',[],['2','3'],{},null]) {
 }
 assert.throws(()=>resolve(shellProfiles.map(p=>p.name==='0.16mm Fine @TestPrinter'
   ? {...p,bottom_shell_layers:'13'}:p),selection),/out of test limits/);
+// First-layer height is an independent native process key, not a substitute
+// for layer_height or a percentage of it. Inheritance must retain both.
+const heightProfiles=profiles.map(p=>{
+  if(p.name==='fdm_process_common')return {...p,initial_layer_print_height:'0.28'};
+  if(p.name==='0.16mm Fine @TestPrinter')return {...p,initial_layer_print_height:'0.24'};
+  return p;
+});
+const heights=resolve(heightProfiles,selection);
+assert.equal(heights.process.settings.layer_height,'0.16');
+assert.equal(heights.process.settings.initial_layer_print_height,'0.24');
+assert.ok(!heights.process.unsupported.includes('initial_layer_print_height'));
+const inheritedHeight=resolve(heightProfiles.map(p=>p.name==='0.16mm Fine @TestPrinter'
+  ? {...p,initial_layer_print_height:undefined} : p).map(p=>{
+    if(p.name==='0.16mm Fine @TestPrinter'){
+      const copy={...p}; delete copy.initial_layer_print_height; return copy;
+    }
+    return p;
+  }),selection);
+assert.equal(inheritedHeight.process.settings.initial_layer_print_height,'0.28');
+assert.equal(resolve(profiles,selection).process.settings.initial_layer_print_height,undefined);
+for(const bad of ['75%',0,'0.51','bad',['0.2','0.3'],null]){
+  assert.throws(()=>resolve(heightProfiles.map(p=>p.name==='0.16mm Fine @TestPrinter'
+    ? {...p,initial_layer_print_height:bad}:p),selection),
+    /Invalid|Multi-extruder|test limits/);
+}
+console.log('PASS: independent inherited and overridden initial-layer height, bad values rejected');
 // Official process speeds are absolute millimetres/second when numeric.
  // Never interpret relative percentage strings as absolute feedrates.
 const speedProfiles=profiles.map(p=>{

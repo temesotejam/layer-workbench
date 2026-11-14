@@ -260,6 +260,39 @@ try {
     });
     assert.notEqual(speedHash,overrideHash,'Native output must respond to speed-only process changes');
     console.log('PASS: bounded process speed overrides applied through native WASM and changed G-code');
+    // Change ONLY the first-layer height while retaining the previous layer,
+    // wall and speed settings. Verify a changed physical extrusion Z, not just
+    // a G-code hash/header difference. Generic test PLA; never printer-ready.
+    const firstExtrusionZ = code => parseGcodeToolpaths(code).layers
+      .find(layer => layer.segments.some(segment => segment.extrusion))?.z;
+    const baselineSpeedGcode=await prepare.locator('#lab-download').evaluate(async link =>
+      (await fetch(link.href)).text());
+    const baselineFirstZ=firstExtrusionZ(baselineSpeedGcode);
+    assert.ok(Number.isFinite(baselineFirstZ),'Missing baseline deposited G-code layer');
+    await prepare.locator('#lab-process').setInputFiles({
+      name:'test-first-layer-height.json',mimeType:'application/json',
+      buffer:Buffer.from(JSON.stringify({
+        layer_height:0.3,wall_loops:3,
+        outer_wall_speed:35,inner_wall_speed:65,travel_speed:110,
+        initial_layer_print_height:0.26,
+      })),
+    });
+    await prepare.locator('#lab-slice').click();
+    await prepare.waitForFunction(() => {
+      const text=document.querySelector('#lab-status')?.textContent || '';
+      return text.startsWith('PASS:') || text.startsWith('FAILED');
+    },null,{timeout:120000});
+    const firstHeightStatus=await prepare.locator('#lab-status').innerText();
+    assert.ok(firstHeightStatus.startsWith('PASS: 2 STL model(s)'),firstHeightStatus);
+    const heightGcode=await prepare.locator('#lab-download').evaluate(async link =>
+      (await fetch(link.href)).text());
+    const firstHeightZ=firstExtrusionZ(heightGcode);
+    assert.ok(Number.isFinite(firstHeightZ),'Missing overridden deposited G-code layer');
+    assert.ok(Math.abs(firstHeightZ-0.26)<0.03,
+      'Native first deposited Z does not match selected first-layer height: '+firstHeightZ);
+    assert.ok(Math.abs(firstHeightZ-baselineFirstZ)>0.03,
+      'Native first deposited Z did not respond to first-layer-only override: '+baselineFirstZ+' -> '+firstHeightZ);
+    console.log('PASS: native first-layer-only override changed deposited Z from '+baselineFirstZ+' to '+firstHeightZ+' mm');
     // Resolve 3 levels of a restricted Orca-style inherited process bundle,
     // apply its final settings and prove the actual output differs.
     await prepare.locator('#lab-process').setInputFiles([]);

@@ -710,3 +710,23 @@ This is an integration smoke and hash-difference check; it does not prove
 specific native feedrates, official full-profile parity or safe real printing.
 [Pages #43574539931](https://github.com/temesotejam/layer-workbench/actions/runs/43574539931)
 **PASS**; the unverified WASM engine was not enabled on Pages.
+
+
+## 2026-11-14: independent native first-layer height bridge (CI pending)
+
+The localhost-only restricted process adapter now accepts OrcaSlicer's
+`initial_layer_print_height` independently of `layer_height`, within a
+conservative 0.06–0.50 mm diagnostic range. Flat test overrides and inherited
+raw process profiles both forward only a finite absolute millimetre value;
+percentage strings, arrays and out-of-range values fail closed. No
+machine-specific first-layer calibration or real printer safety is implied.
+
+The isolated Chrome acceptance test has a stronger observable gate than a
+G-code hash: with the same two-STL fixture and unchanged wall, speed and
+regular layer settings, it alters only the first-layer height to 0.26 mm
+and checks the first **deposited** G-code layer's Z position. This assumes
+an unrafted flat synthetic cube with no printer-specific Z offset; it is
+not a general firmware simulator or full-profile parity test. **The new
+GitHub Actions result must be inspected separately; do not presume PASS.**
+No engine source/pthread build material was modified, and no new WASM engine
+was authorized for the public Pages deployment.
