@@ -125,5 +125,42 @@ class ComparatorTests(unittest.TestCase):
         self.assertTrue(report['match'])
         self.assertEqual(report['native_extrusion_moves'], 2)
 
+    def test_compact_motion_matches_spaced_numeric_words(self):
+        report = self.run_compare(
+            'G90\nM82\nG1X1Y2E0.5F1200\nG2X2Y2I0.5J0E1\n',
+            'G90\nM82\nG1 X1.00 Y2.0 E.500 F1200\nG2 X2 Y2 I0.50 J0 E1.00\n',
+            min_extrusion_moves=2,
+        )
+        self.assertTrue(report['match'], report)
+        self.assertEqual(report['native_motion_commands'], 2)
+        self.assertEqual(report['native_extrusion_moves'], 2)
+
+    def test_compact_numbered_motion_and_exponent(self):
+        report = self.run_compare(
+            'N15G01X1E0.5\nG1 X1E+2 Y1 E1\n',
+            'N15 G01 X1.00 E.500\nG1 X100 Y1 E1\n',
+        )
+        self.assertTrue(report['match'], report)
+        self.assertEqual(report['native_motion_commands'], 2)
+
+    def test_compact_numeric_difference_is_reported(self):
+        report = self.run_compare(
+            'G1X10Y20E0.5\n',
+            'G1 X10 Y21 E0.5\n',
+        )
+        self.assertFalse(report['match'])
+        self.assertEqual(report['first_differences'][0]['parameter_deltas'],
+                         [{'parameter': 'Y', 'wasm_minus_native': '1'}])
+
+    def test_malformed_compact_motion_and_checksum_do_not_normalize(self):
+        for malformed in ['G1X10oopsY20E1', 'G1X10Y20E1*99',
+                          'G1X10Y20E1?', 'G1X10XerrY20E1']:
+            with self.subTest(malformed=malformed):
+                report = self.run_compare(malformed + '\n', 'G1 X10 Y20 E1\n')
+                self.assertFalse(report['match'])
+        # The compact tokenizer must not change unrelated opaque vendor syntax.
+        self.assertFalse(self.run_compare('M900K0.1\nG1X1E1\n',
+                                          'M900 K0.1\nG1 X1 E1\n')['match'])
+
 if __name__ == '__main__':
     unittest.main()

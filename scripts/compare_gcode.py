@@ -15,6 +15,36 @@ import sys
 PARAM = re.compile(r'^([A-Za-z])([+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)$')
 CODE = re.compile(r'^[GMT]\d+(?:\.\d+)?$|^T\d+$|^N\d+$', re.I)
 
+# Only split common compact movement syntax (G1X10Y20E1). Do not reinterpret
+# vendor M-codes, macros or opaque commands. A malformed compact movement is
+# kept verbatim so the strict ordered comparison can expose the difference.
+# In compact G-code "X1E2" means X1 followed by E2; exponent notation needs
+# an explicit exponent sign ("X1E+2") to avoid stealing the E word.
+COMPACT_MOTION_HEAD = re.compile(
+    r'^(?:(N\d+)\s*)?(G0*[0123](?:\.0+)?)(?=[A-Za-z\s]|$)', re.I | re.ASCII
+)
+COMPACT_MOTION_WORD = re.compile(
+    r'\s*([A-Za-z])\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]\d+)?)',
+    re.I | re.ASCII
+)
+
+def split_motion_words(line):
+    """Tokenize a whole compact G0-G3 line, or leave it strictly untouched."""
+    head = COMPACT_MOTION_HEAD.match(line)
+    if head is None:
+        return line.split()
+    result = ([head.group(1)] if head.group(1) else []) + [head.group(2)]
+    index = head.end()
+    while index < len(line):
+        if line[index:].isspace():
+            break
+        word = COMPACT_MOTION_WORD.match(line, index)
+        if word is None:
+            return line.split()
+        result.append(word[1].upper() + word[2])
+        index = word.end()
+    return result
+
 def canonical(path):
     commands = []
     for n, line in enumerate(path.read_text(encoding='utf-8-sig', errors='strict').splitlines(), 1):
@@ -22,7 +52,7 @@ def canonical(path):
         if not text:
             continue
         normalized = []
-        for token in text.split():
+        for token in split_motion_words(text):
             m = PARAM.fullmatch(token)
             if m:
                 normalized.append(m[1].upper() + str(Decimal(m[2]).normalize()))

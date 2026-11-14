@@ -645,3 +645,22 @@ vendor macros, firmware retraction semantics, actual nozzle/material mapping,
 and native OrcaSlicer preview parity are still unsupported. A local parser
 regression explicitly proves no phantom path is drawn for malformed commands.
 The WASM engine and published slicing capabilities are unchanged.
+
+## 2026-11-14: compact motion words in strict native/WASM G-code comparison
+
+The read-only native-vs-WASM comparator `scripts/compare_gcode.py` now
+recognizes **fully valid compact G0/G1/G2/G3 words**, including
+`G1X10Y20E1`, `N15G01X10E1`, signed exponent coordinates and mixed
+spaced/compact numeric parameters. It normalizes their numeric values and
+counts extrusion-state fixture moves with the same strict ordered comparison
+as spaced motion lines. Previously, compact lines could be mistaken for
+non-motion and cause false fixture diagnostics or omit numeric mismatch
+details. A malformed or checksummed compact line is retained verbatim rather
+than partially converted, and unrelated vendor M-code text is left untouched.
+New unit tests cover equivalent formatting, numbered lines, parameter deltas,
+malformed words and vendor-command conservatism.
+
+This **does not execute G-code**, validate machine-specific syntax, establish
+any native OrcaSlicer v2.5.0 vs WASM output parity, or relax differences
+in the motion-command order. The true paired full-profile comparison is
+still outstanding; test and CI status must be checked independently.
