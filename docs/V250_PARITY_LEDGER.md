@@ -514,3 +514,19 @@ Core fixture, arbitrary printer profile retention, G-code parity or
 print safety. Next implementation step is an upstream-native, transactional
 instance transform operation for imported project state, together with
 metadata and object-identity comparison on re-export.
+
+**Strict acceptance follow-up:** [Chrome run #43537269103](https://github.com/temesotejam/layer-workbench/actions/runs/43537269103)
+**PASS** on the pinned native candidate. In addition to the earlier
+diagnostic observations, the test now actively FAILS if independent Core
+3MF import rejects the file, changes the two-object/two-instance native
+hierarchy, produces wrong STL geometry, or fails untouched byte-for-byte
+preservation. This still does not exercise imported-object mutations.
+
+**Pages CI reliability note:** [deployment #43537269008](https://github.com/temesotejam/layer-workbench/actions/runs/43537269008)
+failed even though upload succeeded. The deploy action initially saw zero
+`github-pages` artifacts, and a failed-job rerun uploaded a second artifact
+with the same name, leading to a duplicate-artifact error. The deployment
+workflow now separates artifact upload and deployment into dependent jobs.
+This is CI orchestration only; the published app and WASM release policy are
+unchanged. New deployment results must be checked before declaring the
+hosting issue resolved.
