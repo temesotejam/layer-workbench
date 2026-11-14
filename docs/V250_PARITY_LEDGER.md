@@ -800,3 +800,7 @@ bytes may change. It is intentionally not wired into the public browser UI,
 does not certify desktop reopening/G-code or real printing. Next gate is
 an imported-3MF **native in-place** session edit with metadata-aware semantics
 and independent browser/desktop validation.
+
+### 2026-11-14: edited Core archive imported by accepted native WASM
+
+[Isolated Chrome #43587544199](https://github.com/temesotejam/layer-workbench/actions/runs/43587544199) **PASS** with the previously accepted (not rebuilt) v2.5.0 WASM candidate. A separately generated Core 3MF was surgically edited at build index 1, shifting that 20 mm synthetic cube from X=150–170 to X=180–200 mm while retaining the first placement X=90–110 mm. The isolated browser imported the edited archive through the native 3MF project API, verified two native objects/instances, 24 flattened triangles with the changed XYZ bounds, and byte-identical `preservation=require` export of the **already edited, then untouched** archive. It does **not** demonstrate in-session native editing, editing a real desktop 3MF, semantics of opaque metadata after a change, or native-vs-WASM G-code parity. No new engine binary or public slicer behavior was enabled.
