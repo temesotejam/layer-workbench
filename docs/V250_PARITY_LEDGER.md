@@ -827,7 +827,7 @@ and untouched-export byte identity of the *already edited* archive.
 **PASS**; no WASM binary or unverified slicing was deployed.
 
 
-## 2026-11-14: selected Core 3MF build Z rotation (CI pending)
+## 2026-11-14: selected Core 3MF build Z rotation (CI PASS)
 
 The offline diagnostic editor now additionally accepts `--rotate-z-deg 90`
 to post-compose a selected build item's 3MF row-vector linear transform with
@@ -843,3 +843,15 @@ rotated independent Core cube's exact bounds and untouched archive export.
 correct pivot of desktop OrcaSlicer gizmos, metadata semantic consistency
 after an edit, a desktop-created project round-trip or printable G-code.
 No public WASM or new candidate engine binary is enabled.
+
+[3MF archive CI #43596516386](https://github.com/temesotejam/layer-workbench/actions/runs/43596516386)
+**PASS** for Python regression plus existing scene and preservation suites.
+[Accepted WASM Chrome #43596516338](https://github.com/temesotejam/layer-workbench/actions/runs/43596516338)
+**PASS**: independently generated Core 3MF with the second 20 mm cube
+rotated +90 degrees around its build translation imported into the native
+v2.5.0 WASM engine. The first cube remained unchanged, the rotated cube's
+X bounds changed from 150–170 mm to 130–150 mm while Y/Z bounds stayed
+fixed, two instances and 24 triangles were retained, and the *already edited*
+Core archive exported byte-identically with `preservation=require`.
+[Pages #43596516391](https://github.com/temesotejam/layer-workbench/actions/runs/43596516391)
+**PASS** with diagnostic code only; no candidate WASM deployment.
