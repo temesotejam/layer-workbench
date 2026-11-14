@@ -690,3 +690,23 @@ new change must be observed separately, not assumed PASS.**
 No engine binary, production public-site slicing or printer-ready profile
 is enabled by this change. Next work remains true native in-place 3MF
 editing and full native-vs-WASM paired same-input comparison.
+
+
+## 2026-11-14: observed native-WASM process speed test PASS
+
+[Pin-verified upstream profile CI #43574539971](https://github.com/temesotejam/layer-workbench/actions/runs/43574539971)
+**PASS** on commit `31e94fc`. The real upstream v2.5.0 Creality CR-10
+0.20 mm chain resolved `outer_wall_speed=25`, `inner_wall_speed=30`
+and `travel_speed=120` mm/s; 228 process keys in that selected chain
+remain unsupported, and neither a full printer configuration nor real
+printability has been verified.
+
+[Isolated Chrome CI #43574539928](https://github.com/temesotejam/layer-workbench/actions/runs/43574539928)
+**PASS**: two STL objects on one native plate, the same layer height and shell
+count, then bounded numeric wall/travel speeds were changed through the
+restricted `orca.native-json` profile operation. The browser's genuine WASM
+G-code bytes changed and the read-only path preview remained functional.
+This is an integration smoke and hash-difference check; it does not prove
+specific native feedrates, official full-profile parity or safe real printing.
+[Pages #43574539931](https://github.com/temesotejam/layer-workbench/actions/runs/43574539931)
+**PASS**; the unverified WASM engine was not enabled on Pages.
