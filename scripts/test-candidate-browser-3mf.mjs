@@ -110,6 +110,23 @@ try {
   assert.equal(rotatedImport.nativeProjectImport.preservationRequireByteIdentical,true);
   console.log('PASS: independent Core 3MF +90 degree Z build rotation -> native WASM import -> rotated XYZ bounds and untouched export');
 
+  // Positive local-axis nonuniform scale changes only the selected build
+  // instance. The first cube retains 90..110 mm XYZ bounds; the second
+  // grows to 150..180 X, 90..105 Y, and 0..10 Z.
+  const scaledCorePath='parity-output/scaled-core-build.3mf';
+  execFileSync('python3',[
+    'scripts/edit_3mf_build_transform.py',
+    '--input',independentPath,'--output',scaledCorePath,
+    '--build-index','1','--scale-local','1.5','0.75','0.5'
+  ],{stdio:'inherit'});
+  const scaledCore=await readFile(scaledCorePath);
+  assert.ok(scaledCore.length>300 && !scaledCore.equals(independent),
+    'Core build local scaling did not change archive');
+  const scaledImport=await probeIndependentCore3mfImport(
+    page,new Uint8Array(scaledCore),'parity-output/scaled-core',150,[30,15,10]);
+  assert.equal(scaledImport.nativeProjectImport.preservationRequireByteIdentical,true);
+  console.log('PASS: independent Core 3MF local-axis scaling -> WASM import -> nonuniform XYZ bounds and untouched export');
+
   console.log('DIAGNOSTIC: independently generated 3MF Core native import status='+external.nativeProjectImport.status+
     ', flattened STL conversion='+external.flattenedConversion.status);
   if (process.env.CHECK_REPLACEMENT_GUARD === '1') {

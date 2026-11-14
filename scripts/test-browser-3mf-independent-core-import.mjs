@@ -5,13 +5,16 @@
 import assert from 'node:assert/strict';
 import {mkdir, writeFile} from 'node:fs/promises';
 
-export async function probeIndependentCore3mfImport(page, sourceBytes, outputDir='parity-output', expectedSecondX=150) {
+export async function probeIndependentCore3mfImport(page, sourceBytes, outputDir='parity-output', expectedSecondX=150, expectedSecondExtent=[20,20,20]) {
   assert.ok(sourceBytes instanceof Uint8Array && sourceBytes.length > 300 &&
     sourceBytes.length < 1_000_000, 'Bounded external 3MF fixture required');
   assert.equal(sourceBytes[0], 0x50, 'Expected ZIP archive');
   assert.equal(sourceBytes[1], 0x4b, 'Expected ZIP archive');
   assert.ok(Number.isFinite(expectedSecondX) && expectedSecondX >= 130 && expectedSecondX <= 230,
     'Expected second instance must remain within bounded Core fixture range');
+  assert.ok(Array.isArray(expectedSecondExtent) && expectedSecondExtent.length===3 &&
+    expectedSecondExtent.every(value=>Number.isFinite(value) && value>=0.5 && value<=100),
+    'Expected second Core bounds must have three bounded positive extents');
   const outcome = await page.evaluate(async data => {
     if (!globalThis.crossOriginIsolated)
       throw new Error('Independent 3MF probe requires isolated Chrome');
@@ -20,6 +23,7 @@ export async function probeIndependentCore3mfImport(page, sourceBytes, outputDir
       throw new Error('Verified native WASM engine not loaded');
     const source=new Uint8Array(data.sourceBytes);
     const secondX=data.secondX;
+    const extent=data.secondExtent;
     const result={
       source:'independent synthetic 3MF Core file, not desktop OrcaSlicer',
       sourceBytes:source.byteLength,
@@ -55,7 +59,7 @@ export async function probeIndependentCore3mfImport(page, sourceBytes, outputDir
       }
       const expected=[
         {min:[90,90,0],max:[110,110,20]},
-        {min:[secondX,90,0],max:[secondX+20,110,20]}
+        {min:[secondX,90,0],max:[secondX+extent[0],90+extent[1],extent[2]]}
       ];
       for (let i=0;i<2;i++) {
         if (regions[i].triangles !== 12)
@@ -112,7 +116,7 @@ export async function probeIndependentCore3mfImport(page, sourceBytes, outputDir
       await session.dispose();
     }
     return result;
-  },{sourceBytes:Array.from(sourceBytes),secondX:expectedSecondX});
+  },{sourceBytes:Array.from(sourceBytes),secondX:expectedSecondX,secondExtent:expectedSecondExtent});
   await mkdir(outputDir,{recursive:true});
   if (outcome.convertedStl) {
     await writeFile(outputDir+'/independent-core-converted.stl',

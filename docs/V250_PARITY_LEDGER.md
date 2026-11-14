@@ -855,3 +855,23 @@ fixed, two instances and 24 triangles were retained, and the *already edited*
 Core archive exported byte-identically with `preservation=require`.
 [Pages #43596516391](https://github.com/temesotejam/layer-workbench/actions/runs/43596516391)
 **PASS** with diagnostic code only; no candidate WASM deployment.
+
+
+## 2026-11-14: local-axis nonuniform scale of a Core 3MF build item
+
+The offline diagnostic editor \`scripts/edit_3mf_build_transform.py\` now accepts
+\`--scale-local SX SY SZ\` with bounded strictly positive, dimensionless
+factors. It pre-multiplies the selected build-item matrix by a row-vector
+scale (local axes), preserving the existing build translation as the pivot.
+It does not interpret the pivot as the mesh center, decompose rotation/shear,
+or change other build items. Negative/mirror, zero, no-op and out-of-range
+factors fail closed; unrelated ZIP members are compared after decompression.
+Synthetic tests cover existing nonuniform rotation, an opaque metadata member,
+model unit independence, and invalid inputs.
+
+The pinned isolated-Chrome acceptance adds a nonuniform scale of a synthetic
+two-build Core 3MF and checks its resulting XYZ bounds and untouched native
+WASM re-export. This does **not** establish native-session edits or
+desktop-authored Orca 3MF metadata compatibility. The CI results must be
+confirmed from the run before claiming success. No candidate rebuild or
+public engine deployment is required.

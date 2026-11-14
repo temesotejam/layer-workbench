@@ -220,6 +220,43 @@ def rotate_core_build_item_z(source, destination, item_index, angle_degrees):
     return result
 
 
+def scale_core_build_item_local(source, destination, item_index, factors):
+    """Scale a Core build placement on its LOCAL axes, keeping its origin fixed.
+
+    For 3MF row-vector transforms this is S @ existing_transform. The local
+    mesh origin remains at the same build translation, and any existing
+    rotation/shear is preserved by composition (not decomposed). This is
+    independent of model units and is NOT a native session operation.
+    Negative/mirrored or nearly singular factors are intentionally excluded.
+    """
+    if not isinstance(item_index, int) or isinstance(item_index, bool) or item_index < 0:
+        raise ValueError('Build item index must be zero-based nonnegative integer')
+    if not isinstance(factors, (list, tuple)) or len(factors) != 3 or any(
+        isinstance(v, bool) or not isinstance(v, (int, float))
+        or not math.isfinite(v) or not 0.01 <= v <= 100 for v in factors
+    ):
+        raise ValueError('Local scale requires three positive finite factors in 0.01..100')
+    if all(v == 1 for v in factors):
+        raise ValueError('No relative scale requested')
+    scene = audit(source)
+    if scene['modelParts'] != 1 or scene['scenes'][0]['part'] != MODEL_PART:
+        raise ValueError('Only a single 3D/3dmodel.model Core part is supported')
+    part = scene['scenes'][0]
+    if item_index >= len(part['buildItems']):
+        raise ValueError('Selected build item out of range')
+    original = part['buildItems'][item_index]['transform3mf']
+    sx, sy, sz = factors
+    scale = [sx, 0, 0, 0, sy, 0, 0, 0, sz, 0, 0, 0]
+    scaled = compose_3mf(scale, original)
+    scaled[9:12] = original[9:12]  # Explicitly keep the build origin.
+    serialized = ' '.join(format(value, '.17g') for value in scaled)
+    validated_matrix(serialized)
+    result = edit_core_build_item(source, destination, item_index, serialized)
+    result['relativeLocalScale'] = list(factors)
+    result['pivot'] = 'existing build translation (not mesh center)'
+    return result
+
+
 def main():
     command = argparse.ArgumentParser(description=__doc__)
     command.add_argument('--input', required=True, type=Path)
@@ -231,6 +268,8 @@ def main():
                        help='Relative world-axis mm move; preserve existing rotation and scale')
     edits.add_argument('--rotate-z-deg', type=float,
                        help='World-axis Z rotation around existing build translation (not mesh center)')
+    edits.add_argument('--scale-local', nargs=3, type=float, metavar=('SX','SY','SZ'),
+                       help='Positive local-axis XYZ scale around the existing build translation')
     args = command.parse_args()
     try:
         if args.translate_mm is not None:
@@ -239,6 +278,9 @@ def main():
         elif args.rotate_z_deg is not None:
             result = rotate_core_build_item_z(args.input, args.output,
                                               args.build_index, args.rotate_z_deg)
+        elif args.scale_local is not None:
+            result = scale_core_build_item_local(args.input, args.output,
+                                                 args.build_index, args.scale_local)
         else:
             result = edit_core_build_item(args.input, args.output,
                                           args.build_index, args.transform)

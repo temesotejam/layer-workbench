@@ -6,7 +6,7 @@ import zipfile
 
 from audit_3mf_scene import audit
 from compare_3mf_metadata import inventory
-from edit_3mf_build_transform import edit_core_build_item, translate_core_build_item, rotate_core_build_item_z
+from edit_3mf_build_transform import edit_core_build_item, translate_core_build_item, rotate_core_build_item_z, scale_core_build_item_local
 from make_3mf_two_build_fixture import make_file
 
 IDENTITY_180 = '1 0 0 0 1 0 0 0 1 180 90 0'
@@ -139,6 +139,62 @@ class Core3MFBuildTransformTests(unittest.TestCase):
                 with self.subTest(index=index, degrees=degrees):
                     with self.assertRaises(ValueError):
                         rotate_core_build_item_z(source, dest, index, degrees)
+                    self.assertFalse(dest.exists())
+
+    def test_local_scale_preserves_rotation_translation_and_opaque_metadata(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source, dest = self.paths(folder)
+            self.rewrite_core_model(source, [(b'1 0 0 0 1 0 0 0 1 150 90 0',
+                                              b'0 2 0 -1 0 0 0 0 1 150 90 0')])
+            with zipfile.ZipFile(source, 'a') as archive:
+                archive.writestr('Metadata/vendor.bin', b'keep-project-bytes')
+            original_bytes, before = source.read_bytes(), inventory(source)
+            result = scale_core_build_item_local(source, dest, 1, (2, 3, 0.5))
+            self.assertEqual(result['relativeLocalScale'], [2, 3, 0.5])
+            self.assertIn('not mesh center', result['pivot'])
+            self.assertEqual(source.read_bytes(), original_bytes)
+            after = inventory(dest)
+            self.assertEqual(set(before), set(after))
+            for name in before:
+                if name != '3D/3dmodel.model':
+                    self.assertEqual(before[name], after[name], name)
+            old, new = audit(source)['scenes'][0], audit(dest)['scenes'][0]
+            self.assertEqual(old['buildItems'][0], new['buildItems'][0])
+            self.assertEqual(old['buildItems'][1]['transform3mf'][9:],
+                             new['buildItems'][1]['transform3mf'][9:])
+            actual = new['buildItems'][1]['transform3mf']
+            expected = (0, 4, 0, -3, 0, 0, 0, 0, 0.5, 150, 90, 0)
+            for value, wanted in zip(actual, expected):
+                self.assertAlmostEqual(value, wanted, places=9)
+            bounds = new['resolvedMeshInstances'][1]['conservativeWorldBounds']
+            for side, expected_xyz in [('min', (90, 90, 0)), ('max', (150, 170, 10))]:
+                for value, wanted in zip(bounds[side], expected_xyz):
+                    self.assertAlmostEqual(value, wanted, places=9)
+
+    def test_local_scale_independent_of_model_unit(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source, dest = self.paths(folder)
+            self.rewrite_core_model(source, [(b'unit="millimeter"', b'unit="inch"')])
+            scale_core_build_item_local(source, dest, 1, (1.5, 0.75, 0.5))
+            old, new = audit(source)['scenes'][0], audit(dest)['scenes'][0]
+            self.assertEqual(new['unit'], 'inch')
+            self.assertEqual(old['buildItems'][0], new['buildItems'][0])
+            self.assertEqual(new['buildItems'][1]['transform3mf'],
+                             [1.5, 0, 0, 0, 0.75, 0, 0, 0, 0.5, 150, 90, 0])
+
+    def test_local_scale_rejects_mirror_noop_and_nonfinite(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source, dest = self.paths(folder)
+            for index, factors in (
+                (-1, (2, 1, 1)), (2, (2, 1, 1)), (True, (2, 1, 1)),
+                (1, (1, 1, 1)), (1, (0, 1, 1)), (1, (-1, 1, 1)),
+                (1, (0.001, 1, 1)), (1, (101, 1, 1)),
+                (1, (float('inf'), 1, 1)), (1, (float('nan'), 1, 1)),
+                (1, (True, 1, 1)), (1, (2, 1)), (1, '2 1 1')
+            ):
+                with self.subTest(index=index, factors=factors):
+                    with self.assertRaises(ValueError):
+                        scale_core_build_item_local(source, dest, index, factors)
                     self.assertFalse(dest.exists())
 
     def test_relative_move_obeys_non_mm_3mf_model_units(self):
