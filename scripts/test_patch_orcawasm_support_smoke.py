@@ -12,24 +12,33 @@ spec.loader.exec_module(module)
 class SupportSmokeFixtureTests(unittest.TestCase):
     def setUp(self):
         self.pinned = ("\n".join([
-            module.OLD, module.ENFORCER_OLD, module.LOOP_OLD,
-            module.COMPARE_OLD, module.ASSERTION,
+            module.OLD, module.ENFORCER_OLD, module.BLOCKER_OLD, module.LOOP_OLD,
+            module.COMPARE_OLD, module.ASSERTION, module.FAIL_MESSAGE_OLD,
         ]) + "\n")
 
     def test_enables_support_without_weakening_output_assertion(self):
         updated = module.apply_patch(self.pinned)
         self.assertIn("support_enable: 1,", updated)
+        self.assertIn("support_threshold_angle: 10,", updated)
+        self.assertNotIn("support_threshold_angle: 45,", updated)
+        self.assertIn("sphereStl(2, 10) occupies Z≈0..20 mm", updated)
         self.assertIn(module.ASSERTION, updated)
         self.assertEqual(updated.count("support_enable: 1,"), 1)
         self.assertEqual(updated.count(module.ASSERTION), 1)
-        self.assertIn("position: [0, 0, 5]", updated)
-        self.assertIn("size: [16, 16, 12]", updated)
+        self.assertIn("position: [0, 0, 0]", updated)
+        self.assertIn("position: [0, 0, 15]", updated)
+        self.assertEqual(updated.count("size: [30, 30, 30]"), 2)
+        self.assertNotIn(module.BLOCKER_OLD, updated)
+        self.assertNotIn("size: [16, 16, 12]", updated)
         self.assertIn("'normal(manual)' : 'normal(auto)'", updated)
         self.assertIn("configureSession()\n      // Manual baseline", updated)
         self.assertEqual(updated.count("      configureSession()"), 1)
         self.assertIn("modifiedSupports !== referenceSupports", updated)
         self.assertIn("projectSetObjectsOnce(module, session, baseline.blob, baseline.manifest)", updated)
         self.assertNotIn(module.COMPARE_OLD, updated)
+        self.assertIn("support annotations=", updated)
+        self.assertIn("label + ' baseline", updated)
+        self.assertNotIn(module.FAIL_MESSAGE_OLD, updated)
         self.assertNotIn(module.ENFORCER_OLD, updated)
 
     def test_rejects_missing_or_duplicate_setup(self):
@@ -39,7 +48,7 @@ class SupportSmokeFixtureTests(unittest.TestCase):
             module.apply_patch(self.pinned + module.OLD)
 
     def test_rejects_partial_unsafe_fixture_or_duplicate_anchors(self):
-        for anchor in (module.ENFORCER_OLD, module.LOOP_OLD, module.COMPARE_OLD):
+        for anchor in (module.ENFORCER_OLD, module.BLOCKER_OLD, module.LOOP_OLD, module.COMPARE_OLD, module.FAIL_MESSAGE_OLD):
             with self.subTest(anchor=anchor[:30]):
                 with self.assertRaisesRegex(ValueError, "pinned smoke"):
                     module.apply_patch(self.pinned.replace(anchor, ""))

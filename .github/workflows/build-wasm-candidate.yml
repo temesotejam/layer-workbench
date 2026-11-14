@@ -12,6 +12,8 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
+      - "scripts/patch-orcawasm-support-smoke.py"
+      - "scripts/test_patch_orcawasm_support_smoke.py"
       - "scripts/patch_orcawasm_private_instance_edit.py"
       - "scripts/test-v250-private-instance-edit.mjs"
       - ".github/workflows/build-wasm-candidate.yml"

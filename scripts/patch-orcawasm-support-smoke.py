@@ -6,7 +6,8 @@ an *automatic* baseline that had already placed supports under the sphere.
 This checks separate, role-appropriate references: a manual-support baseline
 for the enforcer, and an automatic-support baseline for the blocker. The
 enforcer volume is moved onto the actual sphere underside rather than its
-upper rim. Output-difference and native re-import assertions remain STRICT.
+upper rim. The blocker volume covers the entire synthetic sphere footprint
+and full above-bed column so edge supports are not left outside the blocker. Output-difference and native re-import assertions remain STRICT.
 Only used in disposable CI checkouts of pinned Hiosdra/OrcaWasm sources.
 """
 from pathlib import Path
@@ -24,7 +25,9 @@ NEW = """function runSupportModifierSmoke(module, session, configureSession = ()
     ...BASE_CONFIG,
     support_enable: 1,
     support_type: 'normal(auto)',
-    support_threshold_angle: 45,
+    // Low overhang threshold deliberately exercises the support-blocker gate.
+    // A 45-degree sphere slice previously generated identical G-code with/without blocker.
+    support_threshold_angle: 10,
   }))
 """
 ASSERTION = "if (assertSupportOutputChange && !supportOutputChanged)"
@@ -35,9 +38,26 @@ ENFORCER_OLD = """    {
     },"""
 ENFORCER_NEW = """    {
       role: 'support-enforcer',
-      position: [0, 0, 5],
+      // sphereStl(2, 10) occupies Z≈0..20 mm; this Z=-15..15 box
+      // covers the lower hemisphere and most, but not all, of the sphere.
+      // The prior narrower box missed its outer XY areas.
+      position: [0, 0, 0],
+      size: [30, 30, 30],
+    },"""
+BLOCKER_OLD = """    {
+      role: 'support-blocker',
+      position: [0, 0, 6],
       size: [16, 16, 12],
     },"""
+BLOCKER_NEW = """    {
+      role: 'support-blocker',
+      // Cover the entire 10 mm radius synthetic sphere and the full
+      // above-bed support column, rather than only its central 8 mm.
+      // The earlier box missed supports near the sphere perimeter.
+      position: [0, 0, 15],
+      size: [30, 30, 30],
+    },"""
+
 LOOP_OLD = """  for (const modifier of cases) {
     const project = makeSupportModifierProject(meshBytes, modifier)"""
 LOOP_NEW = """  for (const modifier of cases) {
@@ -58,6 +78,17 @@ LOOP_NEW = """  for (const modifier of cases) {
     const project = makeSupportModifierProject(meshBytes, modifier)"""
 COMPARE_OLD = "    const supportOutputChanged = modifiedSupports !== automaticSupports"
 COMPARE_NEW = "    const supportOutputChanged = modifiedSupports !== referenceSupports"
+FAIL_MESSAGE_OLD = "      throw new Error(modifier.role + ' did not change support output from the automatic-support baseline')"
+FAIL_MESSAGE_NEW = """      // A full G-code equality check is the existing strict gate. Report
+      // which baseline actually failed, plus diagnostic support annotations.
+      // These annotations are not used to turn a failure into a pass.
+      const label = modifier.role === 'support-enforcer' ? 'manual' : 'automatic'
+      const supportMarkers = (gcode) => gcode.split(/\\r?\\n/u)
+        .filter((line) => /;\\s*(?:TYPE|FEATURE)\\s*:\\s*support/iu.test(line)).length
+      throw new Error(modifier.role + ' did not change support output from the '
+        + label + ' baseline (bytes=' + referenceSupports.length + '/' + modifiedSupports.length
+        + ', support annotations=' + supportMarkers(referenceSupports) + '/'
+        + supportMarkers(modifiedSupports) + ')')"""
 
 
 def apply_patch(source: str) -> str:
@@ -68,8 +99,10 @@ def apply_patch(source: str) -> str:
     patches = (
         (OLD, NEW, "generic support setup"),
         (ENFORCER_OLD, ENFORCER_NEW, "enforcer geometry"),
+        (BLOCKER_OLD, BLOCKER_NEW, "blocker full-footprint geometry"),
         (LOOP_OLD, LOOP_NEW, "role-specific reference baseline"),
         (COMPARE_OLD, COMPARE_NEW, "reference comparison"),
+        (FAIL_MESSAGE_OLD, FAIL_MESSAGE_NEW, "role-specific failure diagnostics"),
     )
     for old, new, label in patches:
         if source.count(old) != 1:
