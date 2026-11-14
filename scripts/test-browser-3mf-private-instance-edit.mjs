@@ -166,6 +166,22 @@ export async function checkBrowserPrivateImportedInstanceEdit(
   assert.equal(result.privateCAbiCalled,true);
   assert.equal(result.strictPreservationRejected,true);
   assert.equal(result.flattenedTriangles,24);
+  // New, isolated test-only sessions re-slice native WASM-flattened source
+  // and edited 3MFs with the SAME generic profile. Assert deposited XY
+  // paths move from the old cube's region to the edited cube's region.
+  // This deliberately does NOT claim direct 3MF Slic3r::Model re-slicing.
+  const toolpathDiagnostic=await page.evaluate(async ({source,edited})=>{
+    if(!globalThis.crossOriginIsolated)
+      throw new Error('Private edit toolpath test requires isolated Chrome');
+    const engine=globalThis.__layerDiagnosticEngine?.engine;
+    const {diagnosePrivateEdited3mfToolpathShift}=
+      await import('/scripts/diagnose-edited-3mf-toolpaths.mjs');
+    return diagnosePrivateEdited3mfToolpathShift(
+      engine,new Uint8Array(source),new Uint8Array(edited));
+  },{source:Array.from(sourceBytes),edited:result.editedArchive});
+  assert.equal(toolpathDiagnostic.status,'PASS');
+  assert.equal(toolpathDiagnostic.printApproved,false);
+  result.editedToolpathDiagnostic=toolpathDiagnostic;
   const archive=Buffer.from(result.editedArchive);
   const stl=Buffer.from(result.flattenedStl);
   delete result.editedArchive;
@@ -175,6 +191,6 @@ export async function checkBrowserPrivateImportedInstanceEdit(
   await writeFile(outputDir+'/browser-private-edited-instance.stl',stl);
   await writeFile(outputDir+'/browser-private-imported-instance-edit.json',
     JSON.stringify(result,null,2)+'\n');
-  console.log('PASS: isolated Chrome private 3MF C ABI, strict preservation guard and flattened edited mesh bounds');
+  console.log('PASS: isolated Chrome private 3MF C ABI, strict preservation guard, edited STL geometry, and synthetic flattened-STL reslice XY paths');
   return result;
 }
