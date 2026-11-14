@@ -56,7 +56,7 @@ class Core3MFBuildTransformTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             source, dest = self.paths(folder)
             for index, transform, error in (
-                (-1, IDENTITY_180, 'index'),
+                (-1, IDENTITY_180, 'range'),
                 (2, IDENTITY_180, 'range'),
                 (1, '1 0 0', '12'),
                 (1, '1 0 0 0 1 0 0 0 1 NaN 0 0', 'Non-finite'),
