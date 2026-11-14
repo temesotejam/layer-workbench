@@ -5,6 +5,7 @@ import {readFile} from 'node:fs/promises';
 import {chromium} from 'playwright';
 import {checkBrowserMultiObject3mf} from './test-browser-3mf-multiobject.mjs';
 import {checkNativeManifestEditRoundTrip} from './test-browser-3mf-native-edit.mjs';
+import {probeIndependentCore3mfImport} from './test-browser-3mf-independent-core-import.mjs';
 
 const base = process.env.ENGINE_PROBE_URL ?? 'http://127.0.0.1:8766/';
 const artifactDir = process.env.ENGINE_ARTIFACT_DIR ?? 'engine-test-artifacts';
@@ -61,6 +62,10 @@ try {
   const edited = await checkNativeManifestEditRoundTrip(page,cube);
   assert.equal(edited.triangles,24);
   console.log('PASS: native 3MF export/reimport after isolated instance-only rotation, scale and translation; source is synthetic STL, not desktop 3MF');
+  const independent=await readFile('parity-output/independent-core-two-build.3mf');
+  const external=await probeIndependentCore3mfImport(page,new Uint8Array(independent));
+  console.log('DIAGNOSTIC: independently generated 3MF Core native import status='+external.nativeProjectImport.status+
+    ', flattened STL conversion='+external.flattenedConversion.status);
 } finally {
   await browser.close();
 }

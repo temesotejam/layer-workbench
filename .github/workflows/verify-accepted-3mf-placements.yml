@@ -37,6 +37,8 @@ jobs:
           run-id: 43517364379
           github-token: ${{ github.token }}
           path: engine-test-artifacts
+      - name: Build independent synthetic 3MF Core input
+        run: python3 scripts/make_3mf_two_build_fixture.py --output parity-output/independent-core-two-build.3mf
       - name: Check pinned artifact and test syntax
         run: |
           set -euo pipefail
@@ -45,6 +47,7 @@ jobs:
           node --check scripts/test-browser-3mf-multiobject.mjs
           node --check scripts/test-candidate-browser-3mf.mjs
           node --check scripts/test-browser-3mf-native-edit.mjs
+          node --check scripts/test-browser-3mf-independent-core-import.mjs
           node --check scripts/native-manifest-edit.mjs
           node scripts/test-native-manifest-edit.mjs
       - name: Assert each cube's own XYZ placement in isolated Chrome
@@ -59,6 +62,15 @@ jobs:
             sleep 1
           done
           node scripts/test-candidate-browser-3mf.mjs
+          # Core input was generated independently of the WASM exporter.
+          # The probe records unsupported imports separately from strict
+          # accepted-candidate invariants, without claiming desktop parity.
+          if test -s parity-output/independent-core-converted.stl; then
+            python3 scripts/check_3mf_stl_bounds.py \
+              --input parity-output/independent-core-two-build.3mf \
+              --stl parity-output/independent-core-converted.stl \
+              --report parity-output/independent-core-geometry-comparison.json
+          fi
           python3 scripts/audit_3mf_scene.py \
             --input parity-output/wasm-edited-manifest-instance.3mf \
             --expected-build-items 2 --min-triangles 24 \
