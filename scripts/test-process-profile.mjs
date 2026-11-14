@@ -8,6 +8,11 @@ const LIMITS = {
   sparse_infill_density: [0,100],
   top_shell_layers: [0,12],
   bottom_shell_layers: [0,12],
+  // Absolute millimetres/second for localhost WASM tests only.
+  // Percentages and vendor-specific relative speed modes remain unsupported.
+  outer_wall_speed: [1,800],
+  inner_wall_speed: [1,800],
+  travel_speed: [1,1500],
 };
 const INTEGERS = new Set(["wall_loops","top_shell_layers","bottom_shell_layers"]);
 
