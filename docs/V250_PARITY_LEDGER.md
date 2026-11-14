@@ -559,3 +559,37 @@ requires a best-effort data-loss warning. The test is only enabled on the
 applied to the previously accepted #43517364379 binary. No WASM is
 enabled on the public Pages build. Audit, build and Chrome statuses must
 be checked from GitHub Actions before treating this safety patch as verified.
+
+
+## 2026-11-14: independently gated rebuilt-WASM imported-3MF preservation regression
+
+[Candidate build #43543086458](https://github.com/temesotejam/layer-workbench/actions/runs/43543086458)
+**FAIL** in the *generic support-enforcer smoke test*, despite successful C++ compile,
+API conformance, asynchronous binding checks, and the independent **two native
+3MF objects / two instances / 24 STL triangles** regression. Adding an explicit
+`support_enable: 1` to that pinned smoke fixture did not resolve the lack
+of a G-code change; this is **not** evidence that the imported 3MF preservation
+guard fails. No candidate WASM artifact was approved/uploaded and the dependent
+isolated Chrome workflow was skipped. Do not weaken the smoke assertion or
+describe this build as green.
+
+Added `scripts/test-v250-imported-replacement-guard.mjs` as a **separate strict
+Node/WASM runtime gate**, called immediately after compilation and before the
+potentially failing support-modifier smoke. It consumes a *fresh, independently
+generated Core 3MF with two build placements* (not desktop-authored), verifies
+the byte-identical untouched `preservation=require` export, intentionally
+replaces it with a one-object synthetic STL using `setObjects`, demands a
+specific strict-preservation refusal, requires
+`warnings[].code = native-project-replaced` for best-effort export, and
+checks that re-importing a fresh clean project resets the sticky guard.
+A JSON-only report is archived even when an unrelated smoke step fails;
+the unapproved WASM binary is **never** archived by this report step.
+
+The smoke step is now independently gated on completed compilation rather
+than the earlier guard's pass, so both failures are visible. The build job
+still FAILS when either guard or smoke fails, and the Chrome acceptance
+workflow still requires a fully successful candidate build. These are new
+test/CI changes, **not yet an observed PASS for the new guard test**.
+The next build's specific runtime outcome must be inspected before approving
+or attempting broader 3MF metadata editing. No public production feature,
+printer G-code, or metadata-lossless edit is enabled by this change.
