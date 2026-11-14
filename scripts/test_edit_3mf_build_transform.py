@@ -6,7 +6,7 @@ import zipfile
 
 from audit_3mf_scene import audit
 from compare_3mf_metadata import inventory
-from edit_3mf_build_transform import edit_core_build_item, translate_core_build_item
+from edit_3mf_build_transform import edit_core_build_item, translate_core_build_item, rotate_core_build_item_z
 from make_3mf_two_build_fixture import make_file
 
 IDENTITY_180 = '1 0 0 0 1 0 0 0 1 180 90 0'
@@ -86,6 +86,60 @@ class Core3MFBuildTransformTests(unittest.TestCase):
             for name in old:
                 if name != '3D/3dmodel.model':
                     self.assertEqual(old[name], after[name], name)
+
+    def test_relative_z_rotation_preserves_other_item_and_opaque_archive(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source, dest = self.paths(folder)
+            with zipfile.ZipFile(source, 'a') as archive:
+                archive.writestr('Metadata/vendor.xml', b'<opaque>keep</opaque>')
+            original = source.read_bytes()
+            before = inventory(source)
+            result = rotate_core_build_item_z(source, dest, 1, 90)
+            self.assertEqual(result['relativeRotationZDegrees'], 90)
+            self.assertIn('not mesh center', result['pivot'])
+            self.assertEqual(source.read_bytes(), original)
+            after = inventory(dest)
+            self.assertEqual(set(before), set(after))
+            for name in before:
+                if name != '3D/3dmodel.model':
+                    self.assertEqual(before[name], after[name], name)
+            old = audit(source)['scenes'][0]
+            new = audit(dest)['scenes'][0]
+            self.assertEqual(old['buildItems'][0], new['buildItems'][0])
+            matrix = new['buildItems'][1]['transform3mf']
+            for value, expected in zip(matrix, (0, 1, 0, -1, 0, 0, 0, 0, 1, 150, 90, 0)):
+                self.assertAlmostEqual(value, expected, places=10)
+            instances = new['resolvedMeshInstances']
+            bounds = instances[1]['conservativeWorldBounds']
+            for side, expected in [('min', (130, 90, 0)), ('max', (150, 110, 20))]:
+                for actual, wanted in zip(bounds[side], expected):
+                    self.assertAlmostEqual(actual, wanted, places=9)
+
+    def test_relative_z_rotation_preserves_nonuniform_scale(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source, dest = self.paths(folder)
+            self.rewrite_core_model(source, [(b'1 0 0 0 1 0 0 0 1 150 90 0',
+                                              b'0 2 0 -1 0 0 0 0 1 150 90 0')])
+            result = rotate_core_build_item_z(source, dest, 1, 90)
+            self.assertEqual(result['editedBuildIndex'], 1)
+            before = audit(source)['scenes'][0]['buildItems']
+            after = audit(dest)['scenes'][0]['buildItems']
+            self.assertEqual(before[0], after[0])
+            self.assertEqual(before[1]['transform3mf'][9:], after[1]['transform3mf'][9:])
+            for value, expected in zip(after[1]['transform3mf'][:9], (-2, 0, 0, 0, -1, 0, 0, 0, 1)):
+                self.assertAlmostEqual(value, expected, places=10)
+
+    def test_relative_z_rotation_rejects_invalid_and_noop(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source, dest = self.paths(folder)
+            for index, degrees in ((-1, 90), (2, 90), (True, 90),
+                                   (1, 0), (1, 360), (1, -360),
+                                   (1, True), (1, float('nan')),
+                                   (1, float('inf')), (1, 361)):
+                with self.subTest(index=index, degrees=degrees):
+                    with self.assertRaises(ValueError):
+                        rotate_core_build_item_z(source, dest, index, degrees)
+                    self.assertFalse(dest.exists())
 
     def test_relative_move_obeys_non_mm_3mf_model_units(self):
         with tempfile.TemporaryDirectory() as folder:

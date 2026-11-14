@@ -15,6 +15,7 @@ from xml.parsers import expat
 
 from audit_3mf_scene import CORE, audit, parse_transform
 from compare_3mf_metadata import inventory
+from three_mf_instance_expansion import compose_3mf
 
 MODEL_PART = '3D/3dmodel.model'
 CORE_NS = CORE[1:-1]
@@ -183,6 +184,42 @@ def translate_core_build_item(source, destination, item_index, delta_mm):
     return result
 
 
+def rotate_core_build_item_z(source, destination, item_index, angle_degrees):
+    """Rotate one Core build placement around its own translation anchor.
+
+    This is a WORLD-axis Z rotation using 3MF row-vector composition. The
+    existing linear matrix is post-multiplied by Rz; its translation is
+    restored so the pivot stays at the build item's current origin, NOT the
+    mesh center. A source STL is not recentered or edited in this operation.
+    """
+    if not isinstance(item_index, int) or isinstance(item_index, bool) or item_index < 0:
+        raise ValueError('Build item index must be zero-based nonnegative integer')
+    if isinstance(angle_degrees, bool) or not isinstance(angle_degrees, (int, float)) or \
+       not math.isfinite(angle_degrees) or abs(angle_degrees) > 360:
+        raise ValueError('Z rotation requires a finite angle within -360..360 degrees')
+    if angle_degrees % 360 == 0:
+        raise ValueError('No relative rotation requested')
+    scene = audit(source)
+    if scene['modelParts'] != 1 or scene['scenes'][0]['part'] != MODEL_PART:
+        raise ValueError('Only a single 3D/3dmodel.model Core part is supported')
+    items = scene['scenes'][0]['buildItems']
+    if item_index >= len(items):
+        raise ValueError('Selected build item out of range')
+    original = items[item_index]['transform3mf']
+    radians = math.radians(angle_degrees)
+    cosine, sine = math.cos(radians), math.sin(radians)
+    # Core 3MF uses row vectors: (x,y) -> (x*cos-y*sin, x*sin+y*cos).
+    rotation = [cosine, sine, 0, -sine, cosine, 0, 0, 0, 1, 0, 0, 0]
+    rotated = compose_3mf(original, rotation)
+    rotated[9:12] = original[9:12]  # Rotation about the existing origin.
+    serialized = ' '.join(format(value, '.17g') for value in rotated)
+    validated_matrix(serialized)
+    result = edit_core_build_item(source, destination, item_index, serialized)
+    result['relativeRotationZDegrees'] = angle_degrees
+    result['pivot'] = 'existing build translation (not mesh center)'
+    return result
+
+
 def main():
     command = argparse.ArgumentParser(description=__doc__)
     command.add_argument('--input', required=True, type=Path)
@@ -192,11 +229,16 @@ def main():
     edits.add_argument('--transform', help='12 numbers in Core 3MF row-vector order (source model units)')
     edits.add_argument('--translate-mm', nargs=3, type=float, metavar=('DX','DY','DZ'),
                        help='Relative world-axis mm move; preserve existing rotation and scale')
+    edits.add_argument('--rotate-z-deg', type=float,
+                       help='World-axis Z rotation around existing build translation (not mesh center)')
     args = command.parse_args()
     try:
         if args.translate_mm is not None:
             result = translate_core_build_item(args.input, args.output,
                                                args.build_index, args.translate_mm)
+        elif args.rotate_z_deg is not None:
+            result = rotate_core_build_item_z(args.input, args.output,
+                                              args.build_index, args.rotate_z_deg)
         else:
             result = edit_core_build_item(args.input, args.output,
                                           args.build_index, args.transform)

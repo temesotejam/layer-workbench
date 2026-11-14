@@ -92,6 +92,23 @@ try {
     page,new Uint8Array(changedCore),'parity-output/edited-core',180);
   assert.equal(changedImport.nativeProjectImport.preservationRequireByteIdentical,true);
   console.log('PASS: standalone one-build Core 3MF transform edit -> native WASM import -> changed XYZ placement and untouched archive export');
+  // A second independent file edit exercises 3MF row-vector Z rotation
+  // around the build item's translation, not around its mesh center.
+  // The second cube's X bounds change from [150,170] to [130,150];
+  // the first cube and both Y/Z bounds remain unchanged.
+  const rotatedCorePath='parity-output/rotated-core-build.3mf';
+  execFileSync('python3',[
+    'scripts/edit_3mf_build_transform.py',
+    '--input',independentPath,'--output',rotatedCorePath,
+    '--build-index','1','--rotate-z-deg','90'
+  ],{stdio:'inherit'});
+  const rotatedCore=await readFile(rotatedCorePath);
+  assert.ok(rotatedCore.length>300 && !rotatedCore.equals(independent),
+    'Core build Z rotation did not change archive');
+  const rotatedImport=await probeIndependentCore3mfImport(
+    page,new Uint8Array(rotatedCore),'parity-output/rotated-core',130);
+  assert.equal(rotatedImport.nativeProjectImport.preservationRequireByteIdentical,true);
+  console.log('PASS: independent Core 3MF +90 degree Z build rotation -> native WASM import -> rotated XYZ bounds and untouched export');
 
   console.log('DIAGNOSTIC: independently generated 3MF Core native import status='+external.nativeProjectImport.status+
     ', flattened STL conversion='+external.flattenedConversion.status);

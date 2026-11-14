@@ -826,3 +826,20 @@ and untouched-export byte identity of the *already edited* archive.
 [Pages #43590683405](https://github.com/temesotejam/layer-workbench/actions/runs/43590683405)
 **PASS**; no WASM binary or unverified slicing was deployed.
 
+
+## 2026-11-14: selected Core 3MF build Z rotation (CI pending)
+
+The offline diagnostic editor now additionally accepts `--rotate-z-deg 90`
+to post-compose a selected build item's 3MF row-vector linear transform with
+a world-Z rotation. The pivot is the item's **existing translation anchor**,
+not its mesh center or bed center. The translation, other build placements,
+triangle mesh payloads and unrelated decompressed ZIP members remain intact.
+The bounded input refuses nonfinite, no-op and >360-degree requests. Unit tests
+exercise a 90-degree rotation, pre-existing nonuniform scale, unrelated ZIP
+metadata and invalid inputs. The accepted-candidate Chrome gate checks a
+rotated independent Core cube's exact bounds and untouched archive export.
+
+**Not established:** true in-session native project transform editing, the
+correct pivot of desktop OrcaSlicer gizmos, metadata semantic consistency
+after an edit, a desktop-created project round-trip or printable G-code.
+No public WASM or new candidate engine binary is enabled.
