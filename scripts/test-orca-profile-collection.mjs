@@ -136,6 +136,30 @@ for(const bad of ['-1','13','2.5','nan',[],['2','3'],{},null]) {
 }
 assert.throws(()=>resolve(shellProfiles.map(p=>p.name==='0.16mm Fine @TestPrinter'
   ? {...p,bottom_shell_layers:'13'}:p),selection),/out of test limits/);
+// Official process speeds are absolute millimetres/second when numeric.
+ // Never interpret relative percentage strings as absolute feedrates.
+const speedProfiles=profiles.map(p=>{
+  if(p.name==='fdm_process_common')
+    return {...p,outer_wall_speed:'45',inner_wall_speed:'70',travel_speed:'130'};
+  if(p.name==='0.16mm Fine @TestPrinter')
+    return {...p,outer_wall_speed:'38'};
+  return p;
+});
+const speeds=resolve(speedProfiles,selection);
+assert.deepEqual(
+  {outer_wall_speed:speeds.process.settings.outer_wall_speed,
+   inner_wall_speed:speeds.process.settings.inner_wall_speed,
+   travel_speed:speeds.process.settings.travel_speed},
+  {outer_wall_speed:'38',inner_wall_speed:'70',travel_speed:'130'});
+for(const key of ['outer_wall_speed','inner_wall_speed','travel_speed'])
+  assert.ok(!speeds.process.unsupported.includes(key));
+for(const bad of ['50%','bad','0','-5',['45','60'],null]){
+  assert.throws(()=>resolve(speedProfiles.map(p=>p.name==='0.16mm Fine @TestPrinter'
+    ? {...p,outer_wall_speed:bad}:p),selection),/Invalid|Multi-extruder|test limits/);
+}
+assert.throws(()=>resolve(speedProfiles.map(p=>p.name==='fdm_process_common'
+  ? {...p,travel_speed:'1501'}:p),selection),/test limits/);
+console.log('PASS: inherited, bounded absolute mm/s process speeds and fail-closed percentage/array rejection');
 console.log('PASS: real process field names top/bottom shell counts inherit and validate independently');
 
 console.log('PASS: exact filament extruder variant maps multi-value volumetric cap; no variant keeps unsupported');
