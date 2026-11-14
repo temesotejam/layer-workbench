@@ -14,8 +14,16 @@ on:
       - "scripts/check_3mf_stl_bounds.py"
       - "scripts/edit_3mf_build_transform.py"
       - "scripts/test_edit_3mf_build_transform.py"
+      - "scripts/patch_orcawasm_private_instance_edit.py"
+      - "scripts/test_patch_orcawasm_private_instance_edit.py"
       - "scripts/make_3mf_two_build_fixture.py"
       - "scripts/test_check_3mf_stl_bounds.py"
+      - ".github/workflows/test-3mf-parity.yml"
+
+  pull_request:
+    paths:
+      - "scripts/patch_orcawasm_private_instance_edit.py"
+      - "scripts/test_patch_orcawasm_private_instance_edit.py"
       - ".github/workflows/test-3mf-parity.yml"
 
 permissions:
@@ -37,3 +45,5 @@ jobs:
           python3 -m unittest discover -s scripts -p test_check_3mf_stl_bounds.py -v
           python3 -m py_compile scripts/edit_3mf_build_transform.py
           python3 -m unittest discover -s scripts -p test_edit_3mf_build_transform.py -v
+          python3 -m py_compile scripts/patch_orcawasm_private_instance_edit.py
+          python3 -m unittest discover -s scripts -p test_patch_orcawasm_private_instance_edit.py -v
