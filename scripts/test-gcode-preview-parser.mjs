@@ -117,3 +117,31 @@ assert.deepEqual(afterUnload.selectedToolIds,[0]);
 assert.deepEqual(afterUnload.layers[0].segments.map(s=>s.toolId),[0,null,null]);
 assert.deepEqual(afterUnload.extrusionSegmentsByTool,{"0":1,unselected:2});
 console.log("PASS: tool-aware G-code toolpaths, vendor T1000 guard, 2D/3D palette mapping");
+
+// A malformed word must not be silently shortened and plotted. Preserve
+// the last valid modal position when rejecting the whole movement.
+const malformed=parseGcodeToolpaths(
+  "G90\nM82\nG1 X10oops Y5 E1\nG1 X20 Y0 E2\nG1 X30 Y0 E3"
+);
+assert.equal(malformed.skippedMalformedMotion,1);
+assert.equal(malformed.extrusions,2);
+assert.deepEqual(
+  malformed.layers[0].segments.map(s=>[s.x1,s.x2]),[[0,20],[20,30]]
+);
+const duplicateWords=parseGcodeToolpaths("G1 X10 X20 E1\nG1 X5 E2");
+assert.equal(duplicateWords.skippedMalformedMotion,1);
+assert.equal(duplicateWords.extrusions,1);
+assert.equal(duplicateWords.layers[0].segments[0].x1,0);
+const malformedChecksum=parseGcodeToolpaths("G1 X10 E1*99\nG1 X2 E2");
+assert.equal(malformedChecksum.skippedMalformedMotion,1);
+assert.equal(malformedChecksum.extrusions,1);
+const compact=parseGcodeToolpaths("G90\nM82\nG1X10Y0Z0.2E1F1200\nN15G1X20Y0E2");
+assert.equal(compact.skippedMalformedMotion,0);
+assert.equal(compact.extrusions,2);
+assert.deepEqual(compact.layers[0].segments.map(s=>s.x2),[10,20]);
+const signedExponent=parseGcodeToolpaths("G1 X1E+1 Y0 E1");
+assert.equal(signedExponent.skippedMalformedMotion,0);
+assert.equal(signedExponent.layers[0].segments[0].x2,10);
+const unsupportedAxis=parseGcodeToolpaths("G1 X10 A10 E1\nG1 X2 E2");
+assert.equal(unsupportedAxis.skippedMalformedMotion,1);
+console.log("PASS: full-word lexing rejects malformed/duplicate/unknown motion words without phantom paths; compact numeric G-code supported");

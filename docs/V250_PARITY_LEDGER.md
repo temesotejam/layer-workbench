@@ -624,3 +624,24 @@ prove indexed mesh topology, face/vertex identity, normals, material metadata,
 desktop OrcaSlicer parity or print safety. It is a stricter WASM 3MF→STL
 regression gate, **not** a native G-code comparison. CI execution results for
 this patch must be checked separately; success must not be presumed.
+
+## 2026-11-14: fail-closed G-code preview word parsing
+
+The localhost-only experimental G-code 2D/3D preview now validates **all** of
+each G0/G1/G2/G3/G92 movement's numeric words before changing its modal XYZE
+state. Previously, a global regex could accept `X10` from the malformed
+`G1 X10oops Y5 E1`, silently drawing a credible but incorrect extrusion.
+Malformed, duplicate, checksum-bearing, and unsupported-axis commands are
+omitted as an entire movement and counted as `skippedMalformedMotion`; a
+subsequent valid movement retains the last valid endpoint. Feedrate and common
+nongeometric numeric F/S/P fields are parsed but not interpreted. Compact
+`G1X10Y20` and `N15G1X20` are supported. To avoid an ambiguous compact
+`X1E2`, exponential values require signed exponents such as `X1E+2`.
+
+This is conservative diagnostic rendering, not validation of arbitrary
+printer firmware G-code syntax or safe toolpath reconstruction. In particular,
+checksummed input is omitted rather than accepting unchecked checksums;
+vendor macros, firmware retraction semantics, actual nozzle/material mapping,
+and native OrcaSlicer preview parity are still unsupported. A local parser
+regression explicitly proves no phantom path is drawn for malformed commands.
+The WASM engine and published slicing capabilities are unchanged.

@@ -5,6 +5,34 @@
 // This is a diagnostic renderer, not a firmware interpreter or print safety check.
 const TAU=2*Math.PI;
 const EPS=1e-9;
+// Validate complete G-code words before plotting. A global parameter regex
+// silently accepted a valid-looking substring of an invalid movement such as
+// "G1 X10oops Y5 E1", drawing a path that was never unambiguously commanded.
+// Read numeric words in order; allow common compact forms like G1X10Y20.
+// For compact X1E2, E2 is a separate extrusion word. Exponents require a sign
+// (X1E+2), avoiding that ambiguity in diagnostic input.
+function parseMovementWords(body, units) {
+  const words={};
+  const seen=new Set();
+  const pattern=/\s*([A-Z])\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:E[+-]\d+)?)/y;
+  let offset=0;
+  while(offset<body.length) {
+    if(/^\s*$/.test(body.slice(offset)))break;
+    pattern.lastIndex=offset;
+    const match=pattern.exec(body);
+    if(!match)return null;
+    const key=match[1];
+    // F/S/P are nongeometric auxiliary words; unrecognised axes and repeated
+    // words are not safe to infer from a read-only XYZE preview.
+    if(seen.has(key)||!"XYZEIJRFSP".includes(key))return null;
+    const value=Number(match[2]);
+    if(!Number.isFinite(value))return null;
+    seen.add(key);
+    if("XYZEIJR".includes(key))words[key]=value*units;
+    offset=pattern.lastIndex;
+  }
+  return words;
+}
 export function parseGcodeToolpaths(source, options={}) {
   if(typeof source!=="string" || source.length>(options.maxChars??20_000_000))
     throw new Error("Invalid or oversized G-code preview input");
@@ -19,7 +47,7 @@ export function parseGcodeToolpaths(source, options={}) {
   let activeTool=null;
   const selectedTools=new Set();
   const extrusionsByTool=new Map();
-  let count=0,deposited=0,travels=0,skippedArcs=0,renderedArcs=0;
+  let count=0,deposited=0,travels=0,skippedArcs=0,renderedArcs=0,skippedMalformedMotion=0;
   function append(x1,y1,x2,y2,z,extrusion){
     if(![x1,y1,x2,y2,z].every(Number.isFinite) ||
        Math.max(Math.abs(x1),Math.abs(y1),Math.abs(x2),Math.abs(y2),Math.abs(z))>100_000)
@@ -44,7 +72,7 @@ export function parseGcodeToolpaths(source, options={}) {
       else if(Number.isSafeInteger(id)&&id>=0&&id<255){activeTool=id;selectedTools.add(id);}
       continue;
     }
-    const m=/^(?:N\d+\s+)?(G\d+(?:\.\d+)?|M\d+)(?=\s|$)/.exec(line);
+    const m=/^(?:N\d+\s*)?(G\d+(?:\.\d+)?|M\d+)(?=[A-Z\s]|$)/.exec(line);
     if(!m)continue;
     let cmd=m[1];
     // Accept leading-zero G-codes, e.g. G02/G03, without rewriting G90.1.
@@ -60,12 +88,8 @@ export function parseGcodeToolpaths(source, options={}) {
     if(["G17","G18","G19"].includes(cmd)){state.plane=cmd;continue;}
     const isArc=cmd==="G2"||cmd==="G3";
     if(!isArc && !["G0","G1","G92"].includes(cmd))continue;
-    const words={};
-    const body=line.slice(m[0].length);
-    for(const part of body.matchAll(/([XYZEIJR])\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:E[+-]?\d+)?)/g)){
-      const v=Number(part[2]);
-      if(Number.isFinite(v))words[part[1]]=v*state.units;
-    }
+    const words=parseMovementWords(line.slice(m[0].length),state.units);
+    if(words===null){skippedMalformedMotion++;continue;}
     if(cmd==="G92"){
       for(const axis of ["X","Y","Z","E"])if(axis in words)state[axis.toLowerCase()]=words[axis];
       continue;
@@ -151,7 +175,7 @@ export function parseGcodeToolpaths(source, options={}) {
     renderedArcs++;
   }
   const layers=[...byZ.values()].sort((a,b)=>a.z-b.z);
-  return {layers,segments:count,extrusions:deposited,travels,renderedArcs,skippedArcs,
+  return {layers,segments:count,extrusions:deposited,travels,renderedArcs,skippedArcs,skippedMalformedMotion,
     selectedToolIds:[...selectedTools].sort((a,b)=>a-b),
     extrusionSegmentsByTool:Object.fromEntries([...extrusionsByTool].map(([id,n])=>[id===null?"unselected":String(id),n]))};
 }

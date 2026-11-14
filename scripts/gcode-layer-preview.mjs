@@ -85,7 +85,7 @@ export function createLayerPreview(container) {
       slider.max=String(parsed.layers.length-1);
       slider.value=String(parsed.layers.length-1);
       const selectors=parsed.selectedToolIds.length>1?` · T selectors: ${parsed.selectedToolIds.map(id=>"T"+id).join(", ")}`:"";
-      stats.textContent=`${parsed.layers.length} Z levels · ${parsed.extrusions} extrusion segments · ${parsed.travels} travel segments · ${parsed.renderedArcs} approximated XY arcs · ${parsed.skippedArcs} unsupported arcs${selectors}`;
+      stats.textContent=`${parsed.layers.length} Z levels · ${parsed.extrusions} extrusion segments · ${parsed.travels} travel segments · ${parsed.renderedArcs} approximated XY arcs · ${parsed.skippedArcs} unsupported arcs · ${parsed.skippedMalformedMotion} malformed motion commands omitted${selectors}`;
       section.hidden=false;
       render(Number(slider.value));
       threeD.show(parsed);
