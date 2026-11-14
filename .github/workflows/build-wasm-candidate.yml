@@ -10,6 +10,11 @@ on:
       - "scripts/patch_orcawasm_private_instance_edit.py"
       - "scripts/test-v250-private-instance-edit.mjs"
   workflow_dispatch:
+  pull_request:
+    paths:
+      - "scripts/patch_orcawasm_private_instance_edit.py"
+      - "scripts/test-v250-private-instance-edit.mjs"
+      - ".github/workflows/build-wasm-candidate.yml"
 
 permissions:
   contents: read
