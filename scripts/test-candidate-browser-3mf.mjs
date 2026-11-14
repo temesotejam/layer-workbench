@@ -8,6 +8,7 @@ import {checkBrowserMultiObject3mf} from './test-browser-3mf-multiobject.mjs';
 import {checkNativeManifestEditRoundTrip} from './test-browser-3mf-native-edit.mjs';
 import {probeIndependentCore3mfImport} from './test-browser-3mf-independent-core-import.mjs';
 import {checkImportedProjectReplacementGuard} from './test-browser-3mf-import-replacement-guard.mjs';
+import {checkBrowserPrivateImportedInstanceEdit} from './test-browser-3mf-private-instance-edit.mjs';
 
 const base = process.env.ENGINE_PROBE_URL ?? 'http://127.0.0.1:8766/';
 const artifactDir = process.env.ENGINE_ARTIFACT_DIR ?? 'engine-test-artifacts';
@@ -75,6 +76,12 @@ try {
   const independent=await readFile(independentPath);
   assert.ok(independent.length>300 && independent[0]===0x50 && independent[1]===0x4b,
     'Independent Core 3MF fixture generation failed');
+  // Use the exact rebuilt candidate from CI to invoke the private C ABI
+  // inside real isolated Chrome, not only in Node's direct WASM harness.
+  // The helper asserts atomic rejection, sibling identity and lossy-export guard.
+  const privateResult=await checkBrowserPrivateImportedInstanceEdit(
+    page,new Uint8Array(independent));
+  assert.equal(privateResult.reimportObjects,2);
   const external=await probeIndependentCore3mfImport(page,new Uint8Array(independent));
   // Validate a genuine modified Core 3MF archive in the accepted native WASM
   // importer. The offline edit changes exactly one build transform and leaves
