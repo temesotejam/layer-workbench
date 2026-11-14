@@ -6,6 +6,7 @@ import {chromium} from 'playwright';
 import {checkBrowserMultiObject3mf} from './test-browser-3mf-multiobject.mjs';
 import {checkNativeManifestEditRoundTrip} from './test-browser-3mf-native-edit.mjs';
 import {probeIndependentCore3mfImport} from './test-browser-3mf-independent-core-import.mjs';
+import {checkImportedProjectReplacementGuard} from './test-browser-3mf-import-replacement-guard.mjs';
 
 const base = process.env.ENGINE_PROBE_URL ?? 'http://127.0.0.1:8766/';
 const artifactDir = process.env.ENGINE_ARTIFACT_DIR ?? 'engine-test-artifacts';
@@ -66,6 +67,9 @@ try {
   const external=await probeIndependentCore3mfImport(page,new Uint8Array(independent));
   console.log('DIAGNOSTIC: independently generated 3MF Core native import status='+external.nativeProjectImport.status+
     ', flattened STL conversion='+external.flattenedConversion.status);
+  if (process.env.CHECK_REPLACEMENT_GUARD === '1') {
+    await checkImportedProjectReplacementGuard(page,new Uint8Array(independent),new Uint8Array(cube));
+  }
 } finally {
   await browser.close();
 }

@@ -52,7 +52,7 @@ jobs:
             if curl -fsS http://127.0.0.1:8766/engine-probe.html >/dev/null; then break; fi
             sleep 1
           done
-          node scripts/test-candidate-browser-3mf.mjs
+          CHECK_REPLACEMENT_GUARD=1 node scripts/test-candidate-browser-3mf.mjs
           python3 scripts/audit_3mf_scene.py \
             --input parity-output/wasm-multiobject-3mf.3mf \
             --expected-build-items 2 --min-triangles 24 \

@@ -11,6 +11,8 @@ on:
       - "scripts/adapt-orcawasm-v2.5.0.py"
       - "scripts/patch-orcawasm-3mf-object-export.py"
       - "scripts/test_patch_orcawasm_3mf_object_export.py"
+      - "scripts/patch_orcawasm_preservation_guard.py"
+      - "scripts/test_patch_orcawasm_preservation_guard.py"
       - "scripts/patch-orcawasm-support-smoke.py"
       - "scripts/test_patch_orcawasm_support_smoke.py"
       - "scripts/build-assimp-wasm.sh"
@@ -92,6 +94,12 @@ jobs:
 
       - name: Apply staged hierarchy-preserving native 3MF export patch (audit only)
         run: python3 scripts/patch-orcawasm-3mf-object-export.py orcawasm/bridge/slicer.cpp
+
+      - name: Unit-test fail-closed imported 3MF preservation guard
+        run: python3 -m unittest discover -s scripts -p 'test_patch_orcawasm_preservation_guard.py' -v
+
+      - name: Stage native 3MF strict preservation guard (audit only)
+        run: python3 scripts/patch_orcawasm_preservation_guard.py orcawasm/bridge/slicer.cpp
 
       - name: Audit native 3MF export branch without building or publishing
         shell: bash

@@ -530,3 +530,32 @@ workflow now separates artifact upload and deployment into dependent jobs.
 This is CI orchestration only; the published app and WASM release policy are
 unchanged. New deployment results must be checked before declaring the
 hosting issue resolved.
+
+
+## 2026-11-14: proposed fail-closed safety guard for imported 3MF replacement
+
+Source audit of pinned OrcaWasm \`oneslicer_project_set_objects\` found a
+metadata-preservation false-positive: importing a 3MF retains source ZIP bytes,
+but subsequent \`setObjects\` **clears** those bytes and sets
+\`native_project_dirty=false\`. A later \`export("project.3mf",
+{preservation:"require"})\` can then succeed even though the imported
+project was discarded. Similarly, an imported project with a dirty manifest
+but no unrecognized ZIP entries is not inherently losslessly regenerated.
+
+The staged, pinned-source-only bridge patch adds a sticky
+\`native_project_replaced\` bit until \`reset_project\`, and refuses
+\`preservation=require\` after imported-project replacement **or** dirty
+native project mutation. \`preservation=best-effort\` remains possible after
+replacement but emits an explicit \`native-project-replaced\` data-loss
+warning. This does not recover discarded metadata, expose a native
+instance-transform operation, or validate desktop-authored projects.
+
+The new isolated-Chrome regression starts from the independently generated
+two-build Core 3MF. It asserts a byte-identical untouched export, replaces
+the imported project with a synthetic single cube using \`setObjects\`,
+requires strict preservation to **reject** that destructive action, and
+requires a best-effort data-loss warning. The test is only enabled on the
+**new rebuilt candidate** via \`CHECK_REPLACEMENT_GUARD=1\` and is not
+applied to the previously accepted #43517364379 binary. No WASM is
+enabled on the public Pages build. Audit, build and Chrome statuses must
+be checked from GitHub Actions before treating this safety patch as verified.

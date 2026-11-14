@@ -6,6 +6,7 @@ on:
     paths:
       - ".github/workflows/build-wasm-candidate.yml"
       - "scripts/patch-orcawasm-3mf-object-export.py"
+      - "scripts/patch_orcawasm_preservation_guard.py"
   workflow_dispatch:
 
 permissions:
@@ -109,6 +110,12 @@ jobs:
 
       - name: Stage experimental native 3MF object-preserving exporter
         run: python3 scripts/patch-orcawasm-3mf-object-export.py orcawasm/bridge/slicer.cpp
+
+      - name: Unit-test fail-closed imported 3MF preservation guard
+        run: python3 -m unittest discover -s scripts -p 'test_patch_orcawasm_preservation_guard.py' -v
+
+      - name: Stage imported native 3MF provenance guard
+        run: python3 scripts/patch_orcawasm_preservation_guard.py orcawasm/bridge/slicer.cpp
 
       - name: Verify native 3MF export path no longer flattens all objects
         shell: bash
