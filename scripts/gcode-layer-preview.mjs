@@ -71,7 +71,15 @@ export function createLayerPreview(container) {
       ctx.stroke();
     }
     ctx.setLineDash([]);
-    info.textContent=`${index+1}/${parsed.layers.length} · Z=${layer.z.toFixed(3)} mm · ${layer.segments.length} segments`;
+    // F is the commanded modal G-code feedrate. Acceleration, cooling,
+    // firmware limits and real elapsed speed cannot be inferred here.
+    const commanded=layer.segments.filter(s=>s.extrusion &&
+      Number.isFinite(s.feedrateMmMin) && s.feedrateMmMin>0)
+      .map(s=>s.feedrateMmMin/60);
+    const feedInfo=commanded.length
+      ? ` · commanded F ${Math.min(...commanded).toFixed(1)}–${Math.max(...commanded).toFixed(1)} mm/s`
+      : " · commanded F unavailable";
+    info.textContent=`${index+1}/${parsed.layers.length} · Z=${layer.z.toFixed(3)} mm · ${layer.segments.length} segments${feedInfo}`;
     canvas.dataset.segmentCount=String(layer.segments.length);
   }
   slider.addEventListener("input",()=>render(Number(slider.value)));

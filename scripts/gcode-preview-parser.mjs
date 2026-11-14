@@ -22,13 +22,14 @@ function parseMovementWords(body, units) {
     const match=pattern.exec(body);
     if(!match)return null;
     const key=match[1];
-    // F/S/P are nongeometric auxiliary words; unrecognised axes and repeated
-    // words are not safe to infer from a read-only XYZE preview.
+    // F is a modal commanded feedrate (mm/min after unit conversion),
+    // not actual toolhead velocity; S/P remain uninterpreted auxiliary words.
+    // Unrecognised axes and repeated words are not safe to infer.
     if(seen.has(key)||!"XYZEIJRFSP".includes(key))return null;
     const value=Number(match[2]);
     if(!Number.isFinite(value))return null;
     seen.add(key);
-    if("XYZEIJR".includes(key))words[key]=value*units;
+    if("XYZEIJRF".includes(key))words[key]=value*units;
     offset=pattern.lastIndex;
   }
   return words;
@@ -40,7 +41,7 @@ export function parseGcodeToolpaths(source, options={}) {
   if(!Number.isSafeInteger(maxSegments)||maxSegments<0||maxSegments>1_000_000)
     throw new Error("Invalid preview segment budget");
   const byZ=new Map();
-  const state={x:0,y:0,z:0,e:0,absoluteXYZ:true,absoluteE:true,units:1,plane:"G17",absoluteArcCenters:false};
+  const state={x:0,y:0,z:0,e:0,absoluteXYZ:true,absoluteE:true,units:1,plane:"G17",absoluteArcCenters:false,feedrateMmMin:null};
   // Tool selectors in G-code label paths, NOT physical extruder IDs or filament colors.
   // Reserved/vendor tool commands (e.g. T1000) do not set a label.
   // Bambu X1E emits T255 while unloading AMS filament: clear the label.
@@ -56,7 +57,8 @@ export function parseGcodeToolpaths(source, options={}) {
     const layerZ=Math.round(z*1000)/1000;
     const key=String(layerZ);
     if(!byZ.has(key))byZ.set(key,{z:layerZ,segments:[]});
-    byZ.get(key).segments.push({x1,y1,x2,y2,extrusion,toolId:activeTool});
+    byZ.get(key).segments.push({x1,y1,x2,y2,extrusion,toolId:activeTool,
+      feedrateMmMin:state.feedrateMmMin});
     if(extrusion){
       deposited++;
       extrusionsByTool.set(activeTool,(extrusionsByTool.get(activeTool)??0)+1);
@@ -90,10 +92,16 @@ export function parseGcodeToolpaths(source, options={}) {
     if(!isArc && !["G0","G1","G92"].includes(cmd))continue;
     const words=parseMovementWords(line.slice(m[0].length),state.units);
     if(words===null){skippedMalformedMotion++;continue;}
+    // Reject nonpositive or implausibly large F instead of displaying a
+    // misleading commanded speed. Never mutate modal state on rejection.
+    if("F" in words && (words.F<=0 || words.F>10_000_000)){
+      skippedMalformedMotion++;continue;
+    }
     if(cmd==="G92"){
       for(const axis of ["X","Y","Z","E"])if(axis in words)state[axis.toLowerCase()]=words[axis];
       continue;
     }
+    if("F" in words)state.feedrateMmMin=words.F;
     const start={...state};
     for(const axis of ["X","Y","Z","E"]){
       if(!(axis in words))continue;

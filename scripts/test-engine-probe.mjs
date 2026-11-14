@@ -93,6 +93,12 @@ try {
   const parsedGcode = parseGcodeToolpaths(wasmGcode);
   assert.ok(parsedGcode.layers.length >= 2, 'Expected multiple sliced Z layers');
   assert.ok(parsedGcode.extrusions > 10, 'Expected positive extrusion toolpaths');
+  const commandedRates=parsedGcode.layers.flatMap(layer=>layer.segments)
+    .filter(segment=>segment.extrusion && Number.isFinite(segment.feedrateMmMin))
+    .map(segment=>segment.feedrateMmMin);
+  assert.ok(commandedRates.length > 10 && commandedRates.every(f=>f>0),
+    'Actual WASM G-code must expose positive modal F on deposited segments');
+  console.log('PASS: actual native WASM G-code deposited segments expose bounded commanded F, not measured velocity');
   const actualGcodeHash = createHash('sha256').update(wasmGcode, 'utf8').digest('hex');
   const parityDir = process.env.PARITY_OUTPUT_DIR || 'parity-output';
   await mkdir(parityDir, {recursive:true});

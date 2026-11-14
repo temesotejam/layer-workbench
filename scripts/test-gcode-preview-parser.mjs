@@ -144,4 +144,17 @@ assert.equal(signedExponent.skippedMalformedMotion,0);
 assert.equal(signedExponent.layers[0].segments[0].x2,10);
 const unsupportedAxis=parseGcodeToolpaths("G1 X10 A10 E1\nG1 X2 E2");
 assert.equal(unsupportedAxis.skippedMalformedMotion,1);
+// Commanded F is modal and measured in mm/min, not realized head speed.
+// It applies to extrusion and travel, survives movements without F, and
+// follows G20/G21 unit changes. Reject bad F without changing position.
+const modalFeed=parseGcodeToolpaths("G21\nG90\nM82\nG0 X10 F2400\nG1 X20 E1 F1200\nG1 X30 E2\nG1 X40 E3 F900");
+assert.deepEqual(modalFeed.layers[0].segments.map(s=>s.feedrateMmMin),[2400,1200,1200,900]);
+const inchFeed=parseGcodeToolpaths("G20\nG1 X1 E1 F60\nG1 X2 E2");
+assert.deepEqual(inchFeed.layers[0].segments.map(s=>s.feedrateMmMin),[1524,1524]);
+const badFeed=parseGcodeToolpaths("G90\nM82\nG1 X10 E1 F0\nG1 X20 E2 F1200\nG1 X30 E3 Fbad\nG1 X40 E4");
+assert.equal(badFeed.skippedMalformedMotion,2);
+assert.deepEqual(badFeed.layers[0].segments.map(s=>[s.x1,s.x2,s.feedrateMmMin]),
+  [[0,20,1200],[20,40,1200]]);
+assert.equal(parseGcodeToolpaths("G1 X1 E1").layers[0].segments[0].feedrateMmMin,null);
+console.log("PASS: modal commanded feedrate in mm/min, inch conversion, missing F and invalid F safety");
 console.log("PASS: full-word lexing rejects malformed/duplicate/unknown motion words without phantom paths; compact numeric G-code supported");

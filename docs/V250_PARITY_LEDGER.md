@@ -730,3 +730,20 @@ not a general firmware simulator or full-profile parity test. **The new
 GitHub Actions result must be inspected separately; do not presume PASS.**
 No engine source/pthread build material was modified, and no new WASM engine
 was authorized for the public Pages deployment.
+
+## 2026-11-14: modal commanded G-code feedrate in local Preview (CI pending)
+
+The read-only G-code toolpath parser now retains each G0/G1/G2/G3 segment's
+**modal commanded F** in mm/min (including G20/G21 unit conversion and
+carry-forward for moves without a fresh F). It rejects nonpositive and
+implausibly large F words before mutating XYZE/modal state. Missing F is
+represented as `null`, never inferred. The isolated 2D layer diagnostic
+shows the minimum and maximum commanded F of the layer's deposition segments
+in mm/s, or explicitly reports that F is unavailable. The actual candidate
+WASM Chrome acceptance probe now requires positive modal F on its deposited
+G-code segments, rather than relying on a source-only parser unit test.
+
+This is **not** actual head speed or elapsed time: firmware acceleration,
+jerk, cooling, flow limits and printer execution are not simulated. No speed
+color mapping, verified machine profile, physical printer output or published
+WASM slicing is enabled. CI status must be inspected after this commit.
