@@ -12,7 +12,7 @@ spec.loader.exec_module(module)
 class SupportSmokeFixtureTests(unittest.TestCase):
     def setUp(self):
         self.pinned = ("\n".join([
-            module.OLD, module.ENFORCER_OLD, module.LOOP_OLD,
+            module.OLD, module.ENFORCER_OLD, module.BLOCKER_OLD, module.LOOP_OLD,
             module.COMPARE_OLD, module.ASSERTION,
         ]) + "\n")
 
@@ -23,6 +23,9 @@ class SupportSmokeFixtureTests(unittest.TestCase):
         self.assertEqual(updated.count("support_enable: 1,"), 1)
         self.assertEqual(updated.count(module.ASSERTION), 1)
         self.assertIn("position: [0, 0, 5]", updated)
+        self.assertIn("position: [0, 0, 15]", updated)
+        self.assertIn("size: [30, 30, 30]", updated)
+        self.assertNotIn(module.BLOCKER_OLD, updated)
         self.assertIn("size: [16, 16, 12]", updated)
         self.assertIn("'normal(manual)' : 'normal(auto)'", updated)
         self.assertIn("configureSession()\n      // Manual baseline", updated)
@@ -39,7 +42,7 @@ class SupportSmokeFixtureTests(unittest.TestCase):
             module.apply_patch(self.pinned + module.OLD)
 
     def test_rejects_partial_unsafe_fixture_or_duplicate_anchors(self):
-        for anchor in (module.ENFORCER_OLD, module.LOOP_OLD, module.COMPARE_OLD):
+        for anchor in (module.ENFORCER_OLD, module.BLOCKER_OLD, module.LOOP_OLD, module.COMPARE_OLD):
             with self.subTest(anchor=anchor[:30]):
                 with self.assertRaisesRegex(ValueError, "pinned smoke"):
                     module.apply_patch(self.pinned.replace(anchor, ""))
