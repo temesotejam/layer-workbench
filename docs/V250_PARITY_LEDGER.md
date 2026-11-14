@@ -772,3 +772,29 @@ not apply the intended fields. The next safe fixture explicitly lowers the
 requested outer/inner wall speeds to 5/8 mm/s and travel speed to 20 mm/s,
 then compares physical G-code F words. If it also fails, native config
 application must be diagnosed rather than masking the failure.
+
+
+## 2026-11-14: surgical single-build Core 3MF transform edit (CI pending)
+
+A new **offline diagnostic** \`scripts/edit_3mf_build_transform.py\` edits one
+explicit \`3D/3dmodel.model\` Core \`<build><item transform="...">\` attribute
+in an *independently generated* two-placement 3MF. It selects by zero-based
+build-item index and uses the **3MF 12-number row-vector convention** (not a
+Three.js or one-slicer-api native 4×4 matrix). It checks the existing scene
+with the bounded 3MF audit, refuses malformed/singular transforms, ambiguous
+attribute syntax, invalid ZIP paths, multi-model parts, missing transforms,
+overwrites and in-place source writes. After writing a separate archive, it
+verifies exactly one decompressed ZIP member changed, other build placements
+and mesh counts survived, and all other ZIP member payloads (including opaque
+metadata files) match byte-for-byte after decompression. A new synthetic
+unit suite checks these cases through the lightweight 3MF CI workflow.
+
+**Limits:** This is neither a new WASM API nor an OrcaSlicer desktop-created
+3MF edit. Other ZIP members' bytes are preserved, but their semantic
+consistency with the changed model transform is *not guaranteed*. Even
+\`3D/3dmodel.model\` is only changed by a narrow, explicitly present attribute
+replacement, not a full native project metadata update. Archive compression
+bytes may change. It is intentionally not wired into the public browser UI,
+does not certify desktop reopening/G-code or real printing. Next gate is
+an imported-3MF **native in-place** session edit with metadata-aware semantics
+and independent browser/desktop validation.
