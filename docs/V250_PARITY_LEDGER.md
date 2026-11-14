@@ -774,10 +774,12 @@ then compares physical G-code F words. If it also fails, native config
 application must be diagnosed rather than masking the failure.
 
 
-## 2026-11-14: surgical single-build Core 3MF transform edit (CI pending)
+## 2026-11-14: surgical single-build Core 3MF transform edit (CI PASS)
 
-A new **offline diagnostic** \`scripts/edit_3mf_build_transform.py\` edits one
-explicit \`3D/3dmodel.model\` Core \`<build><item transform="...">\` attribute
+[3MF audit CI #43587392241](https://github.com/temesotejam/layer-workbench/actions/runs/43587392241) **PASS** on commit `cdfc073`: 4 new focused cases and all previously existing 3MF archive/scene/geometry tests pass. Earlier attempts failed on a test syntax typo and an assertion message mismatch, both fixed; neither failure demonstrated a production or WASM defect.
+
+A new **offline diagnostic** `scripts/edit_3mf_build_transform.py` edits one
+explicit `3D/3dmodel.model` Core `<build><item transform="...">` attribute
 in an *independently generated* two-placement 3MF. It selects by zero-based
 build-item index and uses the **3MF 12-number row-vector convention** (not a
 Three.js or one-slicer-api native 4×4 matrix). It checks the existing scene
@@ -792,7 +794,7 @@ unit suite checks these cases through the lightweight 3MF CI workflow.
 **Limits:** This is neither a new WASM API nor an OrcaSlicer desktop-created
 3MF edit. Other ZIP members' bytes are preserved, but their semantic
 consistency with the changed model transform is *not guaranteed*. Even
-\`3D/3dmodel.model\` is only changed by a narrow, explicitly present attribute
+`3D/3dmodel.model` is only changed by a narrow, explicitly present attribute
 replacement, not a full native project metadata update. Archive compression
 bytes may change. It is intentionally not wired into the public browser UI,
 does not certify desktop reopening/G-code or real printing. Next gate is
