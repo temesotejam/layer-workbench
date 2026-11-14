@@ -7,6 +7,8 @@ on:
       - ".github/workflows/build-wasm-candidate.yml"
       - "scripts/patch-orcawasm-3mf-object-export.py"
       - "scripts/patch_orcawasm_preservation_guard.py"
+      - "scripts/patch_orcawasm_private_instance_edit.py"
+      - "scripts/test-v250-private-instance-edit.mjs"
   workflow_dispatch:
 
 permissions:
@@ -116,6 +118,12 @@ jobs:
 
       - name: Stage imported native 3MF provenance guard
         run: python3 scripts/patch_orcawasm_preservation_guard.py orcawasm/bridge/slicer.cpp
+
+      - name: Unit-test pinned private imported-session transform patch
+        run: python3 -m unittest discover -s scripts -p 'test_patch_orcawasm_private_instance_edit.py' -v
+
+      - name: Stage private imported native session transform prototype
+        run: python3 scripts/patch_orcawasm_private_instance_edit.py orcawasm/bridge/slicer.cpp orcawasm/wasm/CMakeLists.txt
 
       - name: Verify native 3MF export path no longer flattens all objects
         shell: bash
@@ -326,6 +334,15 @@ jobs:
           python3 scripts/make_3mf_two_build_fixture.py --output parity-output/independent-core-two-build.3mf
           node scripts/test-v250-imported-replacement-guard.mjs
 
+      - name: Verify private in-session imported-3MF edit on rebuilt WASM
+        if: ${{ !cancelled() && steps.wasm_build.outcome == 'success' }}
+        timeout-minutes: 8
+        run: |
+          set -euo pipefail
+          node --check scripts/test-v250-private-instance-edit.mjs
+          python3 scripts/make_3mf_two_build_fixture.py --output parity-output/independent-core-two-build.3mf
+          node scripts/test-v250-private-instance-edit.mjs
+
       - name: Run end-to-end engine smoke test
         if: ${{ !cancelled() && steps.wasm_build.outcome == 'success' }}
         working-directory: orcawasm
@@ -337,7 +354,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: experimental-3mf-provenance-report
-          path: parity-output/rebuilt-import-replacement-guard.json
+          path: |
+            parity-output/rebuilt-import-replacement-guard.json
+            parity-output/private-imported-instance-edit.json
           if-no-files-found: warn
           retention-days: 14
 
