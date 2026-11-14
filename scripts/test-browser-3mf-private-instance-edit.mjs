@@ -100,7 +100,51 @@ export async function checkBrowserPrivateImportedInstanceEdit(
           .sort((a,b)=>a-b);
         if (actualX.some((x,i)=>Math.abs(x-expectedX[i]) > 0.1))
           throw new Error('Native reimport lost the edited X position');
+
+        // The manifest alone is insufficient: independently flatten the
+        // best-effort 3MF through native WASM and check actual mesh positions.
+        // This is a synthetic Core fixture, not a desktop/print validation.
+        const stl = await engine.threeMfToStl(bytes);
+        if (!(stl instanceof Uint8Array) || stl.byteLength < 84)
+          throw new Error('Edited 3MF did not flatten to a binary STL');
+        const view = new DataView(stl.buffer,stl.byteOffset,stl.byteLength);
+        const triangles = view.getUint32(80,true);
+        if (triangles !== 24 || stl.byteLength !== 84+50*triangles)
+          throw new Error('Private edit export lost the 24 source triangles');
+        const regions = [
+          {triangles:0,min:[Infinity,Infinity,Infinity],max:[-Infinity,-Infinity,-Infinity]},
+          {triangles:0,min:[Infinity,Infinity,Infinity],max:[-Infinity,-Infinity,-Infinity]}
+        ];
+        for (let t=0;t<triangles;t++) {
+          const vertices=[];
+          for (let v=0;v<3;v++) vertices.push([0,1,2].map(axis=>
+            view.getFloat32(84+t*50+12+v*12+axis*4,true)));
+          if (vertices.some(p=>p.some(x=>!Number.isFinite(x))))
+            throw new Error('Edited 3MF STL contains nonfinite vertices');
+          const centerX=vertices.reduce((sum,p)=>sum+p[0],0)/3;
+          const region=regions[centerX<130?0:1];
+          region.triangles++;
+          for (const p of vertices)for(let axis=0;axis<3;axis++){
+            region.min[axis]=Math.min(region.min[axis],p[axis]);
+            region.max[axis]=Math.max(region.max[axis],p[axis]);
+          }
+        }
+        const expectedBounds=[
+          {min:[90,90,0],max:[110,110,20]},
+          {min:[180,90,0],max:[200,110,20]}
+        ];
+        for(let i=0;i<2;i++){
+          if(regions[i].triangles!==12)
+            throw new Error('Private edit STL lost one cube placement');
+          for(const side of ['min','max'])for(let axis=0;axis<3;axis++){
+            if(Math.abs(regions[i][side][axis]-expectedBounds[i][side][axis])>0.05)
+              throw new Error('Private edit STL geometry differs at cube '+i+
+                ' '+side+' axis '+axis+': '+regions[i][side][axis]);
+          }
+        }
         return {
+          editedArchive:Array.from(bytes),flattenedStl:Array.from(stl),
+          flattenedTriangles:triangles,flattenedBoundsMm:regions,
           status:'PASS',source:'independent synthetic Core 3MF',
           isolatedChrome:true,privateCAbiCalled:true,
           invalidEditsAtomic:true,unselectedInstanceUnchanged:true,
@@ -121,9 +165,16 @@ export async function checkBrowserPrivateImportedInstanceEdit(
   assert.equal(result.status,'PASS');
   assert.equal(result.privateCAbiCalled,true);
   assert.equal(result.strictPreservationRejected,true);
+  assert.equal(result.flattenedTriangles,24);
+  const archive=Buffer.from(result.editedArchive);
+  const stl=Buffer.from(result.flattenedStl);
+  delete result.editedArchive;
+  delete result.flattenedStl;
   await mkdir(outputDir,{recursive:true});
+  await writeFile(outputDir+'/browser-private-edited-instance.3mf',archive);
+  await writeFile(outputDir+'/browser-private-edited-instance.stl',stl);
   await writeFile(outputDir+'/browser-private-imported-instance-edit.json',
     JSON.stringify(result,null,2)+'\n');
-  console.log('PASS: isolated Chrome directly invoked private imported-instance C ABI; sibling and strict preservation guard verified');
+  console.log('PASS: isolated Chrome private 3MF C ABI, strict preservation guard and flattened edited mesh bounds');
   return result;
 }
