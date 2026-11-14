@@ -817,3 +817,12 @@ and invalid/no-op input rejection. The accepted-candidate isolated Chrome
 test now uses the relative +30 mm X operation to exercise actual WASM import
 of the edited 3MF. This is NOT native in-session 3MF editing, desktop 3MF
 parity, G-code parity, or print validation. CI results must be checked.
+[3MF archive unit/audit CI #43590683393](https://github.com/temesotejam/layer-workbench/actions/runs/43590683393)
+**PASS** for the new relative move and existing archive/scene suites.
+[Accepted-candidate isolated Chrome #43590683455](https://github.com/temesotejam/layer-workbench/actions/runs/43590683455)
+**PASS** with a +30 mm relative X move on the second Core build item:
+two native objects/instances, 24 triangles, exact modified absolute placement,
+and untouched-export byte identity of the *already edited* archive.
+[Pages #43590683405](https://github.com/temesotejam/layer-workbench/actions/runs/43590683405)
+**PASS**; no WASM binary or unverified slicing was deployed.
+
