@@ -75,3 +75,33 @@ assert.deepEqual(texturedInit.textured_plate_temp_initial_layer,["60"]);
 assert.equal(texturedInit.hot_plate_temp,undefined);
 console.log("PASS: opt-in textured plate native enum and first/other-layer vectors reach session.init");
 
+// Local-only source-resolved process speeds must pass the *second* override
+// allow-list and reach session.applyProfile, not merely resolve as JSON.
+// This fake engine tests the bridge payload, NOT actual sliced G-code speeds.
+const speedSettings = {
+  sparse_infill_speed:"50", internal_solid_infill_speed:"50",
+  top_surface_speed:"30", gap_infill_speed:"30",
+};
+const speedRecords = records.map(p => p.name === "Standard"
+  ? {...p, ...speedSettings} : p);
+const speedCollection = resolveOrcaProfileCollection(speedRecords,selection);
+let appliedProfile = null, speedSessionDisposed = false;
+await sliceMultiStlWithEngine({createSession:async()=>({
+  init:async()=>{},
+  applyProfile:async(format,bytes)=>{
+    appliedProfile={format,settings:JSON.parse(new TextDecoder().decode(bytes))};
+  },
+  setObjects:async()=>{},
+  slice:async()=>({schemaVersion:"0.7.0",plateResults:[{
+    plateId:"plate-0",assets:[{kind:"gcode",id:"fixture"}],
+  }]}),
+  getAsset:async()=>new TextEncoder().encode("G1 X1 Y1 E1\\n".repeat(30)),
+  dispose:async()=>{speedSessionDisposed=true;},
+})},[{bytes:new Uint8Array(134)}],null,speedCollection.process.settings,speedCollection);
+assert.ok(speedSessionDisposed,"Speed bridge session must be disposed");
+assert.equal(appliedProfile?.format,"orca.native-json");
+for(const [key,value] of Object.entries(speedSettings))
+  assert.equal(appliedProfile.settings[key],value,
+    key+" must reach session.applyProfile without being silently dropped");
+console.log("PASS: four pinned process deposition speeds reach session.applyProfile in isolated mock bridge");
+
