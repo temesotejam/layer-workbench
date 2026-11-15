@@ -53,13 +53,17 @@ def canonical(path):
             continue
         normalized = []
         for token in split_motion_words(text):
-            m = PARAM.fullmatch(token)
-            if m:
-                normalized.append(m[1].upper() + str(Decimal(m[2]).normalize()))
-            elif CODE.fullmatch(token):
+            # G20/G90/M100/T200/N10 also match the generic word pattern.
+            # Keep opcodes intact: Decimal normalization would turn G20
+            # into G2E+1 and break modal state tracking or hide mismatches.
+            if CODE.fullmatch(token):
                 normalized.append(token.upper())
             else:
-                normalized.append(token)
+                m = PARAM.fullmatch(token)
+                if m:
+                    normalized.append(m[1].upper() + str(Decimal(m[2]).normalize()))
+                else:
+                    normalized.append(token)
         commands.append((n, ' '.join(normalized)))
     return commands
 
