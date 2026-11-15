@@ -199,6 +199,7 @@ export async function checkBrowserPrivateImportedInstanceEdit(
   assert.equal(inSession.persistentNativeModelMutation,false);
   assert.equal(inSession.printApproved,false);
   result.inSessionImported3mfToolpathDiagnostic=inSession;
+  console.log('PASS: imported Core 3MF sliced → private +30mm instance edit → re-sliced within same WASM session, with independent multi-layer XY toolpath shift; no external STL flatten or new session');
   const archive=Buffer.from(result.editedArchive);
   const stl=Buffer.from(result.flattenedStl);
   delete result.editedArchive;
