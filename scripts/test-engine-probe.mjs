@@ -794,7 +794,7 @@ try {
       'v 0 0 8','v 40 0 8','v 0 20 8',
       'f 1 3 2','f 4 5 6',
       'f 1 2 5 4','f 2 3 6 5','f 3 1 4 6',
-    ].join('\\n');
+    ].join('\n');
     await prepare.locator('#model-file').setInputFiles({
       name:'gap-test-wedge.obj',mimeType:'text/plain',buffer:Buffer.from(wedgeObj),
     });
@@ -813,7 +813,7 @@ try {
         return status.startsWith('PASS:')||status.startsWith('FAILED');
       },null,{timeout:120000});
       assert.match(await prepare.locator('#lab-status').innerText(),
-        /^PASS: 1 STL\\/OBJ mesh model\\(s\\)/);
+        /^PASS: 1 STL\/OBJ mesh model\(s\)/);
       return prepare.locator('#lab-download').evaluate(async link=>
         await(await fetch(link.href)).text());
     };
@@ -824,8 +824,8 @@ try {
     const wedgeSlowFeeds=positiveExtrusionFeedrates(wedgeSlow);
     const newSlowWedgeFeeds=wedgeSlowFeeds.filter(f=>f>0&&f<=150&&
       !wedgeBaselineFeeds.some(baseline=>Math.abs(baseline-f)<0.01));
-    const gapComments=code=>code.split(/\\r?\\n/).filter(line=>
-      /;\\s*(?:TYPE:)?\\s*gap\\s*(?:in)?fill/i.test(line)).slice(0,10);
+    const gapComments=code=>code.split(/\r?\n/).filter(line=>
+      /;\s*(?:TYPE:)?\s*gap\s*(?:in)?fill/i.test(line)).slice(0,10);
     console.log('GAP_WEDGE_DIAGNOSTIC '+JSON.stringify({
       baselineFeedrates:wedgeBaselineFeeds,slowFeedrates:wedgeSlowFeeds,
       newSlowFeedrates:newSlowWedgeFeeds,
