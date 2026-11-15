@@ -475,3 +475,15 @@ This experiment does not assert realized printer speed, velocity planning,
 desktop OrcaSlicer parity, full profiles, or G-code print safety. It runs only
 with the verified local WASM artifact under isolated Chrome CI and is not
 activated on public Pages. PR CI must pass before this gate is accepted.
+
+## 2026-11-15: isolated sparse-infill commanded-speed regression gate
+
+The local-only Chrome/WASM probe now slices the same synthetic two-cube STL
+plate twice using identical diagnostic settings and a fixed, nonzero
+`sparse_infill_density:35`. The sole changed property is
+`sparse_infill_speed:2` mm/s. The test rejects header-only/hash-only
+changes by comparing actual positive-extrusion G-code feedrate values and
+requiring a newly observed slow feedrate at or below 150 mm/min.
+This test does **not** prove the exact native desktop feature classification,
+full-profile parity, actual machine motion, or safe printability. No upstream
+source, production Pages settings, or pinned engine artifact changes.

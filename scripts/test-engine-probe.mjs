@@ -316,6 +316,47 @@ try {
       'baseline='+JSON.stringify(speedFeeds)+' candidate='+JSON.stringify(topFeeds));
     console.log('PASS: real Chrome/WASM top_surface_speed=2 mm/s changes deposited F, newly slow mm/min='+
       JSON.stringify(newSlowTopFeeds));
+    // Check a second newly bridged native v2.5.0 deposition-speed key.
+    // Both runs use the same two-cube STL plate and process settings, with
+    // explicit nonzero sparse infill density. ONLY sparse_infill_speed changes.
+    // Inspect deposited F commands: a changed G-code hash or header is not proof.
+    const sparseInfillSettings={
+      layer_height:0.3,wall_loops:3,
+      outer_wall_speed:5,inner_wall_speed:8,travel_speed:20,
+      sparse_infill_density:35,
+    };
+    const sliceSparseInfill=async(name,settings)=>{
+      await prepare.locator('#lab-process').setInputFiles({
+        name,mimeType:'application/json',
+        buffer:Buffer.from(JSON.stringify(settings)),
+      });
+      await prepare.locator('#lab-slice').click();
+      await prepare.waitForFunction(() => {
+        const text=document.querySelector('#lab-status')?.textContent || '';
+        return text.startsWith('PASS:') || text.startsWith('FAILED');
+      },null,{timeout:120000});
+      const status=await prepare.locator('#lab-status').innerText();
+      assert.ok(status.startsWith('PASS: 2 STL model(s)'),status);
+      return prepare.locator('#lab-download').evaluate(async link=>
+        (await fetch(link.href)).text());
+    };
+    const sparseBaselineGcode=await sliceSparseInfill(
+      'test-sparse-infill-baseline.json',sparseInfillSettings);
+    const sparseSlowGcode=await sliceSparseInfill(
+      'test-sparse-infill-slow.json',
+      {...sparseInfillSettings,sparse_infill_speed:2});
+    const sparseBaselineFeeds=positiveExtrusionFeedrates(sparseBaselineGcode);
+    const sparseSlowFeeds=positiveExtrusionFeedrates(sparseSlowGcode);
+    assert.ok(sparseBaselineFeeds.length>0 && sparseSlowFeeds.length>0,
+      'Sparse-infill profile test produced no deposited G-code feedrates');
+    const newSlowSparseFeeds=sparseSlowFeeds.filter(f=>f>0 && f<=150 &&
+      !sparseBaselineFeeds.some(baseline=>Math.abs(baseline-f)<0.01));
+    assert.ok(newSlowSparseFeeds.length>0,
+      'sparse_infill_speed=2 mm/s produced no new low deposited F value; '+
+      'baseline='+JSON.stringify(sparseBaselineFeeds)+
+      ' candidate='+JSON.stringify(sparseSlowFeeds));
+    console.log('PASS: real Chrome/WASM sparse_infill_speed=2 mm/s changes deposited F, new slow mm/min='+
+      JSON.stringify(newSlowSparseFeeds));
     // Change ONLY the first-layer height while retaining the previous layer,
     // wall and speed settings. Verify a changed physical extrusion Z, not just
     // a G-code hash/header difference. Generic test PLA; never printer-ready.
