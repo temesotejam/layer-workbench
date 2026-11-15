@@ -600,6 +600,20 @@ try {
       'Selected native volumetric cap must change actual XY extrusion F rate, not merely metadata');
     console.log('PASS: explicit extruder-variant 0.7 vs 40 mm3/s changes median native G1 extrusion feedrate');
 
+    // Selecting a native bed without raw Orca profiles must never fall back
+    // to generic PLA output while silently ignoring the selected heater.
+    await prepare.locator('#lab-orca-profiles').setInputFiles([]);
+    await prepare.locator('#lab-orca-plate').selectOption('textured');
+    await prepare.locator('#lab-slice').click();
+    await prepare.waitForFunction(() =>
+      (document.querySelector('#lab-status')?.textContent||'').startsWith('FAILED slicing:'),
+      null,{timeout:120000});
+    assert.match(await prepare.locator('#lab-status').innerText(),
+      /Explicit bed selection requires a raw Orca profile collection/);
+    assert.equal(await prepare.locator('#lab-download').isVisible(),false);
+    console.log('PASS: explicit bed selection without profiles fails closed; no test G-code download');
+
+
 
 
 
