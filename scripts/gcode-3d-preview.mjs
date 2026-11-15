@@ -94,6 +94,7 @@ export function createThreeDToolpathPreview(container) {
       const extent=new THREE.Box3();
       const multi=Array.isArray(data.selectedToolIds)&&data.selectedToolIds.length>1;
       const selectors=multi?[null,...data.selectedToolIds]:[null];
+      let visibleSegmentCount=0;
       for(const layer of layers) {
         const group=new THREE.Group();
         for (const extrusion of [true,false]) {
@@ -102,6 +103,7 @@ export function createThreeDToolpathPreview(container) {
             for (const segment of layer.segments) {
               if(!visibleGcodeSegment(segment,featureFilter) ||
                  segment.extrusion!==extrusion || (extrusion&&multi&&segment.toolId!==toolId))continue;
+              visibleSegmentCount++;
               // Keep actual endpoint heights (including Z-only travel).
               // Three.js Z-up matches the Prepare viewport.
               const [x1,y1,z1,x2,y2,z2]=gcodeSegment3DVertices(segment,layer.z);
@@ -135,9 +137,10 @@ export function createThreeDToolpathPreview(container) {
       slider.value=String(layers.length-1);
       section.hidden=false;resize();through(layers.length-1);
       startPaint();
-      host.dataset.segmentCount=String(data.segments);
+      host.dataset.segmentCount=String(visibleSegmentCount);
+      host.dataset.featureFilter=featureFilter;
       return layerObjects.length;
     },
-    clear() {cleanup();layers=[];section.hidden=true;host.dataset.segmentCount="0";},
+    clear() {cleanup();layers=[];section.hidden=true;host.dataset.segmentCount="0";host.dataset.featureFilter=ALL_GCODE_PATHS;},
   };
 }
