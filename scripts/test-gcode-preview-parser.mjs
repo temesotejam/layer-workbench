@@ -204,4 +204,21 @@ assert.deepEqual(inline.extrusionSegmentsByFeature,{unclassified:1});
 // Feature labels alone are NOT evidence of an actual extruded gap-fill path.
 const tagWithoutDeposition=parseGcodeToolpaths(";TYPE:Gap infill\nG0 X10 F120\nG1 E1");
 assert.deepEqual(tagWithoutDeposition.extrusionSegmentsByFeature,{});
+// Malformed explicit tags must clear the prior label, not silently attribute
+// following extrusion to the last valid feature. Free-text comments still
+// leave the current slicer feature intact.
+const invalidFeatureTags=parseGcodeToolpaths([
+  "G90", "M82", "G0 X0 Y0 Z0.2",
+  ";TYPE:Gap infill", "G1 X10 E1",
+  ";TYPE:", "G1 X20 E2",
+  ";FEATURE:"+"x".repeat(81), "G1 X30 E3",
+  ";TYPE:Outer wall", "G1 X40 E4",
+  ";FEATURE:gap infill;trailing annotation", "G1 X50 E5",
+  "; ordinary gap infill note", "G1 X60 E6",
+].join("\n"));
+assert.deepEqual(invalidFeatureTags.layers[0].segments.filter(s=>s.extrusion).map(s=>s.feature),
+  ["gap infill",null,null,"outer wall",null,null]);
+assert.deepEqual(invalidFeatureTags.extrusionSegmentsByFeature,
+  {"gap infill":1,unclassified:4,"outer wall":1});
+console.log("PASS: invalid explicit TYPE/FEATURE comments clear stale classification");
 console.log("PASS: explicit type/feature tag attribution, modal F and comment-only false-positive guard");
