@@ -470,13 +470,13 @@ try {
       return text.startsWith('PASS:')||text.startsWith('FAILED');
     },null,{timeout:120000});
     const texturedStatus=await prepare.locator('#lab-status').innerText();
-    assert.match(texturedStatus,/^PASS: 2 STL model\\(s\\)/);
+    assert.match(texturedStatus,/^PASS: 2 STL model\(s\)/);
     assert.match(texturedStatus,/explicitly mapped textured bed 50/);
     assert.match(texturedStatus,/native first-layer textured bed 70/);
     const texturedText=await prepare.locator('#lab-download').evaluate(async link=>await(await fetch(link.href)).text());
     const texturedHeaters=thermalCommands(texturedText);
     assert.ok(texturedHeaters.length>0,'Expected native bed-heater commands on textured plate');
-    assert.ok(texturedHeaters.some(line=>/\\bS70\\b/.test(line)),
+    assert.ok(texturedHeaters.some(line=>/\bS70\b/.test(line)),
       'Textured first-layer setting did not produce actual 70 C heater command');
     assert.notDeepEqual(texturedHeaters,after,
       'Switching hot to textured plate must change actual bed-heater commands');
