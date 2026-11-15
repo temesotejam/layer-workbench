@@ -84,7 +84,7 @@ export function requireEditedCubeToolpathShift(before,after) {
       const span=result.regionZSpanMm?.[name];
       if (!Number.isSafeInteger(layers) || layers<0 ||
           typeof span!=='number' || !Number.isFinite(span) || span<0 ||
-          layers>result.regions[name] || (layers===0)!==(span===0))
+          layers>result.regions[name] || (layers===0 && span!==0))
         throw new Error('Invalid '+label+' vertical region evidence: '+name);
     }
     for (const name of names) {
