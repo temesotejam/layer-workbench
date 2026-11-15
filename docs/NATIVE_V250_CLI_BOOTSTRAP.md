@@ -3,7 +3,7 @@
 The workflow [`probe-native-v250-cli.yml`](../.github/workflows/probe-native-v250-cli.yml)
 downloads the **official** Ubuntu 24.04 x86_64 AppImage from the fixed
 `OrcaSlicer/OrcaSlicer` **v2.5.0 release** into a disposable GitHub Actions
-runner. It records the observed release-asset SHA-256 and the AppImage format
+runner. It checks the observed release-asset SHA-256 against the exact value\n`d13eb0a9cd618ed080ab6b82c64c0a60c4501aac91e88d5ac2c3b526fb141a7c`\n(observed on two earlier PR CI downloads), and records the AppImage format
 to short-lived CI logs, never commits or republishes the binary.
 
 It attempts two deliberately bounded CLI operations:
