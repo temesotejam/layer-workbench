@@ -816,6 +816,10 @@ try {
     const gapSettings={
       layer_height:0.3,wall_loops:2,outer_wall_speed:5,
       inner_wall_speed:8,travel_speed:20,sparse_infill_density:35,
+      // Explicit classic walls can expose narrow-perimeter gap fill that
+      // Arachne's adaptive width might absorb. This is a diagnostic probe,
+      // not evidence of gap paths until feature-tagged G-code confirms them.
+      wall_generator:'classic',gap_fill_target:'everywhere',
     };
     const sliceRing=async(name,settings)=>{
       await prepare.locator('#lab-process').setInputFiles({
@@ -862,6 +866,7 @@ try {
       'inconclusive_no_tagged_gap_paths';
     const gapReport={
       fixture:'watertight 40 x 40 x 8 mm OBJ ring with 1.5 mm walls (localhost only)',
+      explicit_wall_generator:'classic',explicit_gap_fill_target:'everywhere',
       setting:'gap_infill_speed',candidate_mm_s:2,
       baseline_feedrates_mm_min:baselineFeeds,
       candidate_feedrates_mm_min:candidateFeeds,
@@ -876,18 +881,17 @@ try {
     await writeFile(parityDir+'/gap-ring-feature-diagnostic.json',
       JSON.stringify(gapReport,null,2)+'\n');
     console.log('GAP_RING_DIAGNOSTIC '+JSON.stringify(gapReport));
-    if(verified){
-      console.log('PASS: actual tagged WASM gap paths change F when gap_infill_speed=2; mm/min='+
-        JSON.stringify(newSlowGapFeeds));
-    }else if(candidateGap.length>0||baselineGap.length>0){
-      assert.fail('Explicit gap-fill deposition was observed but the targeted '+
-        'gap_infill_speed setting was not verified: '+JSON.stringify(gapReport));
-    }else{
-      // No tagged feature path means no honest support claim, even when an
-      // unrelated extrusion feedrate changes.
-      console.log('INCONCLUSIVE: ring did not yield verified tagged gap-infill deposition; '+
-        'the fourth process speed remains UNVERIFIED');
-    }
+    // Classic/everywhere produced tagged gap deposition in the accepted
+    // pinned Chrome run. Regressions must now FAIL rather than returning an
+    // inconclusive green CI, including if only unrelated feedrates change.
+    assert.ok(baselineGap.length>0 && candidateGap.length>0,
+      'Expected real tagged gap-fill deposition in BOTH classic-mode slices: '+
+      JSON.stringify(gapReport));
+    assert.ok(verified && newSlowGapFeeds.some(f=>Math.abs(f-120)<0.01),
+      'Expected target gap-feature extrusion feedrate F120 (2 mm/s): '+
+      JSON.stringify(gapReport));
+    console.log('PASS: tagged WASM gap-fill extrusion responds with F120 when gap_infill_speed=2; '+
+      'baseline/candidate feature segments='+baselineGap.length+'/'+candidateGap.length);
 
 
 

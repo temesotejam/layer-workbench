@@ -585,3 +585,47 @@ improves *diagnostic attribution integrity only*. It does not prove that the
 WASM engine generates gap-fill paths, verify the fourth deposition speed, show
 OrcaSlicer desktop G-code parity, or authorize printing/deployment. No public
 site or WASM binary is modified.
+
+## 2026-11-16: explicit native classic wall and gap-fill mode for isolated gap probe
+
+The bounded localhost process adapter now accepts only the pinned native
+`wall_generator` tokens `classic`/`arachne` and `gap_fill_target` tokens
+`everywhere`/`topbottom`/`nowhere`. Profile inheritance keeps exact string
+values, and the second process-override gate preserves these choices for
+`session.applyProfile("orca.native-json", ...)`. Invalid casing, arrays,
+numeric coercions and unknown values fail closed, with unit and mock-bridge
+regressions. The isolated gap-ring experiment explicitly requests
+`wall_generator:"classic"` and `gap_fill_target:"everywhere"` for both
+its baseline and 2 mm/s candidate, based on Orca's documented distinction
+between adaptive Arachne and classic-perimeter gap fill.
+
+**Acceptance boundary:** a successful parser or CI run alone does not prove
+that native WASM produced any tagged gap-fill paths or honored the selected
+wall generator. The feature-attributed G-code diagnostic must show actual
+gap deposition and a speed-only F difference before the fourth process
+speed can be called verified. These settings are diagnostic-only; no public
+Pages engine, printer compatibility, full-profile parity, or print-safe
+G-code is claimed.
+
+## 2026-11-16: actual tagged Gap infill F120 in pinned isolated Chrome (PR #31)
+
+With the **same accepted native v2.5.0 WASM binary**, the explicit
+`wall_generator: "classic"`, `gap_fill_target: "everywhere"` settings
+allowed the existing 1.5 mm hollow-ring OBJ fixture to generate **756**
+`gap fill`/`gap infill`-labelled deposited preview segments in *each* of two
+isolated-Chrome slices. With only `gap_infill_speed` varied, the baseline
+tagged gap deposition speeds included **583.27–999.94 mm/min** plus other
+values; the 2 mm/s candidate introduced **F120 (120 mm/min)** on actual
+tagged deposition segments. The two slices kept the same number of tagged
+gap segments. See [real Chrome CI #43769398714](https://github.com/temesotejam/layer-workbench/actions/runs/43769398714),
+which **PASSed** with `observed_tagged_gap_feedrate_effect`. The official
+profile/inheritance and mock bridging checks also **PASSed** in
+[PR CI #43769398709](https://github.com/temesotejam/layer-workbench/actions/runs/43769398709).
+
+The Chrome acceptance gate is now strict: missing explicit tagged gap
+deposition on either side, or failure to introduce the target F120
+on tagged gap deposition, **FAILS** the run instead of reporting an
+inconclusive green build. Actual physical acceleration, material flow,
+native desktop-vs-WASM equivalence, arbitrary printers/profiles,
+verified 3MF compatibility, and print safety remain unverified.
+No production Pages engine or heavyweight WASM candidate was changed.

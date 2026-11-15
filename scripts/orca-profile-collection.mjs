@@ -20,6 +20,12 @@ const SPECS={
     top_surface_speed:[1,800],gap_infill_speed:[1,800]},
 };
 const INTEGERS=new Set(['wall_loops','top_shell_layers','bottom_shell_layers']);
+// Pinned native process enums; the limited adapter retains exact wire values.
+// No inferred default or desktop/print parity is implied by this allow-list.
+const PROCESS_ENUMS=Object.freeze({
+  wall_generator:new Set(["classic","arachne"]),
+  gap_fill_target:new Set(["everywhere","topbottom","nowhere"]),
+});
 // Pinned OrcaSlicer v2.5.0 PrintConfig.cpp: curr_bed_type enum and
 // six native per-filament steady/first-layer coInts pairs. UI labels are
 // NOT the serialized enum values (e.g. "Smooth Cool Plate" vs "Cool Plate").
@@ -82,7 +88,11 @@ export function resolveOrcaProfileFamily(records,type,selected,options={}) {
     for(const rec of chain){
       for(const [key,value] of Object.entries(rec)){
         if(Object.hasOwn(SPECS[type],key))settings[key]=validateNum(key,value,SPECS[type][key]);
-        else if(!META.has(key))unsupported.add(key);
+        else if(type==="process" && Object.hasOwn(PROCESS_ENUMS,key)) {
+          if(typeof value!=="string" || !PROCESS_ENUMS[key].has(value))
+            throw new Error("Invalid native process enum: "+key);
+          settings[key]=value;
+        }else if(!META.has(key))unsupported.add(key);
       }
     }
     // Native OrcaSlicer exposes first-layer nozzle temperature as a

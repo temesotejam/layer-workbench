@@ -23,16 +23,28 @@ const LIMITS = {
   gap_infill_speed: [1,800],
 };
 const INTEGERS = new Set(["wall_loops","top_shell_layers","bottom_shell_layers"]);
+// Exact native v2.5.0 process enum tokens; do not accept labels, numeric
+// stand-ins, lists or guessed defaults. This is localhost-only.
+const ENUMS = Object.freeze({
+  wall_generator: new Set(["classic","arachne"]),
+  gap_fill_target: new Set(["everywhere","topbottom","nowhere"]),
+});
 
 export function parseTestProcessOverrides(input) {
   if (!input || typeof input !== "object" || Array.isArray(input))
     throw new Error("Expected a flat process override JSON object.");
   const entries = Object.entries(input);
   if (!entries.length) throw new Error("No process overrides provided.");
-  if (entries.length > Object.keys(LIMITS).length)
+  if (entries.length > Object.keys(LIMITS).length + Object.keys(ENUMS).length)
     throw new Error("Too many override settings.");
   const clean = {};
   for(const [key,raw] of entries) {
+    if (Object.hasOwn(ENUMS,key)) {
+      if (typeof raw !== "string" || !ENUMS[key].has(raw))
+        throw new Error("Unsupported native enum value for " + key);
+      clean[key] = raw;
+      continue;
+    }
     const range = LIMITS[key];
     if (!range) throw new Error("Unsupported process setting: " + key);
     if (typeof raw !== "number" && typeof raw !== "string")
