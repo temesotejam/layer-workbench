@@ -5,6 +5,7 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {parseGcodeToolpaths} from './gcode-preview-parser.mjs';
+import {makeGapRingObj} from './gap-ring-fixture.mjs';
 import {checkBrowser3mfRoundTrip} from './test-browser-3mf-roundtrip.mjs';
 import {checkBrowserMultiObject3mf} from './test-browser-3mf-multiobject.mjs';
 const base = process.env.ENGINE_PROBE_URL || 'http://127.0.0.1:8766/';
@@ -783,27 +784,22 @@ try {
     console.log('PASS: OBJ displayed in Prepare -> bounded mesh-only STL conversion -> real WASM multilayer G-code ('+
       objPaths.layers.length+' layers, '+objPaths.extrusions+' extrusion segments; not print-ready)');
 
-    // Unlike a 20mm square, a wedge has varying local wall thickness. It is
-    // a candidate gap-fill fixture, not an assertion that a gap must occur.
-    // Remove the previous object so geometry is held exactly constant across
-    // the two speed-only slices. The mesh stays in the localhost test.
+    // The pinned Orca documentation describes a narrow classic-wall gap
+    // between perimeters. Probe a watertight 1.5 mm hollow ring rather than
+    // assuming that an unrelated solid wedge contains gap-fill toolpaths.
+    // This shape remains diagnostic-only; wall-generation mode is not proven.
     await prepare.locator('#remove-object').click();
     await prepare.locator('#object-count').getByText('0 objects').waitFor();
-    const wedgeObj=[
-      'v 0 0 0','v 40 0 0','v 0 20 0',
-      'v 0 0 8','v 40 0 8','v 0 20 8',
-      'f 1 3 2','f 4 5 6',
-      'f 1 2 5 4','f 2 3 6 5','f 3 1 4 6',
-    ].join('\n');
     await prepare.locator('#model-file').setInputFiles({
-      name:'gap-test-wedge.obj',mimeType:'text/plain',buffer:Buffer.from(wedgeObj),
+      name:'gap-test-ring.obj',mimeType:'text/plain',
+      buffer:Buffer.from(makeGapRingObj()),
     });
     await prepare.locator('#object-count').getByText('1 object').waitFor({timeout:30000});
     const gapSettings={
-      layer_height:0.3,wall_loops:3,outer_wall_speed:5,
+      layer_height:0.3,wall_loops:2,outer_wall_speed:5,
       inner_wall_speed:8,travel_speed:20,sparse_infill_density:35,
     };
-    const sliceWedge=async(name,settings)=>{
+    const sliceRing=async(name,settings)=>{
       await prepare.locator('#lab-process').setInputFiles({
         name,mimeType:'application/json',buffer:Buffer.from(JSON.stringify(settings)),
       });
@@ -817,54 +813,63 @@ try {
       return prepare.locator('#lab-download').evaluate(async link=>
         await(await fetch(link.href)).text());
     };
-    const wedgeBaseline=await sliceWedge('gap-wedge-baseline.json',gapSettings);
-    const wedgeSlow=await sliceWedge('gap-wedge-slow.json',
+    const ringBaseline=await sliceRing('gap-ring-baseline.json',gapSettings);
+    const ringSlow=await sliceRing('gap-ring-slow.json',
       {...gapSettings,gap_infill_speed:2});
-    const wedgeBaselineFeeds=positiveExtrusionFeedrates(wedgeBaseline);
-    const wedgeSlowFeeds=positiveExtrusionFeedrates(wedgeSlow);
-    const newSlowWedgeFeeds=wedgeSlowFeeds.filter(f=>f>0&&f<=150&&
-      !wedgeBaselineFeeds.some(baseline=>Math.abs(baseline-f)<0.01));
-    const gapComments=code=>code.split(/\r?\n/).filter(line=>
-      /;\s*(?:TYPE:)?\s*gap\s*(?:in)?fill/i.test(line)).slice(0,10);
-    // Record the unambiguous outcome even when this fixture generated no
-    // eligible gap-fill paths. "No effect" on an unsupported fixture is NOT a
-    // passing gap_infill_speed verification. Keep evidence in CI artifacts.
-    const baselineGapComments=gapComments(wedgeBaseline);
-    const slowGapComments=gapComments(wedgeSlow);
-    const gapFeatureObserved=newSlowWedgeFeeds.length>0;
+    const baselineFeeds=positiveExtrusionFeedrates(ringBaseline);
+    const candidateFeeds=positiveExtrusionFeedrates(ringSlow);
+    const newSlowFeeds=candidateFeeds.filter(f=>f>0&&f<=150&&
+      !baselineFeeds.some(baseline=>Math.abs(baseline-f)<0.01));
+    // Any new low F in generic extrusion is insufficient evidence of gap
+    // speed support. An explicit ;TYPE: or ;FEATURE: marker must accompany
+    // actual positive-E geometry before accepting a feature-specific PASS.
+    const taggedGapMoves=code=>parseGcodeToolpaths(code).layers.flatMap(layer=>layer.segments)
+      .filter(segment=>segment.extrusion&&
+        (segment.feature==='gap infill'||segment.feature==='gap fill')&&
+        Number.isFinite(segment.feedrateMmMin)&&segment.feedrateMmMin>0);
+    const baselineGap=taggedGapMoves(ringBaseline);
+    const candidateGap=taggedGapMoves(ringSlow);
+    const gapRates=moves=>[...new Set(moves.map(s=>
+      Math.round(s.feedrateMmMin*100)/100))].sort((a,b)=>a-b);
+    const baselineGapFeeds=gapRates(baselineGap);
+    const candidateGapFeeds=gapRates(candidateGap);
+    const newSlowGapFeeds=candidateGapFeeds.filter(f=>f<=150&&
+      !baselineGapFeeds.some(v=>Math.abs(v-f)<0.01));
+    const verified=baselineGap.length>0&&candidateGap.length>0&&
+      newSlowGapFeeds.length>0;
+    const status=verified?'observed_tagged_gap_feedrate_effect':
+      candidateGap.length>0||baselineGap.length>0?
+      'gap_paths_observed_but_feedrate_unverified':
+      newSlowFeeds.length>0?'inconclusive_unattributed_feedrate_change':
+      'inconclusive_no_tagged_gap_paths';
     const gapReport={
-      fixture:'single 40 x 20 x 8 mm triangular prism OBJ (localhost test only)',
+      fixture:'watertight 40 x 40 x 8 mm OBJ ring with 1.5 mm walls (localhost only)',
       setting:'gap_infill_speed',candidate_mm_s:2,
-      baseline_feedrates_mm_min:wedgeBaselineFeeds,
-      candidate_feedrates_mm_min:wedgeSlowFeeds,
-      new_slow_feedrates_mm_min:newSlowWedgeFeeds,
-      baseline_gap_comments:baselineGapComments,
-      candidate_gap_comments:slowGapComments,
-      result:gapFeatureObserved?'observed_feedrate_effect':'inconclusive_no_gap_paths_observed',
-      native_desktop_parity:false,printer_safe:false,
+      baseline_feedrates_mm_min:baselineFeeds,
+      candidate_feedrates_mm_min:candidateFeeds,
+      new_slow_feedrates_mm_min:newSlowFeeds,
+      baseline_tagged_gap_extrusion_segments:baselineGap.length,
+      candidate_tagged_gap_extrusion_segments:candidateGap.length,
+      baseline_tagged_gap_feedrates_mm_min:baselineGapFeeds,
+      candidate_tagged_gap_feedrates_mm_min:candidateGapFeeds,
+      new_slow_tagged_gap_feedrates_mm_min:newSlowGapFeeds,
+      result:status,native_desktop_parity:false,printer_safe:false,
     };
-    await writeFile(parityDir+'/gap-wedge-feedrate-diagnostic.json',
+    await writeFile(parityDir+'/gap-ring-feature-diagnostic.json',
       JSON.stringify(gapReport,null,2)+'\n');
-    console.log('GAP_WEDGE_DIAGNOSTIC '+JSON.stringify(gapReport));
-    if(gapFeatureObserved){
-      console.log('PASS: actual WASM gap_infill_speed=2 changes wedge deposited F; new mm/min='+
-        JSON.stringify(newSlowWedgeFeeds));
+    console.log('GAP_RING_DIAGNOSTIC '+JSON.stringify(gapReport));
+    if(verified){
+      console.log('PASS: actual tagged WASM gap paths change F when gap_infill_speed=2; mm/min='+
+        JSON.stringify(newSlowGapFeeds));
+    }else if(candidateGap.length>0||baselineGap.length>0){
+      assert.fail('Explicit gap-fill deposition was observed but the targeted '+
+        'gap_infill_speed setting was not verified: '+JSON.stringify(gapReport));
     }else{
-      // A no-feature geometry may produce identical outputs. Keep this a
-      // negative-control diagnostic, never call it gap-speed support.
-      assert.deepEqual(wedgeSlowFeeds,wedgeBaselineFeeds,
-        'Wedge gap-speed probe had unexplained deposited feedrate differences');
-      assert.equal(baselineGapComments.length+slowGapComments.length,0,
-        'Gap-fill labels were present but the gap-speed change had no measured effect');
-      console.log('INCONCLUSIVE: cube and wedge generated no observed gap-infill paths; '+
-        'gap_infill_speed real G-code effect remains UNVERIFIED');
+      // No tagged feature path means no honest support claim, even when an
+      // unrelated extrusion feedrate changes.
+      console.log('INCONCLUSIVE: ring did not yield verified tagged gap-infill deposition; '+
+        'the fourth process speed remains UNVERIFIED');
     }
-
-
-
-
-
-
 
 
 
