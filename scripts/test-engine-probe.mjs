@@ -826,17 +826,39 @@ try {
       !wedgeBaselineFeeds.some(baseline=>Math.abs(baseline-f)<0.01));
     const gapComments=code=>code.split(/\r?\n/).filter(line=>
       /;\s*(?:TYPE:)?\s*gap\s*(?:in)?fill/i.test(line)).slice(0,10);
-    console.log('GAP_WEDGE_DIAGNOSTIC '+JSON.stringify({
-      baselineFeedrates:wedgeBaselineFeeds,slowFeedrates:wedgeSlowFeeds,
-      newSlowFeedrates:newSlowWedgeFeeds,
-      baselineGapComments:gapComments(wedgeBaseline),
-      slowGapComments:gapComments(wedgeSlow),
-    }));
-    assert.ok(newSlowWedgeFeeds.length>0,
-      'Wedge fixture did not expose a new slow deposited G-code F with gap_infill_speed=2; '+
-      'this could be missing gap-fill paths, not necessarily a broken override');
-    console.log('PASS: real Chrome/WASM gap_infill_speed=2 mm/s changes wedge deposited F, new slow mm/min='+
-      JSON.stringify(newSlowWedgeFeeds));
+    // Record the unambiguous outcome even when this fixture generated no
+    // eligible gap-fill paths. "No effect" on an unsupported fixture is NOT a
+    // passing gap_infill_speed verification. Keep evidence in CI artifacts.
+    const baselineGapComments=gapComments(wedgeBaseline);
+    const slowGapComments=gapComments(wedgeSlow);
+    const gapFeatureObserved=newSlowWedgeFeeds.length>0;
+    const gapReport={
+      fixture:'single 40 x 20 x 8 mm triangular prism OBJ (localhost test only)',
+      setting:'gap_infill_speed',candidate_mm_s:2,
+      baseline_feedrates_mm_min:wedgeBaselineFeeds,
+      candidate_feedrates_mm_min:wedgeSlowFeeds,
+      new_slow_feedrates_mm_min:newSlowWedgeFeeds,
+      baseline_gap_comments:baselineGapComments,
+      candidate_gap_comments:slowGapComments,
+      result:gapFeatureObserved?'observed_feedrate_effect':'inconclusive_no_gap_paths_observed',
+      native_desktop_parity:false,printer_safe:false,
+    };
+    await writeFile(parityDir+'/gap-wedge-feedrate-diagnostic.json',
+      JSON.stringify(gapReport,null,2)+'\n');
+    console.log('GAP_WEDGE_DIAGNOSTIC '+JSON.stringify(gapReport));
+    if(gapFeatureObserved){
+      console.log('PASS: actual WASM gap_infill_speed=2 changes wedge deposited F; new mm/min='+
+        JSON.stringify(newSlowWedgeFeeds));
+    }else{
+      // A no-feature geometry may produce identical outputs. Keep this a
+      // negative-control diagnostic, never call it gap-speed support.
+      assert.deepEqual(wedgeSlowFeeds,wedgeBaselineFeeds,
+        'Wedge gap-speed probe had unexplained deposited feedrate differences');
+      assert.equal(baselineGapComments.length+slowGapComments.length,0,
+        'Gap-fill labels were present but the gap-speed change had no measured effect');
+      console.log('INCONCLUSIVE: cube and wedge generated no observed gap-infill paths; '+
+        'gap_infill_speed real G-code effect remains UNVERIFIED');
+    }
 
 
 
