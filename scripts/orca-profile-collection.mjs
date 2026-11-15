@@ -15,6 +15,19 @@ const SPECS={
     outer_wall_speed:[1,800],inner_wall_speed:[1,800],travel_speed:[1,1500]},
 };
 const INTEGERS=new Set(['wall_loops','top_shell_layers','bottom_shell_layers']);
+// Pinned OrcaSlicer v2.5.0 PrintConfig.cpp: curr_bed_type enum and
+// six native per-filament steady/first-layer coInts pairs. UI labels are
+// NOT the serialized enum values (e.g. "Smooth Cool Plate" vs "Cool Plate").
+// Never infer a plate type from an unrelated bed_temperature fallback.
+const PLATE_OPTIONS=Object.freeze({
+  hot:{name:"High Temp Plate",temperature:"hot_plate_temp"},
+  cool:{name:"Cool Plate",temperature:"cool_plate_temp"},
+  engineering:{name:"Engineering Plate",temperature:"eng_plate_temp"},
+  textured:{name:"Textured PEI Plate",temperature:"textured_plate_temp"},
+  "textured-cool":{name:"Textured Cool Plate",temperature:"textured_cool_plate_temp"},
+  supertack:{name:"Supertack Plate",temperature:"supertack_plate_temp"}
+});
+
 const META=new Set(['type','name','inherits','instantiation','from','compatible_printers','setting_id','filament_id','alias']);
 function dict(x){return x!==null&&typeof x==='object'&&!Array.isArray(x)&&Object.getPrototypeOf(x)===Object.prototype;}
 function name(x){if(typeof x!=='string'||!x||x.length>160||['__proto__','constructor','prototype'].includes(x))throw new Error('Invalid profile name');return x;}
@@ -119,37 +132,37 @@ export function resolveOrcaProfileFamily(records,type,selected,options={}) {
       }else if(options.filamentVariant!==undefined)
         throw new Error("Selected filament variant has no volumetric speed settings");
     }
-    // A real Orca filament has plate-specific bed temperatures, not a generic
-    // 'bed_temperature' field. Only map an explicitly selected hot plate in
-    // this local development proof. Never assume other plate types are equal.
+    // Explicit plate choice only. The upstream v2.5.0 enum has six values
+    // and paired per-filament temperature vectors, selected independently.
+    // '0' means the filament does not support that plate: refuse selection
+    // rather than emitting a cold-bed setting that appears print-ready.
     let selectedBed=null;
     if(type==="filament" && options.plateType!=null) {
-      if(options.plateType!=="hot")throw new Error("Unsupported Orca plate type");
-      const source=[...chain].reverse().find(p=>Object.hasOwn(p,"hot_plate_temp"));
-      if(!source)throw new Error("Selected hot plate temperature missing");
-      const temp=validateNum("bed_temperature",source.hot_plate_temp,SPECS.filament.bed_temperature);
-      // OrcaSlicer's PrintConfig selects the bed temperature through
-      // curr_bed_type. Merely changing a compatibility bed_temperature field
-      // can alter a G-code metadata header WITHOUT issuing an M140/M190.
-      // Require a user-selected plate and pass BOTH native options so that
-      // the G-code writer sees the matching High Temp Plate settings.
+      if(typeof options.plateType!=="string" ||
+         !Object.hasOwn(PLATE_OPTIONS,options.plateType))
+        throw new Error("Unsupported Orca plate type");
+      const plate=PLATE_OPTIONS[options.plateType];
+      const source=[...chain].reverse().find(p=>Object.hasOwn(p,plate.temperature));
+      if(!source)throw new Error("Selected "+options.plateType+" plate temperature missing");
+      const temp=validateNum("bed_temperature",source[plate.temperature],SPECS.filament.bed_temperature);
+      if(Number(temp)===0)throw new Error("Selected Orca plate is unsupported by filament");
+      // Retain the native vector and enum; the limited bridge also accepts
+      // bed_temperature for its development-profile compatibility path.
       settings.bed_temperature=temp;
-      settings.curr_bed_type="High Temp Plate";
-      settings.hot_plate_temp=[temp];
-      unsupported.delete("hot_plate_temp");
-      // The pinned OrcaWasm one-slicer-api bridge accepts native per-filament
-      // temperature vectors (see its smoke-test.mjs). Unlike the steady-state
-      // bridge value, the first-layer temperature must retain the native key
-      // and one-element vector shape; NEVER replace it with bed_temperature.
-      // There is deliberately no inferred default if the field is absent.
-      const initial=[...chain].reverse().find(p=>Object.hasOwn(p,"hot_plate_temp_initial_layer"));
+      settings.curr_bed_type=plate.name;
+      settings[plate.temperature]=[temp];
+      unsupported.delete(plate.temperature);
+      const initialKey=plate.temperature+"_initial_layer";
+      const initial=[...chain].reverse().find(p=>Object.hasOwn(p,initialKey));
       let initialLayerTemp=null;
       if(initial){
-        initialLayerTemp=validateNum("bed_temperature",initial.hot_plate_temp_initial_layer,SPECS.filament.bed_temperature);
-        settings.hot_plate_temp_initial_layer=[initialLayerTemp];
-        unsupported.delete("hot_plate_temp_initial_layer");
+        initialLayerTemp=validateNum("bed_temperature",initial[initialKey],SPECS.filament.bed_temperature);
+        if(Number(initialLayerTemp)===0)
+          throw new Error("Selected Orca plate first layer is unsupported by filament");
+        settings[initialKey]=[initialLayerTemp];
+        unsupported.delete(initialKey);
       }
-      selectedBed={plateType:"hot",source:source.name,bed_temperature:temp,
+      selectedBed={plateType:options.plateType,source:source.name,bed_temperature:temp,
         initialLayerSource:initial?.name??null,initialLayerTemperature:initialLayerTemp};
     }
     // Compatibility may be inherited from the nearest ancestor that defines it.
