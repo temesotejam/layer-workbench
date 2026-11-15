@@ -357,6 +357,27 @@ try {
       ' candidate='+JSON.stringify(sparseSlowFeeds));
     console.log('PASS: real Chrome/WASM sparse_infill_speed=2 mm/s changes deposited F, new slow mm/min='+
       JSON.stringify(newSlowSparseFeeds));
+    // Third newly bridged process-speed option: use the same two-cube
+    // geometry and identical diagnostic settings as the sparse baseline.
+    // Only internal_solid_infill_speed changes. Require actual XY+E feedrate
+    // change rather than accepting profile comments or a G-code hash.
+    // This fixture has top/bottom solid shells and interior solid infill;
+    // a production printer profile or desktop-native parity is NOT asserted.
+    const internalSolidSlowGcode=await sliceSparseInfill(
+      'test-internal-solid-infill-slow.json',
+      {...sparseInfillSettings,internal_solid_infill_speed:2});
+    const internalSolidBaselineFeeds=positiveExtrusionFeedrates(sparseBaselineGcode);
+    const internalSolidSlowFeeds=positiveExtrusionFeedrates(internalSolidSlowGcode);
+    assert.ok(internalSolidBaselineFeeds.length>0&&internalSolidSlowFeeds.length>0,
+      'Internal-solid-speed test produced no deposited G-code feedrates');
+    const newSlowInternalSolidFeeds=internalSolidSlowFeeds.filter(f=>f>0&&f<=150&&
+      !internalSolidBaselineFeeds.some(baseline=>Math.abs(baseline-f)<0.01));
+    assert.ok(newSlowInternalSolidFeeds.length>0,
+      'internal_solid_infill_speed=2 mm/s produced no new low deposited F value; '+
+      'baseline='+JSON.stringify(internalSolidBaselineFeeds)+
+      ' candidate='+JSON.stringify(internalSolidSlowFeeds));
+    console.log('PASS: real Chrome/WASM internal_solid_infill_speed=2 mm/s changes deposited F, new slow mm/min='+
+      JSON.stringify(newSlowInternalSolidFeeds));
     // Change ONLY the first-layer height while retaining the previous layer,
     // wall and speed settings. Verify a changed physical extrusion Z, not just
     // a G-code hash/header difference. Generic test PLA; never printer-ready.
