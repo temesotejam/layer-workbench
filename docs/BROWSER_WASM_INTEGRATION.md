@@ -404,3 +404,20 @@ Acceptance: node scripts/test-obj-to-stl.mjs checks bounding, triangle counts, f
 Previously the local 3D G-code line preview used the destination layer Z for **both** endpoints of every G0/G1 segment. A pure Z travel move became a zero-length horizontal line and a simultaneous XY+Z move appeared level even though its true trajectory is sloped. The bounded parser now stores `z1` and `z2` (millimeters) for each linear or planar arc segment. The 3D renderer consumes these individual heights, while the existing 2D per-layer grouping still uses the destination Z. A standalone pure Node test covers vertical travel, sloped extrusion, relative/inch coordinates and malformed values; a lightweight CI workflow runs without downloading or rebuilding the 30 MB WASM candidate.
 
 **Scope:** this improves only geometry visualization in the explicit localhost-isolated lab; it does not handle helical arcs, printer firmware motion planning, native desktop parity, or the public Pages slicer. Neither toolpaths nor preview assert that a G-code file is safe for a real printer.
+
+## 2026-11-15: bounded G17 helical arcs in localhost G-code diagnostics
+
+The opt-in localhost-only G-code preview tessellates valid G17 XY circular arcs
+that also change Z, including relative-Z moves and I/J full-circle helices.
+Each short 3D line segment interpolates Z between the commanded endpoints;
+all tessellated pieces of one arc remain grouped under the destination Z for
+the existing 2D layer selector. Existing 4096-segment-per-arc and overall
+preview-budget limits still apply. Invalid radii and non-XY-plane arcs are
+skipped while preserving their modal endpoint for later motions. Regression
+tests check rising arcs, full circles, R arcs, relative coordinates, 3D
+continuity, and unsupported-plane fallback.
+
+This is diagnostic visualization, **not** complete firmware interpolation,
+OrcaSlicer native Preview parity, G-code parity, print-ready output, or a
+publicly enabled slicer. Helix pitch is approximated by linear Z interpolation
+along the arc. The previously validated WASM engine candidate is unchanged.

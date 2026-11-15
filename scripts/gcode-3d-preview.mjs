@@ -15,7 +15,7 @@ export function createThreeDToolpathPreview(container) {
     <label>Visible through layer <input id="lab-3d-layer-range" type="range" min="0" max="0" value="0" step="1"></label>
     <output id="lab-3d-layer-info"></output>
     <div id="lab-3d-canvas" aria-label="3D G-code toolpath preview" role="img"></div>
-    <p>Extrusion is orange for one/unknown T selector; multiple T selectors use distinct colors (not actual filament colors or physical nozzle identities). Blue-gray: travel. XY arcs are approximated; helical, non-XY and invalid arcs are omitted. Diagnostic only; not native OrcaSlicer Preview or a print safety check.</p>
+    <p>Extrusion is orange for one/unknown T selector; multiple T selectors use distinct colors (not actual filament colors or physical nozzle identities). Blue-gray: travel. XY planar and helical arcs are approximated; non-XY and invalid arcs are omitted. Diagnostic only; not native OrcaSlicer Preview or a print safety check.</p>
   `;
   container.appendChild(section);
   const host=section.querySelector("#lab-3d-canvas");

@@ -1,5 +1,5 @@
 // Bounded read-only preview parser for G-code from the isolated WASM lab.
-// Linear G0/G1 and common planar G2/G3 (XY, I/J center or R radius) are visualized.
+// Linear G0/G1 and bounded G17 XY planar/helical G2/G3 arcs (I/J center or R radius) are visualized.
 // Unsupported arc forms are *not* drawn as misleading straight chords, but
 // their modal XYZE end positions still advance so subsequent paths stay aligned.
 // This is a diagnostic renderer, not a firmware interpreter or print safety check.
@@ -49,14 +49,14 @@ export function parseGcodeToolpaths(source, options={}) {
   const selectedTools=new Set();
   const extrusionsByTool=new Map();
   let count=0,deposited=0,travels=0,skippedArcs=0,renderedArcs=0,skippedMalformedMotion=0;
-  function append(x1,y1,x2,y2,z1,z2,extrusion){
+  function append(x1,y1,x2,y2,z1,z2,extrusion,groupZ=z2){
     if(![x1,y1,x2,y2,z1,z2].every(Number.isFinite) ||
        Math.max(Math.abs(x1),Math.abs(y1),Math.abs(x2),Math.abs(y2),Math.abs(z1),Math.abs(z2))>100_000)
       throw new Error("Toolpath coordinate exceeds preview limits");
     if(++count>maxSegments)throw new Error("Toolpath too complex for this preview");
     // 2D layers are grouped by destination Z, but 3D must retain both
     // endpoints. Pure Z travel and sloped moves are not horizontal lines.
-    const layerZ=Math.round(z2*1000)/1000;
+    const layerZ=Math.round(groupZ*1000)/1000;
     const key=String(layerZ);
     if(!byZ.has(key))byZ.set(key,{z:layerZ,segments:[]});
     byZ.get(key).segments.push({x1,y1,x2,y2,z1,z2,extrusion,toolId:activeTool,
@@ -125,8 +125,7 @@ export function parseGcodeToolpaths(source, options={}) {
     // major arc. Reject ambiguous R+I/J, impossible chords, and R full circles.
     const hasRadius="R" in words;
     const hasCenter="I" in words||"J" in words;
-    if(state.plane!=="G17"||Math.abs(state.z-start.z)>EPS||
-       hasRadius===hasCenter){
+    if(state.plane!=="G17"||hasRadius===hasCenter){
       skippedArcs++;continue;
     }
     let cx,cy;
@@ -174,13 +173,16 @@ export function parseGcodeToolpaths(source, options={}) {
     // closed rather than silently drawing a grossly simplified trajectory.
     const steps=Math.ceil(Math.max(Math.abs(sweep)*r0,Math.abs(sweep)/(Math.PI/18)));
     if(steps>4096){skippedArcs++;continue;}
-    let px=start.x,py=start.y;
+    let px=start.x,py=start.y,pz=start.z;
     for(let i=1;i<=steps;i++){
       const a=a0+sweep*i/steps;
       const x=i===steps?state.x:cx+r0*Math.cos(a);
       const y=i===steps?state.y:cy+r0*Math.sin(a);
-      append(px,py,x,y,start.z,state.z,extrusion);
-      px=x;py=y;
+      const z=i===steps?state.z:start.z+(state.z-start.z)*i/steps;
+      // Preserve true 3D helix heights while grouping the complete arc in
+      // its destination Z bucket for the existing 2D layer picker.
+      append(px,py,x,y,pz,z,extrusion,state.z);
+      px=x;py=y;pz=z;
     }
     renderedArcs++;
   }
