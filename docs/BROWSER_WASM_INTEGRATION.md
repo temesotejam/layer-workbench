@@ -459,3 +459,19 @@ This is **not** evidence of v2.5.0 desktop-versus-WASM G-code speed parity, nor
 a real-browser verification of the four speeds' effect on tool motion. All
 other unsupported full-profile keys remain excluded; existing candidate WASM
 and public Pages remain unchanged. Do not print test G-code.
+
+## 2026-11-15: isolated Chrome gate for a newly forwarded v2.5.0 process speed
+
+The browser WASM diagnostic now compares two slices of the same 20 mm cube
+fixture with identical layer, wall, and travel settings, varying only
+`top_surface_speed` to an intentionally low 2 mm/s. The regression reads the
+**actual G-code asset**, extracts modal F on positive-extrusion moves, and
+requires newly observed low F values not present in the baseline. It does not
+accept a G-code hash change alone, because metadata/header differences could
+hide an ignored process option. Other three newly bridged speed options remain
+API-forwarded but **are not individually verified in native G-code yet**.
+
+This experiment does not assert realized printer speed, velocity planning,
+desktop OrcaSlicer parity, full profiles, or G-code print safety. It runs only
+with the verified local WASM artifact under isolated Chrome CI and is not
+activated on public Pages. PR CI must pass before this gate is accepted.
