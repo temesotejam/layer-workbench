@@ -8,6 +8,8 @@ on:
       - "scripts/test-obj-to-stl.mjs"
       - "scripts/prepare-engine-lab.mjs"
       - "scripts/test-engine-probe.mjs"
+      - "scripts/gap-ring-fixture.mjs"
+      - "scripts/test-gap-ring-fixture.mjs"
       - ".github/workflows/verify-engine-browser.yml"
   push:
     branches: [main]
@@ -39,6 +41,8 @@ on:
       - "index.html"
       - "scripts/serve-isolated.py"
       - "scripts/test-engine-probe.mjs"
+      - "scripts/gap-ring-fixture.mjs"
+      - "scripts/test-gap-ring-fixture.mjs"
       - "scripts/test-browser-3mf-roundtrip.mjs"
       - "scripts/test-browser-3mf-multiobject.mjs"
       - "scripts/three-mf-viewport-items.mjs"
@@ -91,6 +95,7 @@ jobs:
           node scripts/test-orca-profile-collection.mjs
           node scripts/test-orca-vendor-index.mjs
           node scripts/test-gcode-preview-parser.mjs
+          node scripts/test-gap-ring-fixture.mjs
           node scripts/test-3mf-viewport-items.mjs
           node --check scripts/three-mf-viewport-items.mjs
           node --check scripts/gcode-3d-preview.mjs
