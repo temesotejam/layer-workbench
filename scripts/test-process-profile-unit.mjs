@@ -38,3 +38,18 @@ console.log('PASS: pinned process deposition speeds survive bounded override par
 console.log('PASS: bounded initial-layer height (mm), no percentages or multi-nozzle vectors');
 console.log('PASS: bounded absolute mm/s test process speeds; percentages and multi-nozzle values rejected');
 console.log('PASS: bounded test process overrides and invalid preset rejection');
+
+// Exact native v2.5.0 string enums must not be co-erced to numeric speed
+// settings or interpreted as display labels.
+assert.deepEqual(parseTestProcessOverrides({
+  wall_generator:"classic",gap_fill_target:"everywhere"
+}),{wall_generator:"classic",gap_fill_target:"everywhere"});
+for(const [key,invalid] of [
+  ["wall_generator",["Classic", "auto", "0", ["classic"], null, 0]],
+  ["gap_fill_target",["top/bottom", "all", "", ["everywhere"], null, 1]],
+]){
+  for(const value of invalid)
+    assert.throws(()=>parseTestProcessOverrides({[key]:value}),/native enum/,
+      key+" should refuse "+String(value));
+}
+console.log("PASS: exact classic/arachne and everywhere/topbottom/nowhere native process enums; malformed values fail closed");

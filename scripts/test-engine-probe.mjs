@@ -816,6 +816,10 @@ try {
     const gapSettings={
       layer_height:0.3,wall_loops:2,outer_wall_speed:5,
       inner_wall_speed:8,travel_speed:20,sparse_infill_density:35,
+      // Explicit classic walls can expose narrow-perimeter gap fill that
+      // Arachne's adaptive width might absorb. This is a diagnostic probe,
+      // not evidence of gap paths until feature-tagged G-code confirms them.
+      wall_generator:'classic',gap_fill_target:'everywhere',
     };
     const sliceRing=async(name,settings)=>{
       await prepare.locator('#lab-process').setInputFiles({
@@ -862,6 +866,7 @@ try {
       'inconclusive_no_tagged_gap_paths';
     const gapReport={
       fixture:'watertight 40 x 40 x 8 mm OBJ ring with 1.5 mm walls (localhost only)',
+      explicit_wall_generator:'classic',explicit_gap_fill_target:'everywhere',
       setting:'gap_infill_speed',candidate_mm_s:2,
       baseline_feedrates_mm_min:baselineFeeds,
       candidate_feedrates_mm_min:candidateFeeds,

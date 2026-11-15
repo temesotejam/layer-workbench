@@ -81,6 +81,8 @@ console.log("PASS: opt-in textured plate native enum and first/other-layer vecto
 const speedSettings = {
   sparse_infill_speed:"50", internal_solid_infill_speed:"50",
   top_surface_speed:"30", gap_infill_speed:"30",
+  // Exact native mode selection is opt-in and independent of the numeric speeds.
+  wall_generator:"classic", gap_fill_target:"everywhere",
 };
 const speedRecords = records.map(p => p.name === "Standard"
   ? {...p, ...speedSettings} : p);
@@ -103,5 +105,5 @@ assert.equal(appliedProfile?.format,"orca.native-json");
 for(const [key,value] of Object.entries(speedSettings))
   assert.equal(appliedProfile.settings[key],value,
     key+" must reach session.applyProfile without being silently dropped");
-console.log("PASS: four pinned process deposition speeds reach session.applyProfile in isolated mock bridge");
+console.log("PASS: four pinned process speeds and explicit classic/everywhere modes reach session.applyProfile in isolated mock bridge");
 

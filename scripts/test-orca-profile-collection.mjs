@@ -283,3 +283,36 @@ console.log('PASS: native single-filament flow ratio inherited/overridden as vec
 console.log('PASS: separate inherited native first-layer nozzle temperature vector and bounds');
 console.log('PASS: explicit inherited steady and first-layer hot plate temperatures, native vector shape, fail-closed validation');
 console.log('PASS: Orca-style three-domain inheritance, compatibility and unsupported option reporting');
+
+// The actual Orca process fields are native string enums, never a percentage
+// or an invented boolean. Child overrides replace inherited values.
+const gapEnumProfiles=profiles.map(p=>{
+  if(p.name==="fdm_process_common")
+    return {...p,wall_generator:"arachne",gap_fill_target:"topbottom"};
+  if(p.name==="0.16mm Fine @TestPrinter")
+    return {...p,wall_generator:"classic",gap_fill_target:"everywhere"};
+  return p;
+});
+const gapEnumSelection=resolve(gapEnumProfiles,selection);
+assert.equal(gapEnumSelection.process.settings.wall_generator,"classic");
+assert.equal(gapEnumSelection.process.settings.gap_fill_target,"everywhere");
+for(const key of ["wall_generator","gap_fill_target"])
+  assert.ok(!gapEnumSelection.process.unsupported.includes(key));
+const inheritedEnums=resolve(gapEnumProfiles.map(p=>{
+  if(p.name!=="0.16mm Fine @TestPrinter")return p;
+  const child={...p};
+  delete child.wall_generator;
+  delete child.gap_fill_target;
+  return child;
+}),selection);
+assert.equal(inheritedEnums.process.settings.wall_generator,"arachne");
+assert.equal(inheritedEnums.process.settings.gap_fill_target,"topbottom");
+for(const [key,bad] of [
+  ["wall_generator",["Classic","auto",["classic"],null,0]],
+  ["gap_fill_target",["top/bottom","all",["everywhere"],null,0]],
+]) for(const value of bad) {
+  assert.throws(()=>resolve(gapEnumProfiles.map(p=>
+    p.name==="0.16mm Fine @TestPrinter"?{...p,[key]:value}:p),selection),
+    /Invalid native process enum/);
+}
+console.log("PASS: inherited native process wall-generator and gap-fill enums reach restricted adapter; invalid forms rejected");
