@@ -81,10 +81,10 @@ jobs:
           import re
           from pathlib import Path
           info = Path("native-cli-output/native-info.log").read_text(encoding="utf-8")
-          headers = re.findall(r"(?m)^\\[two-build-items\\.3mf\\]$", info)
-          facets = re.findall(r"(?m)^number_of_facets\\s*=\\s*(\\d+)$", info)
-          manifolds = re.findall(r"(?m)^manifold\\s*=\\s*(\\w+)$", info)
-          sizes = re.findall(r"(?m)^size_x\\s*=\\s*([0-9.]+)$", info)
+          headers = re.findall(r"(?m)^\[two-build-items\.3mf\]$", info)
+          facets = re.findall(r"(?m)^number_of_facets\s*=\s*(\d+)$", info)
+          manifolds = re.findall(r"(?m)^manifold\s*=\s*(\w+)$", info)
+          sizes = re.findall(r"(?m)^size_x\s*=\s*([0-9.]+)$", info)
           if not (len(headers) == 2 and facets == ["12", "12"]
                   and manifolds == ["yes", "yes"]
                   and len(sizes) == 2 and all(abs(float(s) - 20) < 1e-5 for s in sizes)):
