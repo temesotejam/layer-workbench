@@ -1,0 +1,77 @@
+name: Probe official OrcaSlicer v2.5.0 native CLI
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/probe-native-v250-cli.yml"
+      - "scripts/make_3mf_two_build_fixture.py"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/probe-native-v250-cli.yml"
+      - "scripts/make_3mf_two_build_fixture.py"
+
+permissions:
+  contents: read
+
+jobs:
+  native-cli-probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download the official v2.5.0 Linux AppImage only inside CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p native-cli-output
+          asset="OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.5.0.AppImage"
+          url="https://github.com/OrcaSlicer/OrcaSlicer/releases/download/v2.5.0/${asset}"
+          curl --fail --location --show-error --silent --retry 3 \
+            --retry-all-errors --max-time 360 --max-filesize 800000000 \
+            "${url}" -o "${RUNNER_TEMP}/${asset}"
+          test "$(wc -c < "${RUNNER_TEMP}/${asset}")" -gt 50000000
+          file "${RUNNER_TEMP}/${asset}" | tee native-cli-output/appimage-format.txt
+          grep -q 'ELF' native-cli-output/appimage-format.txt
+          sha256sum "${RUNNER_TEMP}/${asset}" | tee native-cli-output/official-v250-appimage.sha256
+          chmod +x "${RUNNER_TEMP}/${asset}"
+
+      - name: Exercise official native headless help and independent Core 3MF import
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="${RUNNER_TEMP}/OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.5.0.AppImage"
+          python3 scripts/make_3mf_two_build_fixture.py \
+            --output native-cli-output/two-build-items.3mf
+          # Extract-and-run avoids the runner's FUSE device dependency.
+          # No print commands, printer networking, or G-code export are invoked.
+          timeout 120s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" --help \
+            > native-cli-output/native-help.log 2>&1 || {
+              cat native-cli-output/native-help.log
+              exit 1
+            }
+          test -s native-cli-output/native-help.log
+          timeout 120s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
+            native-cli-output/two-build-items.3mf --info \
+            > native-cli-output/native-info.log 2>&1 || {
+              cat native-cli-output/native-info.log
+              exit 1
+            }
+          test -s native-cli-output/native-info.log
+          echo "PASS: official v2.5.0 CLI --help and synthetic Core 3MF --info"
+          # The headless test only proves CLI startup and model inspection.
+          # It is not a native G-code result, full-profile comparison or 3MF round-trip.
+
+      - name: Archive text diagnostics without redistributing the AppImage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: orcaslicer-v250-official-native-cli-diagnostics
+          path: |
+            native-cli-output/*.log
+            native-cli-output/*.sha256
+            native-cli-output/appimage-format.txt
+          if-no-files-found: warn
+          retention-days: 7
