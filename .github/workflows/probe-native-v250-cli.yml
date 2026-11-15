@@ -38,6 +38,13 @@ jobs:
           sha256sum "${RUNNER_TEMP}/${asset}" | tee native-cli-output/official-v250-appimage.sha256
           chmod +x "${RUNNER_TEMP}/${asset}"
 
+      - name: Install the missing Ubuntu host OpenGL runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libopengl0
+
       - name: Exercise official native headless help and independent Core 3MF import
         shell: bash
         run: |
