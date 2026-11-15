@@ -556,7 +556,18 @@ No WASM binary, vendor data, or unverified printer feature is published.
 ## 2026-11-16: feature-selectable 2D and 3D localhost G-code preview
 
 The isolated Prepare lab can now select deposition by an explicitly labelled
-G-code feature (
+G-code feature (comment-only `;TYPE:` or `;FEATURE:`). Both the 2D per-layer
+view and the 3D toolpath view use the same selection and hide travel paths
+when a deposition type is selected. Unclassified extrusion has its own
+choice, distinct from a literal feature named "unclassified". Options show
+counts of rendered deposition segments, not independent physical print
+features or verified deposited volume. The 3D camera pose is preserved
+during type selection.
+
+This opt-in localhost-only diagnostic does not prove desktop feature
+classification parity, toolpath correctness, real printer speeds, or
+print-ready G-code. The public Pages site still has no certified WASM
+engine deployment.
 
 ## 2026-11-16: malformed explicit feature tag must not inherit stale type
 
