@@ -16,7 +16,7 @@ const makeGcode=(x,levels=[5,10,15])=>{
 const cloned=x=>JSON.parse(JSON.stringify(x));
 const matrix=x=>[1,0,0,x,0,1,0,90,0,0,1,0,0,0,0,1];
 const source=new Uint8Array(400);source.set([0x50,0x4b]);
-function mockedEngine({stale=false,badConfig=false}={}){
+function mockedEngine({stale=false,badConfig=false,ignoreUndo=false}={}){
   const calls=[];
   let manifest={
     plates:[{id:'plate-0',index:0}],
@@ -34,10 +34,14 @@ function mockedEngine({stale=false,badConfig=false}={}){
       assert.equal(handle,123);
       const obj=JSON.parse(new TextDecoder().decode(heap.slice(pointer,pointer+len)));
       assert.equal(obj.instanceId,'i1');
-      assert.equal(obj.matrix[3],180);
+      assert.ok(obj.matrix[3]===180 || obj.matrix[3]===150);
+      if(obj.matrix[3]===150 && ignoreUndo){
+        calls.push('privateUndoIgnored');
+        return 0; // deliberately broken native behavior
+      }
       manifest.instances[1].transform.matrix=obj.matrix;
-      moved=true;
-      calls.push('privateEdit');
+      moved=obj.matrix[3]===180;
+      calls.push(moved?'privateEdit':'privateUndo');
       return 0;
     }
   };
@@ -82,21 +86,29 @@ const happy=mockedEngine();
 const report=await diagnoseImported3mfInSessionReslice(happy.engine,source);
 assert.equal(report.status,'PASS');
 assert.equal(report.imported3mfReslicedInSameSession,true);
+assert.equal(report.editUndoReslicedInSameSession,true);
+assert.deepEqual(report.restored.regions,report.before.regions);
+assert.deepEqual(report.restored.regionLayers,report.before.regionLayers);
 assert.equal(report.persistentNativeModelMutation,false);
 assert.equal(report.nativeDesktopGcodeParity,false);
 assert.deepEqual(happy.calls,[
   'createSession','initProfile','applyProfile','slice','getAsset',
-  'privateEdit','slice','getAsset','dispose'
+  'privateEdit','slice','getAsset',
+  'privateUndo','slice','getAsset','dispose'
 ]);
 assert.equal(happy.isDisposed(),true);
 const stale=mockedEngine({stale:true});
 await assert.rejects(diagnoseImported3mfInSessionReslice(stale.engine,source),
   /did not relocate/);
 assert.equal(stale.isDisposed(),true);
+const staleUndo=mockedEngine({ignoreUndo:true});
+await assert.rejects(diagnoseImported3mfInSessionReslice(staleUndo.engine,source),
+  /Undo did not restore/);
+assert.equal(staleUndo.isDisposed(),true);
 const invalid=mockedEngine({badConfig:true});
 await assert.rejects(diagnoseImported3mfInSessionReslice(invalid.engine,source),
   /config refused/);
 assert.equal(invalid.isDisposed(),true);
 await assert.rejects(diagnoseImported3mfInSessionReslice(happy.engine,new Uint8Array(0)),
   /Invalid bounded/);
-console.log('PASS: in-session 3MF native slice probe sequence, strict geometry checks and rejection cases');
+console.log('PASS: in-session Core 3MF slice → edit → reslice → undo → reslice, strict multi-layer path and ignored-undo rejection');
