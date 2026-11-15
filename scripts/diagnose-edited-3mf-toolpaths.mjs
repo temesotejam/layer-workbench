@@ -21,6 +21,7 @@ const ROI = Object.freeze({
 export function inspectSyntheticCubeExtrusion(gcode) {
   const parsed=parseGcodeToolpaths(gcode,{maxChars:12_000_000,maxSegments:300_000});
   const counts={unchanged:0,original:0,moved:0};
+  const zByRegion={unchanged:new Set(),original:new Set(),moved:new Set()};
   for (const layer of parsed.layers) {
     if (!(layer.z>=1 && layer.z<=19.5)) continue;
     for (const segment of layer.segments) {
@@ -32,12 +33,25 @@ export function inspectSyntheticCubeExtrusion(gcode) {
           segment.y2<89 || segment.y2>111) continue;
       for (const [name,range] of Object.entries(ROI)) {
         if (segment.x1>=range[0] && segment.x1<=range[1] &&
-            segment.x2>=range[0] && segment.x2<=range[1]) counts[name]++;
+            segment.x2>=range[0] && segment.x2<=range[1]) {
+          counts[name]++;
+          zByRegion[name].add(layer.z);
+        }
       }
     }
   }
+  // A single stray line can be inside a cube ROI without demonstrating a
+  // sliced 20-mm-tall object. Record independently occupied interior layers.
+  const regionLayers={},regionZSpanMm={};
+  for (const [name,levels] of Object.entries(zByRegion)) {
+    regionLayers[name]=levels.size;
+    let min=Infinity,max=-Infinity;
+    for (const z of levels) { min=Math.min(min,z); max=Math.max(max,z); }
+    regionZSpanMm[name]=levels.size ? max-min : 0;
+  }
   return {
-    regions:counts, extrusionSegments:parsed.extrusions,
+    regions:counts,regionLayers,regionZSpanMm,
+    extrusionSegments:parsed.extrusions,
     renderedArcs:parsed.renderedArcs,
     skippedArcs:parsed.skippedArcs,
     malformedMotionLines:parsed.skippedMalformedMotion,
@@ -59,6 +73,27 @@ export function requireEditedCubeToolpathShift(before,after) {
         b.original===0 && b.moved>0))
     throw new Error('Private 3MF edit did not relocate deposited XY paths as expected: '+
       JSON.stringify({before:a,after:b}));
+  // Each expected cube needs extrusion on >=3 distinct interior layers
+  // spanning >=6 mm in Z. Repeated lines on one layer must fail closed.
+  for (const [label,result,names] of [
+    ['before',before,['unchanged','original']],
+    ['after',after,['unchanged','moved']],
+  ]) {
+    for (const name of Object.keys(ROI)) {
+      const layers=result.regionLayers?.[name];
+      const span=result.regionZSpanMm?.[name];
+      if (!Number.isSafeInteger(layers) || layers<0 ||
+          typeof span!=='number' || !Number.isFinite(span) || span<0 ||
+          layers>result.regions[name] || (layers===0 && span!==0))
+        throw new Error('Invalid '+label+' vertical region evidence: '+name);
+    }
+    for (const name of names) {
+      if (result.regionLayers[name]<3 || result.regionZSpanMm[name]<6)
+        throw new Error('Insufficient '+label+' 3D layer coverage for '+name+
+          ': '+JSON.stringify({layers:result.regionLayers[name],
+            spanMm:result.regionZSpanMm[name]}));
+    }
+  }
   return true;
 }
 
