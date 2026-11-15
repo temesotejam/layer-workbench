@@ -284,6 +284,38 @@ try {
     assert.notDeepEqual(speedFeeds,overrideFeeds,
       'Process speed overrides changed only headers, not deposited G-code F values');
     console.log('PASS: native WASM process speed overrides change commanded extrusion F values, not just metadata');
+    // Narrow real-engine gate for one newly bridged v2.5.0 speed key.
+    // Hold every other process setting fixed; a header/hash-only change must
+    // not pass. The two 20 mm cubes include top-solid deposition, but the
+    // resulting G-code is diagnostic and must never be used for printing.
+    await prepare.locator('#lab-process').setInputFiles({
+      name:'test-top-surface-speed.json',mimeType:'application/json',
+      buffer:Buffer.from(JSON.stringify({
+        layer_height:0.3,wall_loops:3,
+        outer_wall_speed:5,inner_wall_speed:8,travel_speed:20,
+        top_surface_speed:2,
+      })),
+    });
+    await prepare.locator('#lab-slice').click();
+    await prepare.waitForFunction(() => {
+      const text=document.querySelector('#lab-status')?.textContent || '';
+      return text.startsWith('PASS:') || text.startsWith('FAILED');
+    },null,{timeout:120000});
+    const topSpeedStatus=await prepare.locator('#lab-status').innerText();
+    assert.ok(topSpeedStatus.startsWith('PASS: 2 STL model(s)'),topSpeedStatus);
+    const topSpeedGcode=await prepare.locator('#lab-download').evaluate(async link=>
+      (await fetch(link.href)).text());
+    const topFeeds=positiveExtrusionFeedrates(topSpeedGcode);
+    assert.ok(topFeeds.length>0,'Top-surface override produced no deposited G-code');
+    assert.notDeepEqual(topFeeds,speedFeeds,
+      'Top-surface override changed metadata only, not actual extrusion F values');
+    const newSlowTopFeeds=topFeeds.filter(f=>f>0 && f<=150 &&
+      !speedFeeds.some(baseline=>Math.abs(baseline-f)<0.01));
+    assert.ok(newSlowTopFeeds.length>0,
+      'top_surface_speed=2 mm/s produced no new low commanded extrusion F; '+
+      'baseline='+JSON.stringify(speedFeeds)+' candidate='+JSON.stringify(topFeeds));
+    console.log('PASS: real Chrome/WASM top_surface_speed=2 mm/s changes deposited F, newly slow mm/min='+
+      JSON.stringify(newSlowTopFeeds));
     // Change ONLY the first-layer height while retaining the previous layer,
     // wall and speed settings. Verify a changed physical extrusion Z, not just
     // a G-code hash/header difference. Generic test PLA; never printer-ready.
