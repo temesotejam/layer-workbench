@@ -47,7 +47,10 @@ export function parseGcodeToolpaths(source, options={}) {
   // Bambu X1E emits T255 while unloading AMS filament: clear the label.
   let activeTool=null;
   const selectedTools=new Set();
-  const extrusionsByTool=new Map();
+  const extrusionsByTool=new Map(),extrusionsByFeature=new Map();
+  // Feature attribution uses only explicit slicer comment tags, never free-text
+  // mentions such as configuration headers containing 'gap infill'.
+  let activeFeature=null;
   let count=0,deposited=0,travels=0,skippedArcs=0,renderedArcs=0,skippedMalformedMotion=0;
   function append(x1,y1,x2,y2,z1,z2,extrusion,groupZ=z2){
     if(![x1,y1,x2,y2,z1,z2].every(Number.isFinite) ||
@@ -60,13 +63,22 @@ export function parseGcodeToolpaths(source, options={}) {
     const key=String(layerZ);
     if(!byZ.has(key))byZ.set(key,{z:layerZ,segments:[]});
     byZ.get(key).segments.push({x1,y1,x2,y2,z1,z2,extrusion,toolId:activeTool,
-      feedrateMmMin:state.feedrateMmMin});
+      feedrateMmMin:state.feedrateMmMin,feature:activeFeature});
     if(extrusion){
       deposited++;
       extrusionsByTool.set(activeTool,(extrusionsByTool.get(activeTool)??0)+1);
+      extrusionsByFeature.set(activeFeature,(extrusionsByFeature.get(activeFeature)??0)+1);
     }else travels++;
   }
   for(const input of source.split(/\r?\n/)){
+    // Slicer feature annotations are comment-only lines: ;TYPE:... or
+    // ; FEATURE:... . Never classify an inline or arbitrary comment as a
+    // confirmed feature. A feature label alone is not proof of extrusion.
+    const featureTag=/^;\s*(?:TYPE|FEATURE)\s*:\s*([^;\r\n]{1,80})\s*$/i.exec(input.trim());
+    if(featureTag){
+      activeFeature=featureTag[1].trim().toLowerCase().replace(/\s+/g," ");
+      continue;
+    }
     const line=input.split(";")[0].replace(/\([^)]*\)/g,"").trim().toUpperCase();
     if(!line)continue;
     const toolMatch=/^(?:N\d+\s+)?T(\d+)(?=\s|$)/.exec(line);
@@ -189,5 +201,6 @@ export function parseGcodeToolpaths(source, options={}) {
   const layers=[...byZ.values()].sort((a,b)=>a.z-b.z);
   return {layers,segments:count,extrusions:deposited,travels,renderedArcs,skippedArcs,skippedMalformedMotion,
     selectedToolIds:[...selectedTools].sort((a,b)=>a-b),
-    extrusionSegmentsByTool:Object.fromEntries([...extrusionsByTool].map(([id,n])=>[id===null?"unselected":String(id),n]))};
+    extrusionSegmentsByTool:Object.fromEntries([...extrusionsByTool].map(([id,n])=>[id===null?"unselected":String(id),n])),
+    extrusionSegmentsByFeature:Object.fromEntries([...extrusionsByFeature].map(([name,n])=>[name===null?"unclassified":name,n]))};
 }
