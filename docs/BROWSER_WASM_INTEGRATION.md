@@ -507,7 +507,7 @@ Gap-infill speed remains unverified in real WASM G-code.
 ## 2026-11-16: gap infill speed path-existence diagnostic (not yet verified)
 
 A real isolated-Chrome v2.5.0 WASM test changes only the restricted
-\`gap_infill_speed\` to 2 mm/s against the same diagnostic process settings.
+`gap_infill_speed` to 2 mm/s against the same diagnostic process settings.
 The original two-cube plate yielded identical deposited-feedrate sets
 despite this override ([initial failing probe #43732395872](https://github.com/temesotejam/layer-workbench/actions/runs/43732395872)).
 A second triangular-prism/wedge OBJ fixture also yielded identical
@@ -517,8 +517,8 @@ the tests cannot distinguish a correctly ignored speed for a nonexistent
 feature from a broken profile-to-engine path.
 
 The Chrome diagnostic now records a structured
-\`parity-output/gap-wedge-feedrate-diagnostic.json\` with actual deposited F
-sets, gap comment samples and an explicit \`inconclusive_no_gap_paths_observed\`
+`parity-output/gap-wedge-feedrate-diagnostic.json` with actual deposited F
+sets, gap comment samples and an explicit `inconclusive_no_gap_paths_observed`
 status. It **never marks gap-infill speed verified** unless a newly observed
 low deposited F appears; if a path is labelled gap fill but F does not respond,
 it fails instead of silently passing. This does not assert native-desktop
