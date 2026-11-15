@@ -889,3 +889,34 @@ Candidate [#43639277062](https://github.com/temesotejam/layer-workbench/actions/
 [Isolated Chrome accepted-candidate CI #43654454882](https://github.com/temesotejam/layer-workbench/actions/runs/43654454882) **PASS** for the pinned OrcaSlicer v2.5.0 WASM artifact #43639277062. A private test-only C API translates one instance of an independently created two-cube Core 3MF by +30 mm X; the unchanged instance remains at X=90..110 mm, the second moves from X=150..170 mm to X=180..200 mm. After validating the edited manifest, 3MF export and native WASM-flattened STL bounds, the new `scripts/diagnose-edited-3mf-toolpaths.mjs` independently flattens the **before and after** archives via the actual WASM `threeMfToStl()`, starts fresh sessions using the **same fixed generic PLA test configuration**, and slices the two flattened STL documents. The G-code preview parser then requires deposited XY segments in the original second-cube region **only before** the edit, in its shifted region **only after**, and in the untouched first-cube region in both cases; travel-only lines and first-layer priming are excluded. A local synthetic G-code unit test proves the rejection behavior as well. This goes beyond validating manifest numbers or flattened STL coordinates: the test confirms a corresponding change in a newly generated WASM G-code toolpath.
 
 **Critical boundary:** this is best-effort edited-3MF export → native WASM STL flattening → new generic-profile STL slicing. It does **not** slice the modified `Slic3r::Model` in place, prove native imported-project 3MF slicing, preserve all opaque Orca metadata, reproduce official full printer/filament/process profiles, compare native desktop and WASM G-code, or certify printable output. The generated G-code stays inside the ephemeral CI test, and the production Pages engine remains disabled. Next: validate editing and re-slicing directly through the native `Slic3r::Model` state and then compare same-STL/full-profile native desktop and WASM G-code.
+
+## 2026-11-15: imported 3MF edited and re-sliced within one WASM session (isolated Chrome)
+
+[Draft PR #14](https://github.com/temesotejam/layer-workbench/pull/14) adds
+`scripts/diagnose-in-session-3mf-reslice.mjs` and a fail-closed test to
+investigate whether the imported 3MF project can be sliced **without** the
+previous best-effort 3MF export → `threeMfToStl()` → new STL session path.
+[Chrome CI #43678749964](https://github.com/temesotejam/layer-workbench/actions/runs/43678749964)
+**PASS** for the first candidate run: an *independently generated two-cube Core 3MF*
+was imported through `initProfile('project.3mf')`; a bounded synthetic PLA
+profile (including explicit absolute E mode) was applied; `session.slice()`
+returned test-only G-code; the existing private C ABI moved only the second
+instance by +30 mm X; and `session.slice()` succeeded **again on the same
+imported session**. The pre-existing multi-layer toolpath checker required
+both 20 mm cubes' deposited XY paths to occupy their correct old/new regions
+at 3+ interior Z levels spanning 6+ mm. No host-side STL flattening,
+`setObjects()`, best-effort 3MF export, or replacement session was used
+in this new diagnostic. Node mocks also require rejected/stale G-code to fail.
+
+**Important engine boundary, verified against pinned Hiosdra/OrcaWasm source:**
+`oneslicer_init_profile` loads a native Orca `Slic3r::Model` then
+`append_native_model_project` serializes its raw geometry into a normalized
+STL mesh blob/manifest. The `oneslicer_project_slice` path calls
+`build_project_plate_model` to construct a **new temporary** native
+`Slic3r::Model` for each slice. The private instance edit mutates the
+manifest, **not** a persistent native `Model`. The observation is therefore
+an in-session native slicing integration milestone, **not** true persistent
+`Slic3r::Model` editing, 3MF metadata preservation, native desktop G-code
+parity, real printer-profile support, or printable output. The Chrome test
+still loads an existing vetted candidate on localhost COOP/COEP and does
+not deploy WASM to Pages.

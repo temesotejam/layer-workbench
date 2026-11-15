@@ -182,6 +182,24 @@ export async function checkBrowserPrivateImportedInstanceEdit(
   assert.equal(toolpathDiagnostic.status,'PASS');
   assert.equal(toolpathDiagnostic.printApproved,false);
   result.editedToolpathDiagnostic=toolpathDiagnostic;
+  // Native WASM route: import Core 3MF, apply synthetic profile, slice,
+  // private-edit, and re-slice IN ONE SESSION. This does not flatten the 3MF
+  // or replace the session with an STL. The C bridge still creates a new
+  // temporary Slic3r::Model from its normalized mesh manifest per slice.
+  const inSession=await page.evaluate(async raw=>{
+    if(!globalThis.crossOriginIsolated)
+      throw new Error('Same-session 3MF slice requires isolated Chrome');
+    const engine=globalThis.__layerDiagnosticEngine?.engine;
+    const {diagnoseImported3mfInSessionReslice}=
+      await import('/scripts/diagnose-in-session-3mf-reslice.mjs');
+    return diagnoseImported3mfInSessionReslice(engine,new Uint8Array(raw));
+  },Array.from(sourceBytes));
+  assert.equal(inSession.status,'PASS');
+  assert.equal(inSession.imported3mfReslicedInSameSession,true);
+  assert.equal(inSession.persistentNativeModelMutation,false);
+  assert.equal(inSession.printApproved,false);
+  result.inSessionImported3mfToolpathDiagnostic=inSession;
+  console.log('PASS: imported Core 3MF sliced → private +30mm instance edit → re-sliced within same WASM session, with independent multi-layer XY toolpath shift; no external STL flatten or new session');
   const archive=Buffer.from(result.editedArchive);
   const stl=Buffer.from(result.flattenedStl);
   delete result.editedArchive;
