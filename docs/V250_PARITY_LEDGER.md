@@ -945,3 +945,26 @@ metadata preservation, native-vs-WASM G-code parity, or printable output.
 The next structural milestone is to retain native object/volume semantics
 across imported project edits rather than regenerating a temporary model
 from flattened mesh data on every slice.
+
+## 2026-11-16: conservative G17 arc geometry fixture gate (CI PASS)
+
+The optional `--min-extrusion-moves` acceptance gate previously counted
+`G2 X1 E1` as deposited arc motion even though it specifies no center/radius,
+and counted zero-radius or geometrically impossible arc commands. This could
+let a synthetic pair satisfy the minimum-deposition **fixture** requirement
+without corresponding valid circular paths. The gate now recognizes only
+geometrically plausible `G17` arcs with a nonzero I/J center or a feasible
+R chord; it rejects ambiguous combined R+I/J, unsupported G18/G19,
+zero-radius/full-circle R, and mismatched endpoint radii. It tracks
+G90.1/G91.1 center interpretation and G20/G21 unit changes. Positive-E
+linear G1 counting and strict ordered G-code comparison remain unchanged.
+
+Focused unit cases cover invalid, full-circle, valid radius, non-XY-plane,
+absolute-center and inch-unit input. Initial [PR CI #43736737376](https://github.com/temesotejam/layer-workbench/actions/runs/43736737376)
+failed because the restored-G17 synthetic fixture had inconsistent radii; the
+fixture was corrected, and [PR CI #43736798426](https://github.com/temesotejam/layer-workbench/actions/runs/43736798426)
+**PASS** (comparator and dependent parity tests). This is a **conservative sanity filter**
+that can undercount supported-but-unmodeled firmware arcs, not a full G-code
+interpreter, a slicer parity result, proof of deposited volume or printable
+output. In particular, an identical pair of synthetic commands is not
+proof of native OrcaSlicer v2.5.0 versus WASM equivalence.

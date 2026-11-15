@@ -8,6 +8,7 @@ import argparse
 from decimal import Decimal
 import hashlib
 import json
+import math
 from pathlib import Path
 import re
 import sys
@@ -82,6 +83,32 @@ def count_motion(commands):
 
 EXTRUSION_MOTION = re.compile(r'^G0*[123](?:\.0+)?$', re.I)
 
+def valid_g17_arc(start, end, words, units, absolute_arc_centers):
+    """Conservatively require a geometrically possible XY arc for fixture counting.
+
+    This only validates G17 planar circular geometry, not firmware semantics
+    or extrusion volume. Unsupported/ambiguous arcs fail closed.
+    """
+    has_radius = 'R' in words
+    has_center = 'I' in words or 'J' in words
+    if has_radius == has_center:
+        return False  # neither definition, or conflicting R and I/J
+    dx, dy = end['X'] - start['X'], end['Y'] - start['Y']
+    if has_radius:
+        radius = abs(words['R'] * units)
+        chord_sq = dx * dx + dy * dy
+        return radius > 0 and chord_sq > 0 and chord_sq <= 4 * radius * radius
+    if absolute_arc_centers:
+        cx = words['I'] * units if 'I' in words else start['X']
+        cy = words['J'] * units if 'J' in words else start['Y']
+    else:
+        cx = start['X'] + words.get('I', Decimal(0)) * units
+        cy = start['Y'] + words.get('J', Decimal(0)) * units
+    r0 = math.hypot(float(start['X'] - cx), float(start['Y'] - cy))
+    r1 = math.hypot(float(end['X'] - cx), float(end['Y'] - cy))
+    return (math.isfinite(r0) and math.isfinite(r1) and r0 > 0
+            and abs(r0 - r1) <= max(0.05, r0 * 0.001))
+
 def count_extrusion_moves(commands):
     """Count positive E on actual XY/arc movement for fixture sanity.
 
@@ -95,6 +122,8 @@ def count_extrusion_moves(commands):
     count = 0
     absolute_e = True
     absolute_xyz = True
+    absolute_arc_centers = False
+    plane = 'G17'
     units = Decimal(1)
     e_position = Decimal(0)
     xy = {'X': Decimal(0), 'Y': Decimal(0)}
@@ -117,6 +146,15 @@ def count_extrusion_moves(commands):
         if opcode == 'G91':
             absolute_xyz = False
             continue
+        if opcode in ('G17', 'G18', 'G19'):
+            plane = opcode
+            continue
+        if opcode == 'G90.1':
+            absolute_arc_centers = True
+            continue
+        if opcode == 'G91.1':
+            absolute_arc_centers = False
+            continue
         if opcode == 'G20':
             units = Decimal('25.4')
             continue
@@ -137,6 +175,7 @@ def count_extrusion_moves(commands):
             continue
         if not MOTION.fullmatch(opcode):
             continue
+        start_xy = xy.copy()
         moved_xy = False
         for axis in xy:
             if axis not in words:
@@ -155,7 +194,8 @@ def count_extrusion_moves(commands):
         code = int(Decimal(opcode[1:]))
         if code == 1 and not moved_xy:
             continue
-        if code in (2, 3) and not (moved_xy or any(k in words for k in ('I', 'J', 'R'))):
+        if code in (2, 3) and (plane != 'G17' or not valid_g17_arc(
+                start_xy, xy, words, units, absolute_arc_centers)):
             continue
         count += 1
     return count

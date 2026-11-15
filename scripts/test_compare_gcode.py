@@ -96,6 +96,48 @@ class ComparatorTests(unittest.TestCase):
         gcode = 'G2 I1 J0 E1\n'
         self.assertTrue(self.run_compare(gcode, gcode, min_extrusion_moves=1)['match'])
 
+    def test_arc_fixture_gate_rejects_missing_or_impossible_geometry(self):
+        # Positive E and an X/Y word cannot substitute for a valid arc.
+        invalid_arcs = [
+            'G2 X1 E1',          # no center or radius
+            'G2 I0 J0 E1',      # zero-radius full circle
+            'G3 X1 R0 E1',      # zero radius
+            'G2 X3 R1 E1',      # chord exceeds diameter
+            'G2 R1 E1',         # R full circle is undefined
+            'G2 X2 I0 J0 E1',   # center coincides with starting point
+            'G2 X2 I1 J0 R1 E1', # conflicting definitions
+            'G2 X2 I0.5 J0.5 E1',   # different start/end radii
+        ]
+        for arc in invalid_arcs:
+            with self.subTest(arc=arc):
+                report = self.run_compare(arc + '\n', arc + '\n', min_extrusion_moves=1)
+                self.assertFalse(report['match'], report)
+                self.assertEqual(report['native_extrusion_moves'], 0)
+
+    def test_arc_fixture_gate_accepts_center_and_radius_g17_paths(self):
+        gcode = ('G17\nM83\nG2 I1 J0 E0.3\n'
+                 'G3 X2 R1 E0.3\n')
+        report = self.run_compare(gcode, gcode, min_extrusion_moves=2)
+        self.assertTrue(report['match'], report)
+        self.assertEqual(report['native_extrusion_moves'], 2)
+
+    def test_arc_fixture_gate_tracks_plane_and_absolute_arc_centers(self):
+        gcode = ('G90\nG17\nG90.1\nG0 X2 Y0\n'
+                 'G2 X0 Y2 I0 J0 E1\n'
+                 'G18\nG2 X1 I0 K1 E2\n'
+                 'G17\nG91.1\nG3 X3 Y2 I1 J0 E3\n')
+        report = self.run_compare(gcode, gcode, min_extrusion_moves=2)
+        self.assertEqual(report['native_extrusion_moves'], 2)
+        self.assertTrue(report['match'], report)
+        self.assertFalse(self.run_compare(gcode, gcode, min_extrusion_moves=3)['match'])
+
+    def test_arc_fixture_gate_converts_radius_and_centers_from_inches(self):
+        gcode = ('G20\nM83\nG2 X2 I1 J0 E0.1\n'
+                 'G21\nG3 X76.2 R25.4 E0.1\n')
+        report = self.run_compare(gcode, gcode, min_extrusion_moves=2)
+        self.assertEqual(report['native_extrusion_moves'], 2)
+        self.assertTrue(report['match'], report)
+
     def test_negative_gate_rejected(self):
         with self.assertRaises(ValueError):
             self.run_compare('G1 X1 E1\n', 'G1 X1 E1\n', min_extrusion_moves=-1)
