@@ -48,10 +48,33 @@ const semicircleFollowed=parseGcodeToolpaths("G0 X0 Y0 Z0.2\nG2 X10 Y0 R5 E1\nG1
 assert.equal(semicircleFollowed.renderedArcs,1);
 assert.equal(semicircleFollowed.skippedArcs,0);
 assert.deepEqual([semicircleFollowed.layers[0].segments.at(-1).x1,semicircleFollowed.layers[0].segments.at(-1).x2],[10,20]);
-// Unsupported helical and non-XY arcs must not draw misleading chords.
+// Helical G17 XY arcs interpolate Z linearly, not as a horizontal chord.
+// The destination layer groups the entire arc so the 2D picker remains bounded.
 const helix=parseGcodeToolpaths("G0 X10 Y0 Z0.2\nG3 X0 Y10 Z0.4 I-10 J0 E1\nG1 X0 Y20 E2");
-assert.equal(helix.skippedArcs,1);
-assert.equal(helix.layers.at(-1).segments.at(-1).y1,10);
+assert.equal(helix.renderedArcs,1);
+assert.equal(helix.skippedArcs,0);
+assert.deepEqual(helix.layers.map(layer=>layer.z),[0.2,0.4]);
+const helixParts=helix.layers.at(-1).segments.slice(0,-1);
+assert.ok(helixParts.length>=15);
+assert.equal(helixParts[0].z1,0.2);
+assert.ok(helixParts.every(p=>p.z2>p.z1));
+assert.ok(Math.abs(helixParts.at(-1).z2-0.4)<1e-9);
+assert.deepEqual([helix.layers.at(-1).segments.at(-1).y1,helix.layers.at(-1).segments.at(-1).y2],[10,20]);
+// A full-circle helix has no XY endpoint displacement but still winds in 3D.
+const risingCircle=parseGcodeToolpaths("G0 X10 Y0 Z0.2\nG2 Z0.6 I-10 J0 E1");
+assert.equal(risingCircle.renderedArcs,1);
+assert.ok(risingCircle.layers.at(-1).segments.length>=36);
+assert.equal(risingCircle.layers.at(-1).segments[0].z1,0.2);
+assert.ok(Math.abs(risingCircle.layers.at(-1).segments.at(-1).z2-0.6)<1e-9);
+assert.ok(Math.abs(risingCircle.layers.at(-1).segments.at(-1).x2-10)<1e-9);
+const rHelix=parseGcodeToolpaths("G0 X0 Y0 Z0.2\nG2 X10 Y0 Z0.7 R5 E1");
+assert.equal(rHelix.renderedArcs,1);
+assert.equal(rHelix.layers.at(-1).segments.at(-1).z2,0.7);
+const relativeHelix=parseGcodeToolpaths("G0 X10 Y0 Z0.2\nG91\nG3 X-10 Y10 Z0.3 I-10 J0 E1");
+assert.equal(relativeHelix.renderedArcs,1);
+assert.ok(Math.abs(relativeHelix.layers.at(-1).segments.at(-1).z2-0.5)<1e-9);
+// Non-XY planes remain unsupported and may not become fake straight chords;
+// their endpoint still advances for the next valid motion.
 const otherPlane=parseGcodeToolpaths("G18\nG2 X10 Z1 I5 E1\nG1 X20 E2");
 assert.equal(otherPlane.skippedArcs,1);
 assert.equal(otherPlane.layers.at(-1).segments.at(-1).x1,10);
@@ -87,7 +110,7 @@ assert.equal(parseGcodeToolpaths("G0 X0 Y0 Z0.2\nG2 X10 Y0 R-5").skippedArcs,1);
 const inchRadius=parseGcodeToolpaths("G20\nG0 X1 Y0 Z0.01\nG3 X0 Y1 R1");
 assert.equal(inchRadius.renderedArcs,1);
 assert.throws(()=>parseGcodeToolpaths("G0 X10 Y0\nG3 X0 Y10 R10",{maxSegments:2}),/complex/);
-console.log('PASS: bounded XY arcs (CW, CCW, full circle, absolute and relative center), R minor/major/semicircles, skipped endpoint safety');
+console.log('PASS: bounded XY planar/helical arcs (CW, CCW, full circle, absolute/relative center), R minor/major, Z interpolation and skipped endpoint safety');
 console.log('PASS: G-code linear extrusion, travel, layers, relative moves, safety limits');
 
 // Material preview labels are the explicit T selectors, not filament slots or nozzle count.
