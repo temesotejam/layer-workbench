@@ -502,3 +502,26 @@ This is not a native v2.5.0 desktop comparison, an assurance of exact
 feature-type attribution, proof of printer motion or print-ready G-code.
 The candidate WASM binary and public Pages deployment are unchanged.
 Gap-infill speed remains unverified in real WASM G-code.
+
+
+## 2026-11-16: gap infill speed path-existence diagnostic (not yet verified)
+
+A real isolated-Chrome v2.5.0 WASM test changes only the restricted
+`gap_infill_speed` to 2 mm/s against the same diagnostic process settings.
+The original two-cube plate yielded identical deposited-feedrate sets
+despite this override ([initial failing probe #43732395872](https://github.com/temesotejam/layer-workbench/actions/runs/43732395872)).
+A second triangular-prism/wedge OBJ fixture also yielded identical
+sets and **no gap-fill comment evidence** ([second diagnostic #43732653122](https://github.com/temesotejam/layer-workbench/actions/runs/43732653122)).
+These failures are *inconclusive*: without any identified gap-fill path,
+the tests cannot distinguish a correctly ignored speed for a nonexistent
+feature from a broken profile-to-engine path.
+
+The Chrome diagnostic now records a structured
+`parity-output/gap-wedge-feedrate-diagnostic.json` with actual deposited F
+sets, gap comment samples and an explicit `inconclusive_no_gap_paths_observed`
+status. It **never marks gap-infill speed verified** unless a newly observed
+low deposited F appears; if a path is labelled gap fill but F does not respond,
+it fails instead of silently passing. This does not assert native-desktop
+parity, machine readiness or a verified fourth speed. Next: construct a pinned
+fixture with actual gap-fill toolpaths confirmed by native feature tags,
+then rerun the speed-only A/B test and compare against desktop v2.5.0.

@@ -783,6 +783,84 @@ try {
     console.log('PASS: OBJ displayed in Prepare -> bounded mesh-only STL conversion -> real WASM multilayer G-code ('+
       objPaths.layers.length+' layers, '+objPaths.extrusions+' extrusion segments; not print-ready)');
 
+    // Unlike a 20mm square, a wedge has varying local wall thickness. It is
+    // a candidate gap-fill fixture, not an assertion that a gap must occur.
+    // Remove the previous object so geometry is held exactly constant across
+    // the two speed-only slices. The mesh stays in the localhost test.
+    await prepare.locator('#remove-object').click();
+    await prepare.locator('#object-count').getByText('0 objects').waitFor();
+    const wedgeObj=[
+      'v 0 0 0','v 40 0 0','v 0 20 0',
+      'v 0 0 8','v 40 0 8','v 0 20 8',
+      'f 1 3 2','f 4 5 6',
+      'f 1 2 5 4','f 2 3 6 5','f 3 1 4 6',
+    ].join('\n');
+    await prepare.locator('#model-file').setInputFiles({
+      name:'gap-test-wedge.obj',mimeType:'text/plain',buffer:Buffer.from(wedgeObj),
+    });
+    await prepare.locator('#object-count').getByText('1 object').waitFor({timeout:30000});
+    const gapSettings={
+      layer_height:0.3,wall_loops:3,outer_wall_speed:5,
+      inner_wall_speed:8,travel_speed:20,sparse_infill_density:35,
+    };
+    const sliceWedge=async(name,settings)=>{
+      await prepare.locator('#lab-process').setInputFiles({
+        name,mimeType:'application/json',buffer:Buffer.from(JSON.stringify(settings)),
+      });
+      await prepare.locator('#lab-slice').click();
+      await prepare.waitForFunction(()=>{
+        const status=document.querySelector('#lab-status')?.textContent||'';
+        return status.startsWith('PASS:')||status.startsWith('FAILED');
+      },null,{timeout:120000});
+      assert.match(await prepare.locator('#lab-status').innerText(),
+        /^PASS: 1 STL\/OBJ mesh model\(s\)/);
+      return prepare.locator('#lab-download').evaluate(async link=>
+        await(await fetch(link.href)).text());
+    };
+    const wedgeBaseline=await sliceWedge('gap-wedge-baseline.json',gapSettings);
+    const wedgeSlow=await sliceWedge('gap-wedge-slow.json',
+      {...gapSettings,gap_infill_speed:2});
+    const wedgeBaselineFeeds=positiveExtrusionFeedrates(wedgeBaseline);
+    const wedgeSlowFeeds=positiveExtrusionFeedrates(wedgeSlow);
+    const newSlowWedgeFeeds=wedgeSlowFeeds.filter(f=>f>0&&f<=150&&
+      !wedgeBaselineFeeds.some(baseline=>Math.abs(baseline-f)<0.01));
+    const gapComments=code=>code.split(/\r?\n/).filter(line=>
+      /;\s*(?:TYPE:)?\s*gap\s*(?:in)?fill/i.test(line)).slice(0,10);
+    // Record the unambiguous outcome even when this fixture generated no
+    // eligible gap-fill paths. "No effect" on an unsupported fixture is NOT a
+    // passing gap_infill_speed verification. Keep evidence in CI artifacts.
+    const baselineGapComments=gapComments(wedgeBaseline);
+    const slowGapComments=gapComments(wedgeSlow);
+    const gapFeatureObserved=newSlowWedgeFeeds.length>0;
+    const gapReport={
+      fixture:'single 40 x 20 x 8 mm triangular prism OBJ (localhost test only)',
+      setting:'gap_infill_speed',candidate_mm_s:2,
+      baseline_feedrates_mm_min:wedgeBaselineFeeds,
+      candidate_feedrates_mm_min:wedgeSlowFeeds,
+      new_slow_feedrates_mm_min:newSlowWedgeFeeds,
+      baseline_gap_comments:baselineGapComments,
+      candidate_gap_comments:slowGapComments,
+      result:gapFeatureObserved?'observed_feedrate_effect':'inconclusive_no_gap_paths_observed',
+      native_desktop_parity:false,printer_safe:false,
+    };
+    await writeFile(parityDir+'/gap-wedge-feedrate-diagnostic.json',
+      JSON.stringify(gapReport,null,2)+'\n');
+    console.log('GAP_WEDGE_DIAGNOSTIC '+JSON.stringify(gapReport));
+    if(gapFeatureObserved){
+      console.log('PASS: actual WASM gap_infill_speed=2 changes wedge deposited F; new mm/min='+
+        JSON.stringify(newSlowWedgeFeeds));
+    }else{
+      // A no-feature geometry may produce identical outputs. Keep this a
+      // negative-control diagnostic, never call it gap-speed support.
+      assert.deepEqual(wedgeSlowFeeds,wedgeBaselineFeeds,
+        'Wedge gap-speed probe had unexplained deposited feedrate differences');
+      assert.equal(baselineGapComments.length+slowGapComments.length,0,
+        'Gap-fill labels were present but the gap-speed change had no measured effect');
+      console.log('INCONCLUSIVE: cube and wedge generated no observed gap-infill paths; '+
+        'gap_infill_speed real G-code effect remains UNVERIFIED');
+    }
+
+
 
 
 
