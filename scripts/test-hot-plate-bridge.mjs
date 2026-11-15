@@ -64,7 +64,7 @@ const texturedResolved=resolveOrcaProfileCollection(texturedRecords,selection,{p
 let texturedInit=null;
 await sliceMultiStlWithEngine({createSession:async()=>({
   init:async bytes=>{texturedInit=JSON.parse(new TextDecoder().decode(bytes));},
-  setObjects:async()=>{},slice:async()=>({plateResults:[{plateId:"plate-0",assets:[{kind:"gcode",id:"fixture"}]}]}),
+  setObjects:async()=>{},slice:async()=>({schemaVersion:"0.7.0",plateResults:[{plateId:"plate-0",assets:[{kind:"gcode",id:"fixture"}]}]}),
   getAsset:async()=>new TextEncoder().encode("G1 X1 Y1 E1\n".repeat(30)),
   dispose:async()=>{}
 })},[{bytes:new Uint8Array(134)}],null,null,texturedResolved);
