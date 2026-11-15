@@ -487,3 +487,18 @@ requiring a newly observed slow feedrate at or below 150 mm/min.
 This test does **not** prove the exact native desktop feature classification,
 full-profile parity, actual machine motion, or safe printability. No upstream
 source, production Pages settings, or pinned engine artifact changes.
+
+## 2026-11-16: isolated internal solid infill speed regression gate
+
+The local-only Chrome/WASM regression now slices the same two-cube STL plate
+with the same bounded diagnostic process configuration previously used for
+sparse infill, varying only `internal_solid_infill_speed` to 2 mm/s.
+It compares the **actual deposited G-code feedrates** (not configuration
+comments or hashes) against the unchanged baseline, requiring at least
+one new low F command at or below 150 mm/min. This is a fail-closed CI
+acceptance gate: its presence in code alone is not a passing result.
+
+This is not a native v2.5.0 desktop comparison, an assurance of exact
+feature-type attribution, proof of printer motion or print-ready G-code.
+The candidate WASM binary and public Pages deployment are unchanged.
+Gap-infill speed remains unverified in real WASM G-code.
