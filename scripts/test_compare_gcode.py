@@ -162,5 +162,35 @@ class ComparatorTests(unittest.TestCase):
         self.assertFalse(self.run_compare('M900K0.1\nG1X1E1\n',
                                           'M900 K0.1\nG1 X1 E1\n')['match'])
 
+    def test_stationary_xy_words_are_not_deposition(self):
+        gcode = ('M82\nG1 X0 E1\nG1 Y0 E2\n'
+                 'G1 X1 E3\nG1 X1 E4\nG1 Y1 E5\n')
+        report = self.run_compare(gcode, gcode, min_extrusion_moves=3)
+        self.assertEqual(report['native_extrusion_moves'], 2)
+        self.assertFalse(report['match'])
+        self.assertTrue(self.run_compare(gcode, gcode, min_extrusion_moves=2)['match'])
+
+    def test_relative_zero_displacement_and_g92_xy_reset(self):
+        gcode = ('G91\nM83\nG1 X0 Y0 E0.2\n'
+                 'G1 X1 E0.2\nG1 Y-1 E0.3\n'
+                 'G90\nG92 X0 Y0\nG1 X0 E0.2\n')
+        report = self.run_compare(gcode, gcode, min_extrusion_moves=3)
+        self.assertEqual(report['native_extrusion_moves'], 2)
+        self.assertFalse(report['match'])
+
+    def test_inch_to_mm_transition_does_not_create_phantom_move(self):
+        gcode = ('G20\nG90\nM82\nG1 X1 E1\n'
+                 'G21\nG1 X25.4 E26\nG1 X26 E27\n')
+        report = self.run_compare(gcode, gcode, min_extrusion_moves=3)
+        self.assertEqual(report['native_extrusion_moves'], 2)
+        self.assertFalse(report['match'])
+
+    def test_stationary_primer_fails_provenance_gate(self):
+        report = self.run_compare('G1 X0 E1\n', 'G1 X0 E1\n',
+                                  min_extrusion_moves=1)
+        self.assertFalse(report['match'])
+        self.assertEqual(report['mismatched_commands'], 0)
+        self.assertEqual(report['native_extrusion_moves'], 0)
+
 if __name__ == '__main__':
     unittest.main()
