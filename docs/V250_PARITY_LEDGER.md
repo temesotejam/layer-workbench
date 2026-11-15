@@ -892,7 +892,7 @@ Candidate [#43639277062](https://github.com/temesotejam/layer-workbench/actions/
 
 ## 2026-11-15: imported 3MF edited and re-sliced within one WASM session (isolated Chrome)
 
-[Draft PR #14](https://github.com/temesotejam/layer-workbench/pull/14) adds
+[Merged PR #14](https://github.com/temesotejam/layer-workbench/pull/14) adds
 `scripts/diagnose-in-session-3mf-reslice.mjs` and a fail-closed test to
 investigate whether the imported 3MF project can be sliced **without** the
 previous best-effort 3MF export → `threeMfToStl()` → new STL session path.
@@ -920,3 +920,28 @@ an in-session native slicing integration milestone, **not** true persistent
 parity, real printer-profile support, or printable output. The Chrome test
 still loads an existing vetted candidate on localhost COOP/COEP and does
 not deploy WASM to Pages.
+
+## 2026-11-15: same-session imported Core 3MF edit → undo → third native WASM slice
+
+[Merged PR #15](https://github.com/temesotejam/layer-workbench/pull/15)
+adds a third real isolated-Chrome slice to the existing synthetic two-cube
+Core 3MF test. After the initial session.slice() and a +30 mm private
+manifest instance translation, the test confirms the second slice deposits
+on the shifted cube. It then restores the **original instance matrix using
+the same private C ABI and the same imported WASM session**, requires the
+full imported manifest to match its original snapshot, and checks the third
+slice deposits on the original cube rather than reusing the shifted paths.
+The independent G-code parser requires 3+ interior Z layers spanning 6+ mm;
+the restored and initial per-region deposition counts, occupied layers and
+Z spans must agree. A negative Node regression simulates an API that falsely
+reports successful undo but leaves the changed manifest, which is rejected.
+
+[PR Chrome/Node CI #43682447900](https://github.com/temesotejam/layer-workbench/actions/runs/43682447900)
+**PASS** using the already accepted WASM candidate artifact
+#43639277062. No engine rebuild or new published WASM artifact was required.
+This verifies reversible **manifest-driven** three-phase synthetic toolpaths,
+not a native persistent Slic3r::Model mutation, lossless desktop 3MF
+metadata preservation, native-vs-WASM G-code parity, or printable output.
+The next structural milestone is to retain native object/volume semantics
+across imported project edits rather than regenerating a temporary model
+from flattened mesh data on every slice.
