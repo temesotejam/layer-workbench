@@ -168,6 +168,24 @@ try {
     assert.equal(await prepare.locator('#lab-3d-canvas').getAttribute('data-visible-layers'),'1');
     await prepare.locator('#lab-3d-layer-range').fill(String(initial3DMax));
     assert.equal(await prepare.locator('#lab-3d-canvas').getAttribute('data-visible-layers'),String(initial3DMax+1));
+    // Exercise the actual localhost 2D -> 3D feature selector with real
+    // WASM-generated G-code. A selected type must filter deposition without
+    // treating all travels as part of the selected type.
+    const featureChoices=await prepare.locator('#lab-feature-filter option').count();
+    assert.ok(featureChoices>=2,'Expected at least one deposition category');
+    const featureKey=await prepare.locator('#lab-feature-filter option').nth(1).getAttribute('value');
+    assert.notEqual(featureKey,'all');
+    const all3DSegments=Number(await prepare.locator('#lab-3d-canvas').getAttribute('data-segment-count'));
+    assert.ok(all3DSegments>0);
+    await prepare.locator('#lab-feature-filter').selectOption(featureKey);
+    const selected3DSegments=Number(await prepare.locator('#lab-3d-canvas').getAttribute('data-segment-count'));
+    assert.ok(selected3DSegments>0 && selected3DSegments<all3DSegments,
+      'Selecting deposition type must hide non-matching toolpaths (including travel)');
+    assert.equal(await prepare.locator('#lab-3d-canvas').getAttribute('data-feature-filter'),featureKey);
+    await prepare.locator('#lab-feature-filter').selectOption('all');
+    assert.equal(Number(await prepare.locator('#lab-3d-canvas').getAttribute('data-segment-count')),all3DSegments,
+      'Restoring all paths must restore full 3D diagnostic geometry');
+    console.log('PASS: actual Chrome feature select filters both 2D and 3D G-code previews without changing WASM output');
     console.log('PASS: 3D WASM G-code toolpaths, orbit canvas, and adjustable visible layer range');
     console.log('PASS: actual WASM G-code rendered as navigable layer toolpaths');
     console.log('PASS: Prepare UI selected STL → local WASM → G-code download');
