@@ -196,10 +196,13 @@ export async function checkBrowserPrivateImportedInstanceEdit(
   },Array.from(sourceBytes));
   assert.equal(inSession.status,'PASS');
   assert.equal(inSession.imported3mfReslicedInSameSession,true);
+  assert.equal(inSession.editUndoReslicedInSameSession,true);
+  assert.deepEqual(inSession.restored.regions,inSession.before.regions);
+  assert.deepEqual(inSession.restored.regionLayers,inSession.before.regionLayers);
   assert.equal(inSession.persistentNativeModelMutation,false);
   assert.equal(inSession.printApproved,false);
   result.inSessionImported3mfToolpathDiagnostic=inSession;
-  console.log('PASS: imported Core 3MF sliced → private +30mm instance edit → re-sliced within same WASM session, with independent multi-layer XY toolpath shift; no external STL flatten or new session');
+  console.log('PASS: imported Core 3MF initial slice → +30mm private instance edit → second slice → undo → third slice in one WASM session; restored 3D deposition, no external STL flattening');
   const archive=Buffer.from(result.editedArchive);
   const stl=Buffer.from(result.flattenedStl);
   delete result.editedArchive;
