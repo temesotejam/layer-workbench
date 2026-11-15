@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import {OrbitControls} from "three/addons/controls/OrbitControls.js";
 import {gcodeSelectorColor} from "./gcode-tool-colors.mjs";
+import {gcodeSegment3DVertices} from "./gcode-3d-vertices.mjs";
 
 // Experimental G-code-derived 3D line preview in the *local isolated lab*.
 // Coordinates are native G-code millimeters, not reconstructed STL geometry.
@@ -97,11 +98,12 @@ export function createThreeDToolpathPreview(container) {
             const points=[];
             for (const segment of layer.segments) {
               if(segment.extrusion!==extrusion || (extrusion&&multi&&segment.toolId!==toolId))continue;
-              const z=layer.z;
+              // Keep actual endpoint heights (including Z-only travel).
               // Three.js Z-up matches the Prepare viewport.
-              points.push(segment.x1,segment.y1,z,segment.x2,segment.y2,z);
-              extent.expandByPoint(new THREE.Vector3(segment.x1,segment.y1,z));
-              extent.expandByPoint(new THREE.Vector3(segment.x2,segment.y2,z));
+              const [x1,y1,z1,x2,y2,z2]=gcodeSegment3DVertices(segment,layer.z);
+              points.push(x1,y1,z1,x2,y2,z2);
+              extent.expandByPoint(new THREE.Vector3(x1,y1,z1));
+              extent.expandByPoint(new THREE.Vector3(x2,y2,z2));
             }
             if(points.length) {
               const geo=new THREE.BufferGeometry();

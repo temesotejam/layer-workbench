@@ -49,15 +49,17 @@ export function parseGcodeToolpaths(source, options={}) {
   const selectedTools=new Set();
   const extrusionsByTool=new Map();
   let count=0,deposited=0,travels=0,skippedArcs=0,renderedArcs=0,skippedMalformedMotion=0;
-  function append(x1,y1,x2,y2,z,extrusion){
-    if(![x1,y1,x2,y2,z].every(Number.isFinite) ||
-       Math.max(Math.abs(x1),Math.abs(y1),Math.abs(x2),Math.abs(y2),Math.abs(z))>100_000)
+  function append(x1,y1,x2,y2,z1,z2,extrusion){
+    if(![x1,y1,x2,y2,z1,z2].every(Number.isFinite) ||
+       Math.max(Math.abs(x1),Math.abs(y1),Math.abs(x2),Math.abs(y2),Math.abs(z1),Math.abs(z2))>100_000)
       throw new Error("Toolpath coordinate exceeds preview limits");
     if(++count>maxSegments)throw new Error("Toolpath too complex for this preview");
-    const layerZ=Math.round(z*1000)/1000;
+    // 2D layers are grouped by destination Z, but 3D must retain both
+    // endpoints. Pure Z travel and sloped moves are not horizontal lines.
+    const layerZ=Math.round(z2*1000)/1000;
     const key=String(layerZ);
     if(!byZ.has(key))byZ.set(key,{z:layerZ,segments:[]});
-    byZ.get(key).segments.push({x1,y1,x2,y2,extrusion,toolId:activeTool,
+    byZ.get(key).segments.push({x1,y1,x2,y2,z1,z2,extrusion,toolId:activeTool,
       feedrateMmMin:state.feedrateMmMin});
     if(extrusion){
       deposited++;
@@ -115,7 +117,7 @@ export function parseGcodeToolpaths(source, options={}) {
     const extrusion=state.e>start.e+1e-7;
     if(!isArc){
       if(Math.abs(state.x-start.x)>EPS||Math.abs(state.y-start.y)>EPS||Math.abs(state.z-start.z)>EPS)
-        append(start.x,start.y,state.x,state.y,state.z,extrusion);
+        append(start.x,start.y,state.x,state.y,start.z,state.z,extrusion);
       continue;
     }
     // Even for omitted arcs, the modal endpoint above must advance.
@@ -177,7 +179,7 @@ export function parseGcodeToolpaths(source, options={}) {
       const a=a0+sweep*i/steps;
       const x=i===steps?state.x:cx+r0*Math.cos(a);
       const y=i===steps?state.y:cy+r0*Math.sin(a);
-      append(px,py,x,y,state.z,extrusion);
+      append(px,py,x,y,start.z,state.z,extrusion);
       px=x;py=y;
     }
     renderedArcs++;
