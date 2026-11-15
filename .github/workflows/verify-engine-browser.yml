@@ -4,6 +4,8 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
+      - "scripts/gcode-preview-parser.mjs"
+      - "scripts/test-gcode-preview-parser.mjs"
       - "scripts/gcode-feature-filter.mjs"
       - "scripts/test-gcode-feature-filter.mjs"
       - "scripts/gcode-layer-preview.mjs"

@@ -74,9 +74,14 @@ export function parseGcodeToolpaths(source, options={}) {
     // Slicer feature annotations are comment-only lines: ;TYPE:... or
     // ; FEATURE:... . Never classify an inline or arbitrary comment as a
     // confirmed feature. A feature label alone is not proof of extrusion.
-    const featureTag=/^;\s*(?:TYPE|FEATURE)\s*:\s*([^;\r\n]{1,80})\s*$/i.exec(input.trim());
-    if(featureTag){
-      activeFeature=featureTag[1].trim().toLowerCase().replace(/\s+/g," ");
+    const comment=input.trim();
+    // A malformed explicit feature directive is not an ordinary comment.
+    // Fail closed by clearing the previous classification: otherwise an
+    // overlong, empty or semicolon-suffixed TYPE/FEATURE line can incorrectly
+    // carry a previous "gap infill" label into unrelated deposited paths.
+    if(/^;\s*(?:TYPE|FEATURE)\s*:/i.test(comment)){
+      const tag=/^;\s*(?:TYPE|FEATURE)\s*:\s*([^;\r\n]{1,80})\s*$/i.exec(comment);
+      activeFeature=tag?.[1]?.trim().toLowerCase().replace(/\s+/g," ") || null;
       continue;
     }
     const line=input.split(";")[0].replace(/\([^)]*\)/g,"").trim().toUpperCase();

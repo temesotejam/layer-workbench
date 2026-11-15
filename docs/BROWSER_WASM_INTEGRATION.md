@@ -556,4 +556,32 @@ No WASM binary, vendor data, or unverified printer feature is published.
 ## 2026-11-16: feature-selectable 2D and 3D localhost G-code preview
 
 The isolated Prepare lab can now select deposition by an explicitly labelled
-G-code feature (
+G-code feature (comment-only `;TYPE:` or `;FEATURE:`). Both the 2D per-layer
+view and the 3D toolpath view use the same selection and hide travel paths
+when a deposition type is selected. Unclassified extrusion has its own
+choice, distinct from a literal feature named "unclassified". Options show
+counts of rendered deposition segments, not independent physical print
+features or verified deposited volume. The 3D camera pose is preserved
+during type selection.
+
+This opt-in localhost-only diagnostic does not prove desktop feature
+classification parity, toolpath correctness, real printer speeds, or
+print-ready G-code. The public Pages site still has no certified WASM
+engine deployment.
+
+## 2026-11-16: malformed explicit feature tag must not inherit stale type
+
+The read-only localhost G-code preview parser now clears the current deposition
+feature when it encounters a syntactically recognizable but invalid explicit
+`;TYPE:` or `;FEATURE:` directive (empty, overlong, or containing an extra
+semicolon). Previously the old feature survived, potentially attributing
+subsequent deposition to a prior `gap infill` section even when the intervening
+directive was not understood. Ordinary non-directive comments still preserve
+the previous feature, as required for line-level G-code comments.
+
+A focused parser regression exercises valid → malformed → valid → malformed
+transitions and asserts that the affected extrusion is unclassified. This
+improves *diagnostic attribution integrity only*. It does not prove that the
+WASM engine generates gap-fill paths, verify the fourth deposition speed, show
+OrcaSlicer desktop G-code parity, or authorize printing/deployment. No public
+site or WASM binary is modified.
