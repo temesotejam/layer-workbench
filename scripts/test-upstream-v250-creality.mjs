@@ -18,6 +18,20 @@ assert.equal(machine.settings.nozzle_diameter,"0.4");
 assert.equal(machine.settings.printable_height,"400");
 assert.equal(process.settings.layer_height,"0.2");
 assert.equal(process.settings.wall_loops,"2");
+
+ // Exact native v2.5.0 CR-10 0.20mm settings from the pinned upstream
+ // child/ancestor chain. These are independent absolute mm/s speeds,
+ // never percent relative presets or replacements for shell/inner speeds.
+for(const [key,speed] of Object.entries({
+  sparse_infill_speed:"50",
+  internal_solid_infill_speed:"50",
+  top_surface_speed:"30",
+  gap_infill_speed:"30",
+})){
+  assert.equal(process.settings[key],speed,"pinned Creality process "+key);
+  assert.ok(!process.unsupported.includes(key),"supported speed must not appear as unsupported: "+key);
+}
+
 // Pinned Orca v2.5.0 ships child overrides: 5 top and 4 bottom solid layers.
 // These are tested native process keys, not inferred desktop GUI defaults.
 assert.equal(process.settings.top_shell_layers,"5");
