@@ -1,0 +1,108 @@
+name: Probe official OrcaSlicer v2.5.0 native CLI
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/probe-native-v250-cli.yml"
+      - "scripts/make_3mf_two_build_fixture.py"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/probe-native-v250-cli.yml"
+      - "scripts/make_3mf_two_build_fixture.py"
+
+permissions:
+  contents: read
+
+jobs:
+  native-cli-probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download the official v2.5.0 Linux AppImage only inside CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p native-cli-output
+          asset="OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.5.0.AppImage"
+          url="https://github.com/OrcaSlicer/OrcaSlicer/releases/download/v2.5.0/${asset}"
+          curl --fail --location --show-error --silent --retry 3 \
+            --retry-all-errors --max-time 360 --max-filesize 800000000 \
+            "${url}" -o "${RUNNER_TEMP}/${asset}"
+          test "$(wc -c < "${RUNNER_TEMP}/${asset}")" -gt 50000000
+          file "${RUNNER_TEMP}/${asset}" | tee native-cli-output/appimage-format.txt
+          grep -q 'ELF' native-cli-output/appimage-format.txt
+          sha256sum "${RUNNER_TEMP}/${asset}" | tee native-cli-output/official-v250-appimage.sha256
+          # Observed on the official release asset in two independent PR CI downloads.
+          actual="$(sha256sum "${RUNNER_TEMP}/${asset}" | cut -d ' ' -f1)"
+          test "${actual}" = "d13eb0a9cd618ed080ab6b82c64c0a60c4501aac91e88d5ac2c3b526fb141a7c"
+          chmod +x "${RUNNER_TEMP}/${asset}"
+
+      - name: Install the host libraries required by the official AppImage
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            libopengl0 libwebkit2gtk-4.1-0 libjavascriptcoregtk-4.1-0 libglu1-mesa
+
+      - name: Exercise official native headless help and independent Core 3MF import
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="${RUNNER_TEMP}/OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.5.0.AppImage"
+          python3 scripts/make_3mf_two_build_fixture.py \
+            --output native-cli-output/two-build-items.3mf
+          # Extract-and-run avoids the runner's FUSE device dependency.
+          # No print commands, printer networking, or G-code export are invoked.
+          timeout 120s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" --help \
+            > native-cli-output/native-help.log 2>&1 || {
+              cat native-cli-output/native-help.log
+              exit 1
+            }
+          test -s native-cli-output/native-help.log
+          grep -Fq "OrcaSlicer-2.5.0" native-cli-output/native-help.log
+          grep -Fq -- "--slice" native-cli-output/native-help.log
+          grep -Fq -- "--load-settings" native-cli-output/native-help.log
+          grep -Fq -- "--load-filaments" native-cli-output/native-help.log
+          timeout 120s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
+            native-cli-output/two-build-items.3mf --info \
+            > native-cli-output/native-info.log 2>&1 || {
+              cat native-cli-output/native-info.log
+              exit 1
+            }
+          test -s native-cli-output/native-info.log
+          # The official CLI's --info lists two Core 3MF build items.
+          # This does not certify their native plate transforms.
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          info = Path("native-cli-output/native-info.log").read_text(encoding="utf-8")
+          headers = re.findall(r"(?m)^\[two-build-items\.3mf\]$", info)
+          facets = re.findall(r"(?m)^number_of_facets\s*=\s*(\d+)$", info)
+          manifolds = re.findall(r"(?m)^manifold\s*=\s*(\w+)$", info)
+          sizes = re.findall(r"(?m)^size_x\s*=\s*([0-9.]+)$", info)
+          if not (len(headers) == 2 and facets == ["12", "12"]
+                  and manifolds == ["yes", "yes"]
+                  and len(sizes) == 2 and all(abs(float(s) - 20) < 1e-5 for s in sizes)):
+              raise SystemExit("Native v2.5.0 --info did not identify both manifold 20 mm Core 3MF cubes")
+          print("PASS: official v2.5.0 native --info recognized two manifold 12-facet 20mm cubes")
+          PY
+          echo "PASS: official v2.5.0 CLI --help and synthetic Core 3MF --info"
+          # The headless test only proves CLI startup and model inspection.
+          # It is not a native G-code result, full-profile comparison or 3MF round-trip.
+
+      - name: Archive text diagnostics without redistributing the AppImage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: orcaslicer-v250-official-native-cli-diagnostics
+          path: |
+            native-cli-output/*.log
+            native-cli-output/*.sha256
+            native-cli-output/appimage-format.txt
+          if-no-files-found: warn
+          retention-days: 7
