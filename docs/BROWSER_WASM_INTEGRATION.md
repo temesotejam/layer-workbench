@@ -525,3 +525,29 @@ it fails instead of silently passing. This does not assert native-desktop
 parity, machine readiness or a verified fourth speed. Next: construct a pinned
 fixture with actual gap-fill toolpaths confirmed by native feature tags,
 then rerun the speed-only A/B test and compare against desktop v2.5.0.
+
+
+## 2026-11-16: narrow-ring gap-fill fixture and feature-attributed speed audit
+
+The earlier wedge had no proven gap-infill extrusion. The isolated Chrome
+probe now uses a **closed 40 × 40 × 8 mm hollow OBJ ring with 1.5 mm walls**,
+with independent unit checks for watertight manifold edges, signed volume,
+and bounded geometry. This better targets the narrow spaces between classic
+perimeters described by upstream, but it does **not** force the native
+wall-generator mode or prove a gap-fill feature will occur.
+
+The bounded G-code preview parser now preserves explicit comment-only
+`;TYPE:` / `;FEATURE:` tags on generated positive-extrusion segments.
+The gap-speed gate compares **tagged gap-fill deposition feedrates** between
+identical-geometry slices with only `gap_infill_speed` changed to 2 mm/s.
+A new generic low F alone **cannot** cause a false gap-feature PASS.
+If no labelled gap deposition exists, the status stays inconclusive;
+if labelled paths exist but no targeted speed response occurs, the Chrome
+test fails and archives `parity-output/gap-ring-feature-diagnostic.json`.
+The same feature tags can inform a later feature-colored Preview, but
+they are not authoritative without independent native classification.
+
+The test intentionally does not claim a fourth validated process speed,
+native desktop/WASM parity, complete PrintConfig, or print-ready G-code.
+It runs with the pinned, previously accepted engine in localhost COOP/COEP.
+No WASM binary, vendor data, or unverified printer feature is published.
