@@ -378,6 +378,26 @@ try {
       ' candidate='+JSON.stringify(internalSolidSlowFeeds));
     console.log('PASS: real Chrome/WASM internal_solid_infill_speed=2 mm/s changes deposited F, new slow mm/min='+
       JSON.stringify(newSlowInternalSolidFeeds));
+    // Fourth restricted speed option: the identical diagnostic plate and
+    // process keys are retained while ONLY gap_infill_speed changes. A pass
+    // requires a new slow F on positive XY extrusion, never just a header.
+    // A lack of gap fill in this geometry must FAIL, not be claimed as proof.
+    const gapSlowGcode=await sliceSparseInfill(
+      'test-gap-infill-slow.json',
+      {...sparseInfillSettings,gap_infill_speed:2});
+    const gapBaselineFeeds=positiveExtrusionFeedrates(sparseBaselineGcode);
+    const gapSlowFeeds=positiveExtrusionFeedrates(gapSlowGcode);
+    assert.ok(gapBaselineFeeds.length>0 && gapSlowFeeds.length>0,
+      'Gap-infill-speed test produced no deposited G-code feedrates');
+    const newSlowGapFeeds=gapSlowFeeds.filter(f=>f>0&&f<=150&&
+      !gapBaselineFeeds.some(baseline=>Math.abs(baseline-f)<0.01));
+    assert.ok(newSlowGapFeeds.length>0,
+      'gap_infill_speed=2 mm/s produced no new low deposited F on the fixture; '+
+      'this could indicate no gap-fill paths, not necessarily a broken bridge; '+
+      'baseline='+JSON.stringify(gapBaselineFeeds)+
+      ' candidate='+JSON.stringify(gapSlowFeeds));
+    console.log('PASS: real Chrome/WASM gap_infill_speed=2 mm/s changes deposited F, new slow mm/min='+
+      JSON.stringify(newSlowGapFeeds));
     // Change ONLY the first-layer height while retaining the previous layer,
     // wall and speed settings. Verify a changed physical extrusion Z, not just
     // a G-code hash/header difference. Generic test PLA; never printer-ready.
