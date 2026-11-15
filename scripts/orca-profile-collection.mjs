@@ -12,7 +12,12 @@ const SPECS={
     top_shell_layers:[0,12],bottom_shell_layers:[0,12],
     // Absolute mm/s only; relative percentage-based speeds are not converted.
     // These bounds constrain diagnostic inputs, not real printer capability.
-    outer_wall_speed:[1,800],inner_wall_speed:[1,800],travel_speed:[1,1500]},
+    outer_wall_speed:[1,800],inner_wall_speed:[1,800],travel_speed:[1,1500],
+    // v2.5.0 Creality 0.20mm Standard supplies these four as absolute mm/s.
+    // Percentages (e.g. "50%") are relative presets: never reinterpret
+    // them as mm/s or silently fall back to another speed.
+    sparse_infill_speed:[1,800],internal_solid_infill_speed:[1,800],
+    top_surface_speed:[1,800],gap_infill_speed:[1,800]},
 };
 const INTEGERS=new Set(['wall_loops','top_shell_layers','bottom_shell_layers']);
 // Pinned OrcaSlicer v2.5.0 PrintConfig.cpp: curr_bed_type enum and

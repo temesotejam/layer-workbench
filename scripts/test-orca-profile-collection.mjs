@@ -236,6 +236,45 @@ for(const bad of ['50%','bad','0','-5',['45','60'],null]){
 }
 assert.throws(()=>resolve(speedProfiles.map(p=>p.name==='fdm_process_common'
   ? {...p,travel_speed:'1501'}:p),selection),/test limits/);
+// Official pinned OrcaSlicer v2.5.0 Creality Ender-3 Pro 0.20mm Standard
+// has four separate absolute-mm/s process speeds (60 / 50 / 30 / 30).
+// Preserve their independent inheritance; never substitute outer/inner speed.
+// Source: OrcaSlicer 40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19
+// resources/profiles/Creality/process/0.20mm Standard @Creality Ender3 Pro 0.4.json
+const nativeDepositionSpeeds={
+  sparse_infill_speed:'60',internal_solid_infill_speed:'50',
+  top_surface_speed:'30',gap_infill_speed:'30'
+};
+const nativeSpeedProfiles=profiles.map(p=>{
+  if(p.name==='fdm_process_common')
+    return {...p,sparse_infill_speed:'55',internal_solid_infill_speed:'48',
+      top_surface_speed:'26',gap_infill_speed:'24'};
+  if(p.name==='0.16mm Fine @TestPrinter')
+    return {...p,...nativeDepositionSpeeds};
+  return p;
+});
+const resolvedDeposition=resolve(nativeSpeedProfiles,selection);
+for(const [key,value] of Object.entries(nativeDepositionSpeeds)){
+  assert.equal(resolvedDeposition.process.settings[key],value);
+  assert.ok(!resolvedDeposition.process.unsupported.includes(key));
+  const inherited=resolve(nativeSpeedProfiles.map(p=>{
+    if(p.name!=='0.16mm Fine @TestPrinter')return p;
+    const copy={...p};delete copy[key];return copy;
+  }),selection);
+  const common={sparse_infill_speed:'55',internal_solid_infill_speed:'48',
+    top_surface_speed:'26',gap_infill_speed:'24'};
+  assert.equal(inherited.process.settings[key],common[key],
+    key+' must be inherited independently');
+  for(const bad of ['50%','0','801',['50','60'],null,'fast']){
+    const modified=nativeSpeedProfiles.map(p=>p.name==='0.16mm Fine @TestPrinter'
+      ? {...p,[key]:bad}:p);
+    assert.throws(()=>resolve(modified,selection),
+      /Invalid|Multi-extruder|test limits/,key+' must reject '+String(bad));
+  }
+}
+for(const key of Object.keys(nativeDepositionSpeeds))
+  assert.equal(resolve(profiles,selection).process.settings[key],undefined);
+console.log('PASS: pinned v2.5.0 four deposition speed fields; independent overrides/inheritance, relative/invalid values rejected');
 console.log('PASS: inherited, bounded absolute mm/s process speeds and fail-closed percentage/array rejection');
 console.log('PASS: real process field names top/bottom shell counts inherit and validate independently');
 
