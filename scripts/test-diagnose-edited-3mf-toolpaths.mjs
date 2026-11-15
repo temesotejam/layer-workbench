@@ -28,7 +28,7 @@ const crossingMidpoints=inspectSyntheticCubeExtrusion([
   'G1 X200 Y95 E1', // X midpoint=160, but crosses the entire original ROI
   'G1 X160 Y50', 'G1 X160 Y140 E2', // Y midpoint=95, but outside cube Y limits
   'G1 X0 Y95','G1 X200 Y95 E3', // X midpoint=100, not an unchanged cube
-].join('\\n'));
+].join('\n'));
 assert.deepEqual(crossingMidpoints.regions,{unchanged:0,original:0,moved:0});
 assert.equal(crossingMidpoints.extrusionSegments,3);
 assert.throws(()=>requireEditedCubeToolpathShift(crossingMidpoints,after),
@@ -36,7 +36,7 @@ assert.throws(()=>requireEditedCubeToolpathShift(crossingMidpoints,after),
 // Conversely, a real deposited segment whose endpoints are both within
 // the bounded cube region must still be counted.
 const bounded=inspectSyntheticCubeExtrusion(
-  'G90\\nM82\\nG1 X150 Y90 Z5\\nG1 X170 Y110 E1\\n');
+  'G90\nM82\nG1 X150 Y90 Z5\nG1 X170 Y110 E1\n');
 assert.equal(bounded.regions.original,1);
 
 assert.throws(()=>requireEditedCubeToolpathShift(noExtrusion,after),/did not relocate/);
