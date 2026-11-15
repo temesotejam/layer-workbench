@@ -120,6 +120,10 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
       }));
       if ([processFile.files?.length, presetBundle.files?.length, rawProfiles.files?.length].filter(Boolean).length>1)
         throw new Error("Use either the flat process fragment OR the inherited preset bundle, not both.");
+      // Never silently fall back to the generic fixture when the UI explicitly
+      // requests an Orca bed; it would ignore the selected heater profile.
+      if (rawPlate.value!=="none" && !rawProfiles.files?.length)
+        throw new Error("Explicit bed selection requires a raw Orca profile collection.");
       const nativeCollection = rawProfiles.files?.length
         ? await readOrcaProfileCollection(rawProfiles.files[0],{
           machine:rawMachine.value.trim(),filament:rawFilament.value.trim(),process:rawProcess.value.trim(),
