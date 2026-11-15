@@ -1,0 +1,40 @@
+name: Test local G-code 3D preview geometry
+
+on:
+  pull_request:
+    paths:
+      - "scripts/gcode-preview-parser.mjs"
+      - "scripts/gcode-3d-preview.mjs"
+      - "scripts/gcode-3d-vertices.mjs"
+      - "scripts/test-gcode-preview-parser.mjs"
+      - "scripts/test-gcode-3d-vertices.mjs"
+      - ".github/workflows/test-gcode-3d-preview.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/gcode-preview-parser.mjs"
+      - "scripts/gcode-3d-preview.mjs"
+      - "scripts/gcode-3d-vertices.mjs"
+      - "scripts/test-gcode-preview-parser.mjs"
+      - "scripts/test-gcode-3d-vertices.mjs"
+      - ".github/workflows/test-gcode-3d-preview.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  geometry-unit-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate G-code parsing and 3D endpoint coordinates
+        run: |
+          node --check scripts/gcode-preview-parser.mjs
+          node --check scripts/gcode-3d-vertices.mjs
+          node --check scripts/gcode-3d-preview.mjs
+          node scripts/test-gcode-preview-parser.mjs
+          node scripts/test-gcode-3d-vertices.mjs
