@@ -551,3 +551,9 @@ The test intentionally does not claim a fourth validated process speed,
 native desktop/WASM parity, complete PrintConfig, or print-ready G-code.
 It runs with the pinned, previously accepted engine in localhost COOP/COEP.
 No WASM binary, vendor data, or unverified printer feature is published.
+
+
+## 2026-11-16: feature-selectable 2D and 3D localhost G-code preview
+
+The isolated Prepare lab can now select deposition by an explicitly labelled
+G-code feature (
