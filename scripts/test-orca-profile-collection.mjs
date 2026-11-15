@@ -45,7 +45,58 @@ const withoutInitial=resolve(profiles.map(p=>p.name==='Generic PLA @System'
   ? {...p,hot_plate_temp:['65']} : p),selection,{plateType:'hot'});
 assert.equal(withoutInitial.filament.selectedBed.initialLayerTemperature,null);
 assert.ok(!Object.hasOwn(withoutInitial.filament.settings,'hot_plate_temp_initial_layer'));
-assert.throws(()=>resolve(withPlate,selection,{plateType:'textured'}),/Unsupported Orca plate type/);
+// Native enum values are distinct from visible UI labels. Validate all six
+// paired steady/first-layer keys and inheritance, not only the hot plate.
+const sixPlates=[
+  ["cool","Cool Plate","cool_plate_temp","32","36"],
+  ["engineering","Engineering Plate","eng_plate_temp","60","65"],
+  ["hot","High Temp Plate","hot_plate_temp","65","70"],
+  ["textured","Textured PEI Plate","textured_plate_temp","58","63"],
+  ["textured-cool","Textured Cool Plate","textured_cool_plate_temp","38","42"],
+  ["supertack","Supertack Plate","supertack_plate_temp","40","44"]
+];
+const sixProfiles=profiles.map(p=>p.name==="Generic PLA @System"
+  ? {...p,...Object.fromEntries(sixPlates.flatMap(([, ,key,steady,initial])=>
+      [[key,[steady]],[key+"_initial_layer",[initial]]]))} : p);
+for(const [plateType,nativeName,key,steady,initial] of sixPlates){
+  const selected=resolve(sixProfiles,selection,{plateType});
+  assert.equal(selected.filament.settings.curr_bed_type,nativeName);
+  assert.equal(selected.filament.settings.bed_temperature,steady);
+  assert.deepEqual(selected.filament.settings[key],[steady]);
+  assert.deepEqual(selected.filament.settings[key+"_initial_layer"],[initial]);
+  assert.deepEqual(selected.filament.selectedBed,{
+    plateType,source:"Generic PLA @System",bed_temperature:steady,
+    initialLayerSource:"Generic PLA @System",initialLayerTemperature:initial
+  });
+  assert.ok(!selected.filament.unsupported.includes(key));
+  assert.ok(!selected.filament.unsupported.includes(key+"_initial_layer"));
+  const others=sixPlates.filter(([other])=>other!==plateType);
+  for(const [, ,otherKey] of others)
+    assert.equal(selected.filament.settings[otherKey],undefined,
+      "never forward temperatures for an unselected bed");
+  const noInitial=resolve(sixProfiles.map(p=>p.name==="Generic PLA @System"
+    ? Object.fromEntries(Object.entries(p).filter(([k])=>k!==key+"_initial_layer")) : p),
+    selection,{plateType});
+  assert.equal(noInitial.filament.selectedBed.initialLayerTemperature,null);
+  assert.equal(noInitial.filament.settings[key+"_initial_layer"],undefined);
+  for(const bad of [["0"],["-1"],["121"],["20","30"],["n/a"]]){
+    const modified=sixProfiles.map(p=>p.name==="Generic PLA @System"
+      ? {...p,[key]:bad} : p);
+    assert.throws(()=>resolve(modified,selection,{plateType}),
+      /unsupported|Invalid|Multi-extruder|test limits/);
+  }
+  const missing=sixProfiles.map(p=>p.name==="Generic PLA @System"
+    ? Object.fromEntries(Object.entries(p).filter(([k])=>k!==key)) : p);
+  assert.throws(()=>resolve(missing,selection,{plateType}),/temperature missing/);
+}
+assert.equal(resolve(sixProfiles,selection).filament.settings.curr_bed_type,undefined);
+assert.throws(()=>resolve(sixProfiles,selection,{plateType:"Smooth High Temp Plate"}),/Unsupported Orca plate type/);
+assert.throws(()=>resolve(sixProfiles,selection,{plateType:"__proto__"}),/Unsupported Orca plate type/);
+assert.throws(()=>resolve(sixProfiles.map(p=>p.name==="Generic PLA @System"
+  ? {...p,textured_plate_temp_initial_layer:["0"]} : p),selection,{plateType:"textured"}),
+  /first layer is unsupported/);
+
+assert.throws(()=>resolve(withPlate,selection,{plateType:'unknown'}),/Unsupported Orca plate type/);
 assert.throws(()=>resolve(withPlate.map(p=>p.name==='Generic PLA @System'
   ? {...p,hot_plate_temp:['150']} : p),selection,{plateType:'hot'}),/test limits/);
 assert.throws(()=>resolve(withPlate.map(p=>p.name==='Generic PLA @System'
