@@ -13,6 +13,17 @@ on:
       - "scripts/orca-multimaterial-gcode-audit.mjs"
       - "scripts/test-orca-multimaterial-gcode-audit.mjs"
       - ".github/workflows/test-gcode-parity.yml"
+  pull_request:
+    paths:
+      - "scripts/compare_gcode.py"
+      - "scripts/test_compare_gcode.py"
+      - "scripts/check_parity_pair.py"
+      - "scripts/test_check_parity_pair.py"
+      - "scripts/make_parity_manifest.py"
+      - "scripts/test_make_parity_manifest.py"
+      - "scripts/orca-multimaterial-gcode-audit.mjs"
+      - "scripts/test-orca-multimaterial-gcode-audit.mjs"
+      - ".github/workflows/test-gcode-parity.yml"
   workflow_dispatch:
 
 permissions:

@@ -53,13 +53,17 @@ def canonical(path):
             continue
         normalized = []
         for token in split_motion_words(text):
-            m = PARAM.fullmatch(token)
-            if m:
-                normalized.append(m[1].upper() + str(Decimal(m[2]).normalize()))
-            elif CODE.fullmatch(token):
+            # G20/G90/M100/T200/N10 also match the generic word pattern.
+            # Keep opcodes intact: Decimal normalization would turn G20
+            # into G2E+1 and break modal state tracking or hide mismatches.
+            if CODE.fullmatch(token):
                 normalized.append(token.upper())
             else:
-                normalized.append(token)
+                m = PARAM.fullmatch(token)
+                if m:
+                    normalized.append(m[1].upper() + str(Decimal(m[2]).normalize()))
+                else:
+                    normalized.append(token)
         commands.append((n, ' '.join(normalized)))
     return commands
 
@@ -79,15 +83,21 @@ def count_motion(commands):
 EXTRUSION_MOTION = re.compile(r'^G0*[123](?:\.0+)?$', re.I)
 
 def count_extrusion_moves(commands):
-    """Count positive extrusion deltas on XY/arc moves for fixture sanity.
+    """Count positive E on actual XY/arc movement for fixture sanity.
 
-    Supports M82/M83 extrusion mode and G92 E resets. Assumes initial absolute
-    E, and does not simulate firmware-specific tool changes or volumetric mode.
-    This is not a deposited-volume, print-safety, or parity certification.
+    A present X/Y word alone does not prove movement: e.g. G1 X0 E1 at the
+    initial position is priming, not deposited path. Track G90/G91, G92 and
+    G20/G21 coordinates as well as M82/M83 and E resets. Arc center/radius
+    words may indicate a full circle with no XY endpoint displacement.
+    This is a conservative *fixture gate*, not a full firmware interpreter,
+    watertightness test, deposited-volume or print-safety certification.
     """
     count = 0
     absolute_e = True
+    absolute_xyz = True
+    units = Decimal(1)
     e_position = Decimal(0)
+    xy = {'X': Decimal(0), 'Y': Decimal(0)}
     for _, command in commands:
         tokens = command.split()
         if tokens and re.fullmatch(r'N\d+', tokens[0], re.I):
@@ -101,27 +111,51 @@ def count_extrusion_moves(commands):
         if opcode in ('M83', 'M083.0', 'M83.0'):
             absolute_e = False
             continue
+        if opcode == 'G90':
+            absolute_xyz = True
+            continue
+        if opcode == 'G91':
+            absolute_xyz = False
+            continue
+        if opcode == 'G20':
+            units = Decimal('25.4')
+            continue
+        if opcode == 'G21':
+            units = Decimal(1)
+            continue
         words = {}
         for token in tokens[1:]:
             match = PARAM.fullmatch(token)
             if match:
                 words[match[1].upper()] = Decimal(match[2])
         if opcode == 'G92':
+            for axis in xy:
+                if axis in words:
+                    xy[axis] = words[axis] * units
             if 'E' in words:
-                e_position = words['E']
+                e_position = words['E'] * units
             continue
         if not MOTION.fullmatch(opcode):
             continue
+        moved_xy = False
+        for axis in xy:
+            if axis not in words:
+                continue
+            requested = words[axis] * units
+            new_position = requested if absolute_xyz else xy[axis] + requested
+            moved_xy |= new_position != xy[axis]
+            xy[axis] = new_position
         if 'E' not in words:
             continue
-        delta = words['E'] - e_position if absolute_e else words['E']
-        e_position = words['E'] if absolute_e else e_position + words['E']
+        requested_e = words['E'] * units
+        delta = requested_e - e_position if absolute_e else requested_e
+        e_position = requested_e if absolute_e else e_position + requested_e
         if delta <= 0 or not EXTRUSION_MOTION.fullmatch(opcode):
             continue
         code = int(Decimal(opcode[1:]))
-        if code == 1 and not ('X' in words or 'Y' in words):
+        if code == 1 and not moved_xy:
             continue
-        if code in (2, 3) and not any(k in words for k in ('X', 'Y', 'I', 'J', 'R')):
+        if code in (2, 3) and not (moved_xy or any(k in words for k in ('I', 'J', 'R'))):
             continue
         count += 1
     return count
