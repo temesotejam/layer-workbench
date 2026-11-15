@@ -181,3 +181,27 @@ assert.deepEqual(badFeed.layers[0].segments.map(s=>[s.x1,s.x2,s.feedrateMmMin]),
 assert.equal(parseGcodeToolpaths("G1 X1 E1").layers[0].segments[0].feedrateMmMin,null);
 console.log("PASS: modal commanded feedrate in mm/min, inch conversion, missing F and invalid F safety");
 console.log("PASS: full-word lexing rejects malformed/duplicate/unknown motion words without phantom paths; compact numeric G-code supported");
+
+
+// Preserve explicit slicer feature tags on real deposited path segments.
+// Mere mentions of "gap infill" in config comments must NOT classify motion.
+const typed=parseGcodeToolpaths([
+  "; gap infill speed = 2", "G90", "M82", "G0 X0 Y0 Z0.2 F2400",
+  ";TYPE:Outer wall", "G1 X10 Y0 E1 F1200",
+  "; FEATURE: Gap infill", "G1 X20 Y0 E2 F120",
+  ";TYPE:Sparse infill", "G1 X30 Y0 E3 F900",
+  "; arbitrary gap infill note", "G1 X40 Y0 E4"
+].join("\n"));
+assert.deepEqual(typed.layers[0].segments.filter(s=>s.extrusion).map(s=>s.feature),
+  ["outer wall","gap infill","sparse infill","sparse infill"]);
+assert.deepEqual(typed.extrusionSegmentsByFeature,
+  {"outer wall":1,"gap infill":1,"sparse infill":2});
+const typedGap=typed.layers[0].segments.filter(s=>s.extrusion&&s.feature==="gap infill");
+assert.deepEqual(typedGap.map(s=>s.feedrateMmMin),[120]);
+// Ignore inline annotation that would ambiguously apply to a movement.
+const inline=parseGcodeToolpaths("G90\nM82\nG1 X10 E1 F120 ;TYPE:Gap infill");
+assert.deepEqual(inline.extrusionSegmentsByFeature,{unclassified:1});
+// Feature labels alone are NOT evidence of an actual extruded gap-fill path.
+const tagWithoutDeposition=parseGcodeToolpaths(";TYPE:Gap infill\nG0 X10 F120\nG1 E1");
+assert.deepEqual(tagWithoutDeposition.extrusionSegmentsByFeature,{});
+console.log("PASS: explicit type/feature tag attribution, modal F and comment-only false-positive guard");
