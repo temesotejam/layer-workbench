@@ -244,6 +244,35 @@ class ComparatorTests(unittest.TestCase):
                 self.assertFalse(report['match'])
                 self.assertEqual(report['mismatched_commands'], 1)
 
+    def test_fixture_gate_rejects_malformed_and_duplicate_motion_words(self):
+        invalid = [
+            'G1 X1 E1 X2',        # last duplicate X used to appear printable
+            'G1 X1 E1 E2',        # conflicting extrusion words
+            'G1 X1 E1 BAD',       # unknown suffix
+            'G1 X1 E1*42',       # unsupported checksum syntax
+            'G1 X1 E1 G91',      # embedded second opcode
+            'G0 X2 BAD\nG1 X3 E1',  # unknown previous coordinate
+        ]
+        for gcode in invalid:
+            with self.subTest(gcode=gcode):
+                code = gcode + '\n'
+                report = self.run_compare(code, code, min_extrusion_moves=1)
+                self.assertFalse(report['match'], report)
+                self.assertEqual(report['native_extrusion_moves'], 0)
+                self.assertEqual(report['wasm_extrusion_moves'], 0)
+
+    def test_fixture_gate_rejects_ambiguous_g92_before_valid_move(self):
+        gcode = 'G92 E0 E1\nG1 X1 E2\n'
+        report = self.run_compare(gcode, gcode, min_extrusion_moves=1)
+        self.assertFalse(report['match'])
+        self.assertEqual(report['native_extrusion_moves'], 0)
+
+    def test_fixture_gate_keeps_valid_feed_and_arc_words(self):
+        gcode = 'M83\nG1 X1 Y0 F1200 E0.3\nG2 X3 Y0 I1 J0 E0.2\n'
+        report = self.run_compare(gcode, gcode, min_extrusion_moves=2)
+        self.assertTrue(report['match'], report)
+        self.assertEqual(report['native_extrusion_moves'], 2)
+
     def test_line_number_tens_still_counts_motion(self):
         report = self.run_compare('N20 G1 X1 E1\n', 'N20 G1 X1 E1\n',
                                   min_extrusion_moves=1)

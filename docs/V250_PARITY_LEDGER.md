@@ -968,3 +968,21 @@ that can undercount supported-but-unmodeled firmware arcs, not a full G-code
 interpreter, a slicer parity result, proof of deposited volume or printable
 output. In particular, an identical pair of synthetic commands is not
 proof of native OrcaSlicer v2.5.0 versus WASM equivalence.
+
+## 2026-11-16: fail-closed G-code fixture syntax sanity gate
+
+The **optional** `--min-extrusion-moves` checker no longer treats a motion
+line as a valid deposition fixture if its numeric words are ambiguous:
+duplicate axes/extrusion parameters, opaque or malformed tokens, embedded
+G/M/N/T opcode words, or unsupported checksums cause a conservative **zero
+deposition count**. Malformed G92 resets also invalidate counting, including
+subsequent moves whose coordinate baseline would be unknown. A normal valid
+feed-rate word or a geometrically valid G17 arc remains countable. These rules
+are deliberately conservative; some firmware extensions may be undercounted,
+and the main ordered command comparison is unchanged.
+
+This prevents a **synthetic self-identical bad file** from satisfying the
+minimum-deposition acceptance gate. It does **not** validate a physical
+printer's G-code dialect, prove native/WASM source provenance or provide
+desktop v2.5.0 toolpath parity. Lightweight CI for this change:
+[PR #27 comparator](https://github.com/temesotejam/layer-workbench/pull/27).
