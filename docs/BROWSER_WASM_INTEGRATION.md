@@ -440,3 +440,22 @@ they **do not** demonstrate that the WASM-produced G-code travels at those
 speeds, native-vs-WASM toolpath equality or physical printer suitability.
 Other process keys (including relative speed parameters) remain unsupported.
 Public Pages and the WASM engine artifact are unchanged.
+
+## 2026-11-15: pinned process deposition-speed bridge allow-list alignment
+
+The source-pinned v2.5.0 profile reader already resolved `sparse_infill_speed`,
+`internal_solid_infill_speed`, `top_surface_speed`, and `gap_infill_speed`
+for the Creality CR-10 0.20mm process. The localhost slicer path subsequently
+revalidated `nativeCollection.process.settings` through a separate
+`parseTestProcessOverrides()` allow-list which lacked these four keys. This
+caused a local slice to fail even though raw profile inheritance tests passed.
+The bounded process override allow-list now admits those four *absolute mm/s*
+values with the same [1, 800] diagnostic limits. Relative percentages,
+multiple-extruder arrays, non-numeric values and out-of-range values are
+rejected. The PR gate exercises parser unit tests and a mock native API session
+to assert all four keys actually reach `applyProfile("orca.native-json", ...)`.
+
+This is **not** evidence of v2.5.0 desktop-versus-WASM G-code speed parity, nor
+a real-browser verification of the four speeds' effect on tool motion. All
+other unsupported full-profile keys remain excluded; existing candidate WASM
+and public Pages remain unchanged. Do not print test G-code.
