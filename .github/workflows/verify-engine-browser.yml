@@ -4,6 +4,8 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
+      - "scripts/obj-to-stl.mjs"
+      - "scripts/test-obj-to-stl.mjs"
       - "scripts/prepare-engine-lab.mjs"
       - "scripts/test-engine-probe.mjs"
       - ".github/workflows/verify-engine-browser.yml"
@@ -13,6 +15,8 @@ on:
       - "engine-probe.html"
       - "scripts/probe-engine.mjs"
       - "scripts/slice-stl.mjs"
+      - "scripts/obj-to-stl.mjs"
+      - "scripts/test-obj-to-stl.mjs"
       - "scripts/test-process-profile.mjs"
       - "scripts/test-process-profile-unit.mjs"
       - "scripts/process-preset-inheritance.mjs"
@@ -80,6 +84,8 @@ jobs:
           test "$(wc -c < engine-test-artifacts/slicer-mt.wasm)" -eq 31294942
           node scripts/test-transform-matrix.mjs
           node scripts/test-multi-stl.mjs
+          node scripts/test-obj-to-stl.mjs
+          node --check scripts/obj-to-stl.mjs
           node scripts/test-process-profile-unit.mjs
           node scripts/test-process-preset-inheritance.mjs
           node scripts/test-orca-profile-collection.mjs

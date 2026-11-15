@@ -652,6 +652,44 @@ try {
     assert.equal(await prepare.locator('#lab-download').isVisible(),false);
     console.log('PASS: explicit bed selection without profiles fails closed; no test G-code download');
 
+    // Geometry-only OBJ is now converted into bounded binary STL locally,
+    // then passed to the SAME accepted OrcaSlicer WASM engine. Materials and
+    // OBJ units remain outside this diagnostic acceptance scope.
+    await prepare.locator('#lab-orca-plate').selectOption('none');
+    await prepare.locator('#lab-orca-filament-variant').fill('');
+    await prepare.locator('#lab-preset-bundle').setInputFiles([]);
+    await prepare.locator('#lab-process').setInputFiles([]);
+    await prepare.locator('#remove-object').click();
+    await prepare.locator('#remove-object').click();
+    await prepare.locator('#object-count').getByText('0 objects').waitFor({timeout:30000});
+    const cubeObj = [
+      'v 0 0 0','v 20 0 0','v 20 20 0','v 0 20 0',
+      'v 0 0 20','v 20 0 20','v 20 20 20','v 0 20 20',
+      'f 1 4 3 2','f 5 6 7 8','f 1 2 6 5',
+      'f 2 3 7 6','f 3 4 8 7','f 4 1 5 8',
+    ].join('\n');
+    await prepare.locator('#model-file').setInputFiles({
+      name:'cube-from-obj.obj',mimeType:'text/plain',buffer:Buffer.from(cubeObj),
+    });
+    await prepare.locator('#object-count').getByText('1 object').waitFor({timeout:30000});
+    assert.equal(await prepare.locator('#lab-slice').isEnabled(),true);
+    await prepare.locator('#lab-slice').click();
+    await prepare.waitForFunction(() => {
+      const s=document.querySelector('#lab-status')?.textContent||'';
+      return s.startsWith('PASS:') || s.startsWith('FAILED');
+    },null,{timeout:120000});
+    const objStatus=await prepare.locator('#lab-status').innerText();
+    assert.match(objStatus,/^PASS: 1 STL\/OBJ mesh model\(s\)/);
+    assert.equal(await prepare.locator('#lab-download').isVisible(),true);
+    const objGcode=await prepare.locator('#lab-download').evaluate(async link=>
+      await (await fetch(link.href)).text());
+    const objPaths=parseGcodeToolpaths(objGcode);
+    assert.ok(objPaths.layers.length>=3 && objPaths.extrusions>100,
+      'OBJ geometry must produce actual multilayer native G-code deposition');
+    console.log('PASS: OBJ displayed in Prepare -> bounded mesh-only STL conversion -> real WASM multilayer G-code ('+
+      objPaths.layers.length+' layers, '+objPaths.extrusions+' extrusion segments; not print-ready)');
+
+
 
 
 

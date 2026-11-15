@@ -1,12 +1,14 @@
 // Opt-in localhost /?engineLab=1: bridge the Prepare selection to the
 // previously verified candidate, without deploying that binary to Pages.
-// The proof accepts one STL plus checked native affine transforms; real profiles remain unimplemented.
+// Mesh-only STL and OBJ (locally converted to STL); checked affine transforms.
+// Native CAD/STEP, OBJ materials, and full printer profiles remain unsupported.
 import { loadSelectedEngine, checkIsolation } from "./probe-engine.mjs";
 import { sliceMultiStlWithEngine } from "./slice-stl.mjs";
 import {readTestProcessFile} from "./test-process-profile.mjs";
 import {readProcessPresetBundle} from "./process-preset-inheritance.mjs";
 import {readOrcaProfileCollection} from "./orca-profile-collection.mjs";
 import {createLayerPreview} from "./gcode-layer-preview.mjs";
+import {objToBinaryStl} from "./obj-to-stl.mjs";
 
 export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
   const panel = document.querySelector(".slice-area");
@@ -38,7 +40,8 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
     <small>Exact extruder variant selection is required for multi-value filament volumetric speed limits; without it no limit is guessed. Real printer extruder-type matching is not yet validated. Manufacturer scripts and generated G-code remain non-print-ready.</small>
     <small>An explicitly chosen plate selects one of six pinned OrcaSlicer v2.5.0 native bed-temperature key pairs; selection is never inferred. Unsupported or zero-temperature plate settings are refused, and first-layer values are forwarded only when present. This is an isolated development-only test, not printer-profile validation. Inherited first-layer nozzle temperature and bounded (0.5–1.5) single-filament flow ratio are forwarded as native vectors; isolated Chrome tests confirmed changes in actual M104 and G1 E commands. Multi-value flow ratios are rejected. Multi-value volumetric flow limits require an explicit, exact extruder-variant selection; real printer/nozzle compatibility is not verified. Manufacturer startup scripts, complete material settings and desktop G-code parity remain unverified; generated G-code is not print-ready.</small>
     <label>Process preset name <input id="lab-orca-process" type="text" maxlength="160"></label>
-    <button id="lab-slice" disabled>Slice STL plate (test only)</button>
+    <small>OBJ is locally triangulated to binary STL for this isolated test. Units are assumed millimeters; materials, UVs, groups and colors are not preserved. No STEP import, CAD edits or print-safety verification.</small>
+    <button id="lab-slice" disabled>Slice STL/OBJ plate (test only)</button>
     <a id="lab-download" hidden download="prepare-test.gcode">Download test G-code</a>
     <p id="lab-status" role="status" aria-live="polite">No engine loaded.</p>
   `;
@@ -71,7 +74,7 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
     load.disabled = busy || !isolated || !js.files?.length || !wasm.files?.length || !!loaded;
     const entries = getEntries();
     slice.disabled = busy || !loaded || entries.length === 0 || entries.length > 24 ||
-      entries.some(e => e.format !== "stl" || !e.file || e.file.size > 20 * 1024 * 1024) ||
+      entries.some(e => !["stl","obj"].includes(e.format) || !e.file || e.file.size > 20 * 1024 * 1024) ||
       entries.reduce((sum,e)=>sum+e.file.size,0) > 80 * 1024 * 1024;
   };
   js.addEventListener("change", refresh);
@@ -88,7 +91,7 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
     try {
       loaded = await loadSelectedEngine(js.files[0], wasm.files[0]);
       status.textContent = "Ready: " + loaded.capabilities.engine.family + " " + loaded.capabilities.engine.version;
-      onStatus("Local engine loaded. STL objects on one plate can be sliced using generic PLA test settings.");
+      onStatus("Local engine loaded. STL/OBJ triangle meshes can be sliced on one plate using generic PLA test settings.");
     } catch (error) {
       status.textContent = "FAILED loading engine: " + error.message;
     } finally {
@@ -99,8 +102,8 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
   slice.addEventListener("click", async () => {
     const selected = getEntries();
     if (!loaded || selected.length === 0 || selected.length > 24 ||
-        selected.some(e => e.format !== "stl" || !e.file)) {
-      status.textContent = "This test supports up to 24 STL models on one plate.";
+        selected.some(e => !["stl","obj"].includes(e.format) || !e.file)) {
+      status.textContent = "This test supports up to 24 STL or OBJ meshes on one plate; STEP must be converted separately.";
       return;
     }
     busy = true;
@@ -114,7 +117,9 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
       const models = await Promise.all(selected.map(async e => {
         e.object.updateMatrixWorld(true);
         return {
-          bytes:new Uint8Array(await e.file.arrayBuffer()),
+          bytes:e.format === "stl"
+            ? new Uint8Array(await e.file.arrayBuffer())
+            : objToBinaryStl(new TextDecoder("utf-8",{fatal:true}).decode(await e.file.arrayBuffer())),
           viewerElements:Array.from(e.object.matrixWorld.elements),
         };
       }));
@@ -151,10 +156,12 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
       const speedVariant = nativeCollection?.filament.selectedFilamentVariant;
       const unsupported = nativeCollection
         ? [nativeCollection.machine,nativeCollection.filament,nativeCollection.process].reduce((n,v)=>n+v.unsupported.length,0) : 0;
-      status.textContent = "PASS: " + selected.length + " STL model(s) → " + result.gcode.byteLength +
+      status.textContent = "PASS: " + selected.length + " " +
+        (selected.every(e=>e.format==="stl") ? "STL model(s)" : "STL/OBJ mesh model(s)") +
+        " → " + result.gcode.byteLength +
         " G-code bytes. Restricted test profiles with " + (nativeCollection ? "Orca raw preset selection ("+rawMachine.value+" / "+rawFilament.value+" / "+rawProcess.value+"), "+unsupported+" unsupported keys excluded"+(bedInfo ? ", explicitly mapped "+bedInfo.plateType+" bed "+bedInfo.bed_temperature+" °C"+(bedInfo.initialLayerTemperature!==null ? " and native first-layer "+bedInfo.plateType+" bed "+bedInfo.initialLayerTemperature+" °C" : " (first layer unspecified)") : "") : chosenPreset ? "inherited process preset (" + chosenPreset.chain.join(" > ") + ")" : processOverrides ? "test overrides" : "default process") + ";" + previewInfo + " Do not print without validating.";
       if(speedVariant) console.log("Selected native volumetric limit:",speedVariant);
-      onStatus("Test WASM sliced all imported STL models and their displayed transforms on one plate; generic PLA settings only.");
+      onStatus("Test WASM sliced imported STL/OBJ geometry and displayed transforms on one plate; generic PLA settings only.");
     } catch (error) {
       status.textContent = "FAILED slicing: " + error.message;
     } finally {
