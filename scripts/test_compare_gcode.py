@@ -106,7 +106,7 @@ class ComparatorTests(unittest.TestCase):
             'G2 R1 E1',         # R full circle is undefined
             'G2 X2 I0 J0 E1',   # center coincides with starting point
             'G2 X2 I1 J0 R1 E1', # conflicting definitions
-            'G2 X2 I1 J1 E1',   # different start/end radii
+            'G2 X2 I0.5 J0.5 E1',   # different start/end radii
         ]
         for arc in invalid_arcs:
             with self.subTest(arc=arc):
