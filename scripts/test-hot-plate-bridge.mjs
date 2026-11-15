@@ -95,7 +95,7 @@ await sliceMultiStlWithEngine({createSession:async()=>({
   slice:async()=>({schemaVersion:"0.7.0",plateResults:[{
     plateId:"plate-0",assets:[{kind:"gcode",id:"fixture"}],
   }]}),
-  getAsset:async()=>new TextEncoder().encode("G1 X1 Y1 E1\\n".repeat(30)),
+  getAsset:async()=>new TextEncoder().encode("G1 X1 Y1 E1\n".repeat(30)),
   dispose:async()=>{speedSessionDisposed=true;},
 })},[{bytes:new Uint8Array(134)}],null,speedCollection.process.settings,speedCollection);
 assert.ok(speedSessionDisposed,"Speed bridge session must be disposed");
