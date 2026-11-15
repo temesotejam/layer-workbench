@@ -56,3 +56,22 @@ assert.ok(!explicit.resolved.filament.unsupported.includes("hot_plate_temp_initi
 console.log("PASS: explicitly selected volumetric flow cap forwarded into session.init; implicit multi-limit excluded");
 console.log("PASS: native inherited first-layer nozzle and flow-ratio vectors reach actual session.init payload");
 console.log("PASS: native first-layer hot_plate_temp_initial_layer vector and steady hot bed reach session.init only after opt-in");
+// The actual session.init payload must retain the selected native enum and
+// per-filament vector for a non-hot plate; this uses a fake engine only.
+const texturedRecords=records.map(p=>p.name==="PLA Base"
+  ? {...p,textured_plate_temp:["55"],textured_plate_temp_initial_layer:["60"]}:p);
+const texturedResolved=resolveOrcaProfileCollection(texturedRecords,selection,{plateType:"textured"});
+let texturedInit=null;
+await sliceMultiStlWithEngine({createSession:async()=>({
+  init:async bytes=>{texturedInit=JSON.parse(new TextDecoder().decode(bytes));},
+  setObjects:async()=>{},slice:async()=>({schemaVersion:"0.7.0",plateResults:[{plateId:"plate-0",assets:[{kind:"gcode",id:"fixture"}]}]}),
+  getAsset:async()=>new TextEncoder().encode("G1 X1 Y1 E1\n".repeat(30)),
+  dispose:async()=>{}
+})},[{bytes:new Uint8Array(134)}],null,null,texturedResolved);
+assert.equal(texturedInit.curr_bed_type,"Textured PEI Plate");
+assert.equal(texturedInit.bed_temperature,"55");
+assert.deepEqual(texturedInit.textured_plate_temp,["55"]);
+assert.deepEqual(texturedInit.textured_plate_temp_initial_layer,["60"]);
+assert.equal(texturedInit.hot_plate_temp,undefined);
+console.log("PASS: opt-in textured plate native enum and first/other-layer vectors reach session.init");
+
