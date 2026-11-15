@@ -38,12 +38,13 @@ jobs:
           sha256sum "${RUNNER_TEMP}/${asset}" | tee native-cli-output/official-v250-appimage.sha256
           chmod +x "${RUNNER_TEMP}/${asset}"
 
-      - name: Install the missing Ubuntu host OpenGL runtime
+      - name: Install the host libraries required by the official AppImage
         shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update -qq
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libopengl0
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            libopengl0 libwebkit2gtk-4.1-0 libjavascriptcoregtk-4.1-0 libglu1-mesa
 
       - name: Exercise official native headless help and independent Core 3MF import
         shell: bash
