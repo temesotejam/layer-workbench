@@ -4,18 +4,36 @@ import assert from 'node:assert/strict';
 import {inspectSyntheticCubeExtrusion,requireEditedCubeToolpathShift}
   from './diagnose-edited-3mf-toolpaths.mjs';
 
-const make=(x)=> [
-  'G21','G90','M82',
-  'G1 X90 Y95 Z0.2','G1 X100 Y95 E1', // first-layer priming excluded
-  'G1 X90 Y95 Z5','G1 X100 Y95 E2',
-  'G1 X'+x+' Y95','G1 X'+(x+10)+' Y95 E3',
-  ''
-].join('\n');
+const make=(x,levels=[5,10,15])=> {
+  let e=1;
+  return [
+    'G21','G90','M82',
+    'G1 X90 Y95 Z0.2','G1 X100 Y95 E1', // first-layer priming excluded
+    ...levels.flatMap(z=>[
+      'G0 X90 Y95 Z'+z,'G1 X100 Y95 E'+(++e),
+      'G0 X'+x+' Y95','G1 X'+(x+10)+' Y95 E'+(++e),
+    ]),
+    ''
+  ].join('\n');
+};
 const before=inspectSyntheticCubeExtrusion(make(150));
 const after=inspectSyntheticCubeExtrusion(make(180));
-assert.deepEqual(before.regions,{unchanged:1,original:1,moved:0});
-assert.deepEqual(after.regions,{unchanged:1,original:0,moved:1});
+assert.deepEqual(before.regions,{unchanged:3,original:3,moved:0});
+assert.deepEqual(after.regions,{unchanged:3,original:0,moved:3});
+assert.deepEqual(before.regionLayers,{unchanged:3,original:3,moved:0});
+assert.deepEqual(after.regionLayers,{unchanged:3,original:0,moved:3});
+assert.deepEqual(before.regionZSpanMm,{unchanged:10,original:10,moved:0});
+assert.deepEqual(after.regionZSpanMm,{unchanged:10,original:0,moved:10});
 assert.equal(requireEditedCubeToolpathShift(before,after),true);
+// A lone extrusion or many strokes packed into a shallow slab cannot
+// establish the 3D relocation of a 20-mm-tall cube.
+const lone=inspectSyntheticCubeExtrusion(make(150,[5]));
+assert.throws(()=>requireEditedCubeToolpathShift(lone,after),/Insufficient.*coverage/);
+const shallow=inspectSyntheticCubeExtrusion(make(150,[5,6,7]));
+assert.throws(()=>requireEditedCubeToolpathShift(shallow,after),/Insufficient.*coverage/);
+const incomplete=structuredClone(before);
+delete incomplete.regionLayers;
+assert.throws(()=>requireEditedCubeToolpathShift(incomplete,after),/Invalid.*evidence/);
 assert.throws(()=>requireEditedCubeToolpathShift(before,before),/did not relocate/);
 assert.throws(()=>requireEditedCubeToolpathShift(after,after),/did not relocate/);
 assert.throws(()=>requireEditedCubeToolpathShift({},after),/Invalid/);
