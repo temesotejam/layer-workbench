@@ -192,5 +192,27 @@ class ComparatorTests(unittest.TestCase):
         self.assertEqual(report['mismatched_commands'], 0)
         self.assertEqual(report['native_extrusion_moves'], 0)
 
+    def test_opcodes_are_not_normalized_as_numeric_parameters(self):
+        for native, wasm in [('G20', 'G2E+1'), ('G90', 'G9E+1'),
+                             ('M100', 'M1E+2'), ('T200', 'T2E+2'),
+                             ('N20', 'N2E+1')]:
+            with self.subTest(native=native):
+                report = self.run_compare(native + '\nG1 X1 E1\n',
+                                          wasm + '\nG1 X1 E1\n')
+                self.assertFalse(report['match'])
+                self.assertEqual(report['mismatched_commands'], 1)
+
+    def test_line_number_tens_still_counts_motion(self):
+        report = self.run_compare('N20 G1 X1 E1\n', 'N20 G1 X1 E1\n',
+                                  min_extrusion_moves=1)
+        self.assertTrue(report['match'], report)
+        self.assertEqual(report['native_extrusion_moves'], 1)
+
+    def test_switch_back_to_absolute_mode_prevents_false_xy_move(self):
+        gcode = 'G91\nM82\nG1 X1 E1\nG90\nG1 X1 E2\n'
+        report = self.run_compare(gcode, gcode, min_extrusion_moves=2)
+        self.assertEqual(report['native_extrusion_moves'], 1)
+        self.assertFalse(report['match'])
+
 if __name__ == '__main__':
     unittest.main()
