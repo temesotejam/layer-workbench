@@ -125,7 +125,7 @@ class ComparatorTests(unittest.TestCase):
         gcode = ('G90\nG17\nG90.1\nG0 X2 Y0\n'
                  'G2 X0 Y2 I0 J0 E1\n'
                  'G18\nG2 X1 I0 K1 E2\n'
-                 'G17\nG91.1\nG3 X2 Y0 I0 J-2 E3\n')
+                 'G17\nG91.1\nG3 X3 Y2 I1 J0 E3\n')
         report = self.run_compare(gcode, gcode, min_extrusion_moves=2)
         self.assertEqual(report['native_extrusion_moves'], 2)
         self.assertTrue(report['match'], report)
