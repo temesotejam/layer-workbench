@@ -2,6 +2,11 @@ name: Verify v2.5.0 WASM candidate in isolated Chrome
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - "scripts/prepare-engine-lab.mjs"
+      - "scripts/test-engine-probe.mjs"
+      - ".github/workflows/verify-engine-browser.yml"
   push:
     branches: [main]
     paths:
