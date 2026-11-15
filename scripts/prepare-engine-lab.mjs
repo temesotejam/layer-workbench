@@ -27,11 +27,16 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
     <label>Filament preset name <input id="lab-orca-filament" type="text" maxlength="160"></label>
     <label>Test bed mapping <select id="lab-orca-plate">
       <option value="none">No plate-specific mapping (fixture defaults)</option>
-      <option value="hot">Orca hot plate only (explicit)</option>
+      <option value="hot">High Temp Plate (explicit)</option>
+      <option value="cool">Cool Plate (explicit)</option>
+      <option value="engineering">Engineering Plate (explicit)</option>
+      <option value="textured">Textured PEI Plate (explicit)</option>
+      <option value="textured-cool">Textured Cool Plate (explicit)</option>
+      <option value="supertack">Supertack Plate (explicit)</option>
     </select></label>
     <label>Filament extruder variant (exact name, optional) <input id="lab-orca-filament-variant" type="text" maxlength="120" placeholder="Direct Drive Standard"></label>
     <small>Exact extruder variant selection is required for multi-value filament volumetric speed limits; without it no limit is guessed. Real printer extruder-type matching is not yet validated. Manufacturer scripts and generated G-code remain non-print-ready.</small>
-    <small>Explicit hot plate selection maps hot_plate_temp to test bed_temperature and, when present, forwards native hot_plate_temp_initial_layer as a single-filament vector. Inherited first-layer nozzle temperature and bounded (0.5–1.5) single-filament flow ratio are forwarded as native vectors; isolated Chrome tests confirmed changes in actual M104 and G1 E commands. Multi-value flow ratios are rejected. Multi-value volumetric flow limits require an explicit, exact extruder-variant selection; real printer/nozzle compatibility is not verified. Manufacturer startup scripts, other plates and full material settings remain unverified; generated G-code is not print-ready.</small>
+    <small>An explicitly chosen plate selects one of six pinned OrcaSlicer v2.5.0 native bed-temperature key pairs; selection is never inferred. Unsupported or zero-temperature plate settings are refused, and first-layer values are forwarded only when present. This is an isolated development-only test, not printer-profile validation. Inherited first-layer nozzle temperature and bounded (0.5–1.5) single-filament flow ratio are forwarded as native vectors; isolated Chrome tests confirmed changes in actual M104 and G1 E commands. Multi-value flow ratios are rejected. Multi-value volumetric flow limits require an explicit, exact extruder-variant selection; real printer/nozzle compatibility is not verified. Manufacturer startup scripts, complete material settings and desktop G-code parity remain unverified; generated G-code is not print-ready.</small>
     <label>Process preset name <input id="lab-orca-process" type="text" maxlength="160"></label>
     <button id="lab-slice" disabled>Slice STL plate (test only)</button>
     <a id="lab-download" hidden download="prepare-test.gcode">Download test G-code</a>
@@ -115,10 +120,14 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
       }));
       if ([processFile.files?.length, presetBundle.files?.length, rawProfiles.files?.length].filter(Boolean).length>1)
         throw new Error("Use either the flat process fragment OR the inherited preset bundle, not both.");
+      // Never silently fall back to the generic fixture when the UI explicitly
+      // requests an Orca bed; it would ignore the selected heater profile.
+      if (rawPlate.value!=="none" && !rawProfiles.files?.length)
+        throw new Error("Explicit bed selection requires a raw Orca profile collection.");
       const nativeCollection = rawProfiles.files?.length
         ? await readOrcaProfileCollection(rawProfiles.files[0],{
           machine:rawMachine.value.trim(),filament:rawFilament.value.trim(),process:rawProcess.value.trim(),
-        }, {plateType:rawPlate.value==="hot" ? "hot" : undefined,
+        }, {plateType:rawPlate.value==="none" ? undefined : rawPlate.value,
           filamentVariant:rawVariant.value.trim() || undefined})
         : null;
       const chosenPreset = presetBundle.files?.length
@@ -143,7 +152,7 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
       const unsupported = nativeCollection
         ? [nativeCollection.machine,nativeCollection.filament,nativeCollection.process].reduce((n,v)=>n+v.unsupported.length,0) : 0;
       status.textContent = "PASS: " + selected.length + " STL model(s) → " + result.gcode.byteLength +
-        " G-code bytes. Restricted test profiles with " + (nativeCollection ? "Orca raw preset selection ("+rawMachine.value+" / "+rawFilament.value+" / "+rawProcess.value+"), "+unsupported+" unsupported keys excluded"+(bedInfo ? ", explicitly mapped hot bed "+bedInfo.bed_temperature+" °C"+(bedInfo.initialLayerTemperature!==null ? " and native first-layer hot bed "+bedInfo.initialLayerTemperature+" °C" : " (first layer unspecified)") : "") : chosenPreset ? "inherited process preset (" + chosenPreset.chain.join(" > ") + ")" : processOverrides ? "test overrides" : "default process") + ";" + previewInfo + " Do not print without validating.";
+        " G-code bytes. Restricted test profiles with " + (nativeCollection ? "Orca raw preset selection ("+rawMachine.value+" / "+rawFilament.value+" / "+rawProcess.value+"), "+unsupported+" unsupported keys excluded"+(bedInfo ? ", explicitly mapped "+bedInfo.plateType+" bed "+bedInfo.bed_temperature+" °C"+(bedInfo.initialLayerTemperature!==null ? " and native first-layer "+bedInfo.plateType+" bed "+bedInfo.initialLayerTemperature+" °C" : " (first layer unspecified)") : "") : chosenPreset ? "inherited process preset (" + chosenPreset.chain.join(" > ") + ")" : processOverrides ? "test overrides" : "default process") + ";" + previewInfo + " Do not print without validating.";
       if(speedVariant) console.log("Selected native volumetric limit:",speedVariant);
       onStatus("Test WASM sliced all imported STL models and their displayed transforms on one plate; generic PLA settings only.");
     } catch (error) {

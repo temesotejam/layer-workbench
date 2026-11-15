@@ -456,6 +456,35 @@ try {
     console.log('HOT_PLATE_THERMAL_COMMANDS',JSON.stringify({before:before.slice(0,8),after:after.slice(0,8)}));
     assert.notDeepEqual(after,before,'Initial layer hot plate temperature must change real bed heater G-code (not merely metadata)');
     console.log('PASS: explicit first-layer hot plate temperature changes real WASM bed heater commands');
+
+    // The non-hot plate must be selectable through the REAL isolated Prepare UI,
+    // and cause actual bed-heater instructions. A changed hash/header alone is
+    // insufficient evidence; this fixture is never approved for printing.
+    rawOrca[2].textured_plate_temp=['50'];
+    rawOrca[2].textured_plate_temp_initial_layer=['70'];
+    await uploadRawOrca();
+    await prepare.locator('#lab-orca-plate').selectOption('textured');
+    await prepare.locator('#lab-slice').click();
+    await prepare.waitForFunction(() => {
+      const text=document.querySelector('#lab-status')?.textContent||'';
+      return text.startsWith('PASS:')||text.startsWith('FAILED');
+    },null,{timeout:120000});
+    const texturedStatus=await prepare.locator('#lab-status').innerText();
+    assert.match(texturedStatus,/^PASS: 2 STL model\(s\)/);
+    assert.match(texturedStatus,/explicitly mapped textured bed 50/);
+    assert.match(texturedStatus,/native first-layer textured bed 70/);
+    const texturedText=await prepare.locator('#lab-download').evaluate(async link=>await(await fetch(link.href)).text());
+    const texturedHeaters=thermalCommands(texturedText);
+    assert.ok(texturedHeaters.length>0,'Expected native bed-heater commands on textured plate');
+    assert.ok(texturedHeaters.some(line=>/\bS70\b/.test(line)),
+      'Textured first-layer setting did not produce actual 70 C heater command');
+    assert.notDeepEqual(texturedHeaters,after,
+      'Switching hot to textured plate must change actual bed-heater commands');
+    console.log('TEXTURED_PLATE_THERMAL_COMMANDS',JSON.stringify(texturedHeaters.slice(0,8)));
+    console.log('PASS: local-only textured PEI plate selection changes real WASM heater commands');
+    // Restore hot plate for the independent first-layer nozzle test below.
+    await prepare.locator('#lab-orca-plate').selectOption('hot');
+
     // Independent initial nozzle temperature. The WASM test must observe
     // M104/M109 tool-heater commands, not merely config comments or a new
     // generated G-code hash. The steady nozzle temperature stays unchanged.
@@ -570,6 +599,20 @@ try {
     assert.ok(median(slow)<median(quick),
       'Selected native volumetric cap must change actual XY extrusion F rate, not merely metadata');
     console.log('PASS: explicit extruder-variant 0.7 vs 40 mm3/s changes median native G1 extrusion feedrate');
+
+    // Selecting a native bed without raw Orca profiles must never fall back
+    // to generic PLA output while silently ignoring the selected heater.
+    await prepare.locator('#lab-orca-profiles').setInputFiles([]);
+    await prepare.locator('#lab-orca-plate').selectOption('textured');
+    await prepare.locator('#lab-slice').click();
+    await prepare.waitForFunction(() =>
+      (document.querySelector('#lab-status')?.textContent||'').startsWith('FAILED slicing:'),
+      null,{timeout:120000});
+    assert.match(await prepare.locator('#lab-status').innerText(),
+      /Explicit bed selection requires a raw Orca profile collection/);
+    assert.equal(await prepare.locator('#lab-download').isVisible(),false);
+    console.log('PASS: explicit bed selection without profiles fails closed; no test G-code download');
+
 
 
 
