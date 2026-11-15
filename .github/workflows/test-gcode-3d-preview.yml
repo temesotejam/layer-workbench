@@ -4,6 +4,9 @@ on:
   pull_request:
     paths:
       - "scripts/gcode-preview-parser.mjs"
+      - "scripts/gcode-feature-filter.mjs"
+      - "scripts/test-gcode-feature-filter.mjs"
+      - "scripts/gcode-layer-preview.mjs"
       - "scripts/gcode-3d-preview.mjs"
       - "scripts/gcode-3d-vertices.mjs"
       - "scripts/test-gcode-preview-parser.mjs"
@@ -13,6 +16,9 @@ on:
     branches: [main]
     paths:
       - "scripts/gcode-preview-parser.mjs"
+      - "scripts/gcode-feature-filter.mjs"
+      - "scripts/test-gcode-feature-filter.mjs"
+      - "scripts/gcode-layer-preview.mjs"
       - "scripts/gcode-3d-preview.mjs"
       - "scripts/gcode-3d-vertices.mjs"
       - "scripts/test-gcode-preview-parser.mjs"
@@ -34,7 +40,10 @@ jobs:
       - name: Validate G-code parsing and 3D endpoint coordinates
         run: |
           node --check scripts/gcode-preview-parser.mjs
+          node --check scripts/gcode-feature-filter.mjs
+          node --check scripts/gcode-layer-preview.mjs
           node --check scripts/gcode-3d-vertices.mjs
           node --check scripts/gcode-3d-preview.mjs
           node scripts/test-gcode-preview-parser.mjs
+          node scripts/test-gcode-feature-filter.mjs
           node scripts/test-gcode-3d-vertices.mjs

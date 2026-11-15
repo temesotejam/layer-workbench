@@ -4,6 +4,10 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
+      - "scripts/gcode-feature-filter.mjs"
+      - "scripts/test-gcode-feature-filter.mjs"
+      - "scripts/gcode-layer-preview.mjs"
+      - "scripts/gcode-3d-preview.mjs"
       - "scripts/obj-to-stl.mjs"
       - "scripts/test-obj-to-stl.mjs"
       - "scripts/prepare-engine-lab.mjs"
@@ -28,6 +32,8 @@ on:
       - "scripts/test-orca-profile-collection.mjs"
       - "scripts/test-process-preset-inheritance.mjs"
       - "scripts/gcode-preview-parser.mjs"
+      - "scripts/gcode-feature-filter.mjs"
+      - "scripts/test-gcode-feature-filter.mjs"
       - "scripts/gcode-layer-preview.mjs"
       - "scripts/gcode-3d-preview.mjs"
       - "scripts/gcode-tool-colors.mjs"
@@ -95,6 +101,7 @@ jobs:
           node scripts/test-orca-profile-collection.mjs
           node scripts/test-orca-vendor-index.mjs
           node scripts/test-gcode-preview-parser.mjs
+          node scripts/test-gcode-feature-filter.mjs
           node scripts/test-gap-ring-fixture.mjs
           node scripts/test-3mf-viewport-items.mjs
           node --check scripts/three-mf-viewport-items.mjs
