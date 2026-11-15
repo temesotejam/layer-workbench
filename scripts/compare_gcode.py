@@ -162,10 +162,21 @@ def count_extrusion_moves(commands):
             units = Decimal(1)
             continue
         words = {}
+        stateful = opcode == 'G92' or bool(MOTION.fullmatch(opcode))
         for token in tokens[1:]:
             match = PARAM.fullmatch(token)
-            if match:
-                words[match[1].upper()] = Decimal(match[2])
+            if not match:
+                if stateful:
+                    # Opaque move/reset syntax leaves the position unknown.
+                    # Never use later moves to satisfy the fixture gate.
+                    return 0
+                continue
+            letter = match[1].upper()
+            if stateful and (letter in words or letter in ('G', 'M', 'N', 'T')):
+                # Duplicate words or embedded opcodes have firmware-dependent
+                # interpretation; the conservative deposition gate must fail.
+                return 0
+            words[letter] = Decimal(match[2])
         if opcode == 'G92':
             for axis in xy:
                 if axis in words:
