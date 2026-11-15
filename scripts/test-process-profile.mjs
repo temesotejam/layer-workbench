@@ -15,6 +15,12 @@ const LIMITS = {
   outer_wall_speed: [1,800],
   inner_wall_speed: [1,800],
   travel_speed: [1,1500],
+  // Pinned v2.5.0 process profiles also use these four absolute mm/s
+  // deposition speeds. No percentages, vectors or relative defaults here.
+  sparse_infill_speed: [1,800],
+  internal_solid_infill_speed: [1,800],
+  top_surface_speed: [1,800],
+  gap_infill_speed: [1,800],
 };
 const INTEGERS = new Set(["wall_loops","top_shell_layers","bottom_shell_layers"]);
 
