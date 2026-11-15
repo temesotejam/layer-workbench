@@ -482,6 +482,45 @@ try {
       'Switching hot to textured plate must change actual bed-heater commands');
     console.log('TEXTURED_PLATE_THERMAL_COMMANDS',JSON.stringify(texturedHeaters.slice(0,8)));
     console.log('PASS: local-only textured PEI plate selection changes real WASM heater commands');
+    // The v2.5.0 profile resolver supports six bed enums; prove that each
+    // remaining enum actually drives first-layer AND steady heater commands
+    // in the isolated Chrome WASM engine. These are controlled synthetic
+    // temperatures, NOT manufacturer-approved printer settings.
+    const additionalBedFixtures = [
+      ["cool", "cool_plate_temp", 32, 36],
+      ["engineering", "eng_plate_temp", 60, 65],
+      ["textured-cool", "textured_cool_plate_temp", 38, 42],
+      ["supertack", "supertack_plate_temp", 40, 44],
+    ];
+    for (const [plateType, nativeKey, steady, firstLayer] of additionalBedFixtures) {
+      rawOrca[2][nativeKey] = [String(steady)];
+      rawOrca[2][nativeKey + "_initial_layer"] = [String(firstLayer)];
+      await uploadRawOrca();
+      await prepare.locator('#lab-orca-plate').selectOption(plateType);
+      await prepare.locator('#lab-slice').click();
+      await prepare.waitForFunction(() => {
+        const text = document.querySelector('#lab-status')?.textContent || '';
+        return text.startsWith('PASS:') || text.startsWith('FAILED');
+      }, null, {timeout:120000});
+      const plateStatus = await prepare.locator('#lab-status').innerText();
+      assert.ok(plateStatus.startsWith('PASS: 2 STL model(s)'), plateStatus);
+      assert.ok(plateStatus.includes('explicitly mapped ' + plateType + ' bed ' + steady),
+        'Selected ' + plateType + ' steady bed temperature not acknowledged: ' + plateStatus);
+      assert.ok(plateStatus.includes('native first-layer ' + plateType + ' bed ' + firstLayer),
+        'Selected ' + plateType + ' first-layer bed temperature not acknowledged: ' + plateStatus);
+      const plateText = await prepare.locator('#lab-download').evaluate(async link =>
+        await (await fetch(link.href)).text());
+      const heaters = thermalCommands(plateText).join('\n');
+      assert.match(heaters, new RegExp('^M190\\s+S' + firstLayer + '(?:\\s|$)', 'm'),
+        'First-layer M190 heater command missing for ' + plateType);
+      assert.match(heaters, new RegExp('^M140\\s+S' + steady + '(?:\\s|$)', 'm'),
+        'Steady M140 heater command missing for ' + plateType);
+      assert.notDeepEqual(thermalCommands(plateText), texturedHeaters,
+        'Different bed types must not reuse textured PEI heater commands');
+      console.log('PASS: ' + plateType + ' real WASM bed commands M190 S' +
+        firstLayer + ' and M140 S' + steady);
+    }
+    console.log('PASS: all six opt-in v2.5.0 bed types exercised in isolated Chrome (synthetic temperatures)');
     // Restore hot plate for the independent first-layer nozzle test below.
     await prepare.locator('#lab-orca-plate').selectOption('hot');
 
