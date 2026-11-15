@@ -25,11 +25,14 @@ export function inspectSyntheticCubeExtrusion(gcode) {
     if (!(layer.z>=1 && layer.z<=19.5)) continue;
     for (const segment of layer.segments) {
       if (!segment.extrusion) continue;
-      const x=(segment.x1+segment.x2)/2;
-      const y=(segment.y1+segment.y2)/2;
-      if (y<89 || y>111) continue;
+      // A midpoint-only check falsely credits a cube for a single long
+      // extrusion crossing its ROI. Require the FULL deposited XY segment
+      // to lie inside the cube's bounded region, not just its midpoint.
+      if (segment.y1<89 || segment.y1>111 ||
+          segment.y2<89 || segment.y2>111) continue;
       for (const [name,range] of Object.entries(ROI)) {
-        if (x>=range[0] && x<=range[1]) counts[name]++;
+        if (segment.x1>=range[0] && segment.x1<=range[1] &&
+            segment.x2>=range[0] && segment.x2<=range[1]) counts[name]++;
       }
     }
   }
