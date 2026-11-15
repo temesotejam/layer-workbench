@@ -378,26 +378,6 @@ try {
       ' candidate='+JSON.stringify(internalSolidSlowFeeds));
     console.log('PASS: real Chrome/WASM internal_solid_infill_speed=2 mm/s changes deposited F, new slow mm/min='+
       JSON.stringify(newSlowInternalSolidFeeds));
-    // Fourth restricted speed option: the identical diagnostic plate and
-    // process keys are retained while ONLY gap_infill_speed changes. A pass
-    // requires a new slow F on positive XY extrusion, never just a header.
-    // A lack of gap fill in this geometry must FAIL, not be claimed as proof.
-    const gapSlowGcode=await sliceSparseInfill(
-      'test-gap-infill-slow.json',
-      {...sparseInfillSettings,gap_infill_speed:2});
-    const gapBaselineFeeds=positiveExtrusionFeedrates(sparseBaselineGcode);
-    const gapSlowFeeds=positiveExtrusionFeedrates(gapSlowGcode);
-    assert.ok(gapBaselineFeeds.length>0 && gapSlowFeeds.length>0,
-      'Gap-infill-speed test produced no deposited G-code feedrates');
-    const newSlowGapFeeds=gapSlowFeeds.filter(f=>f>0&&f<=150&&
-      !gapBaselineFeeds.some(baseline=>Math.abs(baseline-f)<0.01));
-    assert.ok(newSlowGapFeeds.length>0,
-      'gap_infill_speed=2 mm/s produced no new low deposited F on the fixture; '+
-      'this could indicate no gap-fill paths, not necessarily a broken bridge; '+
-      'baseline='+JSON.stringify(gapBaselineFeeds)+
-      ' candidate='+JSON.stringify(gapSlowFeeds));
-    console.log('PASS: real Chrome/WASM gap_infill_speed=2 mm/s changes deposited F, new slow mm/min='+
-      JSON.stringify(newSlowGapFeeds));
     // Change ONLY the first-layer height while retaining the previous layer,
     // wall and speed settings. Verify a changed physical extrusion Z, not just
     // a G-code hash/header difference. Generic test PLA; never printer-ready.
@@ -802,6 +782,62 @@ try {
       'OBJ geometry must produce actual multilayer native G-code deposition');
     console.log('PASS: OBJ displayed in Prepare -> bounded mesh-only STL conversion -> real WASM multilayer G-code ('+
       objPaths.layers.length+' layers, '+objPaths.extrusions+' extrusion segments; not print-ready)');
+
+    // Unlike a 20mm square, a wedge has varying local wall thickness. It is
+    // a candidate gap-fill fixture, not an assertion that a gap must occur.
+    // Remove the previous object so geometry is held exactly constant across
+    // the two speed-only slices. The mesh stays in the localhost test.
+    await prepare.locator('#remove-object').click();
+    await prepare.locator('#object-count').getByText('0 objects').waitFor();
+    const wedgeObj=[
+      'v 0 0 0','v 40 0 0','v 0 20 0',
+      'v 0 0 8','v 40 0 8','v 0 20 8',
+      'f 1 3 2','f 4 5 6',
+      'f 1 2 5 4','f 2 3 6 5','f 3 1 4 6',
+    ].join('\\n');
+    await prepare.locator('#model-file').setInputFiles({
+      name:'gap-test-wedge.obj',mimeType:'text/plain',buffer:Buffer.from(wedgeObj),
+    });
+    await prepare.locator('#object-count').getByText('1 object').waitFor({timeout:30000});
+    const gapSettings={
+      layer_height:0.3,wall_loops:3,outer_wall_speed:5,
+      inner_wall_speed:8,travel_speed:20,sparse_infill_density:35,
+    };
+    const sliceWedge=async(name,settings)=>{
+      await prepare.locator('#lab-process').setInputFiles({
+        name,mimeType:'application/json',buffer:Buffer.from(JSON.stringify(settings)),
+      });
+      await prepare.locator('#lab-slice').click();
+      await prepare.waitForFunction(()=>{
+        const status=document.querySelector('#lab-status')?.textContent||'';
+        return status.startsWith('PASS:')||status.startsWith('FAILED');
+      },null,{timeout:120000});
+      assert.match(await prepare.locator('#lab-status').innerText(),
+        /^PASS: 1 STL\\/OBJ mesh model\\(s\\)/);
+      return prepare.locator('#lab-download').evaluate(async link=>
+        await(await fetch(link.href)).text());
+    };
+    const wedgeBaseline=await sliceWedge('gap-wedge-baseline.json',gapSettings);
+    const wedgeSlow=await sliceWedge('gap-wedge-slow.json',
+      {...gapSettings,gap_infill_speed:2});
+    const wedgeBaselineFeeds=positiveExtrusionFeedrates(wedgeBaseline);
+    const wedgeSlowFeeds=positiveExtrusionFeedrates(wedgeSlow);
+    const newSlowWedgeFeeds=wedgeSlowFeeds.filter(f=>f>0&&f<=150&&
+      !wedgeBaselineFeeds.some(baseline=>Math.abs(baseline-f)<0.01));
+    const gapComments=code=>code.split(/\\r?\\n/).filter(line=>
+      /;\\s*(?:TYPE:)?\\s*gap\\s*(?:in)?fill/i.test(line)).slice(0,10);
+    console.log('GAP_WEDGE_DIAGNOSTIC '+JSON.stringify({
+      baselineFeedrates:wedgeBaselineFeeds,slowFeedrates:wedgeSlowFeeds,
+      newSlowFeedrates:newSlowWedgeFeeds,
+      baselineGapComments:gapComments(wedgeBaseline),
+      slowGapComments:gapComments(wedgeSlow),
+    }));
+    assert.ok(newSlowWedgeFeeds.length>0,
+      'Wedge fixture did not expose a new slow deposited G-code F with gap_infill_speed=2; '+
+      'this could be missing gap-fill paths, not necessarily a broken override');
+    console.log('PASS: real Chrome/WASM gap_infill_speed=2 mm/s changes wedge deposited F, new slow mm/min='+
+      JSON.stringify(newSlowWedgeFeeds));
+
 
 
 
