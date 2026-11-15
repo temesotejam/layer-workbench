@@ -421,3 +421,22 @@ This is diagnostic visualization, **not** complete firmware interpolation,
 OrcaSlicer native Preview parity, G-code parity, print-ready output, or a
 publicly enabled slicer. Helix pitch is approximated by linear Z interpolation
 along the arc. The previously validated WASM engine candidate is unchanged.
+
+
+## 2026-11-15: pinned Creality v2.5.0 process deposition-speed coverage
+
+The localhost-only restricted real-profile adapter now accepts four additional
+independent **absolute mm/s** process keys: `sparse_infill_speed`,
+`internal_solid_infill_speed`, `top_surface_speed` and
+`gap_infill_speed`. Each remains bounded (1–800 mm/s for diagnostic input),
+single-valued, and independently inherited/overridden. Relative percentages,
+multi-extruder vectors and invalid values fail closed instead of being silently
+converted to absolute speed. The source-pinned
+`0.20mm Standard @Creality CR-10 0.4 nozzle` fixture checks resolved values
+50 / 50 / 30 / 30 mm/s, as shipped at upstream
+`40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19`.
+These tests validate JSON selection and native-key forwarding boundaries;
+they **do not** demonstrate that the WASM-produced G-code travels at those
+speeds, native-vs-WASM toolpath equality or physical printer suitability.
+Other process keys (including relative speed parameters) remain unsupported.
+Public Pages and the WASM engine artifact are unchanged.
