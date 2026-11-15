@@ -63,19 +63,23 @@ export async function diagnoseImported3mfInSessionReslice(engine, source) {
        !(mod.HEAPU8 instanceof Uint8Array))
       throw new Error('Pinned private imported-instance C ABI unavailable');
 
-    const target=beforeManifest.instances[1], shifted=[...target.transform.matrix];
-    if(shifted.length!==16 || !shifted.every(Number.isFinite))
+    const target=beforeManifest.instances[1];
+    const original=[...target.transform.matrix], shifted=[...original];
+    if(original.length!==16 || !original.every(Number.isFinite))
       throw new Error('Invalid native Core instance matrix');
     shifted[3]+=30;
-    const request=encode({instanceId:target.id,matrix:shifted});
-    const pointer=mod._malloc(request.length);
-    if(!pointer) throw new Error('Private C request allocation failed');
-    let rc;
-    try {
-      mod.HEAPU8.set(request,pointer);
-      rc=mod._orcawasm_project_edit_instance_transform(handle,pointer,request.length);
-    } finally { mod._free(pointer); }
-    if(rc!==0) throw new Error('Private same-session 3MF transform edit rejected');
+    const applyPrivateTransform=matrix=>{
+      const request=encode({instanceId:target.id,matrix});
+      const pointer=mod._malloc(request.length);
+      if(!pointer) throw new Error('Private C request allocation failed');
+      let rc;
+      try {
+        mod.HEAPU8.set(request,pointer);
+        rc=mod._orcawasm_project_edit_instance_transform(handle,pointer,request.length);
+      } finally { mod._free(pointer); }
+      if(rc!==0) throw new Error('Private same-session 3MF transform edit rejected');
+    };
+    applyPrivateTransform(shifted);
 
     const afterManifest=await session.getManifest();
     const expected=JSON.parse(JSON.stringify(beforeManifest));
@@ -87,15 +91,32 @@ export async function diagnoseImported3mfInSessionReslice(engine, source) {
     // Slic3r::Model builder, NOT that a persistent Model was edited in place.
     const after=await slice();
     requireEditedCubeToolpathShift(before,after);
+
+    // An edit/undo sequence must not reuse the preceding slice or retain
+    // stale placement state. Revert using the SAME private ABI and session.
+    // This is a synthetic diagnostic, not a general production undo feature.
+    applyPrivateTransform(original);
+    const restoredManifest=await session.getManifest();
+    if(JSON.stringify(restoredManifest)!==JSON.stringify(beforeManifest))
+      throw new Error('Undo did not restore the imported Core manifest exactly');
+    const restored=await slice();
+    // The original and restored placements must both be on the old cube,
+    // while the intermediate slice must be at its shifted position.
+    requireEditedCubeToolpathShift(restored,after);
+    for(const key of ['regions','regionLayers','regionZSpanMm']){
+      if(JSON.stringify(restored[key])!==JSON.stringify(before[key]))
+        throw new Error('Undo did not restore the original deposited 3D '+key);
+    }
     return {
       status:'PASS',source:'independent synthetic two-cube Core 3MF',
       imported3mfReslicedInSameSession:true,
+      editUndoReslicedInSameSession:true,
       noExternalStlFlattening:true,noSetObjects:true,
       temporaryNativeModelBuiltForEachSlice:true,
       persistentNativeModelMutation:false,
       source3mfMetadataFullyPreserved:false,
       nativeDesktopGcodeParity:false,printApproved:false,
-      before,after,
+      before,after,restored,
     };
   } finally {
     await session.dispose();
