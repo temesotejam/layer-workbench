@@ -2,6 +2,7 @@ import * as THREE from "three";
 import {OrbitControls} from "three/addons/controls/OrbitControls.js";
 import {gcodeSelectorColor} from "./gcode-tool-colors.mjs";
 import {gcodeSegment3DVertices} from "./gcode-3d-vertices.mjs";
+import {ALL_GCODE_PATHS,visibleGcodeSegment} from "./gcode-feature-filter.mjs";
 
 // Experimental G-code-derived 3D line preview in the *local isolated lab*.
 // Coordinates are native G-code millimeters, not reconstructed STL geometry.
@@ -15,7 +16,7 @@ export function createThreeDToolpathPreview(container) {
     <label>Visible through layer <input id="lab-3d-layer-range" type="range" min="0" max="0" value="0" step="1"></label>
     <output id="lab-3d-layer-info"></output>
     <div id="lab-3d-canvas" aria-label="3D G-code toolpath preview" role="img"></div>
-    <p>Extrusion is orange for one/unknown T selector; multiple T selectors use distinct colors (not actual filament colors or physical nozzle identities). Blue-gray: travel. XY planar and helical arcs are approximated; non-XY and invalid arcs are omitted. Diagnostic only; not native OrcaSlicer Preview or a print safety check.</p>
+    <p>Changing the 2D type selector also filters 3D deposition paths; this follows only explicit G-code feature comments. Extrusion is orange for one/unknown T selector; multiple T selectors use distinct colors (not actual filament colors or physical nozzle identities). Blue-gray: travel. XY planar and helical arcs are approximated; non-XY and invalid arcs are omitted. Diagnostic only; not native OrcaSlicer Preview or a print safety check.</p>
   `;
   container.appendChild(section);
   const host=section.querySelector("#lab-3d-canvas");
@@ -85,7 +86,9 @@ export function createThreeDToolpathPreview(container) {
   }
   slider.addEventListener("input",()=>through(Number(slider.value)));
   return {
-    show(data) {
+    show(data,{featureFilter=ALL_GCODE_PATHS,preserveView=false}={}) {
+      const previousTarget=controls.target.clone();
+      const previousPosition=camera.position.clone();
       cleanup();layers=data.layers;
       if(!layers.length)throw new Error("No layers for 3D preview");
       const extent=new THREE.Box3();
@@ -97,7 +100,8 @@ export function createThreeDToolpathPreview(container) {
           for(const toolId of extrusion?selectors:[null]){
             const points=[];
             for (const segment of layer.segments) {
-              if(segment.extrusion!==extrusion || (extrusion&&multi&&segment.toolId!==toolId))continue;
+              if(!visibleGcodeSegment(segment,featureFilter) ||
+                 segment.extrusion!==extrusion || (extrusion&&multi&&segment.toolId!==toolId))continue;
               // Keep actual endpoint heights (including Z-only travel).
               // Three.js Z-up matches the Prepare viewport.
               const [x1,y1,z1,x2,y2,z2]=gcodeSegment3DVertices(segment,layer.z);
@@ -119,8 +123,13 @@ export function createThreeDToolpathPreview(container) {
       const center=extent.getCenter(new THREE.Vector3());
       const size=extent.getSize(new THREE.Vector3());
       const distance=Math.max(70,Math.max(size.x,size.y,size.z)*2.2);
-      controls.target.copy(center);
-      camera.position.set(center.x+distance*.8,center.y-distance,center.z+distance*.75);
+      if(preserveView){
+        controls.target.copy(previousTarget);
+        camera.position.copy(previousPosition);
+      }else{
+        controls.target.copy(center);
+        camera.position.set(center.x+distance*.8,center.y-distance,center.z+distance*.75);
+      }
       controls.update();
       slider.max=String(layers.length-1);
       slider.value=String(layers.length-1);
