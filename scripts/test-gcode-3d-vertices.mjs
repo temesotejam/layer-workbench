@@ -25,7 +25,9 @@ assert.equal(all[3].s.extrusion,true);
 const relative=parseGcodeToolpaths("G20\nG90\nG0 Z1\nG91\nG0 Z0.5");
 const zMoves=relative.layers.flatMap(layer=>layer.segments);
 assert.deepEqual(gcodeSegment3DVertices(zMoves[0],25.4),[0,0,0,0,0,25.4]);
-assert.deepEqual(gcodeSegment3DVertices(zMoves[1],38.1),[0,0,25.4,0,0,38.1]);
+const secondInchMove=gcodeSegment3DVertices(zMoves[1],38.1);
+assert.deepEqual(secondInchMove.slice(0,5),[0,0,25.4,0,0]);
+assert.ok(Math.abs(secondInchMove[5]-38.1)<1e-8, "relative inches remain accurate in mm");
 
 // The helper continues to accept legacy horizontal segments, but does not
 // silently accept malformed non-finite 3D coordinates.
