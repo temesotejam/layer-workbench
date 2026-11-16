@@ -175,7 +175,7 @@ export function createThreeDToolpathPreview(container) {
       controls.update();
       slider.max=String(layers.length-1);
       slider.value=String(retainLayer&&Number.isInteger(savedLayer)?Math.max(0,Math.min(layers.length-1,savedLayer)):layers.length-1);
-      section.hidden=false;resize();through(layers.length-1);
+      section.hidden=false;resize();through(Number(slider.value));
       startPaint();
       host.dataset.segmentCount=String(visibleSegmentCount);
       host.dataset.featureFilter=featureFilter;
