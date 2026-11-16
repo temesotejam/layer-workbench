@@ -649,3 +649,29 @@ change, native G-code parity, full printer-profile support, or print safety.
 A future geometric bridging fixture must require tagged bridge deposition
 segments and measure their commanded `F` before claiming an actual bridge
 speed effect. The feature remains local opt-in and is not enabled on Pages.
+
+## 2026-11-16: bounded unsupported-arch native WASM bridge-speed diagnostic
+
+A dedicated, watertight concave OBJ arch (40x20x15 mm, 16x20 mm tunnel
+opening to Z10) was added to the localhost-only isolated Chrome regression
+path. The fixture's 28 outward triangles, closed edges, signed volume and
+open tunnel are checked independently; a filled rectangle cannot silently
+become the fixture.
+
+The same synthetic shape is sliced twice with the same diagnostic process
+settings except for absolute `bridge_speed: 40` versus `bridge_speed: 2` mm/s.
+The read-only analyzer examines only positive-extrusion toolpath segments
+explicitly tagged as bridge-related in real emitted G-code, and checks for
+new target F120 (120 mm/min) on these paths. It does not use profile comments
+alone or unrelated travel/wall feedrates as proof. Both runs must produce
+nonempty multilevel deposition; the report is archived at
+`parity-output/bridge-arch-feature-diagnostic.json`.
+
+**Evidence limit:** this is initially a diagnostic, not a claimed verified
+bridge-feature feedrate effect. If either run lacks tagged bridge deposition,
+or tagged deposition does not newly use F120, the result is unverified.
+The first geometry probe is intentionally non-gating on feature attribution
+until the accepted engine's actual feature labels are established. Unit tests
+reject false-positive classifications. This does not establish native
+desktop/WASM G-code parity, full-profile compatibility, or print safety.
+No production Pages slicer or heavyweight WASM binary is modified.
