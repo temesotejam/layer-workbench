@@ -26,6 +26,7 @@ const depositionSpeeds = {
   internal_solid_infill_speed: '50',
   top_surface_speed: '30',
   gap_infill_speed: '30',
+  bridge_speed: '50',
 };
 assert.deepEqual(parseTestProcessOverrides(depositionSpeeds), depositionSpeeds);
 for (const key of Object.keys(depositionSpeeds)) {
