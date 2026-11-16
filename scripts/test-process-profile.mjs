@@ -48,8 +48,11 @@ export function parseTestProcessOverrides(input) {
       clean[key] = raw;
       continue;
     }
+    // Never look up an untrusted JSON key through Object.prototype.
+    // Otherwise keys such as "constructor" or "toString" resolve to inherited
+    // functions and bypass the numeric allow-list (undefined range bounds).
+    if (!Object.hasOwn(LIMITS, key)) throw new Error("Unsupported process setting: " + key);
     const range = LIMITS[key];
-    if (!range) throw new Error("Unsupported process setting: " + key);
     if (typeof raw !== "number" && typeof raw !== "string")
       throw new Error("Invalid value for " + key);
     if (typeof raw === "string" && !/^\d+(?:\.\d+)?$/.test(raw.trim()))
