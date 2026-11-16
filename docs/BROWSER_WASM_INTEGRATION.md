@@ -678,3 +678,23 @@ F120 behavior. These are **commanded** G-code feedrates in one fixture,
 not measured nozzle velocity. There is no native desktop/WASM G-code
 parity finding, full official profile support, print-safety claim, or public
 WASM Pages deployment. The heavyweight engine was not rebuilt.
+
+## 2026-11-16: strict bridge feature-label parity guard (diagnostic)
+
+The isolated Chrome/WASM bridge feedrate audit now recognizes only the **six
+explicitly named bridge G-code features** already accepted by the official
+native v2.5.0 diagnostic: `bridge`, `external bridge`, `internal bridge`,
+`bridge infill`, `internal bridge infill`, and `bridge over infill`.
+Case and repeated whitespace are normalized, but labels such as
+`non-bridge`, `not bridge`, or `bridge overhang` cannot contribute to
+the apparent F120 bridge result. Both baseline and candidate reports also
+include per-feature deposition-segment counts, so future native-versus-WASM
+comparisons can distinguish different bridge subtypes instead of only
+comparing total counts. Synthetic positive and negative regressions run
+alongside the real isolated Chrome probe.
+
+This is an **attribution integrity improvement**, not a desktop-versus-WASM
+comparison. Identical nominal labels would still not establish identical
+effective printer/process/filament settings, object placement, ordered
+toolpaths, actual machine speeds, or safe printing. No new WASM artifact
+is built and the public Pages slicer remains disabled.
