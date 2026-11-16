@@ -19,7 +19,7 @@ OUTER_WALL = {"outer wall", "external perimeter"}
 MOVE = {"G0", "G1", "G00", "G01", "G2", "G3", "G02", "G03"}
 
 
-def outer_wall_feedrates(path, features=OUTER_WALL):
+def outer_wall_feedrates(path, features=OUTER_WALL, *, feature_counts=None):
     """Return (positive XY wall deposition count, commanded feedrates mm/min).
 
     F-only travel/moves and extrusion-only priming cannot satisfy the gate.
@@ -97,6 +97,8 @@ def outer_wall_feedrates(path, features=OUTER_WALL):
                     raise ValueError(f"outer-wall extrusion has no commanded F at {line_number}")
                 speeds.append(feed)
                 count += 1
+                if feature_counts is not None:
+                    feature_counts[feature] = feature_counts.get(feature, 0) + 1
     return count, speeds
 
 
