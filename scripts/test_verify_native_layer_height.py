@@ -2,7 +2,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from verify_native_layer_height import extruded_layers, verify, cadence
+from verify_native_layer_height import extruded_layers, verify
+from decimal import Decimal
 
 
 def fixture(step, layers, absolute_e=True):
@@ -11,7 +12,7 @@ def fixture(step, layers, absolute_e=True):
     for i in range(1, layers + 1):
         z = step * i
         code.append(f"G0 Z{z:.3f}")
-        for j in range(2):
+        for j in range(3):
             e += 0.1
             code.append(f"G1 X{i+j} Y{i+j+1} E{e:.3f}" if absolute_e else
                         "G1 X1 Y1 E0.1")
@@ -27,7 +28,7 @@ class NativeLayerAuditTests(unittest.TestCase):
                             "G1 X2 E0.1\nG92 E0\nG91\nG1 Z0.2\n"
                             "G1 X1 E0.1\n", encoding="utf-8")
             heights, count = extruded_layers(path)
-            self.assertEqual(heights, [0.2, 0.4, 0.6])
+            self.assertEqual(heights, [Decimal('0.2'), Decimal('0.4'), Decimal('0.6')])
             self.assertEqual(count, 3)
 
     def test_real_layer_height_change_passes(self):
