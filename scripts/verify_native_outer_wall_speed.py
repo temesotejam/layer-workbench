@@ -19,7 +19,7 @@ OUTER_WALL = {"outer wall", "external perimeter"}
 MOVE = {"G0", "G1", "G00", "G01", "G2", "G3", "G02", "G03"}
 
 
-def outer_wall_feedrates(path):
+def outer_wall_feedrates(path, features=OUTER_WALL):
     """Return (positive XY wall deposition count, commanded feedrates mm/min).
 
     F-only travel/moves and extrusion-only priming cannot satisfy the gate.
@@ -91,7 +91,7 @@ def outer_wall_feedrates(path):
             if "E" in words:
                 e = words["E"] if e_absolute else e + words["E"]
             # Only linear positive deposition: arcs are excluded from the measured subset.
-            if opcode in ("G1", "G01") and feature in OUTER_WALL and e > old_e \
+            if opcode in ("G1", "G01") and feature in features and e > old_e \
                     and (x != old_x or y != old_y):
                 if feed is None:
                     raise ValueError(f"outer-wall extrusion has no commanded F at {line_number}")
