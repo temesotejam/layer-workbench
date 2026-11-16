@@ -80,7 +80,7 @@ console.log("PASS: opt-in textured plate native enum and first/other-layer vecto
 // This fake engine tests the bridge payload, NOT actual sliced G-code speeds.
 const speedSettings = {
   sparse_infill_speed:"50", internal_solid_infill_speed:"50",
-  top_surface_speed:"30", gap_infill_speed:"30",
+  top_surface_speed:"30", gap_infill_speed:"30", bridge_speed:"50",
   // Exact native mode selection is opt-in and independent of the numeric speeds.
   wall_generator:"classic", gap_fill_target:"everywhere",
 };

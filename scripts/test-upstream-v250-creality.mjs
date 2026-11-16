@@ -27,6 +27,7 @@ for(const [key,speed] of Object.entries({
   internal_solid_infill_speed:"50",
   top_surface_speed:"30",
   gap_infill_speed:"30",
+  bridge_speed:"50",
 })){
   assert.equal(process.settings[key],speed,"pinned Creality process "+key);
   assert.ok(!process.unsupported.includes(key),"supported speed must not appear as unsupported: "+key);

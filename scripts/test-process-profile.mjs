@@ -21,6 +21,9 @@ const LIMITS = {
   internal_solid_infill_speed: [1,800],
   top_surface_speed: [1,800],
   gap_infill_speed: [1,800],
+  // Pinned CR-10 0.20mm Standard sets bridge_speed to absolute 50 mm/s.
+  // Only bounded absolute speed is accepted; percentages are rejected.
+  bridge_speed: [1,800],
 };
 const INTEGERS = new Set(["wall_loops","top_shell_layers","bottom_shell_layers"]);
 // Exact native v2.5.0 process enum tokens; do not accept labels, numeric
