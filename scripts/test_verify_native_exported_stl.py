@@ -47,6 +47,19 @@ class NativeStlAuditTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "24 cube facets"):
             self.audit(self.generate(skip_second=True))
 
+    def test_two_independent_stl_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            whole = self.generate()
+            # Split 24 triangle records into two twelve-facet binary STLs.
+            prefix = whole[:80]
+            parts = []
+            for start in (0, 12):
+                path = Path(tmp) / f'item{start}.stl'
+                path.write_bytes(prefix + struct.pack('<I', 12) +
+                                 whole[84 + start*50:84 + (start+12)*50])
+                parts.append(path)
+            self.assertEqual(len(audit_export(*parts)), 2)
+
     def test_truncated_binary_fails(self):
         with self.assertRaises(ValueError):
             self.audit(self.generate(truncate=True))
