@@ -649,3 +649,32 @@ change, native G-code parity, full printer-profile support, or print safety.
 A future geometric bridging fixture must require tagged bridge deposition
 segments and measure their commanded `F` before claiming an actual bridge
 speed effect. The feature remains local opt-in and is not enabled on Pages.
+
+## 2026-11-16: actual bridge-feature F120 verified on unsupported arch (PR #41)
+
+The isolated Chrome test now uses a dedicated watertight, one-piece concave
+OBJ arch (40x20x15 mm, 16x20 mm open tunnel to Z10). The fixture's 28
+outward-oriented triangles, manifold edges, signed volume, bounds and
+genuinely open underside are independently unit tested. Both slices use
+identical diagnostic settings except `bridge_speed:40` versus `bridge_speed:2`
+(absolute mm/s), under the same accepted v2.5.0 pthread WASM artifact.
+
+[Initial real Chrome run #43833053887](https://github.com/temesotejam/layer-workbench/actions/runs/43833053887)
+PASSed with **279 explicitly bridge-tagged positive-extrusion segments in
+each run**. On the base 40 mm/s setting the actual bridge-tagged feedrates
+were F954.93 and F1385.88 mm/min; on the candidate 2 mm/s setting they
+were F120 and F180 mm/min. A newly introduced **F120** was observed on
+genuine bridge-tagged deposition, not merely in profile metadata or
+unrelated travel. The two runs had 120 layers each, and 4268 vs 4276
+all-feature extrusion segments. See the archived
+`parity-output/bridge-arch-feature-diagnostic.json` for the full evidence.
+
+**Acceptance is now strict:** the Chrome test fails if either run lacks
+valid tagged bridge extrusion, or if the candidate does not introduce
+F120 in the bridge-attributed paths. The parser never treats only a header
+change, travel move or arbitrary unlabelled speed change as sufficient.
+F180 remains visible in the candidate and is not concealed as universal
+F120 behavior. These are **commanded** G-code feedrates in one fixture,
+not measured nozzle velocity. There is no native desktop/WASM G-code
+parity finding, full official profile support, print-safety claim, or public
+WASM Pages deployment. The heavyweight engine was not rebuilt.

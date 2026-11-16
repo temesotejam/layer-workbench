@@ -21,6 +21,10 @@ on:
       - "scripts/test-engine-probe.mjs"
       - "scripts/gap-ring-fixture.mjs"
       - "scripts/test-gap-ring-fixture.mjs"
+      - "scripts/bridge-arch-fixture.mjs"
+      - "scripts/test-bridge-arch-fixture.mjs"
+      - "scripts/bridge-feature-diagnostic.mjs"
+      - "scripts/test-bridge-feature-diagnostic.mjs"
       - ".github/workflows/verify-engine-browser.yml"
   push:
     branches: [main]
@@ -56,6 +60,10 @@ on:
       - "scripts/test-engine-probe.mjs"
       - "scripts/gap-ring-fixture.mjs"
       - "scripts/test-gap-ring-fixture.mjs"
+      - "scripts/bridge-arch-fixture.mjs"
+      - "scripts/test-bridge-arch-fixture.mjs"
+      - "scripts/bridge-feature-diagnostic.mjs"
+      - "scripts/test-bridge-feature-diagnostic.mjs"
       - "scripts/test-browser-3mf-roundtrip.mjs"
       - "scripts/test-browser-3mf-multiobject.mjs"
       - "scripts/three-mf-viewport-items.mjs"
@@ -111,6 +119,8 @@ jobs:
           node scripts/test-gcode-preview-parser.mjs
           node scripts/test-gcode-feature-filter.mjs
           node scripts/test-gap-ring-fixture.mjs
+          node scripts/test-bridge-arch-fixture.mjs
+          node scripts/test-bridge-feature-diagnostic.mjs
           node scripts/test-3mf-viewport-items.mjs
           node --check scripts/three-mf-viewport-items.mjs
           node --check scripts/gcode-3d-preview.mjs
