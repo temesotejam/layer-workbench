@@ -18,6 +18,8 @@ on:
       - "scripts/verify_native_bridge_speed.py"
       - "scripts/test_verify_native_bridge_speed.py"
       - "scripts/export-bridge-arch-stl.mjs"
+      - "scripts/wrap_bridge_arch_3mf.py"
+      - "scripts/test_wrap_bridge_arch_3mf.py"
       - "scripts/test-export-bridge-arch-stl.mjs"
       - "scripts/bridge-arch-fixture.mjs"
       - "scripts/obj-to-stl.mjs"
@@ -44,6 +46,8 @@ on:
       - "scripts/verify_native_bridge_speed.py"
       - "scripts/test_verify_native_bridge_speed.py"
       - "scripts/export-bridge-arch-stl.mjs"
+      - "scripts/wrap_bridge_arch_3mf.py"
+      - "scripts/test_wrap_bridge_arch_3mf.py"
       - "scripts/test-export-bridge-arch-stl.mjs"
       - "scripts/bridge-arch-fixture.mjs"
       - "scripts/obj-to-stl.mjs"
@@ -392,6 +396,9 @@ jobs:
           node scripts/test-export-bridge-arch-stl.mjs
           python3 -m unittest discover -s scripts -p test_verify_native_bridge_speed.py -v
           node scripts/export-bridge-arch-stl.mjs native-cli-output/bridge-arch.stl
+          python3 -m unittest discover -s scripts -p test_wrap_bridge_arch_3mf.py -v
+          python3 scripts/wrap_bridge_arch_3mf.py --stl native-cli-output/bridge-arch.stl \
+            --output native-cli-output/bridge-arch.3mf
           sha256sum native-cli-output/bridge-arch.stl > native-cli-output/native-bridge-arch.sha256
           # The only altered value is process.bridge_speed; all other official
           # machine/filament/process options are unchanged and ephemeral.
@@ -416,7 +423,7 @@ jobs:
           app="$RUNNER_TEMP/OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.5.0.AppImage"
           mkdir -p native-cli-output/native-bridge-baseline native-cli-output/native-bridge-2
           timeout 240s env APPIMAGE_EXTRACT_AND_RUN=1 "$app" \
-            native-cli-output/bridge-arch.stl \
+            native-cli-output/bridge-arch.3mf \
             --load-settings "native-cli-output/native-profiles/process.json;native-cli-output/native-profiles/machine.json" \
             --load-filaments native-cli-output/native-profiles/filament.json \
             --arrange 0 --slice 0 --outputdir native-cli-output/native-bridge-baseline \
@@ -425,7 +432,7 @@ jobs:
               exit 1
             }
           timeout 240s env APPIMAGE_EXTRACT_AND_RUN=1 "$app" \
-            native-cli-output/bridge-arch.stl \
+            native-cli-output/bridge-arch.3mf \
             --load-settings "native-cli-output/native-profiles/process-bridge-2.json;native-cli-output/native-profiles/machine.json" \
             --load-filaments native-cli-output/native-profiles/filament.json \
             --arrange 0 --slice 0 --outputdir native-cli-output/native-bridge-2 \
