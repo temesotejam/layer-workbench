@@ -14,16 +14,18 @@ export function createThreeDToolpathPreview(container) {
   section.hidden=true;
   section.innerHTML=`
     <h3>3D G-code paths (experimental)</h3>
-    <label>Visible through layer <input id="lab-3d-layer-range" type="range" min="0" max="0" value="0" step="1"></label>
+    <label>Selected layer <input id="lab-3d-layer-range" type="range" min="0" max="0" value="0" step="1"></label>
+    <label>Layer display <select id="lab-3d-layer-mode" aria-label="3D layer display mode"><option value="through">Through selected layer</option><option value="single">Selected layer only</option></select></label>
     <label>3D extrusion color <select id="lab-3d-color-mode" aria-label="3D extrusion color mode"><option value="tool">Tool selector</option><option value="speed">Commanded F speed</option></select></label>
     <output id="lab-3d-color-legend" aria-live="polite"></output>
     <output id="lab-3d-layer-info"></output>
     <div id="lab-3d-canvas" aria-label="3D G-code toolpath preview" role="img"></div>
-    <p>Changing the 2D type selector also filters 3D deposition paths; this follows only explicit G-code feature comments. Tool-selector mode uses orange for one/unknown T selector and distinct colors for multiple T selectors. Commanded-speed mode groups modal G-code F values in mm/s; it does not show achieved motion speed or account for acceleration. Blue-gray: travel. XY planar and helical arcs are approximated; non-XY and invalid arcs are omitted. Diagnostic only; not native OrcaSlicer Preview or a print safety check.</p>
+    <p>Choose accumulated layers or a single Z layer. Changing the 2D type selector also filters 3D deposition paths; this follows only explicit G-code feature comments. Tool-selector mode uses orange for one/unknown T selector and distinct colors for multiple T selectors. Commanded-speed mode groups modal G-code F values in mm/s; it does not show achieved motion speed or account for acceleration. Blue-gray: travel. XY planar and helical arcs are approximated; non-XY and invalid arcs are omitted. Diagnostic only; not native OrcaSlicer Preview or a print safety check.</p>
   `;
   container.appendChild(section);
   const host=section.querySelector("#lab-3d-canvas");
   const slider=section.querySelector("#lab-3d-layer-range");
+  const layerModeSelect=section.querySelector("#lab-3d-layer-mode");
   const colorSelect=section.querySelector("#lab-3d-color-mode");
   const colorLegend=section.querySelector("#lab-3d-color-legend");
   const info=section.querySelector("#lab-3d-layer-info");
@@ -57,7 +59,7 @@ export function createThreeDToolpathPreview(container) {
       materialByTool.set(id,new THREE.LineBasicMaterial({color:gcodeSelectorColor(id,true)}));
     return materialByTool.get(id);
   }
-  let layers=[],layerObjects=[],lastData=null,lastFeature=ALL_GCODE_PATHS;
+  let layers=[],layerObjects=[],layerSegmentCounts=[],lastData=null,lastFeature=ALL_GCODE_PATHS;
   const cleanup=()=>{
     for(const group of layerObjects) {
       for(const child of group.children)child.geometry.dispose();
@@ -92,20 +94,33 @@ export function createThreeDToolpathPreview(container) {
     requestAnimationFrame(loop);
   };
   function through(index) {
-    for(let i=0;i<layerObjects.length;i++)layerObjects[i].visible=i<=index;
-    const visible=layers[index];
-    info.textContent=`${index+1}/${layers.length} · Z=${visible?.z?.toFixed(3)??"?"} mm`;
-    host.dataset.visibleLayers=String(index+1);
+    const single=layerModeSelect.value==="single";
+    let visibleLayers=0,visibleSegments=0;
+    for(let i=0;i<layerObjects.length;i++) {
+      const visible=single?i===index:i<=index;
+      layerObjects[i].visible=visible;
+      if(visible){visibleLayers++;visibleSegments+=layerSegmentCounts[i];}
+    }
+    const layer=layers[index];
+    info.textContent=`${index+1}/${layers.length} · Z=${layer?.z?.toFixed(3)??"?"} mm · ${single?"selected layer only":"through selected layer"}`;
+    host.dataset.visibleLayers=String(visibleLayers);
+    host.dataset.visibleSegments=String(visibleSegments);
+    host.dataset.layerMode=single?"single":"through";
     renderer.render(scene,camera);
   }
   slider.addEventListener("input",()=>through(Number(slider.value)));
+  layerModeSelect.addEventListener("change",()=>{
+    if(layerObjects.length)through(Number(slider.value));
+  });
   const preview={
     show(data,{featureFilter=ALL_GCODE_PATHS,preserveView=false}={}) {
+      const retainLayer=preserveView&&lastData===data;
+      const savedLayer=Number(slider.value);
       lastData=data;lastFeature=featureFilter;
       const speedMode=colorSelect.value==="speed";
       const previousTarget=controls.target.clone();
       const previousPosition=camera.position.clone();
-      cleanup();layers=data.layers;
+      cleanup();layers=data.layers;layerSegmentCounts=[];
       if(!layers.length)throw new Error("No layers for 3D preview");
       const extent=new THREE.Box3();
       const multi=Array.isArray(data.selectedToolIds)&&data.selectedToolIds.length>1;
@@ -115,6 +130,7 @@ export function createThreeDToolpathPreview(container) {
       const activeColorClasses=new Set();
       for(const layer of layers) {
         const group=new THREE.Group();
+        let layerCount=0;
         for (const extrusion of [true,false]) {
           for(const toolId of extrusion?selectors:[null]){
             const points=[];
@@ -124,7 +140,7 @@ export function createThreeDToolpathPreview(container) {
               if(extrusion && (speedMode
                   ? commandedSpeedBand(segment.feedrateMmMin).id!==toolId
                   : (multi&&segment.toolId!==toolId)))continue;
-              visibleSegmentCount++;
+              visibleSegmentCount++;layerCount++;
               if(extrusion)activeColorClasses.add(speedMode?toolId:(segment.toolId??"unselected"));
               // Keep actual endpoint heights (including Z-only travel).
               // Three.js Z-up matches the Prepare viewport.
@@ -143,7 +159,7 @@ export function createThreeDToolpathPreview(container) {
             }
           }
         }
-        geometryGroup.add(group);layerObjects.push(group);
+        geometryGroup.add(group);layerObjects.push(group);layerSegmentCounts.push(layerCount);
       }
       if(extent.isEmpty())throw new Error("No 3D line positions");
       const center=extent.getCenter(new THREE.Vector3());
@@ -158,7 +174,7 @@ export function createThreeDToolpathPreview(container) {
       }
       controls.update();
       slider.max=String(layers.length-1);
-      slider.value=String(layers.length-1);
+      slider.value=String(retainLayer&&Number.isInteger(savedLayer)?Math.max(0,Math.min(layers.length-1,savedLayer)):layers.length-1);
       section.hidden=false;resize();through(layers.length-1);
       startPaint();
       host.dataset.segmentCount=String(visibleSegmentCount);
@@ -169,7 +185,7 @@ export function createThreeDToolpathPreview(container) {
         "T selector labels only; colors are not filament identities";
       return layerObjects.length;
     },
-    clear() {cleanup();layers=[];lastData=null;lastFeature=ALL_GCODE_PATHS;section.hidden=true;host.dataset.segmentCount="0";host.dataset.featureFilter=ALL_GCODE_PATHS;host.dataset.colorMode="tool";colorSelect.value="tool";colorLegend.textContent="";},
+    clear() {cleanup();layers=[];layerSegmentCounts=[];lastData=null;lastFeature=ALL_GCODE_PATHS;section.hidden=true;host.dataset.segmentCount="0";host.dataset.visibleSegments="0";host.dataset.visibleLayers="0";host.dataset.layerMode="through";host.dataset.featureFilter=ALL_GCODE_PATHS;host.dataset.colorMode="tool";colorSelect.value="tool";layerModeSelect.value="through";colorLegend.textContent="";},
   };
   colorSelect.addEventListener("change",()=>{
     if(lastData)preview.show(lastData,{featureFilter:lastFeature,preserveView:true});
