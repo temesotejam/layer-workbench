@@ -23,6 +23,9 @@ class TestNativeBridgeSpeed(unittest.TestCase):
         report=verify(self.a,self.b)
         self.assertEqual(report['altered_F120_tagged_extrusions'],16)
         self.assertFalse(report['native_wasm_gcode_match'])
+        self.assertEqual(report['baseline_tagged_bridge_xy_length_mm'],
+                         report['altered_tagged_bridge_xy_length_mm'])
+        self.assertIn('bridge', report['baseline_tagged_bridge_xy_lengths_mm_by_feature'])
 
     def test_six_strict_feature_types_and_xy_only_counts(self):
         # Separate actual native G1 counts per recognized subtype; do not
@@ -45,6 +48,22 @@ class TestNativeBridgeSpeed(unittest.TestCase):
         self.assertEqual(report["baseline_tagged_bridge_xy_extrusions"], 12)
         self.assertEqual(report["altered_tagged_bridge_xy_extrusions"], 12)
         self.assertIn("no arcs", report["measured_subset"])
+
+    def test_equal_xy_length_with_different_g1_segmentation(self):
+        # Split each identical straight path at 0.5 mm; count changes but
+        # total deposition length and selected feature stay identical.
+        for path, steps, feed in ((self.a, 16, 2400), (self.b, 32, 120)):
+            lines = ['G21', 'G90', 'M82', 'G1 X0 Y0 E0 F3000', ';TYPE: Bridge']
+            lines.extend(f'G1 X{i * 16 / steps:g} Y0 E{i * 16 / steps:g} F{feed}'
+                         for i in range(1, steps + 1))
+            path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+        report = verify(self.a, self.b)
+        self.assertEqual(report['baseline_tagged_bridge_xy_extrusions'], 16)
+        self.assertEqual(report['altered_tagged_bridge_xy_extrusions'], 32)
+        self.assertEqual(report['baseline_tagged_bridge_xy_length_mm'], '16.000000')
+        self.assertEqual(report['altered_tagged_bridge_xy_length_mm'], '16.000000')
+        self.assertEqual(report['baseline_tagged_bridge_xy_lengths_mm_by_feature'],
+                         {'bridge': '16.000000'})
 
     def test_untagged_wall_never_counts(self):
         fixture(self.a,2400,feature='Outer wall')
