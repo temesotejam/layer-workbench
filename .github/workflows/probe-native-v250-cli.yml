@@ -12,6 +12,8 @@ on:
       - "scripts/test-prepare-native-v250-presets.mjs"
       - "scripts/verify_native_layer_height.py"
       - "scripts/test_verify_native_layer_height.py"
+      - "scripts/verify_native_nozzle_temperature.py"
+      - "scripts/test_verify_native_nozzle_temperature.py"
       - "scripts/fetch-upstream-v250-fixture.py"
       - "scripts/orca-full-profile.mjs"
       - "scripts/orca-vendor-index.mjs"
@@ -26,6 +28,8 @@ on:
       - "scripts/test-prepare-native-v250-presets.mjs"
       - "scripts/verify_native_layer_height.py"
       - "scripts/test_verify_native_layer_height.py"
+      - "scripts/verify_native_nozzle_temperature.py"
+      - "scripts/test_verify_native_nozzle_temperature.py"
       - "scripts/fetch-upstream-v250-fixture.py"
       - "scripts/orca-full-profile.mjs"
       - "scripts/orca-vendor-index.mjs"
@@ -49,6 +53,9 @@ jobs:
 
       - name: Unit-test native effective layer-height audit offline
         run: python3 -m unittest discover -s scripts -p test_verify_native_layer_height.py -v
+
+      - name: Unit-test native nozzle-heater command audit offline
+        run: python3 -m unittest discover -s scripts -p test_verify_native_nozzle_temperature.py -v
 
       - name: Download the official v2.5.0 Linux AppImage only inside CI
         shell: bash
@@ -241,6 +248,44 @@ jobs:
           sha256sum native-cli-output/native-gcode-layer-025/plate_1.gcode \
             > native-cli-output/native-gcode-layer-025.sha256
           # An observed native setting effect does not prove WASM parity or print safety.
+
+      - name: Prove effective native initial nozzle temperature changes actual heater commands
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Create an ephemeral one-field change to the inherited official
+          # filament vector. Never upload the full licensed preset or G-code.
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          src = Path("native-cli-output/native-profiles/filament.json")
+          filament = json.loads(src.read_text(encoding="utf-8"))
+          if filament.get("nozzle_temperature_initial_layer") != ["220"]:
+              raise SystemExit("unexpected pinned native initial nozzle temperature vector")
+          filament["nozzle_temperature_initial_layer"] = ["235"]
+          dst = Path("native-cli-output/native-profiles/filament-nozzle-235.json")
+          dst.write_text(json.dumps(filament, indent=2) + "\n", encoding="utf-8")
+          dst.chmod(0o600)
+          PY
+          app="${RUNNER_TEMP}/OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.5.0.AppImage"
+          mkdir -p native-cli-output/native-gcode-nozzle-235
+          timeout 240s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
+            native-cli-output/two-build-items.3mf \
+            --load-settings "native-cli-output/native-profiles/process.json;native-cli-output/native-profiles/machine.json" \
+            --load-filaments native-cli-output/native-profiles/filament-nozzle-235.json \
+            --arrange 0 --slice 0 --outputdir native-cli-output/native-gcode-nozzle-235 \
+            > native-cli-output/native-nozzle-temp-slice.log 2>&1 || {
+              tail -n 140 native-cli-output/native-nozzle-temp-slice.log
+              exit 1
+            }
+          test -s native-cli-output/native-gcode-nozzle-235/plate_1.gcode
+          python3 scripts/verify_native_nozzle_temperature.py \
+            --baseline native-cli-output/native-gcode/plate_1.gcode \
+            --altered native-cli-output/native-gcode-nozzle-235/plate_1.gcode \
+            --report native-cli-output/native-nozzle-temp-audit.log
+          sha256sum native-cli-output/native-gcode-nozzle-235/plate_1.gcode \
+            > native-cli-output/native-gcode-nozzle-235.sha256
+          # Actual M104/M109 targets are not thermistor measurements or print safety.
 
       - name: Archive text diagnostics without redistributing the AppImage
         if: always()
