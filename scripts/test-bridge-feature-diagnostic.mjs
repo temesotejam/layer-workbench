@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import {auditBridgeSpeedSegments} from "./bridge-feature-diagnostic.mjs";
 
 const segment=(feature,feedrateMmMin,extrusion=true)=>
-  ({feature,feedrateMmMin,extrusion});
+  ({feature,feedrateMmMin,extrusion,x1:0,y1:0,x2:1,y2:0});
 const baseline=[segment("Bridge",2400),segment("External bridge",1800),
   segment("Inner wall",120)];
 const candidate=[segment("Bridge",120),segment("External bridge",120),
@@ -29,6 +29,19 @@ assert.equal(auditBridgeSpeedSegments(baseline,[
   segment("Bridge",NaN),segment("Bridge",0),segment("Bridge",-1),
   {feature:"Bridge",feedrateMmMin:120,extrusion:false}
 ]).target_feedrate_observed,false);
+// Vertical positive-E and zero-XY priming must not be called bridge
+// deposition even if a valid bridge feature tag and target F are present.
+for (const bogus of [
+  {...segment("Bridge",120),x2:0,y2:0},
+  {...segment("Bridge",120),x1:1,y1:1,x2:1,y2:1},
+  {...segment("Bridge",120),x1:NaN},
+  {...segment("Bridge",120),x2:Infinity},
+]) {
+  const audit=auditBridgeSpeedSegments([segment("Bridge",2400)],[bogus]);
+  assert.equal(audit.target_feedrate_observed,false);
+  assert.equal(audit.candidate_tagged_bridge_extrusion_segments,0);
+}
+assert.match(found.measured_subset,/positive-E XY/);
 // Existing bridge F120 in baseline is not a newly observed effect.
 assert.equal(auditBridgeSpeedSegments([segment("Bridge",120)],
   [segment("Bridge",120)]).target_feedrate_observed,false);
