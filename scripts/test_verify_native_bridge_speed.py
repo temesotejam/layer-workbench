@@ -24,6 +24,28 @@ class TestNativeBridgeSpeed(unittest.TestCase):
         self.assertEqual(report['altered_F120_tagged_extrusions'],16)
         self.assertFalse(report['native_wasm_gcode_match'])
 
+    def test_six_strict_feature_types_and_xy_only_counts(self):
+        # Separate actual native G1 counts per recognized subtype; do not
+        # accidentally include substring labels or vertical/prime-only moves.
+        labels = ("Bridge", "External bridge", "Internal bridge",
+                  "Bridge infill", "Internal bridge infill", "Bridge over infill")
+        for output, feed in ((self.a, 2400), (self.b, 120)):
+            lines = ["G21", "G90", "M83", "G1 X0 Y0 E0 F3000"]
+            for i, label in enumerate(labels * 2, 1):
+                lines.extend((f";FEATURE: {label}", f"G1 X{i} Y1 E0.1 F{feed}"))
+            # These must NOT increment the tagged counts.
+            lines.extend((";TYPE: not bridge", "G1 X20 Y1 E0.1 F120",
+                          ";TYPE: bridge", "G1 Z2 E0.1 F120",
+                          "G1 E0.1 F120"))
+            output.write_text("\\n".join(lines) + "\\n", encoding="utf-8")
+        report = verify(self.a, self.b)
+        expected = {label.lower(): 2 for label in labels}
+        self.assertEqual(report["baseline_tagged_bridge_feature_counts"], expected)
+        self.assertEqual(report["altered_tagged_bridge_feature_counts"], expected)
+        self.assertEqual(report["baseline_tagged_bridge_xy_extrusions"], 12)
+        self.assertEqual(report["altered_tagged_bridge_xy_extrusions"], 12)
+        self.assertIn("no arcs", report["measured_subset"])
+
     def test_untagged_wall_never_counts(self):
         fixture(self.a,2400,feature='Outer wall')
         fixture(self.b,120,feature='Outer wall')
