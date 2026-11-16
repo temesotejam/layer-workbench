@@ -17,7 +17,10 @@ const SPECS={
     // Percentages (e.g. "50%") are relative presets: never reinterpret
     // them as mm/s or silently fall back to another speed.
     sparse_infill_speed:[1,800],internal_solid_infill_speed:[1,800],
-    top_surface_speed:[1,800],gap_infill_speed:[1,800]},
+    top_surface_speed:[1,800],gap_infill_speed:[1,800],
+    // The source-pinned CR-10 0.20mm profile uses absolute 50 mm/s.
+    // Relative percentages and engine behavior are NOT inferred here.
+    bridge_speed:[1,800]},
 };
 const INTEGERS=new Set(['wall_loops','top_shell_layers','bottom_shell_layers']);
 // Pinned native process enums; the limited adapter retains exact wire values.
