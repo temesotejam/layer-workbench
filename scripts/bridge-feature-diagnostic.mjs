@@ -30,8 +30,28 @@ export function auditBridgeSpeedSegments(baselineSegments,candidateSegments,targ
     BRIDGE_FEATURES.has(normalizeFeature(s.feature))&&
     Number.isFinite(s.feedrateMmMin)&&s.feedrateMmMin>0&&
     [s.x1,s.y1,s.x2,s.y2].every(Number.isFinite)&&
+    Number.isFinite(Math.hypot(s.x2-s.x1,s.y2-s.y1))&&
     Math.hypot(s.x2-s.x1,s.y2-s.y1)>1e-9);
   const base=tagged(baselineSegments),changed=tagged(candidateSegments);
+  // Cumulative XY length is more robust to different line segmentation than
+  // raw move counts. It is still not geometric parity: arcs may be tessellated
+  // in the browser preview, and native/WASM profiles are not yet aligned.
+  const xyLengths=items=>{
+    const byFeature={};
+    let total=0;
+    for (const s of items) {
+      const length=Math.hypot(s.x2-s.x1,s.y2-s.y1);
+      total+=length;
+      const key=normalizeFeature(s.feature);
+      byFeature[key]=(byFeature[key]??0)+length;
+    }
+    return {
+      total:Number(total.toFixed(6)),
+      byFeature:Object.fromEntries(Object.entries(byFeature).sort(([a],[b])=>a.localeCompare(b))
+        .map(([label,length])=>[label,Number(length.toFixed(6))])),
+    };
+  };
+  const baselineLengths=xyLengths(base),candidateLengths=xyLengths(changed);
   const rates=items=>[...new Set(items.map(s=>Math.round(s.feedrateMmMin*100)/100))]
     .sort((a,b)=>a-b);
   const baselineFeeds=rates(base),candidateFeeds=rates(changed);
@@ -46,6 +66,10 @@ export function auditBridgeSpeedSegments(baselineSegments,candidateSegments,targ
     candidate_tagged_bridge_extrusion_segments:changed.length,
     baseline_tagged_bridge_feature_counts:featureCounts(base),
     candidate_tagged_bridge_feature_counts:featureCounts(changed),
+    baseline_tagged_bridge_xy_length_mm:baselineLengths.total,
+    candidate_tagged_bridge_xy_length_mm:candidateLengths.total,
+    baseline_tagged_bridge_xy_lengths_mm_by_feature:baselineLengths.byFeature,
+    candidate_tagged_bridge_xy_lengths_mm_by_feature:candidateLengths.byFeature,
     baseline_tagged_bridge_feedrates_mm_min:baselineFeeds,
     candidate_tagged_bridge_feedrates_mm_min:candidateFeeds,
     new_tagged_bridge_feedrates_mm_min:newFeeds,

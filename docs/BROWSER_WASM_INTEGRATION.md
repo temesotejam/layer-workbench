@@ -702,3 +702,20 @@ is built and the public Pages slicer remains disabled.
 ## 2026-11-17: localhost process JSON allow-list hardening
 
 The opt-in localhost process override parser now requires every incoming JSON key to be an **own** property of its numeric-key allow-list. In JavaScript a direct `LIMITS[key]` lookup can also resolve inherited names such as `constructor`, `toString` and `__proto__`, bypassing the intended numeric bounds. Regression tests submit these names through real `JSON.parse` objects and require rejection. The native enums continue to use own-property checks. This is a parser-validation correction only; it does not increase the number of supported OrcaSlicer settings, establish G-code parity or permit public/physical printing.
+
+## 2026-11-17: per-subtype bridge XY path length (pre-parity diagnostic)
+
+The isolated WASM Chrome bridge audit now additionally reports cumulative
+positive-E XY path lengths (millimetres, rounded to 0.000001 mm) under the
+same strict six bridge feature labels as the native diagnostic. Regression
+checks ensure that replacing a 2 mm straight bridge with two 1 mm lines
+changes the **count** but not the **total length**. Non-finite distances,
+unknown labels, zero-XY priming and travel do not count. The native CLI audit
+separately measures the corresponding straight positive-E **G1** subset.
+
+Length comparisons can help identify path-geometry differences masked by
+segmentation counts, but the current native full official profiles and
+WASM restricted local profiles are **not equivalent**. Browser arcs may be
+tessellated, native arcs are excluded, and these aggregates do not establish
+ordered coordinate, extrusion-volume or F-value equality. No printer-safe
+G-code or public engine activation is implied.
