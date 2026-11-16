@@ -22,9 +22,15 @@ export function auditBridgeSpeedSegments(baselineSegments,candidateSegments,targ
   if(!Array.isArray(baselineSegments)||!Array.isArray(candidateSegments)||
       !Number.isFinite(targetMmMin)||targetMmMin<=0)
     throw new Error("Invalid bridge feature inputs");
+  // The native diagnostic measures positive-E XY G1 deposition, not
+  // an extrusion-only prime or vertical move mislabeled as a bridge.
+  // Browser preview paths may include tessellated arcs, so matching counts
+  // here still does NOT establish identical native/wasm command subsets.
   const tagged=segments=>segments.filter(s=>s&&s.extrusion===true&&
     BRIDGE_FEATURES.has(normalizeFeature(s.feature))&&
-    Number.isFinite(s.feedrateMmMin)&&s.feedrateMmMin>0);
+    Number.isFinite(s.feedrateMmMin)&&s.feedrateMmMin>0&&
+    [s.x1,s.y1,s.x2,s.y2].every(Number.isFinite)&&
+    Math.hypot(s.x2-s.x1,s.y2-s.y1)>1e-9);
   const base=tagged(baselineSegments),changed=tagged(candidateSegments);
   const rates=items=>[...new Set(items.map(s=>Math.round(s.feedrateMmMin*100)/100))]
     .sort((a,b)=>a-b);
@@ -44,6 +50,7 @@ export function auditBridgeSpeedSegments(baselineSegments,candidateSegments,targ
     candidate_tagged_bridge_feedrates_mm_min:candidateFeeds,
     new_tagged_bridge_feedrates_mm_min:newFeeds,
     target_feedrate_observed:observed,
+    measured_subset:"positive-E XY preview segments (rendered G17 arcs may be tessellated)",
     native_desktop_parity:false,
     printer_safe:false,
   };
