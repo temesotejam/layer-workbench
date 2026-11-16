@@ -942,10 +942,15 @@ try {
     await writeFile(parityDir+'/bridge-arch-feature-diagnostic.json',
       JSON.stringify(bridgeReport,null,2)+'\n');
     console.log('BRIDGE_ARCH_DIAGNOSTIC '+JSON.stringify(bridgeReport));
-    if(bridgeReport.target_feedrate_observed)
-      console.log('PASS: tagged WASM bridge extrusion changes to F120 on actual arch geometry');
-    else
-      console.log('KNOWN GAP: arch bridge-speed effect NOT proven; diagnostic only');
+    // Both slices have now emitted 279 explicit bridge-tagged segments in
+    // real isolated Chrome. Treat losing tagged bridge deposition or the new
+    // F120 response as a regression, not an inconclusive green build.
+    assert.ok(bridgeReport.baseline_tagged_bridge_extrusion_segments>0 &&
+      bridgeReport.candidate_tagged_bridge_extrusion_segments>0 &&
+      bridgeReport.target_feedrate_observed,
+      'Expected new F120 on genuine tagged bridge extrusion: '+
+      JSON.stringify(bridgeReport));
+    console.log('PASS: tagged WASM bridge extrusion changes to F120 on actual arch geometry');
 
 
 
