@@ -105,6 +105,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("stl", type=Path, nargs="+")
     args = parser.parse_args()
+    for path in args.stl:
+        faces = read_triangles(path)
+        vertices = [p for face in faces for p in face]
+        bounds = tuple(fn(p[axis] for p in vertices)
+                       for axis in range(3) for fn in (min, max))
+        print('Native STL diagnostic:', path.name,
+              'facets=', len(faces), 'XYZ min/max pairs=', bounds, flush=True)
     for entry in audit_export(*args.stl):
         print("PASS: official native exported Core 3MF build item",
               entry["item"], "facets=", entry["facets"], "XYZ bounds=", entry["bounds"])
