@@ -4,6 +4,11 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
+      - "scripts/test-process-profile.mjs"
+      - "scripts/test-process-profile-unit.mjs"
+      - "scripts/orca-profile-collection.mjs"
+      - "scripts/test-orca-profile-collection.mjs"
+      - "scripts/test-hot-plate-bridge.mjs"
       - "scripts/gcode-preview-parser.mjs"
       - "scripts/test-gcode-preview-parser.mjs"
       - "scripts/gcode-feature-filter.mjs"
@@ -99,6 +104,7 @@ jobs:
           node scripts/test-obj-to-stl.mjs
           node --check scripts/obj-to-stl.mjs
           node scripts/test-process-profile-unit.mjs
+          node scripts/test-hot-plate-bridge.mjs
           node scripts/test-process-preset-inheritance.mjs
           node scripts/test-orca-profile-collection.mjs
           node scripts/test-orca-vendor-index.mjs
