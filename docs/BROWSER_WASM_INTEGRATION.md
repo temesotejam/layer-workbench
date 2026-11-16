@@ -771,3 +771,18 @@ The isolated Chrome regression checks the modes, layer counts, selection
 preservation and the return to cumulative display on a real WASM slice.
 This is still a diagnostic subset of OrcaSlicer's native Preview, not proof
 of visual parity, native project semantics, actual motion speed or print safety.
+
+## 2026-11-17: synchronized 2D and 3D G-code layer selectors
+
+The isolated localhost 2D and 3D G-code viewers now share the selected **Z-level index**.
+Dragging the 2D layer slider updates the 3D selected layer without regenerating
+geometry; dragging the 3D slider updates the 2D plot and layer label. Changing
+3D single/through-layer mode, palette or explicit feature filter preserves the
+selection on the same parsed G-code. Loading a new slice resets both selectors
+to the last Z level. An out-of-range programmatic 3D selection is rejected,
+and clearing preview state does not attempt to render an obsolete layer.
+
+The real isolated Chrome/WASM regression moves both sliders at the first, last
+and an intermediate layer and checks cross-view selection and labels. This is
+read-only visual coordination, **not** native OrcaSlicer Preview parity, full
+3MF/profile compatibility, G-code modification or a production deployment.
