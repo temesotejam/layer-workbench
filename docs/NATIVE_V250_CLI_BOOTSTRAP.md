@@ -193,3 +193,20 @@ only textual fingerprints, hashes and audit diagnostics are archived.
 **Next:** emit the same fixture bytes and *same effective complete settings*
 through the WASM engine and run the existing strict `check_parity_pair.py`
 gate before making any matching-toolpath claim.
+
+## 2026-11-16: strict XY bridge subtype accounting for native/WASM preflight
+
+The native bridge-speed audit now records **per-label positive-E XY G1 counts**
+for the six explicitly accepted bridge labels, using the same normalized names
+as the isolated-browser bridge-speed audit. The browser diagnostic additionally
+requires actual XY displacement on positive-extrusion preview segments, so a
+vertical extrusion or extrusion-only prime cannot masquerade as F120 bridge
+deposition. Negative fixture tests reject invalid labels and missing XY motion.
+
+This improves feature attribution before a real desktop-versus-WASM comparison.
+**It is not a parity result**: the browser parser may tessellate G17 arcs,
+whereas the native count covers G1 only; native processing uses pinned
+full printer/filament/process presets and an explicit Core 3MF placement,
+while the browser arch probe uses restricted diagnostic settings. The inputs
+and complete ordered G-code have not been proven identical. G-code remains
+test-only and must not be printed.
