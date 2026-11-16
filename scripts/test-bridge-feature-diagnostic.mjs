@@ -16,6 +16,12 @@ assert.deepEqual(found.baseline_tagged_bridge_feature_counts,
   {"bridge":1,"external bridge":1});
 assert.deepEqual(found.candidate_tagged_bridge_feature_counts,
   {"bridge":1,"external bridge":1});
+assert.equal(found.baseline_tagged_bridge_xy_length_mm,2);
+assert.equal(found.candidate_tagged_bridge_xy_length_mm,2);
+assert.deepEqual(found.baseline_tagged_bridge_xy_lengths_mm_by_feature,
+  {"bridge":1,"external bridge":1});
+assert.deepEqual(found.candidate_tagged_bridge_xy_lengths_mm_by_feature,
+  {"bridge":1,"external bridge":1});
 assert.equal(found.native_desktop_parity,false);
 assert.equal(found.printer_safe,false);
 // Travel-only F120 and unrelated wall speeds cannot prove bridge-speed control.
@@ -75,3 +81,24 @@ assert.equal(auditBridgeSpeedSegments(
 assert.throws(()=>auditBridgeSpeedSegments({},[]),/Invalid/);
 assert.throws(()=>auditBridgeSpeedSegments([],[],0),/Invalid/);
 console.log("PASS: tagged bridge extrusion F-only diagnostic cannot promote unrelated paths");
+
+// A slicer may split one geometrically identical bridge path into several
+// positive-E XY moves. Counts differ, but cumulative subtype length must not.
+const oneSegment=[{...segment("Bridge",2400),x2:2}];
+const twoSegments=[
+  {...segment("Bridge",120),x2:1},
+  {...segment("Bridge",120),x1:1,x2:2},
+];
+const splitAudit=auditBridgeSpeedSegments(oneSegment,twoSegments);
+assert.equal(splitAudit.baseline_tagged_bridge_extrusion_segments,1);
+assert.equal(splitAudit.candidate_tagged_bridge_extrusion_segments,2);
+assert.equal(splitAudit.baseline_tagged_bridge_xy_length_mm,2);
+assert.equal(splitAudit.candidate_tagged_bridge_xy_length_mm,2);
+assert.deepEqual(splitAudit.candidate_tagged_bridge_xy_lengths_mm_by_feature,{bridge:2});
+// Finite endpoints can overflow when subtracted: those are not usable paths.
+const overflowAudit=auditBridgeSpeedSegments(oneSegment,[
+  {...segment("Bridge",120),x1:-1e308,x2:1e308},
+]);
+assert.equal(overflowAudit.candidate_tagged_bridge_extrusion_segments,0);
+assert.equal(overflowAudit.candidate_tagged_bridge_xy_length_mm,0);
+console.log("PASS: bridge XY lengths are segmentation-aware and non-finite-safe");
