@@ -8,6 +8,8 @@ on:
       - "scripts/test-process-profile-unit.mjs"
       - "scripts/slice-stl.mjs"
       - "scripts/orca-profile-collection.mjs"
+      - "scripts/audit-native-wasm-profile-gap.mjs"
+      - "scripts/test-audit-native-wasm-profile-gap.mjs"
       - "scripts/test-orca-profile-collection.mjs"
       - "scripts/test-hot-plate-bridge.mjs"
       - ".github/workflows/verify-real-v250-profiles.yml"
@@ -18,6 +20,8 @@ on:
       - "scripts/test-process-profile-unit.mjs"
       - "scripts/test-hot-plate-bridge.mjs"
       - "scripts/orca-profile-collection.mjs"
+      - "scripts/audit-native-wasm-profile-gap.mjs"
+      - "scripts/test-audit-native-wasm-profile-gap.mjs"
       - "scripts/orca-full-profile.mjs"
       - "scripts/orca-config-array-semantics.mjs"
       - "scripts/orca-filament-routing.mjs"
@@ -76,6 +80,14 @@ jobs:
         run: node scripts/test-upstream-v250-profiles.mjs
       - name: Validate real Creality machine and process inheritance
         run: node scripts/test-upstream-v250-creality.mjs
+      - name: Inventory full native vs restricted WASM preset option gaps
+        run: |
+          set -euo pipefail
+          node scripts/test-audit-native-wasm-profile-gap.mjs
+          node scripts/audit-native-wasm-profile-gap.mjs \
+            upstream-v250-creality-fixture.json upstream-v250-filament-fixture.json \
+            profile-coverage-report.json
+          # This reports option-key gaps, not actual G-code parity or print safety.
       - name: Fetch pinned multi-vendor machine, process and filament samples
         run: python3 scripts/fetch-upstream-v250-multi-vendor-fixture.py
       - name: Validate real Snapmaker U1, Prusa MK4S and global filament selection
