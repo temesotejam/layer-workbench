@@ -828,7 +828,9 @@ machine/material keys.
 Only the already supported bounded, single-nozzle machine dimensions and
 single-filament temperatures/flow vectors are accepted. A selected plate
 must use one exact upstream v2.5.0 bed enum and matching native temperature
-vector; no implicit bed choice or multi-tool vector coercion is allowed.
+vector; a bounded legacy scalar bed_temperature remains available without
+inferring a plate type. No implicit native plate choice or multi-tool vector
+coercion is allowed.
 Missing required settings, inconsistent selected-plate temperatures,
 unsupported keys, malformed vectors and injected machine/filament G-code
 are rejected **before createSession**. Generic PLA test fixtures without a
