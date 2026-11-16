@@ -6,6 +6,8 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {parseGcodeToolpaths} from './gcode-preview-parser.mjs';
 import {makeGapRingObj} from './gap-ring-fixture.mjs';
+import {makeBridgeArchObj} from './bridge-arch-fixture.mjs';
+import {auditBridgeSpeedSegments} from './bridge-feature-diagnostic.mjs';
 import {checkBrowser3mfRoundTrip} from './test-browser-3mf-roundtrip.mjs';
 import {checkBrowserMultiObject3mf} from './test-browser-3mf-multiobject.mjs';
 const base = process.env.ENGINE_PROBE_URL || 'http://127.0.0.1:8766/';
@@ -902,6 +904,48 @@ try {
       JSON.stringify(gapReport));
     console.log('PASS: tagged WASM gap-fill extrusion responds with F120 when gap_infill_speed=2; '+
       'baseline/candidate feature segments='+baselineGap.length+'/'+candidateGap.length);
+
+
+    // A through-tunnel bridge arch gives the slicer a real unsupported roof.
+    // Unlike the earlier two cubes this shape has a geometric bridge region,
+    // but evidence must still come from tagged positive-E native G-code.
+    await prepare.locator('#remove-object').click();
+    await prepare.locator('#object-count').getByText('0 objects').waitFor();
+    await prepare.locator('#model-file').setInputFiles({
+      name:'bridge-arch-diagnostic.obj',mimeType:'text/plain',
+      buffer:Buffer.from(makeBridgeArchObj()),
+    });
+    await prepare.locator('#object-count').getByText('1 object').waitFor({timeout:30000});
+    const bridgeSettings={
+      layer_height:0.25,wall_loops:2,outer_wall_speed:12,
+      inner_wall_speed:16,travel_speed:50,sparse_infill_density:20,
+      wall_generator:'classic',bridge_speed:40,
+    };
+    const bridgeBaseline=await sliceRing('bridge-arch-baseline.json',bridgeSettings);
+    const bridgeSlow=await sliceRing('bridge-arch-2mm-s.json',
+      {...bridgeSettings,bridge_speed:2});
+    const bridgeBaselinePaths=parseGcodeToolpaths(bridgeBaseline);
+    const bridgeSlowPaths=parseGcodeToolpaths(bridgeSlow);
+    assert.ok(bridgeBaselinePaths.extrusions>50&&bridgeSlowPaths.extrusions>50,
+      'Bridge arch must produce real multilayer deposited G-code in BOTH runs');
+    const allSegments=paths=>paths.layers.flatMap(layer=>layer.segments);
+    const bridgeReport={
+      fixture:'watertight 40x20x15 mm OBJ arch; 16x20 mm open tunnel to Z10',
+      setting:'bridge_speed',baseline_mm_s:40,candidate_mm_s:2,
+      ...auditBridgeSpeedSegments(allSegments(bridgeBaselinePaths),
+        allSegments(bridgeSlowPaths),120),
+      baseline_layers:bridgeBaselinePaths.layers.length,
+      candidate_layers:bridgeSlowPaths.layers.length,
+      baseline_total_extrusions:bridgeBaselinePaths.extrusions,
+      candidate_total_extrusions:bridgeSlowPaths.extrusions,
+    };
+    await writeFile(parityDir+'/bridge-arch-feature-diagnostic.json',
+      JSON.stringify(bridgeReport,null,2)+'\n');
+    console.log('BRIDGE_ARCH_DIAGNOSTIC '+JSON.stringify(bridgeReport));
+    if(bridgeReport.target_feedrate_observed)
+      console.log('PASS: tagged WASM bridge extrusion changes to F120 on actual arch geometry');
+    else
+      console.log('KNOWN GAP: arch bridge-speed effect NOT proven; diagnostic only');
 
 
 
