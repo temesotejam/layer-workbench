@@ -108,3 +108,26 @@ fixture; it does not certify all upstream keys, full vendor semantics, native
 3MF parity, WASM capability, native-vs-WASM G-code equality, or printer safety.
 Only hash manifests and textual diagnostics are archived; no generated G-code
 or licensed upstream profiles are redistributed.
+
+
+## 2026-11-16: initial nozzle heater target application probe
+
+The native CLI CI now makes one **ephemeral change** to the same pinned,
+fully inherited Generic PLA @System filament JSON: the single-element
+nozzle_temperature_initial_layer array changes from ["220"] to ["235"]
+degrees C. The source profile, ordinary nozzle_temperature, process profile,
+machine profile, 3MF input and --arrange 0 are unchanged. The new
+scripts/verify_native_nozzle_temperature.py reads **actual G-code** and requires
+the first positive M104 S (set nozzle) and M109 S (wait nozzle) targets to change
+from 220 to 235. It ignores comments, handles line numbers and decimal target
+notation, and fails closed on ambiguous heater words, missing targets or
+unchanged heater instructions. Offline regression cases cover each gate.
+
+This is a narrow **native effective-command test**, not a guarantee that
+every temperature option was applied, not a measurement of thermistor
+temperature, and not WASM parity. The selected preset's normal later-layer
+temperature is deliberately **not changed**; comparing all nonzero heater
+commands as if they were identical would be an incorrect acceptance test.
+The diagnostic G-code, upstream JSON and official AppImage remain ephemeral.
+Only textual audit logs and file digests may be uploaded. Never print from
+these fixtures or enable the unverified engine on the public site.
