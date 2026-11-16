@@ -698,3 +698,7 @@ comparison. Identical nominal labels would still not establish identical
 effective printer/process/filament settings, object placement, ordered
 toolpaths, actual machine speeds, or safe printing. No new WASM artifact
 is built and the public Pages slicer remains disabled.
+
+## 2026-11-17: localhost process JSON allow-list hardening
+
+The opt-in localhost process override parser now requires every incoming JSON key to be an **own** property of its numeric-key allow-list. In JavaScript a direct `LIMITS[key]` lookup can also resolve inherited names such as `constructor`, `toString` and `__proto__`, bypassing the intended numeric bounds. Regression tests submit these names through real `JSON.parse` objects and require rejection. The native enums continue to use own-property checks. This is a parser-validation correction only; it does not increase the number of supported OrcaSlicer settings, establish G-code parity or permit public/physical printing.
