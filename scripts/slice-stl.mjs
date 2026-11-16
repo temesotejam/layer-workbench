@@ -46,9 +46,32 @@ export async function sliceStlWithEngine(engine, stlBytes, onProgress, viewerEle
   return sliceMultiStlWithEngine(engine, [{bytes:stlBytes,viewerElements}], onProgress);
 }
 
+// The profile reader resolves the process branch separately from machine
+// and filament. Never silently drop it when a caller supplies a collection
+// without repeating its process settings as an explicit override.
+// This is a restricted localhost test adapter, NOT a full native PrintConfig.
+export function resolveRestrictedProcessSettings(processOverrides = null, profileCollection = null) {
+  let fromCollection = null;
+  if (profileCollection !== null) {
+    const source = profileCollection?.process?.settings;
+    if (!source || typeof source !== "object" || Array.isArray(source) ||
+        Object.keys(source).length === 0)
+      throw new Error("Selected Orca process profile has no supported settings.");
+    fromCollection = parseTestProcessOverrides(source);
+  }
+  const manual = processOverrides === null ? null
+    : parseTestProcessOverrides(processOverrides);
+  // Explicit user overrides take precedence, retaining the remaining inherited
+  // process fields. Each source is independently allow-listed and bounded.
+  return fromCollection && manual ? {...fromCollection, ...manual}
+    : fromCollection ?? manual;
+}
+
 export async function sliceMultiStlWithEngine(engine, items, onProgress, processOverrides = null, profileCollection = null) {
   if (!engine || typeof engine.createSession !== "function")
     throw new Error("Verified OrcaSlicer engine must be loaded before slicing.");
+  // Validate before creating the native WASM session (fail closed).
+  const effectiveProcess = resolveRestrictedProcessSettings(processOverrides, profileCollection);
   const session = await engine.createSession();
   try {
     // Apply only explicitly vetted numeric machine/filament fragments.
@@ -59,11 +82,10 @@ export async function sliceMultiStlWithEngine(engine, items, onProgress, process
       ...profileCollection.filament.settings,
     } : GENERIC_PLA_TEST_CONFIG;
     await session.init(encode(base));
-    if (processOverrides !== null) {
-      // Apply a restricted flat process fragment. Full OrcaSlicer profile
-      // inheritance/machine compatibility requires a separate validated path.
-      const overrides = parseTestProcessOverrides(processOverrides);
-      await session.applyProfile("orca.native-json", encode(overrides));
+    if (effectiveProcess !== null) {
+      // Apply one validated effective process fragment, including any selected
+      // inherited settings and explicit overrides, before objects and slicing.
+      await session.applyProfile("orca.native-json", encode(effectiveProcess));
     }
     const project = makeMultiStlProject(items);
     await session.setObjects(project.blob, project.manifest);
