@@ -741,3 +741,19 @@ native CLI to WASM. Per-feature length and bounding envelopes are coarse
 invariants: they do not prove the same ordered XY/G-code paths, extrusion
 volume, arc interpretation, full profile equivalence or print safety.
 The candidate WASM artifact and production Pages remain unchanged.
+
+## 2026-11-17: 3D commanded-feedrate color preview (localhost opt-in only)
+
+The isolated 3D G-code viewer now provides a switch between the previous
+T-selector colors and six fixed diagnostic bins of **modal G-code F** (including
+a distinct unknown-F bucket). Values are parsed as mm/min and displayed as
+mm/s. Toolpath geometries and feature filtering are unchanged by switching
+colors. Standalone unit tests cover boundaries and invalid/missing F.
+The isolated Chrome flow checks that real WASM G-code retains the same
+segment count before, during, and after palette changes, including with
+a feature filter active.
+
+This is a **display-only improvement**, not a native OrcaSlicer Preview
+replica, actual speed measurement, acceleration simulation, full-profile
+parity, executable/print-safe G-code, or a production deployment. The
+published Pages app still does not enable the WASM engine.
