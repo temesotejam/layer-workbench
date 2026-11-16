@@ -83,3 +83,28 @@ The [native CLI PR #34](https://github.com/temesotejam/layer-workbench/pull/34) 
 The CI prepares full flat records with **111 machine keys, 240 process keys, and 73 filament keys** (including `type` and `name`), keeps vectors intact, and records exact preset/asset SHA-256 hashes. It invokes the SHA-pinned official Ubuntu 24.04 AppImage with `--load-settings`, `--load-filaments`, `--arrange 0`, `--slice 0`, and the same independently generated two-cube Core 3MF. The real [Chrome-independent native workflow run #43782297548](https://github.com/temesotejam/layer-workbench/actions/runs/43782297548) **PASSed**. One `plate_1.gcode` was produced (SHA-256 `4d472e43cfd84f6661c5d37161e3dda9fe52ac457c2285193d6a0abf2e3854f6`), with **14,059 parsed commands, 13,771 G0/G1/G2/G3 moves, and 7,722 conservatively counted positive-E XY moves**. It requires at least 100 actual extrusion moves rather than accepting an empty G-code or a successful exit alone.
 
 **Proof limit:** the native executable *accepted the full resolved input files* and returned nonempty G-code; this does not mean every one of the upstream keys was applied as expected. The selected Generic PLA has multivariant values that require explicit semantic reconciliation before any machine-use claim. This run does **not** independently measure final feature speeds, dimensions or temperature/application equivalence, nor compare WASM output with the exact same input files. The CI stores only diagnostic logs and digests; neither resulting G-code nor licensed profile JSON is redistributed or deployed. Never print from this test output. The next gates are effective-config/feature application audit, exact-input WASM fixture generation and numerical path comparison.
+
+
+## 2026-11-16: native process layer-height effective-settings probe
+
+The native CLI integration workflow now includes an explicit **one-setting perturbation test**.
+It first slices the same two-object, arranged-off Core 3MF with the exact
+source-pinned full Creality CR-10 / Generic PLA profile (process layer_height
+0.20 mm). It then privately clones only the resolved process JSON, changes
+layer_height to 0.25 mm, and slices the same fixture again with the same
+official AppImage, machine/filament JSON, and CLI flags. These experimental
+outputs remain inside ephemeral CI runner directories.
+
+The independent scripts/verify_native_layer_height.py counts **distinct Z
+levels on real positive-E XY extrusion moves**, tracks absolute/relative XYZ,
+M82/M83, G92, and units, and checks that the median Z-layer step shifts from
+approximately 0.20 to 0.25 mm while the number of deposited layers decreases.
+Unchanged G-code, missing extrusion, insufficient print height or ambiguous
+motion words cause failure. Offline synthetic regression tests cover modal
+extrusion, Z-only priming, failure on unchanged settings, and ambiguous words.
+
+This tests observable native **process option application** for one synthetic
+fixture; it does not certify all upstream keys, full vendor semantics, native
+3MF parity, WASM capability, native-vs-WASM G-code equality, or printer safety.
+Only hash manifests and textual diagnostics are archived; no generated G-code
+or licensed upstream profiles are redistributed.
