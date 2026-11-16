@@ -154,8 +154,11 @@ export function makeRestrictedInitConfig(profileCollection=null) {
     (key.endsWith("_initial_layer") &&
       plateFields.has(key.slice(0,-"_initial_layer".length))));
   if (selectedPlateKey===null) {
-    if (Object.hasOwn(filament,"bed_temperature") || allPlateKeys.length)
-      throw new Error("Native bed temperature requires an explicit plate choice.");
+    // Upstream may carry a legacy scalar bed_temperature without selecting
+    // a native plate enum. Preserve that bounded fallback, but never infer
+    // or forward any plate-specific vectors without an explicit choice.
+    if (allPlateKeys.length)
+      throw new Error("Native plate vectors require an explicit plate choice.");
   } else {
     if (!Object.hasOwn(filament,selectedPlateKey) ||
         !Object.hasOwn(filament,"bed_temperature") ||
