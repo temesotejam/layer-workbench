@@ -165,3 +165,31 @@ not deployed or published.
 Next: build a true same-bytes, same-effective-profile native/WASM G-code
 pair and report numerical toolpath differences, including any unsupported
 WASM profile options; do not claim parity until that comparison exists.
+
+## 2026-11-16: ordered-command repeatability gate before native/WASM pairing
+
+A reproducibility prerequisite now re-runs the **same** pinned official-native
+v2.5.0 AppImage on the same Core 3MF, full flattened machine/process/filament
+JSON, `--arrange 0` mode, and CLI flags **inside one CI runner**. The
+`scripts/verify_native_gcode_repeatability.py` audit requires at least 100
+conservatively counted positive-E XY deposition moves in each run, a bounded
+G-code size, and an exact sequence of canonical G/M/T commands. It records
+both raw SHA-256 digests, both ordered-command SHA-256 fingerprints, command
+counts and up to 15 actual command differences when any exist.
+
+The canonical comparison omits comments/blank lines and normalizes numeric
+formatting, but it **does not** sort commands, drop printer commands or
+silently tolerate toolpath changes. A byte-level hash mismatch with matching
+ordered commands can be reported without falsely asserting different toolpaths.
+A mismatching command sequence or travel-only output fails the acceptance gate.
+Regression tests cover raw metadata drift, numeric/toolpath differences,
+missing deposition, invalid sizes, and nonzero CLI exit status.
+
+This only establishes *official-native repeatability for one synthetic
+fixture*. It neither proves that the resolved upstream settings fully applied,
+nor verifies WASM profile equivalence, native/WASM G-code parity or machine
+safety. Generated G-code and upstream JSON are kept inside disposable CI;
+only textual fingerprints, hashes and audit diagnostics are archived.
+**Next:** emit the same fixture bytes and *same effective complete settings*
+through the WASM engine and run the existing strict `check_parity_pair.py`
+gate before making any matching-toolpath claim.
