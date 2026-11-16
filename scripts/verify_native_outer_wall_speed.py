@@ -19,8 +19,11 @@ OUTER_WALL = {"outer wall", "external perimeter"}
 MOVE = {"G0", "G1", "G00", "G01", "G2", "G3", "G02", "G03"}
 
 
-def outer_wall_feedrates(path, features=OUTER_WALL, *, feature_counts=None):
+def outer_wall_feedrates(path, features=OUTER_WALL, *, feature_counts=None, feature_lengths=None):
     """Return (positive XY wall deposition count, commanded feedrates mm/min).
+
+    Optional feature_lengths accumulates straight G1 XY path length in mm
+    by explicitly accepted feature. Arcs remain excluded from this subset.
 
     F-only travel/moves and extrusion-only priming cannot satisfy the gate.
     Reject ambiguous G-code instead of accepting a misleading speed reading.
@@ -99,6 +102,10 @@ def outer_wall_feedrates(path, features=OUTER_WALL, *, feature_counts=None):
                 count += 1
                 if feature_counts is not None:
                     feature_counts[feature] = feature_counts.get(feature, 0) + 1
+                if feature_lengths is not None:
+                    dx, dy = x - old_x, y - old_y
+                    distance = (dx * dx + dy * dy).sqrt()
+                    feature_lengths[feature] = feature_lengths.get(feature, D(0)) + distance
     return count, speeds
 
 
