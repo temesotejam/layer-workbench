@@ -6,6 +6,10 @@ on:
     paths:
       - ".github/workflows/probe-native-v250-cli.yml"
       - "scripts/make_3mf_two_build_fixture.py"
+      - "scripts/verify_native_exported_stl.py"
+      - "scripts/test_verify_native_exported_stl.py"
+      - "scripts/verify_native_exported_stl.py"
+      - "scripts/test_verify_native_exported_stl.py"
   push:
     branches: [main]
     paths:
@@ -21,6 +25,9 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+
+      - name: Unit-test the STL placement audit offline
+        run: python3 -m unittest discover -s scripts -p test_verify_native_exported_stl.py -v
 
       - name: Download the official v2.5.0 Linux AppImage only inside CI
         shell: bash
@@ -94,6 +101,34 @@ jobs:
           echo "PASS: official v2.5.0 CLI --help and synthetic Core 3MF --info"
           # The headless test only proves CLI startup and model inspection.
           # It is not a native G-code result, full-profile comparison or 3MF round-trip.
+
+      - name: Check native Core 3MF export placement with real geometry
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="${RUNNER_TEMP}/OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.5.0.AppImage"
+          mkdir -p native-cli-output/stl-export
+          # Preserve explicit Core 3MF placements; default CLI auto-arrange
+          # moved the cubes from (90,90)/(150,90) to adjacent Y positions.
+          timeout 120s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
+            native-cli-output/two-build-items.3mf \
+            --arrange 0 --export-stl --outputdir native-cli-output/stl-export \
+            > native-cli-output/native-export-stl.log 2>&1 || {
+              cat native-cli-output/native-export-stl.log
+              exit 1
+            }
+          mapfile -d '' stls < <(find native-cli-output -type f -iname '*.stl' -print0)
+          printf "STL export files (count=%s):\n" "${#stls[@]}"
+          printf "  %s\n" "${stls[@]}"
+          if [ "${#stls[@]}" -lt 1 ] || [ "${#stls[@]}" -gt 2 ]; then
+            cat native-cli-output/native-export-stl.log
+            echo "Expected one combined or two per-item native STL files, got ${#stls[@]}"
+            exit 1
+          fi
+          python3 scripts/verify_native_exported_stl.py "${stls[@]}" \
+            | tee native-cli-output/native-stl-geometry.log
+          sha256sum "${stls[@]}" | tee native-cli-output/native-stl.sha256
+          echo "PASS: official native v2.5.0 preserved both synthetic Core 3MF build placements"
 
       - name: Archive text diagnostics without redistributing the AppImage
         if: always()
