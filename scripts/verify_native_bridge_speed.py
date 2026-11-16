@@ -32,7 +32,7 @@ def verify(baseline, slow):
     baseline_target = sum(abs(speed-D(120)) <= D(12) for speed in a)
     if target_count < 3 or target_count <= baseline_target:
         raise ValueError(f"no newly effective bridge F120 deposition: {baseline_target}/{target_count}")
-    if a_median <= b_median * 1.5:
+    if a_median <= b_median * D('1.5'):
         raise ValueError(f"bridge speed did not significantly decrease: F{a_median}/F{b_median}")
     return {
         "baseline_tagged_bridge_xy_extrusions": a_count,
