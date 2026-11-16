@@ -94,6 +94,10 @@ assert.equal(splitAudit.baseline_tagged_bridge_extrusion_segments,1);
 assert.equal(splitAudit.candidate_tagged_bridge_extrusion_segments,2);
 assert.equal(splitAudit.baseline_tagged_bridge_xy_length_mm,2);
 assert.equal(splitAudit.candidate_tagged_bridge_xy_length_mm,2);
+assert.equal(splitAudit.bridge_path_geometry_consistent,true,
+  "Different segmentation of the same path must remain eligible");
+assert.deepEqual(splitAudit.bridge_path_geometry_mismatched_features,[]);
+
 assert.deepEqual(splitAudit.candidate_tagged_bridge_xy_lengths_mm_by_feature,{bridge:2});
 // Finite endpoints can overflow when subtracted: those are not usable paths.
 const overflowAudit=auditBridgeSpeedSegments(oneSegment,[
@@ -102,3 +106,41 @@ const overflowAudit=auditBridgeSpeedSegments(oneSegment,[
 assert.equal(overflowAudit.candidate_tagged_bridge_extrusion_segments,0);
 assert.equal(overflowAudit.candidate_tagged_bridge_xy_length_mm,0);
 console.log("PASS: bridge XY lengths are segmentation-aware and non-finite-safe");
+
+// A newly appearing F120 is NOT enough if the alleged speed-only override
+// also changes feature geometry. Preserve the evidence, but fail closed.
+const shifted=auditBridgeSpeedSegments(
+  [segment("Bridge",2400)],
+  [{...segment("Bridge",120),x1:10,x2:11}]);
+assert.deepEqual(shifted.new_tagged_bridge_feedrates_mm_min,[120]);
+assert.equal(shifted.target_feedrate_observed,false);
+assert.equal(shifted.result,"bridge_geometry_changed_speed_unverified");
+assert.deepEqual(shifted.bridge_path_geometry_mismatched_features,["bridge"]);
+assert.equal(shifted.baseline_tagged_bridge_xy_length_mm,
+  shifted.candidate_tagged_bridge_xy_length_mm,
+  "Shifted path has the SAME cumulative length; envelope guard is required");
+assert.notDeepEqual(shifted.baseline_tagged_bridge_xy_bounds_mm_by_feature,
+  shifted.candidate_tagged_bridge_xy_bounds_mm_by_feature);
+
+const shortened=auditBridgeSpeedSegments(
+  [{...segment("Bridge",2400),x2:2}],
+  [segment("Bridge",120)]);
+assert.equal(shortened.target_feedrate_observed,false);
+assert.deepEqual(shortened.bridge_path_geometry_mismatched_features,["bridge"]);
+
+const retagged=auditBridgeSpeedSegments(
+  [segment("Bridge",2400)],
+  [segment("Internal bridge",120)]);
+assert.equal(retagged.target_feedrate_observed,false);
+assert.deepEqual(retagged.bridge_path_geometry_mismatched_features,
+  ["bridge","internal bridge"]);
+
+// The 0.01 mm threshold is for this SAME-engine diagnostic only.
+// It is intentionally not a toolpath-parity tolerance.
+const tinyDrift=auditBridgeSpeedSegments(
+  [segment("Bridge",2400)],
+  [{...segment("Bridge",120),x2:1.005}]);
+assert.equal(tinyDrift.bridge_path_geometry_consistent,true);
+assert.equal(tinyDrift.target_feedrate_observed,true);
+assert.equal(shifted.native_desktop_parity,false);
+console.log("PASS: bridge speed evidence requires subtype length/envelope invariance, not merely a new F target");

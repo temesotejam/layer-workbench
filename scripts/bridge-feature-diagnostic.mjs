@@ -52,14 +52,50 @@ export function auditBridgeSpeedSegments(baselineSegments,candidateSegments,targ
     };
   };
   const baselineLengths=xyLengths(base),candidateLengths=xyLengths(changed);
+  // A speed-only perturbation must retain at least the gross bridge geometry.
+  // Subtype length AND XY envelope are tested: length alone misses a shifted
+  // or mirrored toolpath. This is NOT ordered-toolpath or native/WASM parity.
+  const bounds=items=>{
+    const groups=Object.create(null);
+    for(const s of items) {
+      const label=normalizeFeature(s.feature);
+      const b=groups[label]??(groups[label]={
+        minX:Infinity,maxX:-Infinity,minY:Infinity,maxY:-Infinity});
+      b.minX=Math.min(b.minX,s.x1,s.x2);
+      b.maxX=Math.max(b.maxX,s.x1,s.x2);
+      b.minY=Math.min(b.minY,s.y1,s.y2);
+      b.maxY=Math.max(b.maxY,s.y1,s.y2);
+    }
+    return Object.fromEntries(Object.entries(groups).sort(([a],[b])=>a.localeCompare(b))
+      .map(([label,b])=>[label,Object.fromEntries(
+        Object.entries(b).map(([name,value])=>[name,Number(value.toFixed(6))]))]));
+  };
+  const baselineBounds=bounds(base),candidateBounds=bounds(changed);
+  // Allow only a 0.01 mm numerical/tessellation difference in gross bridge
+  // lengths and envelopes; never infer identical ordered G-code from this.
+  const geometryToleranceMm=0.01;
+  const geometryDifferences=[...new Set([
+    ...Object.keys(baselineLengths.byFeature),
+    ...Object.keys(candidateLengths.byFeature)])].sort().filter(label=>{
+    if(!Object.hasOwn(baselineBounds,label)||!Object.hasOwn(candidateBounds,label))
+      return true;
+    if(Math.abs(baselineLengths.byFeature[label]-
+        candidateLengths.byFeature[label])>geometryToleranceMm)return true;
+    return ["minX","maxX","minY","maxY"].some(axis=>
+      Math.abs(baselineBounds[label][axis]-candidateBounds[label][axis])>
+        geometryToleranceMm);
+  });
+  const geometryConsistent=base.length>0&&changed.length>0&&geometryDifferences.length===0;
   const rates=items=>[...new Set(items.map(s=>Math.round(s.feedrateMmMin*100)/100))]
     .sort((a,b)=>a-b);
   const baselineFeeds=rates(base),candidateFeeds=rates(changed);
   const newFeeds=candidateFeeds.filter(f=>!baselineFeeds.some(b=>Math.abs(b-f)<0.01));
   const targetAppeared=newFeeds.some(f=>Math.abs(f-targetMmMin)<0.01);
-  const observed=base.length>0&&changed.length>0&&targetAppeared;
+  const observed=geometryConsistent&&targetAppeared;
   return {
     result:observed?"observed_tagged_bridge_feedrate_effect":
+      base.length&&changed.length&&!geometryConsistent?
+        "bridge_geometry_changed_speed_unverified":
       base.length||changed.length?"bridge_paths_observed_but_speed_unverified":
       "inconclusive_no_tagged_bridge_paths",
     baseline_tagged_bridge_extrusion_segments:base.length,
@@ -70,6 +106,11 @@ export function auditBridgeSpeedSegments(baselineSegments,candidateSegments,targ
     candidate_tagged_bridge_xy_length_mm:candidateLengths.total,
     baseline_tagged_bridge_xy_lengths_mm_by_feature:baselineLengths.byFeature,
     candidate_tagged_bridge_xy_lengths_mm_by_feature:candidateLengths.byFeature,
+    baseline_tagged_bridge_xy_bounds_mm_by_feature:baselineBounds,
+    candidate_tagged_bridge_xy_bounds_mm_by_feature:candidateBounds,
+    bridge_path_geometry_consistent:geometryConsistent,
+    bridge_path_geometry_tolerance_mm:geometryToleranceMm,
+    bridge_path_geometry_mismatched_features:geometryDifferences,
     baseline_tagged_bridge_feedrates_mm_min:baselineFeeds,
     candidate_tagged_bridge_feedrates_mm_min:candidateFeeds,
     new_tagged_bridge_feedrates_mm_min:newFeeds,
