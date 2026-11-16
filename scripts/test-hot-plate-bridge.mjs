@@ -15,9 +15,10 @@ const records=[
 ];
 const selection={machine:"TestPrinter",filament:"PLA Selected",process:"Standard"};
 async function run(plateType,filamentVariant) {
-  let config=null,disposed=false;
+  let config=null,process=null,disposed=false;
   const fakeEngine={createSession:async()=>({
     init:async bytes=>{config=JSON.parse(new TextDecoder().decode(bytes));},
+    applyProfile:async(format,bytes)=>{process={format,settings:JSON.parse(new TextDecoder().decode(bytes))};},
     setObjects:async()=>{},
     slice:async()=>({schemaVersion:"0.7.0",plateResults:[{
       plateId:"plate-0",assets:[{kind:"gcode",id:"fixture"}],
@@ -28,9 +29,13 @@ async function run(plateType,filamentVariant) {
   const resolved=resolveOrcaProfileCollection(records,selection,{plateType,filamentVariant});
   await sliceMultiStlWithEngine(fakeEngine,[{bytes:new Uint8Array(134)}],null,null,resolved);
   assert.ok(disposed,"Slicer session must be disposed");
-  return {config,resolved};
+  return {config,process,resolved};
 }
 const implicit=await run(undefined);
+assert.equal(implicit.process?.format,"orca.native-json");
+assert.deepEqual(implicit.process?.settings,
+  {layer_height:"0.2",wall_loops:"2",sparse_infill_density:"15"},
+  "selected restricted process must now be sent even without a duplicate override");
 assert.equal(implicit.config.bed_temperature,GENERIC_PLA_TEST_CONFIG.bed_temperature);
 assert.equal(implicit.resolved.filament.selectedBed,null);
 const explicit=await run("hot","Direct Drive High Flow");
@@ -64,6 +69,7 @@ const texturedResolved=resolveOrcaProfileCollection(texturedRecords,selection,{p
 let texturedInit=null;
 await sliceMultiStlWithEngine({createSession:async()=>({
   init:async bytes=>{texturedInit=JSON.parse(new TextDecoder().decode(bytes));},
+  applyProfile:async()=>{},
   setObjects:async()=>{},slice:async()=>({schemaVersion:"0.7.0",plateResults:[{plateId:"plate-0",assets:[{kind:"gcode",id:"fixture"}]}]}),
   getAsset:async()=>new TextEncoder().encode("G1 X1 Y1 E1\n".repeat(30)),
   dispose:async()=>{}

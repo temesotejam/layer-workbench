@@ -786,3 +786,31 @@ The real isolated Chrome/WASM regression moves both sliders at the first, last
 and an intermediate layer and checks cross-view selection and labels. This is
 read-only visual coordination, **not** native OrcaSlicer Preview parity, full
 3MF/profile compatibility, G-code modification or a production deployment.
+
+## 2026-11-17: selected restricted process settings applied by the WASM bridge
+
+The direct `sliceMultiStlWithEngine` helper previously required callers to
+repeat `profileCollection.process.settings` in the separate
+`processOverrides` argument. The interactive local Prepare lab happened
+to pass this duplicate argument, but other callers could supply a selected
+Orca machine/filament/process collection and **silently slice with generic
+PLA process defaults**. This ambiguity obstructed controlled profile
+comparison, even for the small supported process subset.
+
+The bridge now resolves its **effective, bounded test-only process fragment**
+before opening a WASM session: it takes the explicitly selected inherited
+process settings by default; separately supplied manual overrides replace
+only overlapping keys; each source independently passes the existing strict
+native-key/enum/number allow-list. The effective fragment is applied once,
+before setting plate objects. Missing, empty, unsupported or out-of-bounds
+selected process settings cause an error rather than silent generic fallback.
+The generic PLA fixture still works when no collection was selected.
+
+`scripts/test-slice-stl-process-application.mjs` uses a mocked session to
+check calls, merged option precedence, no duplicate profile application,
+and rejection before session creation. The source-pinned real-profile and
+isolated Chrome workflows run the regression. **No full native PrintConfig
+is forwarded**: all unsupported machine/process/filament keys, variant
+semantics, start/end G-code, native-vs-WASM parity, print safety and public
+WASM deployment remain unverified. The change does not enable any feature
+on GitHub Pages.
