@@ -8,7 +8,7 @@ import {ALL_GCODE_PATHS,visibleGcodeSegment} from "./gcode-feature-filter.mjs";
 // Experimental G-code-derived 3D line preview in the *local isolated lab*.
 // Coordinates are native G-code millimeters, not reconstructed STL geometry.
 // Maximum 200k parsed segments is enforced by the shared parser.
-export function createThreeDToolpathPreview(container) {
+export function createThreeDToolpathPreview(container,{onLayerChange}={}) {
   const section=document.createElement("section");
   section.className="gcode-3d-preview";
   section.hidden=true;
@@ -20,7 +20,7 @@ export function createThreeDToolpathPreview(container) {
     <output id="lab-3d-color-legend" aria-live="polite"></output>
     <output id="lab-3d-layer-info"></output>
     <div id="lab-3d-canvas" aria-label="3D G-code toolpath preview" role="img"></div>
-    <p>Choose accumulated layers or a single Z layer. Changing the 2D type selector also filters 3D deposition paths; this follows only explicit G-code feature comments. Tool-selector mode uses orange for one/unknown T selector and distinct colors for multiple T selectors. Commanded-speed mode groups modal G-code F values in mm/s; it does not show achieved motion speed or account for acceleration. Blue-gray: travel. XY planar and helical arcs are approximated; non-XY and invalid arcs are omitted. Diagnostic only; not native OrcaSlicer Preview or a print safety check.</p>
+    <p>The 2D and 3D layer sliders stay synchronized. Choose accumulated layers or a single Z layer. Changing the 2D type selector also filters 3D deposition paths; this follows only explicit G-code feature comments. Tool-selector mode uses orange for one/unknown T selector and distinct colors for multiple T selectors. Commanded-speed mode groups modal G-code F values in mm/s; it does not show achieved motion speed or account for acceleration. Blue-gray: travel. XY planar and helical arcs are approximated; non-XY and invalid arcs are omitted. Diagnostic only; not native OrcaSlicer Preview or a print safety check.</p>
   `;
   container.appendChild(section);
   const host=section.querySelector("#lab-3d-canvas");
@@ -108,7 +108,11 @@ export function createThreeDToolpathPreview(container) {
     host.dataset.layerMode=single?"single":"through";
     renderer.render(scene,camera);
   }
-  slider.addEventListener("input",()=>through(Number(slider.value)));
+  slider.addEventListener("input",()=>{
+    const index=Number(slider.value);
+    through(index);
+    onLayerChange?.(index);
+  });
   layerModeSelect.addEventListener("change",()=>{
     if(layerObjects.length)through(Number(slider.value));
   });
@@ -184,6 +188,13 @@ export function createThreeDToolpathPreview(container) {
       colorLegend.textContent=speedMode?commandedSpeedLegend():
         "T selector labels only; colors are not filament identities";
       return layerObjects.length;
+    },
+    selectLayer(index) {
+      if(!layers.length)return;
+      if(!Number.isSafeInteger(index)||index<0||index>=layers.length)
+        throw new RangeError("Invalid G-code layer selection");
+      slider.value=String(index);
+      through(index);
     },
     clear() {cleanup();layers=[];layerSegmentCounts=[];lastData=null;lastFeature=ALL_GCODE_PATHS;section.hidden=true;host.dataset.segmentCount="0";host.dataset.visibleSegments="0";host.dataset.visibleLayers="0";host.dataset.layerMode="through";host.dataset.featureFilter=ALL_GCODE_PATHS;host.dataset.colorMode="tool";colorSelect.value="tool";layerModeSelect.value="through";colorLegend.textContent="";},
   };

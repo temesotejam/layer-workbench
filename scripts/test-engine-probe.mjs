@@ -161,14 +161,19 @@ try {
     assert.ok(Number(await prepare.locator('#lab-toolpath-canvas').getAttribute('data-segment-count'))>0);
     await prepare.locator('#lab-layer-range').fill('0');
     assert.match(await prepare.locator('#lab-layer-info').innerText(),/^1\//);
+    assert.equal(await prepare.locator('#lab-3d-layer-range').inputValue(),'0',
+      'Selecting 2D layer must update the 3D layer picker');
     assert.equal(await prepare.locator('.gcode-3d-preview').isVisible(),true);
     assert.equal(await prepare.locator('#lab-3d-canvas canvas').isVisible(),true);
     assert.ok(Number(await prepare.locator('#lab-3d-canvas').getAttribute('data-segment-count'))>0);
     const initial3DMax=Number(await prepare.locator('#lab-3d-layer-range').getAttribute('max'));
     assert.ok(initial3DMax>0);
     await prepare.locator('#lab-3d-layer-range').fill('0');
+    assert.equal(await prepare.locator('#lab-layer-range').inputValue(),'0',
+      'Selecting 3D layer must update the 2D layer picker');
     assert.equal(await prepare.locator('#lab-3d-canvas').getAttribute('data-visible-layers'),'1');
     await prepare.locator('#lab-3d-layer-range').fill(String(initial3DMax));
+    assert.equal(await prepare.locator('#lab-layer-range').inputValue(),String(initial3DMax));
     assert.equal(await prepare.locator('#lab-3d-canvas').getAttribute('data-visible-layers'),String(initial3DMax+1));
     // The isolated 3D viewer can inspect one Z layer without mutating the
     // actual WASM G-code or rebuilding its toolpath geometries.
@@ -176,6 +181,8 @@ try {
     assert.ok(fullLayerSegments>0);
     const middleLayer=Math.floor(initial3DMax/2);
     await prepare.locator('#lab-3d-layer-range').fill(String(middleLayer));
+    assert.equal(await prepare.locator('#lab-layer-range').inputValue(),String(middleLayer));
+    assert.match(await prepare.locator('#lab-layer-info').innerText(),new RegExp(`^${middleLayer+1}/`));
     const cumulativeSegments=Number(await prepare.locator('#lab-3d-canvas').getAttribute('data-visible-segments'));
     await prepare.locator('#lab-3d-layer-mode').selectOption('single');
     assert.equal(await prepare.locator('#lab-3d-canvas').getAttribute('data-layer-mode'),'single');
@@ -193,7 +200,7 @@ try {
     assert.equal(Number(await prepare.locator('#lab-3d-canvas').getAttribute('data-visible-segments')),cumulativeSegments);
     await prepare.locator('#lab-3d-layer-range').fill(String(initial3DMax));
     assert.equal(Number(await prepare.locator('#lab-3d-canvas').getAttribute('data-visible-segments')),fullLayerSegments);
-    console.log('PASS: real Chrome/WASM single-layer 3D visibility, cumulative restore and palette switch preserve selection');
+    console.log('PASS: real Chrome/WASM synchronized 2D/3D layer pickers, single-layer visibility and palette switch');
     // Exercise the actual localhost 2D -> 3D feature selector with real
     // WASM-generated G-code. A selected type must filter deposition without
     // treating all travels as part of the selected type.

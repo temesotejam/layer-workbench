@@ -21,7 +21,12 @@ export function createLayerPreview(container) {
     <p>Type filtering is based only on explicit ;TYPE: or ;FEATURE: G-code comments, not independently verified native feature classes. A selected type hides travels in both views. Extrusion is orange for one/unknown T selector; multiple T selectors use distinct colors. Gray dashed: travel. Colors identify G-code T numbers, not actual filament colors or physical nozzles. G0/G1 and XY G2/G3 I/J or R arcs are approximated; helical, non-XY, invalid arcs and firmware macros are omitted. Diagnostic only.</p>
   `;
   container.appendChild(section);
-  const threeD=createThreeDToolpathPreview(container);
+  const threeD=createThreeDToolpathPreview(container,{
+    onLayerChange(index) {
+      slider.value=String(index);
+      render(index);
+    },
+  });
   const canvas=section.querySelector("canvas");
   const slider=section.querySelector("#lab-layer-range");
   const info=section.querySelector("#lab-layer-info");
@@ -99,7 +104,11 @@ export function createLayerPreview(container) {
     info.textContent=`${index+1}/${parsed.layers.length} · Z=${layer.z.toFixed(3)} mm · ${layer.segments.length} segments${feedInfo}`;
     canvas.dataset.segmentCount=String(visible.length);
   }
-  slider.addEventListener("input",()=>render(Number(slider.value)));
+  slider.addEventListener("input",()=>{
+    const index=Number(slider.value);
+    render(index);
+    threeD.selectLayer(index);
+  });
   featureSelect.addEventListener("change",()=>{
     if(!parsed)return;
     selectedFeature=featureSelect.value;
