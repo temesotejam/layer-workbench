@@ -131,3 +131,37 @@ commands as if they were identical would be an incorrect acceptance test.
 The diagnostic G-code, upstream JSON and official AppImage remain ephemeral.
 Only textual audit logs and file digests may be uploaded. Never print from
 these fixtures or enable the unverified engine on the public site.
+
+
+## 2026-11-16: source-pinned native outer-wall speed applied to actual extrusion commands
+
+[PR #37](https://github.com/temesotejam/layer-workbench/pull/37)
+adds a third **effective native setting** test to the same official v2.5.0
+AppImage and independently generated two-item Core 3MF. The pinned,
+fully inherited CR-10 process option `outer_wall_speed` is **25 mm/s**.
+The CI clones that private process JSON, changes only this value to
+**2 mm/s**, and invokes the same native CLI with the same machine,
+filament, object placements and flags.
+
+The independent `scripts/verify_native_outer_wall_speed.py` reads real
+G-code, tracks modal XYZ/E/units/feedrate, and attributes only **positive-E
+XY G1 extrusion** under explicit `;TYPE:` / `;FEATURE:` outer-wall tags.
+Travel moves, isolated E priming, free-text comments and malformed
+feature directives cannot satisfy the acceptance gate. Ambiguous
+motion words fail closed. Regression tests cover both positive and
+negative cases.
+
+In the [first PR native run #43803096242](https://github.com/temesotejam/layer-workbench/actions/runs/43803096242),
+**PASS**: both outputs had **800** tagged positive XY outer-wall moves.
+Median commanded outer-wall speed changed from **F1500 mm/min
+(25 mm/s)** to **F120 mm/min (2 mm/s)**. This confirms the process option
+affects native generated path commands for this fixture; it does **not**
+measure physical carriage velocity, demonstrate all machine/profile
+settings, compare native vs WASM, establish complete OrcaSlicer parity,
+or approve printing. Only text logs and hashes are retained; the
+temporary generated G-code and source-pinned upstream profile files are
+not deployed or published.
+
+Next: build a true same-bytes, same-effective-profile native/WASM G-code
+pair and report numerical toolpath differences, including any unsupported
+WASM profile options; do not claim parity until that comparison exists.
