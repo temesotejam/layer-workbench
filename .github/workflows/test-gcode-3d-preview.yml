@@ -10,7 +10,6 @@ on:
       - "scripts/gcode-3d-preview.mjs"
       - "scripts/gcode-speed-colors.mjs"
       - "scripts/test-gcode-speed-colors.mjs"
-      - "scripts/test-engine-probe.mjs"
       - "scripts/gcode-3d-vertices.mjs"
       - "scripts/test-gcode-preview-parser.mjs"
       - "scripts/test-gcode-3d-vertices.mjs"
@@ -25,7 +24,6 @@ on:
       - "scripts/gcode-3d-preview.mjs"
       - "scripts/gcode-speed-colors.mjs"
       - "scripts/test-gcode-speed-colors.mjs"
-      - "scripts/test-engine-probe.mjs"
       - "scripts/gcode-3d-vertices.mjs"
       - "scripts/test-gcode-preview-parser.mjs"
       - "scripts/test-gcode-3d-vertices.mjs"
@@ -53,4 +51,5 @@ jobs:
           node scripts/test-gcode-preview-parser.mjs
           node scripts/test-gcode-feature-filter.mjs
           node scripts/test-gcode-3d-vertices.mjs
+          node --check scripts/gcode-speed-colors.mjs
           node scripts/test-gcode-speed-colors.mjs
