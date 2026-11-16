@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import {resolveRestrictedProcessSettings, sliceMultiStlWithEngine} from "./slice-stl.mjs";
+import {resolveRestrictedProcessSettings, makeRestrictedInitConfig, sliceMultiStlWithEngine} from "./slice-stl.mjs";
 
 const selected = {
   machine: {settings: {nozzle_diameter:"0.4", printable_height:"250"}},
@@ -69,4 +69,64 @@ const items=[{bytes:new Uint8Array(134)}];
   }),/outside the safe test range/);
   assert.equal(calls.length,0,"invalid selected profiles must be rejected before native session creation");
 }
+
+// Session.init must be just as fail-closed as session.applyProfile. A caller
+// bypassing the upstream resolver must not inject native G-code or unknown
+// machine/filament options that the localhost diagnostic cannot audit.
+{
+  const init=makeRestrictedInitConfig(selected);
+  assert.equal(init.nozzle_diameter,"0.4");
+  assert.equal(init.printable_height,"250");
+  assert.equal(init.nozzle_temperature,"220");
+  assert.equal(init.layer_height,0.2,"generic process defaults remain diagnostic-only");
+  const legacy=makeRestrictedInitConfig({...selected,filament:{settings:{
+    nozzle_temperature:"220",bed_temperature:"55"
+  }}});
+  assert.equal(legacy.bed_temperature,"55",
+    "legacy bounded scalar bed temperature is allowed without inferring a plate");
+  assert.equal(legacy.curr_bed_type,undefined);
+}
+{
+  const withBed={...selected,filament:{settings:{
+    nozzle_temperature:"220",nozzle_temperature_initial_layer:["235"],
+    filament_flow_ratio:["0.98"],filament_max_volumetric_speed:["21"],
+    curr_bed_type:"High Temp Plate",bed_temperature:"65",
+    hot_plate_temp:["65"],hot_plate_temp_initial_layer:["75"],
+  }}};
+  const init=makeRestrictedInitConfig(withBed);
+  assert.deepEqual(init.filament_max_volumetric_speed,["21"]);
+  assert.deepEqual(init.nozzle_temperature_initial_layer,["235"]);
+  assert.equal(init.curr_bed_type,"High Temp Plate");
+  assert.deepEqual(init.hot_plate_temp_initial_layer,["75"]);
+}
+const invalidCollections=[
+  {...selected,machine:{settings:{...selected.machine.settings,
+    machine_start_gcode:"M104 S290"}}},
+  {...selected,filament:{settings:{...selected.filament.settings,
+    filament_start_gcode:"M109 S290"}}},
+  {...selected,machine:{settings:{nozzle_diameter:["0.4","0.6"],printable_height:"250"}}},
+  {...selected,filament:{settings:{nozzle_temperature:["210","240"]}}},
+  {...selected,filament:{settings:{nozzle_temperature:"220",hot_plate_temp:["65"]}}},
+  {...selected,filament:{settings:{nozzle_temperature:"220",
+    curr_bed_type:"High Temp Plate",bed_temperature:"65",hot_plate_temp:["55"]}}},
+  {...selected,filament:{settings:{nozzle_temperature:"220",
+    curr_bed_type:"Textured PEI Plate",bed_temperature:"55",
+    hot_plate_temp:["55"]}}},
+  {...selected,filament:{settings:JSON.parse(
+    '{"nozzle_temperature":"220","__proto__":{"machine_start_gcode":"M104 S290"}}')}},
+  {...selected,machine:{settings:{nozzle_diameter:"0.4"}}},
+];
+for(const bad of invalidCollections){
+  assert.throws(()=>makeRestrictedInitConfig(bad),
+    /Unsupported|Expected|Invalid|requires|outside|disagree|vector/,
+    "Unvetted restricted session.init settings must not pass validation");
+  const {engine,calls}=mockedEngine();
+  await assert.rejects(
+    ()=>sliceMultiStlWithEngine(engine,items,null,null,bad),
+    /Unsupported|Expected|Invalid|requires|outside|disagree|vector/);
+  assert.equal(calls.length,0,
+    "Invalid machine/filament configuration must be refused before createSession");
+}
+console.log("PASS: only bounded single-tool machine/filament settings reach native session.init");
+
 console.log("PASS: selected restricted Orca process auto-applied once, bounded override precedence and early failure");

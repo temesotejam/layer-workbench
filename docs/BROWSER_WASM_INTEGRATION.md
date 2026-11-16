@@ -814,3 +814,32 @@ is forwarded**: all unsupported machine/process/filament keys, variant
 semantics, start/end G-code, native-vs-WASM parity, print safety and public
 WASM deployment remain unverified. The change does not enable any feature
 on GitHub Pages.
+
+## 2026-11-17: fail-closed restricted machine/filament session.init validation
+
+The opt-in localhost WASM bridge now validates the **actual machine and
+filament configuration passed to session.init** before opening a session.
+Previously, direct callers could supply a nominally selected collection with
+arbitrary additional settings (including executable printer-start G-code)
+because only process overrides had a strict allow-list. That made a
+supposedly restricted comparison capable of silently accepting unaudited
+machine/material keys.
+
+Only the already supported bounded, single-nozzle machine dimensions and
+single-filament temperatures/flow vectors are accepted. A selected plate
+must use one exact upstream v2.5.0 bed enum and matching native temperature
+vector; a bounded legacy scalar bed_temperature remains available without
+inferring a plate type. No implicit native plate choice or multi-tool vector
+coercion is allowed.
+Missing required settings, inconsistent selected-plate temperatures,
+unsupported keys, malformed vectors and injected machine/filament G-code
+are rejected **before createSession**. Generic PLA test fixtures without a
+selected profile still use their existing explicit development defaults.
+
+The test-slice-stl-process-application.mjs regression checks valid
+single-tool/plate fields and rejection of untrusted direct-input objects.
+This is a defensive gate for **the restricted adapter**, not evidence that
+the full official machine/filament configuration is now implemented, nor
+proof of native-versus-WASM G-code parity, machine compatibility, printer
+readiness, or a public WASM deployment. Official vendor JSON remains an
+ephemeral CI input; the accepted engine candidate is unchanged.
