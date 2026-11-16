@@ -15,7 +15,7 @@ def fixture(step, layers, absolute_e=True):
         for j in range(3):
             e += 0.1
             code.append(f"G1 X{i+j} Y{i+j+1} E{e:.3f}" if absolute_e else
-                        "G1 X1 Y1 E0.1")
+                        f"G1 X{i+j} Y{i+j+1} E0.1")
     return "\n".join(code) + "\n"
 
 
