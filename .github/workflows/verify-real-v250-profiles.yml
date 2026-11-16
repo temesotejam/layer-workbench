@@ -7,6 +7,7 @@ on:
       - "scripts/test-process-profile.mjs"
       - "scripts/test-process-profile-unit.mjs"
       - "scripts/slice-stl.mjs"
+      - "scripts/test-slice-stl-process-application.mjs"
       - "scripts/orca-profile-collection.mjs"
       - "scripts/audit-native-wasm-profile-gap.mjs"
       - "scripts/test-audit-native-wasm-profile-gap.mjs"
@@ -40,6 +41,7 @@ on:
       - "scripts/test-orca-profile-collection.mjs"
       - "scripts/test-hot-plate-bridge.mjs"
       - "scripts/slice-stl.mjs"
+      - "scripts/test-slice-stl-process-application.mjs"
       - "scripts/test-orca-vendor-index.mjs"
       - "scripts/fetch-upstream-v250-fixture.py"
       - "scripts/fetch-upstream-v250-multi-vendor-fixture.py"
@@ -65,6 +67,7 @@ jobs:
           set -euo pipefail
           node scripts/test-orca-profile-collection.mjs
           node scripts/test-process-profile-unit.mjs
+          node scripts/test-slice-stl-process-application.mjs
           node scripts/test-hot-plate-bridge.mjs
           node scripts/test-orca-vendor-index.mjs
           node scripts/test-orca-vendor-catalog.mjs
