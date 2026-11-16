@@ -757,3 +757,17 @@ This is a **display-only improvement**, not a native OrcaSlicer Preview
 replica, actual speed measurement, acceleration simulation, full-profile
 parity, executable/print-safe G-code, or a production deployment. The
 published Pages app still does not enable the WASM engine.
+
+## 2026-11-17: isolated 3D preview single-layer inspection
+
+The localhost-only G-code-derived 3D Preview can now switch between showing
+all layers through the selected Z index and **only the selected Z layer**.
+The Z slider is preserved when changing the commanded-F palette or the
+explicit-feature filter on the same parsed G-code; loading new G-code resets
+to the final layer. The viewer tracks actual shown segment/layer counts
+separately from the immutable total parsed toolpath count. Both display modes
+reuse the already parsed G-code and do not alter generated G-code or slicing.
+The isolated Chrome regression checks the modes, layer counts, selection
+preservation and the return to cumulative display on a real WASM slice.
+This is still a diagnostic subset of OrcaSlicer's native Preview, not proof
+of visual parity, native project semantics, actual motion speed or print safety.
