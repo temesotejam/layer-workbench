@@ -48,7 +48,7 @@ outputs identical until the actual pair comparison passes.
 ## 2026-11-16: official-native synthetic Core 3MF export geometry gate
 
 The CI also invokes the *same official SHA-verified native binary* with
-\`--arrange 0 --export-stl --outputdir ...\`, then checks the exported STL
+`--arrange 0 --export-stl --outputdir ...`, then checks the exported STL
 triangles against both explicitly positioned 20 mm Core 3MF build items
 (90..110 / 150..170 mm X, 90..110 mm Y, 0..20 mm Z). The checker accepts
 either one combined STL or two per-object STLs, requires exactly 24
@@ -57,7 +57,7 @@ and 12 faces per cube. Synthetic binary/ASCII STL regressions ensure
 missing items and changed placements fail.
 
 **Important discovery:** the initial native CLI export *without*
-\`--arrange 0\` did not preserve the input build positions: it emitted
+`--arrange 0` did not preserve the input build positions: it emitted
 two individual STLs with bounds X=90..110 and Y=79..99 / 101..121 mm,
 rather than the source's X=90..110 / 150..170 mm and Y=90..110 mm.
 See [initial failure #43779091892](https://github.com/temesotejam/layer-workbench/actions/runs/43779091892).
@@ -72,3 +72,6 @@ fixture**. It is not a general desktop-native 3MF round-trip test, full
 settings/geometry compatibility test, G-code equivalence test or
 print-safety certificate. Text logs and SHA-256 digests are archived, but
 the official binary and exported meshes are not published.
+
+
+The corrected opt-out **PASSed** in [native export geometry CI #43779208648](https://github.com/temesotejam/layer-workbench/actions/runs/43779208648): two individual STLs with 12 triangles each; X=90..110 and X=150..170, both Y=90..110 and Z=0..20 mm. This explicitly verifies native export placement for the fixture with auto-arrange disabled, and shows why comparing default-arranged output would be misleading.
