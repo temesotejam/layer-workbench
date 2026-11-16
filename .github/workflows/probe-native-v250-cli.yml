@@ -108,9 +108,11 @@ jobs:
           set -euo pipefail
           app="${RUNNER_TEMP}/OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.5.0.AppImage"
           mkdir -p native-cli-output/stl-export
+          # Preserve explicit Core 3MF placements; default CLI auto-arrange
+          # moved the cubes from (90,90)/(150,90) to adjacent Y positions.
           timeout 120s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
             native-cli-output/two-build-items.3mf \
-            --export-stl --outputdir native-cli-output/stl-export \
+            --arrange 0 --export-stl --outputdir native-cli-output/stl-export \
             > native-cli-output/native-export-stl.log 2>&1 || {
               cat native-cli-output/native-export-stl.log
               exit 1
