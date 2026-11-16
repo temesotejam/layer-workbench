@@ -58,8 +58,10 @@ def read_triangles(path: Path):
     return faces
 
 
-def audit_export(path: Path):
-    faces = read_triangles(path)
+def audit_export(*paths: Path):
+    if not 1 <= len(paths) <= 2:
+        raise ValueError('expected one combined or two independent exported STLs')
+    faces = [face for path in paths for face in read_triangles(path)]
     if len(faces) != 24:
         raise ValueError(f"expected exactly 24 cube facets, found {len(faces)}")
     groups = ([], [])
@@ -101,9 +103,9 @@ def audit_export(path: Path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("stl", type=Path)
+    parser.add_argument("stl", type=Path, nargs="+")
     args = parser.parse_args()
-    for entry in audit_export(args.stl):
+    for entry in audit_export(*args.stl):
         print("PASS: official native exported Core 3MF build item",
               entry["item"], "facets=", entry["facets"], "XYZ bounds=", entry["bounds"])
 
