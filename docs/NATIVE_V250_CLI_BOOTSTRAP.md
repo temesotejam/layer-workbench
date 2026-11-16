@@ -8,7 +8,7 @@ runner. It checks the observed release-asset SHA-256 against the exact value
 (observed on two earlier PR CI downloads), and records the AppImage format
 to short-lived CI logs, never commits or republishes the binary.
 
-It attempts two deliberately bounded CLI operations:
+Its initial bootstrap tests two bounded CLI operations:
 
 1. `--help` (native CLI starts without invoking the GUI workflow).
 2. `<independently-generated two-build-item Core 3MF> --info`, using
@@ -75,3 +75,11 @@ the official binary and exported meshes are not published.
 
 
 The corrected opt-out **PASSed** in [native export geometry CI #43779208648](https://github.com/temesotejam/layer-workbench/actions/runs/43779208648): two individual STLs with 12 triangles each; X=90..110 and X=150..170, both Y=90..110 and Z=0..20 mm. This explicitly verifies native export placement for the fixture with auto-arrange disabled, and shows why comparing default-arranged output would be misleading.
+
+## 2026-11-16: first official-native v2.5.0 G-code with source-pinned full JSON
+
+The [native CLI PR #34](https://github.com/temesotejam/layer-workbench/pull/34) adds `scripts/prepare-native-v250-presets.mjs` and the first **actual native headless slice** in the disposable Linux CI runner. The importer uses the existing source-preserving full inheritance resolver for exact, pinned v2.5.0 upstream JSON (commit `40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19`), with these explicitly named selections: Creality CR-10 0.4 nozzle machine, 0.20mm Standard @Creality CR-10 0.4 nozzle process, and OrcaFilamentLibrary Generic PLA @System. No upstream profile JSON is checked into this repository or deployed.
+
+The CI prepares full flat records with **111 machine keys, 240 process keys, and 73 filament keys** (including `type` and `name`), keeps vectors intact, and records exact preset/asset SHA-256 hashes. It invokes the SHA-pinned official Ubuntu 24.04 AppImage with `--load-settings`, `--load-filaments`, `--arrange 0`, `--slice 0`, and the same independently generated two-cube Core 3MF. The real [Chrome-independent native workflow run #43782297548](https://github.com/temesotejam/layer-workbench/actions/runs/43782297548) **PASSed**. One `plate_1.gcode` was produced (SHA-256 `4d472e43cfd84f6661c5d37161e3dda9fe52ac457c2285193d6a0abf2e3854f6`), with **14,059 parsed commands, 13,771 G0/G1/G2/G3 moves, and 7,722 conservatively counted positive-E XY moves**. It requires at least 100 actual extrusion moves rather than accepting an empty G-code or a successful exit alone.
+
+**Proof limit:** the native executable *accepted the full resolved input files* and returned nonempty G-code; this does not mean every one of the upstream keys was applied as expected. The selected Generic PLA has multivariant values that require explicit semantic reconciliation before any machine-use claim. This run does **not** independently measure final feature speeds, dimensions or temperature/application equivalence, nor compare WASM output with the exact same input files. The CI stores only diagnostic logs and digests; neither resulting G-code nor licensed profile JSON is redistributed or deployed. Never print from this test output. The next gates are effective-config/feature application audit, exact-input WASM fixture generation and numerical path comparison.
