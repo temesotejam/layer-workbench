@@ -54,8 +54,8 @@ def verify(baseline, altered, old=Decimal("220"), new=Decimal("235")):
     if [command for _, command in canonical(baseline)] == [command for _, command in canonical(altered)]:
         raise ValueError("temperature override did not change native G-code commands")
     return {
-        "baseline_initial_targets_c": {key: str(value) for key, value in sorted(a.items())},
-        "altered_initial_targets_c": {key: str(value) for key, value in sorted(b.items())},
+        "baseline_initial_targets_c": {key: format(value, "f") for key, value in sorted(a.items())},
+        "altered_initial_targets_c": {key: format(value, "f") for key, value in sorted(b.items())},
         "source": "native G-code M104/M109 S commands from the same v2.5.0 binary and model",
         "only_tested_override": "filament.nozzle_temperature_initial_layer[0]",
         "actual_heater_temperature_measured": False,
