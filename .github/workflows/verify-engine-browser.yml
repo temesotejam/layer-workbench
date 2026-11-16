@@ -15,6 +15,9 @@ on:
       - "scripts/test-gcode-feature-filter.mjs"
       - "scripts/gcode-layer-preview.mjs"
       - "scripts/gcode-3d-preview.mjs"
+      - "scripts/gcode-speed-colors.mjs"
+      - "scripts/test-gcode-speed-colors.mjs"
+      - "scripts/gcode-3d-preview.mjs"
       - "scripts/obj-to-stl.mjs"
       - "scripts/test-obj-to-stl.mjs"
       - "scripts/prepare-engine-lab.mjs"
@@ -46,6 +49,9 @@ on:
       - "scripts/gcode-feature-filter.mjs"
       - "scripts/test-gcode-feature-filter.mjs"
       - "scripts/gcode-layer-preview.mjs"
+      - "scripts/gcode-3d-preview.mjs"
+      - "scripts/gcode-speed-colors.mjs"
+      - "scripts/test-gcode-speed-colors.mjs"
       - "scripts/gcode-3d-preview.mjs"
       - "scripts/gcode-tool-colors.mjs"
       - "scripts/test-gcode-preview-parser.mjs"
@@ -118,6 +124,7 @@ jobs:
           node scripts/test-orca-vendor-index.mjs
           node scripts/test-gcode-preview-parser.mjs
           node scripts/test-gcode-feature-filter.mjs
+          node scripts/test-gcode-speed-colors.mjs
           node scripts/test-gap-ring-fixture.mjs
           node scripts/test-bridge-arch-fixture.mjs
           node scripts/test-bridge-feature-diagnostic.mjs
