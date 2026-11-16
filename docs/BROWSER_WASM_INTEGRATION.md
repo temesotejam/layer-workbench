@@ -719,3 +719,25 @@ WASM restricted local profiles are **not equivalent**. Browser arcs may be
 tessellated, native arcs are excluded, and these aggregates do not establish
 ordered coordinate, extrusion-volume or F-value equality. No printer-safe
 G-code or public engine activation is implied.
+
+## 2026-11-17: speed-only bridge G-code geometry consistency gate (diagnostic)
+
+The existing isolated Chrome bridge-speed experiment compares the same arch
+fixture and test process settings, changing only `bridge_speed`. The browser
+audit now requires **both** feature-attributed XY deposition length and the
+XY bounding envelope (min/max X/Y) of every explicit bridge subtype to remain
+within 0.01 mm between baseline and candidate. An F120 newly appearing only
+on shifted, shortened or reclassified bridge paths is recorded as
+`bridge_geometry_changed_speed_unverified`, **not** as successful
+speed-only evidence. A different subdivision of the same straight path
+is accepted. Negative regression tests exercise identical-length shifted
+paths, lost length, subtype changes and the tolerance boundary.
+
+The old actual Chrome fixture reported 279 bridge-tagged extrusion segments
+in each run and identical length 2491.612469 mm; the new independent envelope
+gate must also pass in real Chrome CI before promotion. This gate is designed
+for **two runs of the same restricted WASM fixture**, not for comparing the
+native CLI to WASM. Per-feature length and bounding envelopes are coarse
+invariants: they do not prove the same ordered XY/G-code paths, extrusion
+volume, arc interpretation, full profile equivalence or print safety.
+The candidate WASM artifact and production Pages remain unchanged.
