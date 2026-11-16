@@ -21,8 +21,11 @@ BRIDGE_FEATURES = frozenset({
 
 
 def verify(baseline, slow):
-    a_count, a = outer_wall_feedrates(baseline, features=BRIDGE_FEATURES)
-    b_count, b = outer_wall_feedrates(slow, features=BRIDGE_FEATURES)
+    a_features, b_features = {}, {}
+    a_count, a = outer_wall_feedrates(
+        baseline, features=BRIDGE_FEATURES, feature_counts=a_features)
+    b_count, b = outer_wall_feedrates(
+        slow, features=BRIDGE_FEATURES, feature_counts=b_features)
     if min(a_count, b_count) < 10:
         raise ValueError(f"too few tagged positive-E XY bridge moves: {a_count}/{b_count}")
     a_median, b_median = median(a), median(b)
@@ -37,6 +40,9 @@ def verify(baseline, slow):
     return {
         "baseline_tagged_bridge_xy_extrusions": a_count,
         "altered_tagged_bridge_xy_extrusions": b_count,
+        "baseline_tagged_bridge_feature_counts": dict(sorted(a_features.items())),
+        "altered_tagged_bridge_feature_counts": dict(sorted(b_features.items())),
+        "measured_subset": "positive-E XY G1 under six explicit bridge labels (no arcs)",
         "baseline_bridge_median_feed_mm_min": str(a_median),
         "altered_bridge_median_feed_mm_min": str(b_median),
         "baseline_F120_tagged_extrusions": baseline_target,
