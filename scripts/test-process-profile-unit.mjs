@@ -2,6 +2,17 @@ import assert from 'node:assert/strict';
 import {parseTestProcessOverrides} from './test-process-profile.mjs';
 assert.deepEqual(parseTestProcessOverrides({layer_height:0.3, wall_loops:"3"}),{layer_height:"0.3",wall_loops:"3"});
 assert.throws(()=>parseTestProcessOverrides({nozzle_temperature:350}),/Unsupported/);
+// Parsed JSON can carry prototype property names as *own* keys. Before the
+// own-property guard, LIMITS[key] inherited e.g. Object.prototype.constructor
+// and accepted these values with undefined numeric bounds. Reject them all.
+for (const key of ['__proto__', 'constructor', 'toString', 'valueOf', 'hasOwnProperty']) {
+  const untrusted = JSON.parse(`{"layer_height":0.2,"${key}":"12"}`);
+  assert.throws(() => parseTestProcessOverrides(untrusted),
+    /Unsupported process setting/, key + ' bypassed the explicit allow-list');
+}
+assert.deepEqual(parseTestProcessOverrides(JSON.parse('{"layer_height":0.2}')),
+  {layer_height:"0.2"});
+console.log('PASS: JSON prototype-key names cannot bypass the local process override allow-list');
 assert.throws(()=>parseTestProcessOverrides({layer_height:0.01}),/safe test range/);
 assert.throws(()=>parseTestProcessOverrides({wall_loops:1.5}),/safe test range/);
 assert.throws(()=>parseTestProcessOverrides({wall_loops:"1;rm"}),/Invalid numeric/);
