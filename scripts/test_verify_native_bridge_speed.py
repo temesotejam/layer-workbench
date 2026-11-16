@@ -37,7 +37,7 @@ class TestNativeBridgeSpeed(unittest.TestCase):
             lines.extend((";TYPE: not bridge", "G1 X20 Y1 E0.1 F120",
                           ";TYPE: bridge", "G1 Z2 E0.1 F120",
                           "G1 E0.1 F120"))
-            output.write_text("\\n".join(lines) + "\\n", encoding="utf-8")
+            output.write_text("\n".join(lines) + "\n", encoding="utf-8")
         report = verify(self.a, self.b)
         expected = {label.lower(): 2 for label in labels}
         self.assertEqual(report["baseline_tagged_bridge_feature_counts"], expected)
