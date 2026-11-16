@@ -210,3 +210,18 @@ full printer/filament/process presets and an explicit Core 3MF placement,
 while the browser arch probe uses restricted diagnostic settings. The inputs
 and complete ordered G-code have not been proven identical. G-code remains
 test-only and must not be printed.
+
+## 2026-11-17: bridge deposition XY length diagnostic (segmentation-independent metric)
+
+The pinned official native CLI bridge-speed audit now reports cumulative XY
+length in millimetres for positive-E **G1** moves under each of the six
+explicitly recognized bridge feature labels, as well as the total. The
+additional metric helps distinguish changed line *segmentation* from changed
+path length. It leaves the existing F120, subtype-count and minimum-motion
+gates intact. Synthetic tests include geometrically identical 16 mm straight
+bridge paths divided into 16 versus 32 G1 commands; both must total 16 mm.
+
+These are motion-command diagnostics, **not** native/WASM G-code parity or
+material deposition measurements. The isolated-browser parser may tessellate
+G17 arcs, and the two pipelines still use different effective profiles and
+placement rules. No generated G-code or proprietary source assets are stored.
