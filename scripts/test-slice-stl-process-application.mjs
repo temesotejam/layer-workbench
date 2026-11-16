@@ -79,6 +79,12 @@ const items=[{bytes:new Uint8Array(134)}];
   assert.equal(init.printable_height,"250");
   assert.equal(init.nozzle_temperature,"220");
   assert.equal(init.layer_height,0.2,"generic process defaults remain diagnostic-only");
+  const legacy=makeRestrictedInitConfig({...selected,filament:{settings:{
+    nozzle_temperature:"220",bed_temperature:"55"
+  }}});
+  assert.equal(legacy.bed_temperature,"55",
+    "legacy bounded scalar bed temperature is allowed without inferring a plate");
+  assert.equal(legacy.curr_bed_type,undefined);
 }
 {
   const withBed={...selected,filament:{settings:{
@@ -100,7 +106,7 @@ const invalidCollections=[
     filament_start_gcode:"M109 S290"}}},
   {...selected,machine:{settings:{nozzle_diameter:["0.4","0.6"],printable_height:"250"}}},
   {...selected,filament:{settings:{nozzle_temperature:["210","240"]}}},
-  {...selected,filament:{settings:{nozzle_temperature:"220",bed_temperature:"65"}}},
+  {...selected,filament:{settings:{nozzle_temperature:"220",hot_plate_temp:["65"]}}},
   {...selected,filament:{settings:{nozzle_temperature:"220",
     curr_bed_type:"High Temp Plate",bed_temperature:"65",hot_plate_temp:["55"]}}},
   {...selected,filament:{settings:{nozzle_temperature:"220",
