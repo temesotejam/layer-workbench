@@ -629,3 +629,23 @@ inconclusive green build. Actual physical acceleration, material flow,
 native desktop-vs-WASM equivalence, arbitrary printers/profiles,
 verified 3MF compatibility, and print safety remain unverified.
 No production Pages engine or heavyweight WASM candidate was changed.
+
+
+## 2026-11-16: source-pinned native bridge-speed option forwarded (candidate validation)
+
+The opt-in isolated localhost profile bridge now recognizes **`bridge_speed`**
+only as a bounded, absolute millimetres-per-second number (1–800), rejecting
+percentages, unsupported vectors, and malformed values. The v2.5.0 pinned
+Creality CR-10 0.20mm Standard child process preset has `bridge_speed: "50"`;
+its native key is forwarded via the same validated `orca.native-json` process
+path as the previously accepted infill speeds. The unit, upstream-inheritance,
+mock-session-forwarding and isolated Chrome candidate checks are CI gates.
+
+**Evidence limit:** a separate pair of cubes is used in the Chrome smoke test,
+which need not generate any bridge path. A successful test only demonstrates
+that the setting is accepted by this restricted bridge and slicing still
+produces deposited G-code; it **does not** establish a bridge-feature feedrate
+change, native G-code parity, full printer-profile support, or print safety.
+A future geometric bridging fixture must require tagged bridge deposition
+segments and measure their commanded `F` before claiming an actual bridge
+speed effect. The feature remains local opt-in and is not enabled on Pages.
