@@ -361,6 +361,16 @@ try {
     };
     const sparseBaselineGcode=await sliceSparseInfill(
       'test-sparse-infill-baseline.json',sparseInfillSettings);
+    // Exercise bridge_speed against the real isolated candidate. A pair of
+    // independent cubes has no guaranteed bridge geometry, so this probes
+    // acceptance and nonempty deposition only, NOT bridge F or native parity.
+    const bridgeProbe=await sliceSparseInfill(
+      'test-bridge-speed-opt-in.json',
+      {...sparseInfillSettings,bridge_speed:2});
+    assert.ok(parseGcodeToolpaths(bridgeProbe).extrusions>10,
+      'Real WASM rejected bridge_speed or generated no deposited geometry');
+    console.log('PASS: isolated Chrome/WASM accepts bounded bridge_speed and slices; '+
+      'bridge-feature speed effects remain unverified');
     const sparseSlowGcode=await sliceSparseInfill(
       'test-sparse-infill-slow.json',
       {...sparseInfillSettings,sparse_infill_speed:2});
