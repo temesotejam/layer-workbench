@@ -68,7 +68,7 @@ class PairTests(unittest.TestCase):
         (self.root / "wasm" / "model.txt").write_bytes(modified_model)
         self.change("wasm", lambda m: m["files"]["model"].update(
             sha256=hashlib.sha256(modified_model).hexdigest()))
-        modified_gcode = b"G1 X1 E0.1\\nG1 X3 E0.2\\n"
+        modified_gcode = b"G1 X1 E0.1\nG1 X3 E0.2\n"
         (self.root / "wasm" / "gcode.txt").write_bytes(modified_gcode)
         self.change("wasm", lambda m: m["files"]["gcode"].update(
             sha256=hashlib.sha256(modified_gcode).hexdigest()))
