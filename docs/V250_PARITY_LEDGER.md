@@ -986,3 +986,23 @@ minimum-deposition acceptance gate. It does **not** validate a physical
 printer's G-code dialect, prove native/WASM source provenance or provide
 desktop v2.5.0 toolpath parity. Lightweight CI for this change:
 [PR #27 comparator](https://github.com/temesotejam/layer-workbench/pull/27).
+
+
+## 2026-11-17: positive E commanded-length metric for parity diagnostics
+
+The strict native-versus-WASM G-code comparator now reports each input's
+`native_counted_positive_e_mm` / `wasm_counted_positive_e_mm` and the signed
+`counted_positive_e_delta_mm` (WASM minus native). These numbers add **positive
+filament-axis E deltas only on the same XY extrusion moves counted by the
+existing conservative fixture gate**; G92 resets, absolute/relative E,
+G20/G21 unit conversions, E-only priming, negative retractions, travel moves
+and supported G17 I/J or R arcs follow the existing modal checks. If ambiguous
+motion syntax invalidates that gate, the E totals are `null` instead of
+misleadingly zero. Positive E length is not volume, mass, flow calibration,
+physical deposited filament, or printer-safety evidence.
+
+The added metrics are diagnostic only: strict ordered command matching,
+input-hash provenance checks, and the existing minimum-deposition gate still
+determine `match`. In particular, this does **not** establish an identical
+full-profile native-vs-WASM comparison. The fixture pair must first carry
+identical, separately sourced model and effective profile data.
