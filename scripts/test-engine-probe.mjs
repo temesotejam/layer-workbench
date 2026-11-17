@@ -1292,12 +1292,42 @@ try {
       {...supportArchSettings,enable_support:'1'});
     const sphereOffAudit=auditSupportDeposition(parseGcodeToolpaths(sphereSupportOff));
     const sphereOnAudit=auditSupportDeposition(parseGcodeToolpaths(sphereSupportOn));
+    // Archive bounded evidence about the actual G-code as well as parsed
+    // feature paths. This distinguishes an ignored toggle from a parser
+    // classification gap without retaining printer-executable G-code.
+    const summarizeSphereGcode=text=>{
+      const parsed=parseGcodeToolpaths(text);
+      const byFeature=Object.create(null);
+      for(const layer of parsed.layers)for(const segment of layer.segments){
+        if(!segment.extrusion)continue;
+        const feature=String(segment.feature||'(unlabelled)').toLowerCase();
+        byFeature[feature]=(byFeature[feature]||0)+1;
+      }
+      const comments=text.split(/\\r?\\n/).filter(line=>
+        /^\\s*;\\s*(?:TYPE|FEATURE)\\s*:/i.test(line));
+      return {
+        sha256:createHash('sha256').update(text).digest('hex'),
+        utf8_bytes:Buffer.byteLength(text),
+        extrusion_segments:parsed.extrusions,
+        parsed_positive_e_features:Object.fromEntries(
+          Object.entries(byFeature).sort((a,b)=>b[1]-a[1]).slice(0,24)),
+        tagged_comment_count:comments.length,
+        support_tagged_comment_count:comments.filter(line=>/support/i.test(line)).length,
+      };
+    };
+    const sphereOutputDifference={
+      disabled:summarizeSphereGcode(sphereSupportOff),
+      enabled:summarizeSphereGcode(sphereSupportOn),
+      exact_gcode_equal:sphereSupportOff===sphereSupportOn,
+    };
+    console.log('SPHERE_SUPPORT_GCODE_SUMMARY '+JSON.stringify(sphereOutputDifference));
     const sphereReport={
       fixture:'watertight 20 mm diameter low-poly sphere, lower point at Z0',
       engine:'pinned v2.5.0 WASM candidate; isolated localhost opt-in',
       fixed_native_support_type:'normal(auto)',fixed_threshold_angle_degrees:10,
       changed_native_key:'support_enable',baseline:0,candidate:1,
       baseline_audit:sphereOffAudit,candidate_audit:sphereOnAudit,
+      gcode_evidence:sphereOutputDifference,
       native_desktop_parity:false,printer_safe:false,public_pages_enabled:false,
     };
     await writeFile(parityDir+'/sphere-support-on-feature-diagnostic.json',

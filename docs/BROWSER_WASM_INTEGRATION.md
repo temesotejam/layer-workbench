@@ -1208,3 +1208,9 @@ full native parity, or print safety is claimed.
 The next real isolated-Chrome run [#44165269422](https://github.com/temesotejam/layer-workbench/actions/runs/44165269422) still found **no tagged support deposition** on either arch or lower hemisphere, even with explicit init `support_enable:1`, `support_type:normal(auto)`, and threshold 10. This is a **FAIL**, not support equivalence.
 
 The pinned Hiosdra/OrcaWasm source `scripts/smoke-test.mjs` at `60a09e04f1990be39c8f6f35dffef1a2c9e224c4` also sets `support_enable:1` through `applyProfileOnce(..., 'orca.native-json')` in its selected Voron profile smoke. The restricted adapter now forwards the validated numeric support flag and fixed support strategy through **both** `session.init` and `orca.native-json` on the explicit local diagnostic, with identical fixed settings for on/off. The positive sphere audit remains a mandatory FAIL gate until actual tagged deposition is observed; there is no published engine or printer-safety claim.
+
+### 2026-11-18: support-toggle G-code effect classification (pending CI)
+
+The second real Chrome support enablement trial [#44165901370](https://github.com/temesotejam/layer-workbench/actions/runs/44165901370) still found **zero tagged support body/interface deposition** on the bridge and sphere with the same bounded native init plus native-json support settings. The positive gate correctly **FAILed**, so PR #73 must remain unmerged.
+
+A further strictly local read-only diagnostic now records the disabled and enabled sphere G-code SHA-256, byte lengths, positive-E feature-label histogram, and the count of tagged feature comments (including those mentioning support). This distinguishes truly unchanged generated paths from possible feature-label misclassification; no raw G-code is published. Until the Chrome gate observes actual support deposition, there is no supported positive claim or publishable feature.
