@@ -110,7 +110,7 @@ def valid_g17_arc(start, end, words, units, absolute_arc_centers):
             and abs(r0 - r1) <= max(0.05, r0 * 0.001))
 
 def extrusion_move_metrics(commands):
-    """Summarize positive E on actual XY/arc movement for fixture sanity.
+    """Summarize positive E and G1 XY path length for fixture sanity.
 
     A present X/Y word alone does not prove movement: e.g. G1 X0 E1 at the
     initial position is priming, not deposited path. Track G90/G91, G92 and
@@ -121,6 +121,8 @@ def extrusion_move_metrics(commands):
     """
     count = 0
     counted_e_mm = Decimal(0)
+    counted_linear_xy_mm = Decimal(0)
+    counted_linear_moves = 0
     absolute_e = True
     absolute_xyz = True
     absolute_arc_centers = False
@@ -170,13 +172,13 @@ def extrusion_move_metrics(commands):
                 if stateful:
                     # Opaque move/reset syntax leaves the position unknown.
                     # Never use later moves to satisfy the fixture gate.
-                    return 0, None
+                    return 0, None, None, 0
                 continue
             letter = match[1].upper()
             if stateful and (letter in words or letter in ('G', 'M', 'N', 'T')):
                 # Duplicate words or embedded opcodes have firmware-dependent
                 # interpretation; the conservative deposition gate must fail.
-                return 0, None
+                return 0, None, None, 0
             words[letter] = Decimal(match[2])
         if opcode == 'G92':
             for axis in xy:
@@ -211,7 +213,14 @@ def extrusion_move_metrics(commands):
             continue
         count += 1
         counted_e_mm += delta
-    return count, counted_e_mm
+        if code == 1:
+            # Only G1 XY deposition is a straight segment. G17 arcs remain
+            # in the extrusion count/E total but are excluded from this metric.
+            dx = xy['X'] - start_xy['X']
+            dy = xy['Y'] - start_xy['Y']
+            counted_linear_xy_mm += (dx * dx + dy * dy).sqrt()
+            counted_linear_moves += 1
+    return count, counted_e_mm, counted_linear_xy_mm, counted_linear_moves
 
 
 def count_extrusion_moves(commands):
@@ -237,6 +246,11 @@ def numeric_parameter_deltas(native_command, wasm_command):
                 })
     return deltas
 
+def rounded_mm(value):
+    """Format a rounded diagnostic length without scientific notation."""
+    return format(value.quantize(Decimal('0.000001')).normalize(), 'f')
+
+
 def compare(native, wasm, min_extrusion_moves=0):
     if min_extrusion_moves < 0:
         raise ValueError('minimum extrusion moves must not be negative')
@@ -254,8 +268,8 @@ def compare(native, wasm, min_extrusion_moves=0):
                     entry['parameter_deltas'] = deltas
                 differences.append(entry)
     native_motion, wasm_motion = count_motion(a), count_motion(b)
-    native_extrusion, native_e_mm = extrusion_move_metrics(a)
-    wasm_extrusion, wasm_e_mm = extrusion_move_metrics(b)
+    native_extrusion, native_e_mm, native_linear_xy_mm, native_linear_moves = extrusion_move_metrics(a)
+    wasm_extrusion, wasm_e_mm, wasm_linear_xy_mm, wasm_linear_moves = extrusion_move_metrics(b)
     issues = []
     if native_motion == 0:
         issues.append('native input has no G0/G1/G2/G3 motion commands')
@@ -276,6 +290,16 @@ def compare(native, wasm, min_extrusion_moves=0):
         'wasm_counted_positive_e_mm': None if wasm_e_mm is None else str(wasm_e_mm.normalize()),
         'counted_positive_e_delta_mm': None if native_e_mm is None or wasm_e_mm is None
             else str((wasm_e_mm - native_e_mm).normalize()),
+        # Only positive-E G1 XY strokes (not G17 arc lengths or travels).
+        # Rounded to 1 micrometre for a stable diagnostic display.
+        'native_counted_linear_xy_moves': native_linear_moves,
+        'wasm_counted_linear_xy_moves': wasm_linear_moves,
+        'native_counted_linear_xy_mm': None if native_linear_xy_mm is None
+            else rounded_mm(native_linear_xy_mm),
+        'wasm_counted_linear_xy_mm': None if wasm_linear_xy_mm is None
+            else rounded_mm(wasm_linear_xy_mm),
+        'counted_linear_xy_delta_mm': None if native_linear_xy_mm is None or wasm_linear_xy_mm is None
+            else rounded_mm(wasm_linear_xy_mm - native_linear_xy_mm),
         'minimum_extrusion_moves': min_extrusion_moves,
         'input_issues': issues,
         'native_sha256': hashlib.sha256(native.read_bytes()).hexdigest(),

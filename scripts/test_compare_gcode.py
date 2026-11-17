@@ -12,6 +12,42 @@ class ComparatorTests(unittest.TestCase):
             second.write_text(wasm, encoding='utf-8')
             return compare(first, second, **kwargs)
 
+    def test_counted_linear_xy_length_excludes_arcs_priming_and_stationary_moves(self):
+        code = ('M83\nG1 X3 Y4 E1\nG1 X3 Y4 E1\n'
+                'G2 I1 J0 E1\nG1 X6 Y8 E1\n'
+                'G91\nG1 X0 Y-12 E1\n')
+        report = self.run_compare(code, code, min_extrusion_moves=4)
+        self.assertTrue(report['match'], report)
+        self.assertEqual(report['native_extrusion_moves'], 4)
+        self.assertEqual(report['native_counted_linear_xy_moves'], 3)
+        self.assertEqual(report['native_counted_linear_xy_mm'], '22')
+        self.assertEqual(report['wasm_counted_linear_xy_mm'], '22')
+        self.assertEqual(report['counted_linear_xy_delta_mm'], '0')
+
+    def test_linear_xy_delta_detects_geometry_change_even_when_e_total_matches(self):
+        native = 'M83\nG1 X3 Y4 E1\nG1 X6 Y8 E1\n'
+        wasm = 'M83\nG1 X3 Y4 E1\nG1 X6 Y9 E1\n'
+        report = self.run_compare(native, wasm, min_extrusion_moves=2)
+        self.assertFalse(report['match'])
+        self.assertEqual(report['counted_positive_e_delta_mm'], '0')
+        self.assertEqual(report['native_counted_linear_xy_mm'], '10')
+        self.assertEqual(report['wasm_counted_linear_xy_mm'], '10.830952')
+        self.assertEqual(report['counted_linear_xy_delta_mm'], '0.830952')
+
+    def test_linear_xy_length_respects_unit_switches(self):
+        code = 'G20\nM83\nG1 X1 E0.1\nG21\nG1 X25.4 E0.1\nG1 Y10 E0.1\n'
+        report = self.run_compare(code, code, min_extrusion_moves=2)
+        self.assertTrue(report['match'], report)
+        self.assertEqual(report['native_counted_linear_xy_moves'], 2)
+        self.assertEqual(report['native_counted_linear_xy_mm'], '35.4')
+
+    def test_malformed_modal_geometry_reports_unknown_linear_length(self):
+        code = 'G92 E0 E1\nG1 X10 E2\n'
+        report = self.run_compare(code, code, min_extrusion_moves=1)
+        self.assertFalse(report['match'])
+        self.assertIsNone(report['native_counted_linear_xy_mm'])
+        self.assertIsNone(report['counted_linear_xy_delta_mm'])
+
     def test_counted_positive_e_mm_excludes_priming_and_retractions(self):
         # Absolute E, an explicit G92 reset, relative E and G20 inches.
         # E-only priming and XY retraction are never counted as deposition.
