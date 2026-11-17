@@ -1045,3 +1045,25 @@ at 0.32mm versus 0.72mm first-layer width. The experiment counts as functional
 evidence only once that real WASM gate passes. It is not same-full-profile
 native/WASM G-code parity, machine certification, full 3MF support, print
 safety, or permission to expose the candidate engine on public GitHub Pages.
+
+## 2026-11-18: source-pinned first-layer speed in isolated WASM
+
+Source-pinned OrcaSlicer v2.5.0 commit
+`40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19` defines the absolute
+`initial_layer_speed` as 20mm/s in `fdm_process_common`, overridden to
+15mm/s in `fdm_process_creality_common` and inherited by
+`0.20mm Standard @Creality CR-10 0.4 nozzle`. The restricted localhost
+process resolver and explicit override allow-list now carry this native key
+independently of first-layer *infill* speed, wall speeds, travel speed and
+first-layer line width. Only 1–800mm/s absolute single-tool scalar settings
+are admitted; relative percentages, multi-tool lists, malformed and missing
+values are not inferred.
+
+The pinned upstream CI checks the actual parent/child settings and rejection
+cases. The isolated Chrome regression varies only this one process setting
+(5 vs 15mm/s), requires real deposited first-layer G-code with valid modal F
+and compares first-layer extrusion feedrates. This counts as a runtime feature
+only after corresponding Chrome CI passes; successful metadata-only parsing
+is insufficient. Full original profiles, actual-machine safety, native vs
+WASM G-code parity, 3MF project parity and public WASM deployment remain
+unverified. This change does not ship WASM to Pages.
