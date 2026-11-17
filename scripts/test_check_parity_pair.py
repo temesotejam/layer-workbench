@@ -44,6 +44,59 @@ class PairTests(unittest.TestCase):
         self.assertEqual(report["different_inputs"], ["model"])
         self.assertNotIn("gcode_comparison", report)
 
+    def test_opt_in_diagnostic_compares_commands_but_never_grants_parity(self):
+        # Simulates full native vs restricted WASM profile bytes that differ.
+        # Identical synthetic G-code cannot turn this into a parity PASS.
+        altered = b"restricted wasm process settings"
+        (self.root / "wasm" / "process.txt").write_bytes(altered)
+        self.change("wasm", lambda m: m["files"]["process"].update(
+            sha256=hashlib.sha256(altered).hexdigest()))
+        conservative = verify(self.manifest("native"), self.manifest("wasm"))
+        self.assertFalse(conservative["match"])
+        self.assertEqual(conservative["different_inputs"], ["process"])
+        self.assertNotIn("gcode_comparison", conservative)
+        report = verify(self.manifest("native"), self.manifest("wasm"),
+                        diagnose_mismatched_inputs=True)
+        self.assertFalse(report["match"])
+        self.assertTrue(report["diagnostic_only"])
+        self.assertEqual(report["different_inputs"], ["process"])
+        self.assertTrue(report["gcode_comparison"]["match"])
+        self.assertEqual(report["gcode_comparison"]["counted_positive_e_delta_mm"], "0")
+
+    def test_opt_in_diagnostic_detects_real_command_delta_on_unequal_inputs(self):
+        modified_model = b"same fixtures but different model placement"
+        (self.root / "wasm" / "model.txt").write_bytes(modified_model)
+        self.change("wasm", lambda m: m["files"]["model"].update(
+            sha256=hashlib.sha256(modified_model).hexdigest()))
+        modified_gcode = b"G1 X1 E0.1\nG1 X3 E0.2\n"
+        (self.root / "wasm" / "gcode.txt").write_bytes(modified_gcode)
+        self.change("wasm", lambda m: m["files"]["gcode"].update(
+            sha256=hashlib.sha256(modified_gcode).hexdigest()))
+        report = verify(self.manifest("native"), self.manifest("wasm"),
+                        diagnose_mismatched_inputs=True)
+        self.assertFalse(report["match"])
+        self.assertEqual(report["different_inputs"], ["model"])
+        self.assertEqual(report["gcode_comparison"]["mismatched_commands"], 1)
+        self.assertEqual(report["gcode_comparison"]["counted_linear_xy_delta_mm"], "1")
+
+    def test_opt_in_diagnostic_cli_still_exits_nonzero_with_identical_commands(self):
+        data = b"restricted wasm profile"
+        (self.root / "wasm" / "filament.txt").write_bytes(data)
+        self.change("wasm", lambda m: m["files"]["filament"].update(
+            sha256=hashlib.sha256(data).hexdigest()))
+        script = Path(__file__).with_name("check_parity_pair.py")
+        result = subprocess.run(
+            [sys.executable, str(script),
+             "--native-manifest", str(self.manifest("native")),
+             "--wasm-manifest", str(self.manifest("wasm")),
+             "--diagnose-mismatched-inputs"],
+            capture_output=True, text=True, check=False)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        report = json.loads(result.stdout)
+        self.assertFalse(report["match"])
+        self.assertTrue(report["gcode_comparison"]["match"])
+        self.assertEqual(report["different_inputs"], ["filament"])
+
     def test_tampered_profile_rejected(self):
         (self.root / "native" / "machine.txt").write_bytes(b"tampered")
         with self.assertRaisesRegex(ValueError, "SHA256 mismatch"):

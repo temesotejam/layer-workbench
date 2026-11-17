@@ -39,7 +39,12 @@ def read_manifest(path, role):
         out[kind] = (sha, full)
     return out
 
-def verify(native_manifest, wasm_manifest, minimum=1):
+def verify(native_manifest, wasm_manifest, minimum=1, diagnose_mismatched_inputs=False):
+    """Compare G-code on verified-equal inputs, or optionally inspect unequal ones.
+
+    Diagnostic mode never certifies parity: different source/profile bytes
+    force the final result to mismatch even if commands happen to be equal.
+    """
     if minimum < 1:
         raise ValueError("minimum extrusion moves must be positive")
     n = read_manifest(native_manifest, "native")
@@ -47,11 +52,18 @@ def verify(native_manifest, wasm_manifest, minimum=1):
     different = [k for k in KINDS if k != "gcode" and n[k][0] != w[k][0]]
     report = {"upstream_commit": PIN, "different_inputs": different,
               "input_hashes_match": not different, "match": False}
-    if different:
+    if different and not diagnose_mismatched_inputs:
         return report
     result = compare(n["gcode"][1], w["gcode"][1], min_extrusion_moves=minimum)
     report["gcode_comparison"] = result
-    report["match"] = result["match"]
+    # A changed input can still produce identical commands accidentally.
+    # Keep the conservative parity gate CLOSED in diagnostic-only mode.
+    report["match"] = not different and result["match"]
+    if different:
+        report["diagnostic_only"] = True
+        report["diagnostic_note"] = (
+            "G-code inspected despite mismatched model/profile SHA256; "
+            "command agreement is NOT native/WASM parity.")
     return report
 
 def main():
@@ -60,9 +72,13 @@ def main():
     p.add_argument("--wasm-manifest", required=True, type=Path)
     p.add_argument("--min-extrusion-moves", type=int, default=1)
     p.add_argument("--report", type=Path)
+    p.add_argument("--diagnose-mismatched-inputs", action="store_true",
+                   help="Compute command/XY/E diagnostics even when model or profile hashes differ; "
+                        "never return a parity PASS for unequal inputs")
     args = p.parse_args()
     try:
-        report = verify(args.native_manifest, args.wasm_manifest, args.min_extrusion_moves)
+        report = verify(args.native_manifest, args.wasm_manifest, args.min_extrusion_moves,
+                        diagnose_mismatched_inputs=args.diagnose_mismatched_inputs)
     except (OSError, ValueError, UnicodeError, KeyError, TypeError) as exc:
         report = {"match": False, "error": str(exc)}
     output = json.dumps(report, ensure_ascii=False, indent=2, default=str)
