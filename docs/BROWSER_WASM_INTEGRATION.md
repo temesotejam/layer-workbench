@@ -1113,3 +1113,27 @@ toolpath effects**. The pinned child profile also has
 unsupported, not misrepresented as 50 mm/s. Native G-code equivalence,
 print safety, full 3MF/project parity and production deployment remain
 unverified; no WASM binary is deployed to public Pages.
+
+## 2026-11-18: source-pinned support role diagnostic and negative control
+
+Added `scripts/support-feature-diagnostic.mjs` and
+`scripts/test-support-feature-diagnostic.mjs`. The read-only audit recognizes
+only the four exact labels from official OrcaSlicer v2.5.0
+`src/libslic3r/GCode.cpp` (pinned at
+`40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19`):
+`support material`, `support material interface`, `support transition`,
+and `support ironing`. It separately counts genuine positive-E XY
+deposition by role, modal feedrates, gross length, and XYZ bounds. Header
+mentions, travel-only feedrates, bare labels, vertical/pure-E priming, unknown
+tags, or malformed tags cannot count as support extrusion. A future
+same-engine speed test requires role-specific new F *and* stable gross geometry;
+this is not a native/desktop G-code parity criterion.
+
+The isolated Chrome test now saves
+`parity-output/support-disabled-feature-diagnostic.json` for the existing
+source-pinned support-disabled two-cube baseline and asserts that no labeled
+support body/interface deposition appears. This **does not enable supports**
+and does not demonstrate the effect of support speed or width. The next
+acceptance step remains a bounded, explicit localhost-only support-enabled
+overhang fixture with verified role-tagged toolpaths, tested without changing
+the public Pages environment. Never use diagnostic G-code on hardware.

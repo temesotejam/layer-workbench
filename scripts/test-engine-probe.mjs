@@ -9,6 +9,7 @@ import {makeGapRingObj} from './gap-ring-fixture.mjs';
 import {makeBridgeArchObj} from './bridge-arch-fixture.mjs';
 import {makeParityCubeStl, PARITY_CUBE_STL_SHA256} from './parity-cube-fixture.mjs';
 import {auditBridgeSpeedSegments} from './bridge-feature-diagnostic.mjs';
+import {auditSupportDeposition} from './support-feature-diagnostic.mjs';
 import {checkBrowser3mfRoundTrip} from './test-browser-3mf-roundtrip.mjs';
 import {checkBrowserMultiObject3mf} from './test-browser-3mf-multiobject.mjs';
 const base = process.env.ENGINE_PROBE_URL || 'http://127.0.0.1:8766/';
@@ -780,6 +781,21 @@ try {
     const supportConfiguredGcode=await sliceWithLineWidth('30','support_speed');
     assert.ok(motionOnly(supportConfiguredGcode).length>100,
       'Native-json support parameter ingestion failed in the real WASM engine');
+    // A guarded baseline for future support-enabled test fixtures: the
+    // source-pinned CR-10 child has enable_support=0, and the localhost
+    // override allow-list intentionally forbids enabling it. Record actual
+    // feature-tagged G-code (not the profile comment) as a negative control.
+    const supportDisabledAudit=auditSupportDeposition(
+      parseGcodeToolpaths(supportConfiguredGcode));
+    await writeFile(parityDir+'/support-disabled-feature-diagnostic.json',
+      JSON.stringify({
+        fixture:'two synthetic cubes; source-pinned support generation disabled',
+        ...supportDisabledAudit
+      },null,2)+'\n');
+    assert.equal(supportDisabledAudit.result,'no_tagged_support_body_or_interface',
+      'Support-off baseline unexpectedly contains tagged support deposition');
+    console.log('PASS: real WASM support-disabled negative control has no tagged support body/interface XY extrusion');
+
     for(const key of ['support_line_width','support_speed',
       'support_interface_speed'])delete rawOrca[4][key];
     await uploadRawOrca();
