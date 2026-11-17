@@ -117,6 +117,15 @@ export function resolveOrcaProfileFamily(records,type,selected,options={}) {
         settings.filament_type="PLA";
         unsupported.delete("filament_type");
       }
+      // The pinned native v2.5.0 common filament preset supplies a single
+      // physical filament diameter (1.75 mm), not a variant/nozzle map.
+      // Only a bounded, explicit one-slot vector enters the WASM test adapter.
+      const diameterSource=[...chain].reverse().find(p=>Object.hasOwn(p,"filament_diameter"));
+      if(diameterSource){
+        const diameter=validateNum("filament_diameter",diameterSource.filament_diameter,[1,3]);
+        settings.filament_diameter=[diameter];
+        unsupported.delete("filament_diameter");
+      }
       const initialNozzle=[...chain].reverse().find(p=>Object.hasOwn(p,"nozzle_temperature_initial_layer"));
       if(initialNozzle){
         const temp=validateNum("nozzle_temperature",initialNozzle.nozzle_temperature_initial_layer,SPECS.filament.nozzle_temperature);
