@@ -23,6 +23,10 @@ const SPECS={
     // Pinned CR-10 top surfaces independently use 0.42mm, absolute only.
     top_surface_line_width:[0.1,2],
     sparse_infill_line_width:[0.1,2],
+    // In the pinned CR-10 profile the internal SOLID infill width is an
+    // independent 0.45mm value (Creality common: 0.4mm). Accept only absolute
+    // single-nozzle widths; relative percentages remain unsupported.
+    internal_solid_infill_line_width:[0.1,2],
     wall_loops:[1,8],sparse_infill_density:[0,100],
     top_shell_layers:[0,12],bottom_shell_layers:[0,12],
     // Absolute mm/s only; relative percentage-based speeds are not converted.

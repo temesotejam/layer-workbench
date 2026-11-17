@@ -20,6 +20,9 @@ const LIMITS = {
   // Independent absolute top-surface width for the localhost WASM proof.
   top_surface_line_width: [0.1,2],
   sparse_infill_line_width: [0.1,2],
+  // Independently forward pinned CR-10 internal solid infill extrusion width.
+  // Local diagnostic only: absolute mm, no percentage or nozzle vectors.
+  internal_solid_infill_line_width: [0.1,2],
   wall_loops: [1,8],
   sparse_infill_density: [0,100],
   top_shell_layers: [0,12],

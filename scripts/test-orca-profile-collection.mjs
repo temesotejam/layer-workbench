@@ -474,3 +474,32 @@ for(const bad of ['105%',0,'2.01',['0.42','0.5'],null,'auto']){
 }
 assert.equal(result.process.settings.top_surface_line_width,undefined);
 console.log('PASS: top-surface width inheritance, independent override and safety bounds');
+
+// Source-pinned internal solid infill width uses a separate native field.
+// The parent, child and missing-key paths must preserve its identity.
+const solidWidthProfiles=profiles.map(rec=>rec.name==='fdm_process_common'
+  ? {...rec,line_width:'0.42',sparse_infill_line_width:'0.45',
+      top_surface_line_width:'0.4',internal_solid_infill_line_width:'0.4'} :
+    rec.name==='0.16mm Fine @TestPrinter'
+      ? {...rec,internal_solid_infill_line_width:'0.45'}:rec);
+const solidWidth=resolve(solidWidthProfiles,selection).process;
+assert.equal(solidWidth.settings.internal_solid_infill_line_width,'0.45');
+assert.equal(solidWidth.settings.line_width,'0.42');
+assert.equal(solidWidth.settings.sparse_infill_line_width,'0.45');
+assert.equal(solidWidth.settings.top_surface_line_width,'0.4');
+assert.ok(!solidWidth.unsupported.includes('internal_solid_infill_line_width'));
+const inheritedSolid=solidWidthProfiles.map(rec=>{
+  if(rec.name!=='0.16mm Fine @TestPrinter')return rec;
+  const child={...rec};delete child.internal_solid_infill_line_width;return child;
+});
+assert.equal(resolve(inheritedSolid,selection).process.settings.internal_solid_infill_line_width,'0.4');
+assert.equal(resolve(solidWidthProfiles.map(rec=>rec.name==='0.16mm Fine @TestPrinter'
+  ? {...rec,internal_solid_infill_line_width:['0.45']}:rec),selection)
+  .process.settings.internal_solid_infill_line_width,'0.45');
+for(const bad of ['105%',0,'2.01',['0.45','0.5'],null,'auto']){
+  assert.throws(()=>resolve(solidWidthProfiles.map(rec=>rec.name==='0.16mm Fine @TestPrinter'
+    ? {...rec,internal_solid_infill_line_width:bad}:rec),selection),
+    /Invalid|Multi-extruder|test limits/);
+}
+assert.equal(result.process.settings.internal_solid_infill_line_width,undefined);
+console.log('PASS: internal-solid width inheritance and child override, one-nozzle normalization and fail-closed bounds');
