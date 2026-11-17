@@ -89,6 +89,37 @@ for(const bad of ['105%',0,'2.01',['0.45','0.5'],null,'auto']){
 }
 assert.equal(result.process.settings.inner_wall_line_width,undefined);
 console.log('PASS: inherited and overridden inner-wall width, one-nozzle normalization and bounds');
+// Native sparse-infill width must follow its own parent/child precedence,
+// without overwriting wall widths or deriving a missing value.
+const sparseWidthProfiles=profiles.map(rec=>{
+  if(rec.name==='fdm_process_common')
+    return {...rec,line_width:'0.42',inner_wall_line_width:'0.45',sparse_infill_line_width:'0.44'};
+  if(rec.name==='0.16mm Fine @TestPrinter')
+    return {...rec,sparse_infill_line_width:'0.5'};
+  return rec;
+});
+const sparseResolved=resolve(sparseWidthProfiles,selection);
+assert.equal(sparseResolved.process.settings.sparse_infill_line_width,'0.5');
+assert.equal(sparseResolved.process.settings.line_width,'0.42');
+assert.equal(sparseResolved.process.settings.inner_wall_line_width,'0.45');
+assert.ok(!sparseResolved.process.unsupported.includes('sparse_infill_line_width'));
+const sparseInherited=resolve(sparseWidthProfiles.map(rec=>{
+  if(rec.name!=='0.16mm Fine @TestPrinter')return rec;
+  const child={...rec};delete child.sparse_infill_line_width;return child;
+}),selection);
+assert.equal(sparseInherited.process.settings.sparse_infill_line_width,'0.44');
+assert.equal(resolve(sparseWidthProfiles.map(rec=>
+  rec.name==='0.16mm Fine @TestPrinter'
+    ? {...rec,sparse_infill_line_width:['0.5']}:rec),selection)
+  .process.settings.sparse_infill_line_width,'0.5');
+for(const bad of ['105%',0,'2.01',['0.45','0.5'],null,'auto']){
+  assert.throws(()=>resolve(sparseWidthProfiles.map(rec=>
+    rec.name==='0.16mm Fine @TestPrinter'
+      ? {...rec,sparse_infill_line_width:bad}:rec),selection),
+    /Invalid|Multi-extruder|test limits/);
+}
+assert.equal(result.process.settings.sparse_infill_line_width,undefined);
+console.log('PASS: independent sparse infill width inheritance, precedence and bounded input');
 assert.ok(result.machine.unsupported.includes('machine_start_gcode'));
 assert.throws(()=>resolve(profiles,{...selection,machine:'wrong printer'}),/Missing/);
 assert.throws(()=>resolve(profiles.map(p=>p.name==='Generic PLA @TestPrinter'?{...p,compatible_printers:['Other printer']}:p),selection),/not compatible/);
