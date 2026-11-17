@@ -15,6 +15,9 @@ const LIMITS = {
   // Independently preserve the source-pinned native inner-wall width.
   // Only bounded absolute mm; %, vectors and inferred defaults are excluded.
   inner_wall_line_width: [0.1,2],
+  // Independently carry the native sparse-infill width in absolute mm only.
+  // The pinned CR-10 0.20mm process uses 0.45 mm; no relative widths.
+  sparse_infill_line_width: [0.1,2],
   wall_loops: [1,8],
   sparse_infill_density: [0,100],
   top_shell_layers: [0,12],
