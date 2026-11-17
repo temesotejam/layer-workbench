@@ -154,3 +154,36 @@ console.log("PASS: selected restricted Orca process auto-applied once, bounded o
     assert.equal(applied.value[key],preset.process.settings[key]);
 }
 console.log('PASS: support width/body/interface settings reach mocked native-json applyProfile');
+
+// The pinned WASM API support smoke uses the session.init key
+// support_enable (numeric 0/1), not the native-profile enable_support key.
+// An explicit local test toggle must reach init and must NOT leak into
+// orca.native-json. No support is enabled in generic fallback.
+{
+  const {engine,calls}=mockedEngine();
+  await sliceMultiStlWithEngine(engine,items,null,{enable_support:'1',support_speed:'30'});
+  const init=calls.find(c=>c.name==='init').value;
+  const applied=calls.find(c=>c.name==='applyProfile').value;
+  assert.equal(init.support_enable,1);
+  assert.equal(applied.support_speed,'30');
+  assert.equal(Object.hasOwn(applied,'enable_support'),false);
+}
+{
+  const {engine,calls}=mockedEngine();
+  await sliceMultiStlWithEngine(engine,items,null,{enable_support:'0'});
+  assert.equal(calls.find(c=>c.name==='init').value.support_enable,0);
+  assert.equal(calls.some(c=>c.name==='applyProfile'),false,
+    'A single support toggle is session-init only');
+}
+for (const bad of [true,1,2,'true','2',null,['1']]){
+  const {engine,calls}=mockedEngine();
+  await assert.rejects(()=>sliceMultiStlWithEngine(engine,items,null,
+    {enable_support:bad}),/native enum/);
+  assert.equal(calls.length,0,'Unverified support toggles must fail before createSession');
+}
+{
+  const {engine,calls}=mockedEngine();
+  await sliceMultiStlWithEngine(engine,items,null);
+  assert.equal(Object.hasOwn(calls.find(c=>c.name==='init').value,'support_enable'),false);
+}
+console.log('PASS: explicit support toggle maps to session.init only; generic fallback stays disabled');
