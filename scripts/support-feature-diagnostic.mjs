@@ -39,14 +39,22 @@ function stats(segments) {
   const feedrates=[...new Set(segments.filter(s=>
     Number.isFinite(s.feedrateMmMin)&&s.feedrateMmMin>0)
     .map(s=>Math.round(s.feedrateMmMin*100)/100))].sort((a,b)=>a-b);
-  const bounds=segments.length?{
-    minX:round(Math.min(...segments.flatMap(s=>[s.x1,s.x2]))),
-    maxX:round(Math.max(...segments.flatMap(s=>[s.x1,s.x2]))),
-    minY:round(Math.min(...segments.flatMap(s=>[s.y1,s.y2]))),
-    maxY:round(Math.max(...segments.flatMap(s=>[s.y1,s.y2]))),
-    minZ:round(Math.min(...segments.flatMap(s=>[s.z1,s.z2]))),
-    maxZ:round(Math.max(...segments.flatMap(s=>[s.z1,s.z2]))),
-  }:null;
+  // Iterate instead of spreading every segment into Math.min/Math.max:
+  // a real large support print may exceed the JS argument-count limit.
+  let bounds=null;
+  for(const s of segments) {
+    if(bounds===null)bounds={
+      minX:Infinity,maxX:-Infinity,minY:Infinity,maxY:-Infinity,
+      minZ:Infinity,maxZ:-Infinity};
+    bounds.minX=Math.min(bounds.minX,s.x1,s.x2);
+    bounds.maxX=Math.max(bounds.maxX,s.x1,s.x2);
+    bounds.minY=Math.min(bounds.minY,s.y1,s.y2);
+    bounds.maxY=Math.max(bounds.maxY,s.y1,s.y2);
+    bounds.minZ=Math.min(bounds.minZ,s.z1,s.z2);
+    bounds.maxZ=Math.max(bounds.maxZ,s.z1,s.z2);
+  }
+  if(bounds)bounds=Object.fromEntries(Object.entries(bounds)
+    .map(([key,value])=>[key,round(value)]));
   return {
     extrusion_xy_segments:segments.length,
     xy_length_mm:round(segments.reduce((sum,s)=>sum+s.xyLength,0)),
