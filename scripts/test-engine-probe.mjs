@@ -7,6 +7,7 @@ import {createHash} from 'node:crypto';
 import {parseGcodeToolpaths} from './gcode-preview-parser.mjs';
 import {makeGapRingObj} from './gap-ring-fixture.mjs';
 import {makeBridgeArchObj} from './bridge-arch-fixture.mjs';
+import {makeParityCubeStl, PARITY_CUBE_STL_SHA256} from './parity-cube-fixture.mjs';
 import {auditBridgeSpeedSegments} from './bridge-feature-diagnostic.mjs';
 import {checkBrowser3mfRoundTrip} from './test-browser-3mf-roundtrip.mjs';
 import {checkBrowserMultiObject3mf} from './test-browser-3mf-multiobject.mjs';
@@ -48,18 +49,9 @@ try {
   console.log('PASS: browser loaded pthread WASM engine with isolated headers and v2.5.0 capabilities');
   // A reproducible 12-triangle cube, identical to the standalone Prepare
   // browser smoke fixture. Verify the actual engine exports a G-code asset.
-  const triangles = [
-    [[0,0,0],[20,0,0],[20,20,0]], [[0,0,0],[20,20,0],[0,20,0]],
-    [[0,0,20],[20,20,20],[20,0,20]], [[0,0,20],[0,20,20],[20,20,20]],
-    [[0,0,0],[20,0,20],[20,0,0]], [[0,0,0],[0,0,20],[20,0,20]],
-    [[0,20,0],[20,20,0],[20,20,20]], [[0,20,0],[20,20,20],[0,20,20]],
-    [[0,0,0],[0,20,0],[0,20,20]], [[0,0,0],[0,20,20],[0,0,20]],
-    [[20,0,0],[20,0,20],[20,20,20]], [[20,0,0],[20,20,20],[20,20,0]],
-  ];
-  const cube = Buffer.alloc(84 + 50 * triangles.length);
-  cube.writeUInt32LE(triangles.length, 80);
-  triangles.forEach((tri, i) => tri.forEach((vertex, v) => vertex.forEach((value, axis) =>
-    cube.writeFloatLE(value, 84 + i * 50 + 12 + v * 12 + axis * 4))));
+  // Exact same source STL bytes are also used by the official native CLI
+  // fixture; profile/placement equivalence is NOT implied by a shared model.
+  const cube = makeParityCubeStl();
   // Real 3MF archive path through the same trusted browser-loaded WASM:
   // native export -> native project reimport -> geometry conversion ->
   // preservation=require export. This is deliberately a synthetic fixture.
@@ -109,6 +101,7 @@ try {
   await writeFile(parityDir + '/wasm-gcode-summary.json', JSON.stringify({
     engine:'OrcaSlicer WASM candidate', version:'2.5.0', api:'0.7.0',
     fixture:'synthetic 12-triangle cube; generic PLA development profile only',
+    source_stl_sha256:PARITY_CUBE_STL_SHA256,
     gcode_sha256:actualGcodeHash, bytes:Buffer.byteLength(wasmGcode,'utf8'),
     layers:parsedGcode.layers.length, extrusion_segments:parsedGcode.extrusions,
     travel_segments:parsedGcode.travels

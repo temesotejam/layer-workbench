@@ -47,3 +47,29 @@ browser one-slicer-api forwards a restricted subset, so a *true*
 equal-input pair cannot yet be claimed. Diagnostic mode allows recording
 the observed differences without confusing them with a successful parity
 check. Do not deploy the WASM engine to the public Pages app.
+
+## Shared source STL milestone (2026-11-17)
+
+`scripts/parity-cube-fixture.mjs` now owns one synthetic binary STL
+source for **both** the isolated Chrome/WASM single-cube smoke probe and the
+official native v2.5.0 CLI probe. The 12-triangle 20 mm cube must hash to
+`7b59223183b5c34815cbf197e1207b108932779a650bd9e6c9a6d2be811f8e93`
+(SHA256 of 684 raw STL bytes, including the header and normals). An offline
+test checks the complete bytes, triangle count, bounds and edge manifoldness.
+The Chrome test records this source digest alongside its generated G-code
+summary; the native CI generates exactly the same STL and **attempts** a
+separate official full-preset slice, keeping raw outputs ephemeral and only
+archiving hashes, bounded counts and logs.
+
+This establishes **source model-byte identity only** when both CI runs pass.
+The existing native test automatically arranges its STL; the localhost WASM
+test uses its own project placement and a restricted development profile,
+whereas the native runner loads full upstream-pinned machine, filament and
+process presets. Therefore the resulting G-code files must **not** yet be
+called a same-placement/same-effective-profile parity pair. Comparing their
+hashes or aggregated counts is not a valid equivalence verdict. The next
+gate is to align the two object-to-bed transforms and capture explicit
+effective configuration bytes from both engines in the same isolated runner
+before invoking `check_parity_pair.py`; unequal settings must remain
+diagnostic-only with a nonzero exit status. Never deploy the diagnostic
+G-code or WASM candidate to public Pages or treat the result as print-safe.
