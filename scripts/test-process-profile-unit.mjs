@@ -53,6 +53,15 @@ for(const bad of ["105%",0,2.01,["0.42"],"auto",null,-0.1]){
     /Invalid|outside the safe test range/);
 }
 console.log("PASS: absolute 0.42 mm source-pinned line_width; relative/invalid widths fail closed");
+// Preserve an independently selected outer-wall width, not a replacement for
+// the general line width. Reject percentages and multi-tool vectors.
+assert.deepEqual(parseTestProcessOverrides({line_width:"0.5",outer_wall_line_width:"0.42"}),
+  {line_width:"0.5",outer_wall_line_width:"0.42"});
+for(const bad of ["105%",0,2.01,["0.42"],"auto",null,-0.1]){
+  assert.throws(()=>parseTestProcessOverrides({outer_wall_line_width:bad}),
+    /Invalid|outside the safe test range/);
+}
+console.log("PASS: bounded native outer_wall_line_width is independent and rejects ambiguous formats");
 console.log('PASS: bounded initial-layer height (mm), no percentages or multi-nozzle vectors');
 console.log('PASS: bounded absolute mm/s test process speeds; percentages and multi-nozzle values rejected');
 console.log('PASS: bounded test process overrides and invalid preset rejection');

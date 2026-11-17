@@ -924,3 +924,26 @@ This adds **one bounded process setting**, not the full Orca PrintConfig:
 per-feature line widths, native full-preset equivalence, desktop-vs-WASM
 G-code parity, actual print quality/safety, and public Pages WASM activation
 remain unverified. The test model stays confined to isolated localhost CI.
+
+## 2026-11-17: source-pinned independent outer-wall line width (localhost only)
+
+The exact official OrcaSlicer v2.5.0 source pin
+`40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19` defines
+`outer_wall_line_width: "0.4"` in the Creality common process and
+`outer_wall_line_width: "0.42"` in
+`0.20mm Standard @Creality CR-10 0.4 nozzle`. The restricted process
+reader now independently inherits, validates and forwards the native
+`outer_wall_line_width` key, with **absolute 0.1–2.0 mm only**.
+The existing general `line_width` remains separate. Percentage values,
+multi-nozzle arrays and malformed values are rejected rather than converted.
+
+A source-pinned real-profile CI gate asserts the exact inherited value.
+The localhost-only isolated-Chrome regression holds the general line width
+at 0.42 mm, changes **only** the outer-wall width from 0.32 to 0.72 mm,
+and requires the actual WASM G-code G0/G1 motion commands to change,
+not merely JSON, headers or hashes. The assertion must pass in CI before
+this key is considered functionally verified.
+
+This is **one more restricted process option**, not a full PrintConfig
+mapping, same-full-profile desktop-vs-WASM toolpath parity, verified real
+printer G-code, or permission to publish the WASM engine on GitHub Pages.

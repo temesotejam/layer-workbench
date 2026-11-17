@@ -602,8 +602,8 @@ try {
     // A source-pinned CR-10 process uses absolute line_width=0.42 mm.
     // The restricted localhost adapter accepts only millimetres; prove the
     // real engine changes deposited motion, not just a header or JSON echo.
-    const sliceWithLineWidth=async width=>{
-      rawOrca[4].line_width=width;
+    const sliceWithLineWidth=async (width,key='line_width')=>{
+      rawOrca[4][key]=width;
       await uploadRawOrca();
       await prepare.locator('#lab-slice').click();
       await prepare.waitForFunction(()=>{
@@ -623,6 +623,21 @@ try {
     delete rawOrca[4].line_width;
     await uploadRawOrca();
     console.log('PASS: absolute process line_width 0.35 -> 0.65 changes real localhost WASM motion G-code');
+
+    // Hold the common width constant and change ONLY the native outer-wall
+    // width. This specifically tests one extra source-pinned CR-10 key, not
+    // an alias of line_width. Compare real motion commands, not metadata.
+    rawOrca[4].line_width='0.42';
+    const narrowOuterMotion=motionOnly(await sliceWithLineWidth('0.32','outer_wall_line_width'));
+    const broadOuterMotion=motionOnly(await sliceWithLineWidth('0.72','outer_wall_line_width'));
+    assert.ok(narrowOuterMotion.length>100&&broadOuterMotion.length>100,
+      'Outer-wall width probe needs substantive real G-code motion');
+    assert.notDeepEqual(narrowOuterMotion,broadOuterMotion,
+      'Changing only outer_wall_line_width must change actual WASM motion, not headers');
+    delete rawOrca[4].outer_wall_line_width;
+    delete rawOrca[4].line_width;
+    await uploadRawOrca();
+    console.log('PASS: outer_wall_line_width 0.32 -> 0.72 changes real isolated WASM G-code');
 
     // Test the deliberately opt-in plate mapping through the *real* engine.
     // Default profile used 55C. Inherited upstream-style hot_plate_temp=65C
