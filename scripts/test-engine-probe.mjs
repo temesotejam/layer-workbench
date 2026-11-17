@@ -1379,7 +1379,7 @@ try {
       native_desktop_parity:false,printer_safe:false,public_pages_enabled:false,
     };
     await writeFile(parityDir+'/sphere-support-role-speed-diagnostic.json',
-      JSON.stringify(speedReport,null,2)+'\\n');
+      JSON.stringify(speedReport,null,2)+'\n');
     console.log('SPHERE_SUPPORT_ROLE_SPEED_DIAGNOSTIC '+JSON.stringify(speedReport));
     assert.equal(bodySpeedEffect.result,'observed_tagged_support_feedrate_effect',
       'Support body 3 mm/s must produce a new tagged F180 on unchanged gross geometry: '+
