@@ -11,6 +11,7 @@ import {makeSupportSphereObj} from './support-sphere-fixture.mjs';
 import {makeParityCubeStl, PARITY_CUBE_STL_SHA256} from './parity-cube-fixture.mjs';
 import {auditBridgeSpeedSegments} from './bridge-feature-diagnostic.mjs';
 import {auditSupportDeposition,auditSupportSpeedEffect} from './support-feature-diagnostic.mjs';
+import {auditSupportWidthEffect} from './support-extrusion-diagnostic.mjs';
 import {checkBrowser3mfRoundTrip} from './test-browser-3mf-roundtrip.mjs';
 import {checkBrowserMultiObject3mf} from './test-browser-3mf-multiobject.mjs';
 const base = process.env.ENGINE_PROBE_URL || 'http://127.0.0.1:8766/';
@@ -1388,6 +1389,36 @@ try {
       'Support interface 3 mm/s must produce a new tagged F180 on unchanged gross geometry: '+
       JSON.stringify(interfaceSpeedEffect));
     console.log('PASS: actual isolated WASM support body and interface independently respond to low-speed overrides with role-tagged F180; no native parity asserted');
+
+    // The previous pass only proved support speed. Compare support-line
+    // width using two identical support-enabled sphere sessions, changing
+    // ONLY the absolute support_line_width 0.32 -> 0.72 mm. Require a real
+    // role-tagged positive-E G1 XY material-feed change; reject header-only
+    // differences. The scanner accounts for M82/M83 and G92 E. This
+    // represents commanded filament length, not volume or desktop parity.
+    const sphereWidthNarrow=await sliceRing('sphere-support-width-032mm.json',
+      {...supportArchSettings,enable_support:'1',support_line_width:0.32});
+    const sphereWidthWide=await sliceRing('sphere-support-width-072mm.json',
+      {...supportArchSettings,enable_support:'1',support_line_width:0.72});
+    const supportWidthEffect=auditSupportWidthEffect(
+      sphereWidthNarrow,sphereWidthWide);
+    const widthReport={
+      fixture:'same watertight 20 mm support-enabled sphere',
+      fixed_enable_support:'1',fixed_support_threshold_angle_degrees:70,
+      changed_native_key:'support_line_width',
+      narrow_width_mm:0.32,wide_width_mm:0.72,
+      ...supportWidthEffect,
+      public_pages_enabled:false,
+    };
+    await writeFile(parityDir+'/sphere-support-width-filament-diagnostic.json',
+      JSON.stringify(widthReport,null,2)+'\n');
+    console.log('SPHERE_SUPPORT_WIDTH_FILAMENT_DIAGNOSTIC '+
+      JSON.stringify(widthReport));
+    assert.equal(supportWidthEffect.result,
+      'observed_support_body_filament_feed_difference',
+      'Support line width must alter actually deposited, role-tagged G1 XY filament E: '+
+      JSON.stringify(supportWidthEffect));
+    console.log('PASS: actual isolated WASM support line width changes role-tagged positive-E XY filament feed; no native parity asserted');
 
     console.log('PASS: actual isolated WASM sphere produces support-tagged positive-E XY motion only when explicitly enabled; no native parity asserted');
 
