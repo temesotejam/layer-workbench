@@ -12,6 +12,35 @@ class ComparatorTests(unittest.TestCase):
             second.write_text(wasm, encoding='utf-8')
             return compare(first, second, **kwargs)
 
+    def test_counted_positive_e_mm_excludes_priming_and_retractions(self):
+        # Absolute E, an explicit G92 reset, relative E and G20 inches.
+        # E-only priming and XY retraction are never counted as deposition.
+        code = ('M82\nG1 E6\nG92 E0\nG1 X10 E1.25\n'
+                'G1 X20 E0.75\nM83\nG1 Y10 E0.5\n'
+                'G20\nG1 X1 E0.1\n')
+        report = self.run_compare(code, code, min_extrusion_moves=3)
+        self.assertTrue(report['match'], report)
+        self.assertEqual(report['native_extrusion_moves'], 3)
+        self.assertEqual(report['native_counted_positive_e_mm'], '4.29')
+        self.assertEqual(report['wasm_counted_positive_e_mm'], '4.29')
+        self.assertEqual(report['counted_positive_e_delta_mm'], '0')
+
+    def test_counted_positive_e_delta_is_diagnostic_not_a_parity_override(self):
+        native = 'M83\nG1 X10 E1\nG1 X20 E1\n'
+        wasm = 'M83\nG1 X10 E1\nG1 X20 E2\n'
+        report = self.run_compare(native, wasm, min_extrusion_moves=2)
+        self.assertFalse(report['match'])
+        self.assertEqual(report['native_counted_positive_e_mm'], '2')
+        self.assertEqual(report['wasm_counted_positive_e_mm'], '3')
+        self.assertEqual(report['counted_positive_e_delta_mm'], '1')
+
+    def test_invalid_deposition_syntax_has_unknown_e_total(self):
+        code = 'G92 E0 E1\nG1 X10 E2\n'
+        report = self.run_compare(code, code, min_extrusion_moves=1)
+        self.assertFalse(report['match'])
+        self.assertIsNone(report['native_counted_positive_e_mm'])
+        self.assertIsNone(report['counted_positive_e_delta_mm'])
+
     def test_comments_and_numeric_format_are_ignored(self):
         self.assertTrue(self.run_compare(
             '; at 12:00\nG1 X1.00 Y2.0 E.500 ; original\n',

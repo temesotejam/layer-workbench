@@ -109,8 +109,8 @@ def valid_g17_arc(start, end, words, units, absolute_arc_centers):
     return (math.isfinite(r0) and math.isfinite(r1) and r0 > 0
             and abs(r0 - r1) <= max(0.05, r0 * 0.001))
 
-def count_extrusion_moves(commands):
-    """Count positive E on actual XY/arc movement for fixture sanity.
+def extrusion_move_metrics(commands):
+    """Summarize positive E on actual XY/arc movement for fixture sanity.
 
     A present X/Y word alone does not prove movement: e.g. G1 X0 E1 at the
     initial position is priming, not deposited path. Track G90/G91, G92 and
@@ -120,6 +120,7 @@ def count_extrusion_moves(commands):
     watertightness test, deposited-volume or print-safety certification.
     """
     count = 0
+    counted_e_mm = Decimal(0)
     absolute_e = True
     absolute_xyz = True
     absolute_arc_centers = False
@@ -169,13 +170,13 @@ def count_extrusion_moves(commands):
                 if stateful:
                     # Opaque move/reset syntax leaves the position unknown.
                     # Never use later moves to satisfy the fixture gate.
-                    return 0
+                    return 0, None
                 continue
             letter = match[1].upper()
             if stateful and (letter in words or letter in ('G', 'M', 'N', 'T')):
                 # Duplicate words or embedded opcodes have firmware-dependent
                 # interpretation; the conservative deposition gate must fail.
-                return 0
+                return 0, None
             words[letter] = Decimal(match[2])
         if opcode == 'G92':
             for axis in xy:
@@ -209,7 +210,13 @@ def count_extrusion_moves(commands):
                 start_xy, xy, words, units, absolute_arc_centers)):
             continue
         count += 1
-    return count
+        counted_e_mm += delta
+    return count, counted_e_mm
+
+
+def count_extrusion_moves(commands):
+    """Backward-compatible fixture count; diagnostics also sum positive E."""
+    return extrusion_move_metrics(commands)[0]
 
 def numeric_parameter_deltas(native_command, wasm_command):
     """Return diagnostic WASM-minus-native deltas for aligned numeric words."""
@@ -247,8 +254,8 @@ def compare(native, wasm, min_extrusion_moves=0):
                     entry['parameter_deltas'] = deltas
                 differences.append(entry)
     native_motion, wasm_motion = count_motion(a), count_motion(b)
-    native_extrusion = count_extrusion_moves(a)
-    wasm_extrusion = count_extrusion_moves(b)
+    native_extrusion, native_e_mm = extrusion_move_metrics(a)
+    wasm_extrusion, wasm_e_mm = extrusion_move_metrics(b)
     issues = []
     if native_motion == 0:
         issues.append('native input has no G0/G1/G2/G3 motion commands')
@@ -263,6 +270,12 @@ def compare(native, wasm, min_extrusion_moves=0):
         'native_commands': len(a), 'wasm_commands': len(b),
         'native_motion_commands': native_motion, 'wasm_motion_commands': wasm_motion,
         'native_extrusion_moves': native_extrusion, 'wasm_extrusion_moves': wasm_extrusion,
+        # Positive commanded filament-axis E for counted XY deposition only.
+        # This is not deposited material volume or an actual extrusion sensor.
+        'native_counted_positive_e_mm': None if native_e_mm is None else str(native_e_mm.normalize()),
+        'wasm_counted_positive_e_mm': None if wasm_e_mm is None else str(wasm_e_mm.normalize()),
+        'counted_positive_e_delta_mm': None if native_e_mm is None or wasm_e_mm is None
+            else str((wasm_e_mm - native_e_mm).normalize()),
         'minimum_extrusion_moves': min_extrusion_moves,
         'input_issues': issues,
         'native_sha256': hashlib.sha256(native.read_bytes()).hexdigest(),
