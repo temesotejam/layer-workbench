@@ -843,3 +843,23 @@ the full official machine/filament configuration is now implemented, nor
 proof of native-versus-WASM G-code parity, machine compatibility, printer
 readiness, or a public WASM deployment. Official vendor JSON remains an
 ephemeral CI input; the accepted engine candidate is unchanged.
+
+## 2026-11-17: fail-closed official filament material type in the localhost adapter
+
+The pinned OrcaSlicer v2.5.0 Creality `fdm_filament_pla` source has
+`filament_type: ["PLA"]`; the existing tested browser `session.init`
+fixture uses scalar `filament_type: "PLA"`. The restricted profile resolver now
+explicitly inherits and validates exactly this **single-slot PLA** vector and
+forwards the proven scalar representation. Non-PLA, multi-slot, malformed or
+ambiguous material declarations are rejected, including when passed by a
+direct caller to `makeRestrictedInitConfig`. This prevents a user-selected
+PETG/ABS etc. preset from being silently sliced as generic test PLA.
+
+The synthetic resolver tests verify inherited and child-override PLA, bad
+material vectors and unsupported materials; restricted session-init tests
+verify that invalid direct inputs fail before WASM session creation. Missing
+material declarations retain the explicitly labelled generic-PLA developer
+fallback, not a printer-profile claim. This supports **one additional exact
+material key only**, not native filament/multi-extruder parity, real-material
+validation, physical printing or production WASM deployment. Upstream input
+was inspected at source pin `40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19`.
