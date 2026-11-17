@@ -639,6 +639,22 @@ try {
     await uploadRawOrca();
     console.log('PASS: outer_wall_line_width 0.32 -> 0.72 changes real isolated WASM G-code');
 
+    // Hold both the common and outer-wall widths fixed. Vary only inner
+    // walls and compare real motion paths, not source JSON or G-code headers.
+    rawOrca[4].line_width='0.42';
+    rawOrca[4].outer_wall_line_width='0.42';
+    const narrowInnerMotion=motionOnly(await sliceWithLineWidth('0.32','inner_wall_line_width'));
+    const broadInnerMotion=motionOnly(await sliceWithLineWidth('0.72','inner_wall_line_width'));
+    assert.ok(narrowInnerMotion.length>100&&broadInnerMotion.length>100,
+      'Inner-wall width probe needs substantive real G-code motion');
+    assert.notDeepEqual(narrowInnerMotion,broadInnerMotion,
+      'Changing only inner_wall_line_width must change WASM motion, not headers');
+    delete rawOrca[4].inner_wall_line_width;
+    delete rawOrca[4].outer_wall_line_width;
+    delete rawOrca[4].line_width;
+    await uploadRawOrca();
+    console.log('PASS: inner_wall_line_width 0.32 -> 0.72 changes real isolated WASM G-code');
+
     // Test the deliberately opt-in plate mapping through the *real* engine.
     // Default profile used 55C. Inherited upstream-style hot_plate_temp=65C
     // should be passed into session.init only after selecting the hot plate.

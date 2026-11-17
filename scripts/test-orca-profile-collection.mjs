@@ -57,6 +57,38 @@ for(const bad of ['105%',0,'2.01',['0.42','0.45'],null,'auto']){
 }
 assert.equal(result.process.settings.outer_wall_line_width,undefined);
 console.log('PASS: independent outer-wall width inheritance and bounds');
+// The child overrides its inherited inner-wall width without changing outer
+// or general widths. Missing values are not fabricated from other settings.
+const innerWidthProfiles=profiles.map(rec=>{
+  if(rec.name==='fdm_process_common')
+    return {...rec,line_width:'0.45',outer_wall_line_width:'0.4',inner_wall_line_width:'0.46'};
+  if(rec.name==='0.16mm Fine @TestPrinter')
+    return {...rec,inner_wall_line_width:'0.5'};
+  return rec;
+});
+const innerResolved=resolve(innerWidthProfiles,selection);
+assert.equal(innerResolved.process.settings.inner_wall_line_width,'0.5');
+assert.equal(innerResolved.process.settings.line_width,'0.45');
+assert.equal(innerResolved.process.settings.outer_wall_line_width,'0.4');
+assert.ok(!innerResolved.process.unsupported.includes('inner_wall_line_width'));
+const innerInherited=resolve(innerWidthProfiles.map(rec=>{
+  if(rec.name!=='0.16mm Fine @TestPrinter')return rec;
+  const child={...rec};delete child.inner_wall_line_width;return child;
+}),selection);
+assert.equal(innerInherited.process.settings.inner_wall_line_width,'0.46');
+assert.equal(resolve(innerWidthProfiles.map(rec=>
+  rec.name==='0.16mm Fine @TestPrinter'
+    ? {...rec,inner_wall_line_width:['0.5']}:rec),selection)
+  .process.settings.inner_wall_line_width,'0.5',
+  'Single-nozzle native width vector must normalize to absolute mm');
+for(const bad of ['105%',0,'2.01',['0.45','0.5'],null,'auto']){
+  assert.throws(()=>resolve(innerWidthProfiles.map(rec=>
+    rec.name==='0.16mm Fine @TestPrinter'
+      ? {...rec,inner_wall_line_width:bad}:rec),selection),
+    /Invalid|Multi-extruder|test limits/);
+}
+assert.equal(result.process.settings.inner_wall_line_width,undefined);
+console.log('PASS: inherited and overridden inner-wall width, one-nozzle normalization and bounds');
 assert.ok(result.machine.unsupported.includes('machine_start_gcode'));
 assert.throws(()=>resolve(profiles,{...selection,machine:'wrong printer'}),/Missing/);
 assert.throws(()=>resolve(profiles.map(p=>p.name==='Generic PLA @TestPrinter'?{...p,compatible_printers:['Other printer']}:p),selection),/not compatible/);

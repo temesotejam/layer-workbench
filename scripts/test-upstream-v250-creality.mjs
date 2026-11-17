@@ -28,6 +28,14 @@ assert.equal(process.settings.outer_wall_line_width,"0.42",
   "Official v2.5.0 CR-10 0.20mm child must override outer-wall width independently");
 assert.ok(!process.unsupported.includes("outer_wall_line_width"),
   "Supported native outer-wall width must not be classified as ignored");
+assert.equal(indexed.records.find(p=>p.name==="fdm_process_common").inner_wall_line_width,"0.45",
+  "Official v2.5.0 common process defines native inner-wall width");
+assert.equal(indexed.records.find(p=>p.name==="fdm_process_creality_common").inner_wall_line_width,"0.45",
+  "Creality common process must preserve the independently inherited inner-wall width");
+assert.equal(process.settings.inner_wall_line_width,"0.45",
+  "Official v2.5.0 CR-10 0.20mm preset specifies 0.45 mm inner walls");
+assert.ok(!process.unsupported.includes("inner_wall_line_width"),
+  "Inner-wall line width must be forwarded as native setting");
 assert.equal(indexed.records.find(p=>p.name==="fdm_process_common").sparse_infill_pattern,"crosshatch",
   "Source-pinned Creality ancestor must define exact native crosshatch token");
 assert.equal(process.settings.sparse_infill_pattern,"grid",
