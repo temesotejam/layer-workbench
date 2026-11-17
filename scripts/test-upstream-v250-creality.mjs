@@ -18,6 +18,10 @@ assert.equal(machine.settings.nozzle_diameter,"0.4");
 assert.equal(machine.settings.printable_height,"400");
 assert.equal(process.settings.layer_height,"0.2");
 assert.equal(process.settings.wall_loops,"2");
+assert.equal(process.settings.line_width,"0.42",
+  "Official v2.5.0 CR-10 0.20mm process must provide absolute line width");
+assert.ok(!process.unsupported.includes("line_width"),
+  "Source-pinned absolute line width must be included in restricted process settings");
 assert.equal(indexed.records.find(p=>p.name==="fdm_process_common").sparse_infill_pattern,"crosshatch",
   "Source-pinned Creality ancestor must define exact native crosshatch token");
 assert.equal(process.settings.sparse_infill_pattern,"grid",

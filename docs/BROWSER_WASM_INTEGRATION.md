@@ -906,3 +906,21 @@ geometry (not merely G-code SHA, metadata or config comments). This is a
 bounded functional check in the accepted localhost WASM candidate. It is not
 a full list of native patterns, desktop/native G-code equivalence, official
 printer readiness, or permission to activate the public Pages slicer.
+
+## 2026-11-17: bounded source-pinned absolute process line width (localhost only)
+
+The official OrcaSlicer v2.5.0 source at
+`40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19` contains
+`line_width: "0.42"` in the Creality CR-10 0.20mm Standard process preset.
+The restricted profile resolver and `orca.native-json` bridge now forward
+only finite, absolute 0.1–2.0 mm `line_width` values. Percentages,
+multi-tool arrays and malformed values fail closed rather than silently
+being reinterpreted as millimetres. Real-profile CI asserts the pinned
+0.42 mm value. The isolated Chrome regression slices the same two-STL
+project at 0.35 and 0.65 mm and requires a difference in actual G0/G1
+motion/extrusion commands, not only headers or profile serialization.
+
+This adds **one bounded process setting**, not the full Orca PrintConfig:
+per-feature line widths, native full-preset equivalence, desktop-vs-WASM
+G-code parity, actual print quality/safety, and public Pages WASM activation
+remain unverified. The test model stays confined to isolated localhost CI.
