@@ -197,7 +197,16 @@ export async function sliceMultiStlWithEngine(engine, items, onProgress, process
     ? {...base,support_enable:Number(effectiveProcess.enable_support),
         support_type:"normal(auto)",support_threshold_angle:10} : base;
   const appliedProcess = effectiveProcess===null ? null : {...effectiveProcess};
-  if (hasSupportToggle) delete appliedProcess.enable_support;
+  if (hasSupportToggle) {
+    delete appliedProcess.enable_support;
+    // Pinned OrcaWasm profile smoke explicitly applies native support_enable
+    // via orca.native-json. Session.init alone did not produce supports in
+    // the real Chrome arch/sphere control; preserve both proven API paths.
+    // The same fixed type/threshold are applied to OFF and ON sessions.
+    appliedProcess.support_enable=Number(effectiveProcess.enable_support);
+    appliedProcess.support_type="normal(auto)";
+    appliedProcess.support_threshold_angle=10;
+  }
   const session = await engine.createSession();
   try {
     await session.init(encode(initConfig));

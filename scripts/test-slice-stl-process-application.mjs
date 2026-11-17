@@ -168,6 +168,9 @@ console.log('PASS: support width/body/interface settings reach mocked native-jso
   assert.equal(init.support_type,'normal(auto)');
   assert.equal(init.support_threshold_angle,10);
   assert.equal(applied.support_speed,'30');
+  assert.equal(applied.support_enable,1);
+  assert.equal(applied.support_type,'normal(auto)');
+  assert.equal(applied.support_threshold_angle,10);
   assert.equal(Object.hasOwn(applied,'enable_support'),false);
 }
 {
@@ -176,8 +179,9 @@ console.log('PASS: support width/body/interface settings reach mocked native-jso
   assert.equal(calls.find(c=>c.name==='init').value.support_enable,0);
   assert.equal(calls.find(c=>c.name==='init').value.support_type,'normal(auto)');
   assert.equal(calls.find(c=>c.name==='init').value.support_threshold_angle,10);
-  assert.equal(calls.some(c=>c.name==='applyProfile'),false,
-    'A single support toggle is session-init only');
+  assert.deepEqual(calls.find(c=>c.name==='applyProfile').value,
+    {support_enable:0,support_type:'normal(auto)',support_threshold_angle:10},
+    'A single support toggle also sets the pinned native support profile explicitly');
 }
 for (const bad of [true,1,2,'true','2',null,['1']]){
   const {engine,calls}=mockedEngine();
@@ -192,4 +196,4 @@ for (const bad of [true,1,2,'true','2',null,['1']]){
   assert.equal(Object.hasOwn(calls.find(c=>c.name==='init').value,'support_type'),false);
   assert.equal(Object.hasOwn(calls.find(c=>c.name==='init').value,'support_threshold_angle'),false);
 }
-console.log('PASS: explicit support toggle maps to session.init only; generic fallback stays disabled');
+console.log('PASS: explicit support toggle reaches both native init and native-json profile, while generic fallback stays disabled');

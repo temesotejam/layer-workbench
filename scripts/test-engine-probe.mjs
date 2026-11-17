@@ -1301,7 +1301,7 @@ try {
       native_desktop_parity:false,printer_safe:false,public_pages_enabled:false,
     };
     await writeFile(parityDir+'/sphere-support-on-feature-diagnostic.json',
-      JSON.stringify(sphereReport,null,2)+'\\n');
+      JSON.stringify(sphereReport,null,2)+'\n');
     console.log('SPHERE_SUPPORT_DIAGNOSTIC '+JSON.stringify(sphereReport));
     assert.equal(sphereOffAudit.result,'no_tagged_support_body_or_interface',
       'Disabled sphere auto-support produced positive-E XY support deposition');

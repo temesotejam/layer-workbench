@@ -1202,3 +1202,9 @@ process settings; only the numeric `support_enable` differs. The local-only
 diagnostic must show source-tagged positive-E XY support body/interface paths
 on the ON case and none on OFF, or CI must FAIL. No public WASM activation,
 full native parity, or print safety is claimed.
+
+### 2026-11-18: explicit native-json support state after sphere FAIL
+
+The next real isolated-Chrome run [#44165269422](https://github.com/temesotejam/layer-workbench/actions/runs/44165269422) still found **no tagged support deposition** on either arch or lower hemisphere, even with explicit init `support_enable:1`, `support_type:normal(auto)`, and threshold 10. This is a **FAIL**, not support equivalence.
+
+The pinned Hiosdra/OrcaWasm source `scripts/smoke-test.mjs` at `60a09e04f1990be39c8f6f35dffef1a2c9e224c4` also sets `support_enable:1` through `applyProfileOnce(..., 'orca.native-json')` in its selected Voron profile smoke. The restricted adapter now forwards the validated numeric support flag and fixed support strategy through **both** `session.init` and `orca.native-json` on the explicit local diagnostic, with identical fixed settings for on/off. The positive sphere audit remains a mandatory FAIL gate until actual tagged deposition is observed; there is no published engine or printer-safety claim.
