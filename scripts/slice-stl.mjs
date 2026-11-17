@@ -132,7 +132,13 @@ export function makeRestrictedInitConfig(profileCollection=null) {
 
   const plateFields=new Set(Object.values(PLATE_INIT_FIELDS));
   for (const [key,value] of Object.entries(profileCollection.filament.settings)) {
-    if (Object.hasOwn(FILAMENT_INIT_SCALARS,key))
+    if (key==="filament_type") {
+      // Do not silently apply the generic PLA baseline to PETG/ABS/etc.
+      // The current tested one-slicer-api session.init wire value is scalar.
+      if (value!=="PLA")
+        throw new Error("Only PLA filament_type is verified for restricted WASM init");
+      filament.filament_type=value;
+    } else if (Object.hasOwn(FILAMENT_INIT_SCALARS,key))
       filament[key]=boundedNativeNumber(value,key,FILAMENT_INIT_SCALARS[key]);
     else if (Object.hasOwn(FILAMENT_INIT_VECTORS,key))
       filament[key]=boundedNativeNumber(value,key,FILAMENT_INIT_VECTORS[key],true);
