@@ -164,3 +164,18 @@ for(const bad of ['50%',0,801,['20'],['20','30'],'auto',null,-1]){
     /Invalid|outside the safe test range/);
 }
 console.log('PASS: bounded independent first-layer infill speed refuses relative and vector inputs');
+
+// Source-pinned support settings are independent absolute parameters;
+// a localhost process override cannot silently enable support generation.
+assert.deepEqual(parseTestProcessOverrides({
+  support_line_width:'0.42',support_speed:'30',support_interface_speed:'25',
+}),{support_line_width:'0.42',support_speed:'30',support_interface_speed:'25'});
+for(const key of ['support_line_width','support_speed','support_interface_speed']) {
+  for(const bad of ['50%',0,key==='support_line_width'?2.01:801,
+    ['0.42'],['0.42','0.5'],null,'auto']) {
+    assert.throws(()=>parseTestProcessOverrides({[key]:bad}),
+      /Invalid|outside the safe test range/,key+': '+JSON.stringify(bad));
+  }
+}
+assert.throws(()=>parseTestProcessOverrides({enable_support:'1'}),/Unsupported process setting/);
+console.log('PASS: absolute support width and independent body/interface speeds bounded; activation excluded');

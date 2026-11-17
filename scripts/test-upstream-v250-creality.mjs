@@ -140,3 +140,21 @@ console.log("PASS: actual pinned CR-10 machine inheritance and 0.20mm process pr
 console.log("Real machine supported keys:",JSON.stringify(machine.settings));
 console.log("Real process supported keys:",JSON.stringify(process.settings));
 console.log("Unsupported real machine/process keys:",machine.unsupported.length,process.unsupported.length);
+
+// Real pinned chain, not a synthetic test fixture: support is disabled and
+// the three absolute support keys are only forwarded, not toolpath-verified.
+for(const [key,expected] of Object.entries({
+  support_line_width:['0.42','0.4','0.42'],
+  support_speed:['40','150','30'],
+  support_interface_speed:['80','80','30'],
+})){
+  assert.deepEqual(process.chain.map(name=>indexed.records.find(p=>p.name===name)[key]),
+    expected,'Pinned official chain '+key);
+  assert.equal(process.settings[key],expected[2]);
+  assert.ok(!process.unsupported.includes(key));
+}
+assert.equal(process.record.enable_support,'0');
+assert.equal(process.record.initial_layer_travel_speed,'50%');
+assert.ok(process.unsupported.includes('initial_layer_travel_speed'),
+  'Relative 50% native travel setting must not be mistaken for 50 mm/s');
+console.log('PASS: pinned CR-10 support settings forwarded; support disabled and relative travel excluded');

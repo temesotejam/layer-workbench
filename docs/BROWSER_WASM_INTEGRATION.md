@@ -1090,3 +1090,26 @@ from actual WASM G-code. A change is considered verified only if that
 corresponding Chrome CI run succeeds. Neither metadata agreement nor a
 build PASS establishes full effective-profile parity, real-printer safety,
 3MF equivalence, or permission to publish WASM on GitHub Pages.
+
+## 2026-11-18: source-pinned support dimensions and feedrates (ingestion only)
+
+The strict localhost-only v2.5.0 profile bridge now preserves three
+**independent** native CR-10 0.20mm Standard keys through actual upstream
+inheritance (common → Creality common → CR-10 child):
+`support_line_width` (**0.42 → 0.40 → 0.42 mm**),
+`support_speed` (**40 → 150 → 30 mm/s**) and
+`support_interface_speed` (**80 → 80 → 30 mm/s**). The bounded adapter
+accepts only absolute 0.1–2.0 mm widths and 1–800 mm/s speeds, with
+single-tool native array normalization only in the resolver. Relative
+percentages, multi-tool ambiguity, malformed inputs and missing defaults
+fail closed. Official source JSON is fetched only within CI.
+
+**Support remains disabled** in the pinned CR-10 profile and
+`enable_support` is intentionally excluded from the test override
+allow-list. Real isolated Chrome/WASM checks only native-json ingestion and
+subsequent successful slicing, **not actual support generation or support
+toolpath effects**. The pinned child profile also has
+`initial_layer_travel_speed: "50%"`; this relative speed remains
+unsupported, not misrepresented as 50 mm/s. Native G-code equivalence,
+print safety, full 3MF/project parity and production deployment remain
+unverified; no WASM binary is deployed to public Pages.
