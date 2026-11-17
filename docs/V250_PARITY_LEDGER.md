@@ -1006,3 +1006,26 @@ input-hash provenance checks, and the existing minimum-deposition gate still
 determine `match`. In particular, this does **not** establish an identical
 full-profile native-vs-WASM comparison. The fixture pair must first carry
 identical, separately sourced model and effective profile data.
+
+## 2026-11-17: counted G1 deposited XY length diagnostic
+
+The strict comparator now reports `native_counted_linear_xy_moves`,
+`wasm_counted_linear_xy_moves`, `native_counted_linear_xy_mm`,
+`wasm_counted_linear_xy_mm` and signed `counted_linear_xy_delta_mm`
+(WASM minus native, rounded to 0.000001 mm). It sums Euclidean
+**straight-line XY path length only for positive-E G1 moves already accepted
+by the conservative deposition gate**. It follows G90/G91, G92 XY resets,
+G20/G21 units, M82/M83 and E resets, and rejects stationary XY priming.
+Supported G17 G2/G3 arcs still contribute to the pre-existing E/count
+diagnostics, **but their curved lengths do not enter this new linear-only
+metric**. Unknown/ambiguous move syntax produces `null` linear totals,
+not a misleading zero.
+
+Synthetic regression checks include a 3–4–5 diagonal, a radius-defined
+full-circle arc exclusion, stationary priming, inch-to-mm transitions,
+G92 ambiguity, and a changed XY path with unchanged commanded E. This is
+only a geometry-sensitive **diagnostic**; neither matching totals nor
+matching strict commands authenticate executable provenance or prove
+native-vs-WASM full-profile slicing parity. No WASM binary, official
+profile file or public Pages engine switch is changed. No G-code is
+certified for printing.
