@@ -44,7 +44,12 @@ const outerInherited=resolve(outerWidthProfiles.map(rec=>{
   const child={...rec};delete child.outer_wall_line_width;return child;
 }),selection);
 assert.equal(outerInherited.process.settings.outer_wall_line_width,'0.4');
-for(const bad of ['105%',0,'2.01',['0.42'],null,'auto']){
+assert.equal(resolve(outerWidthProfiles.map(rec=>
+  rec.name==='0.16mm Fine @TestPrinter'
+    ? {...rec,outer_wall_line_width:['0.42']}:rec),selection)
+  .process.settings.outer_wall_line_width,'0.42',
+  'Native one-nozzle arrays must be normalized without changing units');
+for(const bad of ['105%',0,'2.01',['0.42','0.45'],null,'auto']){
   assert.throws(()=>resolve(outerWidthProfiles.map(rec=>
     rec.name==='0.16mm Fine @TestPrinter'
       ? {...rec,outer_wall_line_width:bad}:rec),selection),
