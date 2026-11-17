@@ -36,6 +36,14 @@ assert.equal(process.settings.inner_wall_line_width,"0.45",
   "Official v2.5.0 CR-10 0.20mm preset specifies 0.45 mm inner walls");
 assert.ok(!process.unsupported.includes("inner_wall_line_width"),
   "Inner-wall line width must be forwarded as native setting");
+assert.equal(indexed.records.find(p=>p.name==="fdm_process_common").sparse_infill_line_width,"0.45",
+  "Pinned common process must declare independent sparse-infill width");
+assert.equal(indexed.records.find(p=>p.name==="fdm_process_creality_common").sparse_infill_line_width,"0.45",
+  "Pinned Creality common process must carry sparse-infill width");
+assert.equal(process.settings.sparse_infill_line_width,"0.45",
+  "Official CR-10 0.20mm preset independently uses 0.45 mm sparse infill");
+assert.ok(!process.unsupported.includes("sparse_infill_line_width"),
+  "Native sparse-infill width must not be silently dropped");
 assert.equal(indexed.records.find(p=>p.name==="fdm_process_common").sparse_infill_pattern,"crosshatch",
   "Source-pinned Creality ancestor must define exact native crosshatch token");
 assert.equal(process.settings.sparse_infill_pattern,"grid",
