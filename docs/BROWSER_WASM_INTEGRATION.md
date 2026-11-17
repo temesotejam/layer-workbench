@@ -1163,3 +1163,24 @@ Even a green gate proves only a bounded test overhang and one archived
 WASM artifact. Full native-vs-WASM profile/G-code equivalence, real printer
 support behavior, usable 3MF/STEP projects, and print safety remain unverified.
 No output should be sent to a printer.
+
+### API 0.7.0 support-toggle routing correction (first Chrome failure)
+
+The first isolated Chrome run ([#44162923061](https://github.com/temesotejam/layer-workbench/actions/runs/44162923061))
+completed all prior smoke probes but produced **zero** support-labelled deposited
+segments with both `enable_support:"0"` and `"1"`; the new positive acceptance
+assertion failed, as intended. This cannot be reported as generated support.
+
+The pinned OrcaWasm modifier smoke (`scripts/patch-orcawasm-support-smoke.py`)
+provides more precise API evidence: the engine consumes numeric
+`support_enable: 1` via `session.init`. Passing the official process name
+`enable_support` only into `orca.native-json` did not activate support in that
+Chrome test. The restricted localhost adapter now explicitly translates
+validated `"0"`/`"1"` to numeric `support_enable` **at init only** and
+excludes the process key from `applyProfile`; all other supported process
+settings retain their previous behavior. Mock-session tests require these
+exact call paths, including no support enablement in the generic fallback.
+
+The positive overhang probe remains a FAIL until a new real Chrome run
+observes tagged support extrusion. Do not treat unit or source-profile
+PASS as evidence of support generation or native G-code parity.
