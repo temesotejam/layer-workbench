@@ -519,7 +519,7 @@ try {
     const rawOrca = [
       {type:'machine',name:'test machine base',nozzle_diameter:'0.4',printable_height:'250',machine_start_gcode:'G28'},
       {type:'machine',name:'TestPrinter 0.4 nozzle',inherits:'test machine base'},
-      {type:'filament',name:'Generic PLA @System',nozzle_temperature:'210',nozzle_temperature_initial_layer:['235'],bed_temperature:'55',hot_plate_temp:['65'],hot_plate_temp_initial_layer:['75']},
+      {type:'filament',name:'Generic PLA @System',filament_diameter:['1.75'],nozzle_temperature:'210',nozzle_temperature_initial_layer:['235'],bed_temperature:'55',hot_plate_temp:['65'],hot_plate_temp_initial_layer:['75']},
       {type:'filament',name:'Generic PLA @TestPrinter',inherits:'Generic PLA @System',nozzle_temperature:'215',compatible_printers:['TestPrinter 0.4 nozzle']},
       {type:'process',name:'process base',layer_height:'0.2',wall_loops:'2'},
       {type:'process',name:'0.16 Fine @TestPrinter',inherits:'process base',layer_height:'0.16',wall_loops:'4',compatible_printers:['TestPrinter 0.4 nozzle']},
@@ -756,6 +756,34 @@ try {
     const changed=lowE.filter((value,i)=>Math.abs(value-highE[i])>0.00001).length;
     assert.ok(changed>=10,'Actual numeric E extrusion values must respond to native flow ratio; G-code metadata alone is insufficient');
     console.log('PASS: native filament_flow_ratio 0.80 -> 1.20 changes '+changed+' real XY G1 E extrusion numbers');
+
+    // Native filament_diameter is a physical filament cross-section option.
+    // Verify an actual difference in XY G1 E commands, not only config text
+    // or a G-code hash, while the remaining test conditions stay fixed.
+    rawOrca[2].filament_flow_ratio=['0.98'];
+    const sliceWithDiameter=async diameter=>{
+      rawOrca[2].filament_diameter=[diameter];
+      await uploadRawOrca();
+      await prepare.locator('#lab-slice').click();
+      await prepare.waitForFunction(()=>{
+        const status=document.querySelector('#lab-status')?.textContent||'';
+        return status.startsWith('PASS:')||status.startsWith('FAILED');
+      },null,{timeout:120000});
+      const state=await prepare.locator('#lab-status').innerText();
+      assert.ok(state.startsWith('PASS: 2 STL model(s)'),state);
+      return prepare.locator('#lab-download').evaluate(async link=>await(await fetch(link.href)).text());
+    };
+    const smallDiameterE=extrusionValues(await sliceWithDiameter('1.75')).slice(0,120);
+    const largeDiameterE=extrusionValues(await sliceWithDiameter('2.85')).slice(0,120);
+    assert.ok(smallDiameterE.length>=30,'Filament diameter probe needs real XY E extrusion');
+    assert.equal(smallDiameterE.length,largeDiameterE.length,
+      'Diameter-only change should preserve comparable XY deposition commands');
+    const diameterChanged=smallDiameterE.filter((v,i)=>Math.abs(v-largeDiameterE[i])>0.00001).length;
+    assert.ok(diameterChanged>=10,
+      'Native filament_diameter must affect actual XY G1 E, not only G-code metadata');
+    console.log('PASS: filament_diameter 1.75 -> 2.85 alters '+diameterChanged+
+      ' real XY E values in accepted Chrome WASM');
+    rawOrca[2].filament_diameter=['1.75'];
 
     // The official v2.5.0 Generic PLA multi-value max flow setting uses
     // extruder VARIANTS, not multiple filament slots. Test the actual WASM
