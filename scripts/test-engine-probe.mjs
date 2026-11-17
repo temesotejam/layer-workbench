@@ -10,7 +10,7 @@ import {makeBridgeArchObj} from './bridge-arch-fixture.mjs';
 import {makeSupportSphereObj} from './support-sphere-fixture.mjs';
 import {makeParityCubeStl, PARITY_CUBE_STL_SHA256} from './parity-cube-fixture.mjs';
 import {auditBridgeSpeedSegments} from './bridge-feature-diagnostic.mjs';
-import {auditSupportDeposition} from './support-feature-diagnostic.mjs';
+import {auditSupportDeposition,auditSupportSpeedEffect} from './support-feature-diagnostic.mjs';
 import {checkBrowser3mfRoundTrip} from './test-browser-3mf-roundtrip.mjs';
 import {checkBrowserMultiObject3mf} from './test-browser-3mf-multiobject.mjs';
 const base = process.env.ENGINE_PROBE_URL || 'http://127.0.0.1:8766/';
@@ -1348,6 +1348,47 @@ try {
     assert.ok(sphereOnAudit.roles.body.extrusion_xy_segments>0 ||
       sphereOnAudit.roles.interface.extrusion_xy_segments>0,
       'Support-enabled sphere changed only metadata or unrelated toolpaths');
+
+    // Source-pinned v2.5.0 speed settings were previously accepted by the
+    // native-json adapter while support was OFF. Here require real tagged
+    // positive-E XY support movement with support ON and a changed role-
+    // specific F, leaving the sphere, support toggle, width, threshold,
+    // and every other process key identical to the positive baseline.
+    // Low 3 mm/s is deliberately diagnostic: capped high speeds in the
+    // support-on baseline need not equal the configured 30 mm/s.
+    const sphereBodySlow=await sliceRing('sphere-support-body-3mm-s.json',
+      {...supportArchSettings,enable_support:'1',support_speed:3});
+    const sphereInterfaceSlow=await sliceRing('sphere-support-interface-3mm-s.json',
+      {...supportArchSettings,enable_support:'1',support_interface_speed:3});
+    const referenceSupportPaths=parseGcodeToolpaths(sphereSupportOn);
+    const bodySlowPaths=parseGcodeToolpaths(sphereBodySlow);
+    const interfaceSlowPaths=parseGcodeToolpaths(sphereInterfaceSlow);
+    const bodySpeedEffect=auditSupportSpeedEffect(
+      referenceSupportPaths,bodySlowPaths,'body',180);
+    const interfaceSpeedEffect=auditSupportSpeedEffect(
+      referenceSupportPaths,interfaceSlowPaths,'interface',180);
+    const speedReport={
+      fixture:'same watertight 20 mm diameter support-enabled sphere',
+      engine:'pinned v2.5.0 WASM; isolated localhost opt-in',
+      fixed_enable_support:'1',fixed_support_threshold_angle_degrees:70,
+      baseline_support_body_mm_s:30,baseline_support_interface_mm_s:30,
+      body_candidate:{changed_native_key:'support_speed',value_mm_s:3,
+        ...bodySpeedEffect},
+      interface_candidate:{changed_native_key:'support_interface_speed',value_mm_s:3,
+        ...interfaceSpeedEffect},
+      native_desktop_parity:false,printer_safe:false,public_pages_enabled:false,
+    };
+    await writeFile(parityDir+'/sphere-support-role-speed-diagnostic.json',
+      JSON.stringify(speedReport,null,2)+'\\n');
+    console.log('SPHERE_SUPPORT_ROLE_SPEED_DIAGNOSTIC '+JSON.stringify(speedReport));
+    assert.equal(bodySpeedEffect.result,'observed_tagged_support_feedrate_effect',
+      'Support body 3 mm/s must produce a new tagged F180 on unchanged gross geometry: '+
+      JSON.stringify(bodySpeedEffect));
+    assert.equal(interfaceSpeedEffect.result,'observed_tagged_support_feedrate_effect',
+      'Support interface 3 mm/s must produce a new tagged F180 on unchanged gross geometry: '+
+      JSON.stringify(interfaceSpeedEffect));
+    console.log('PASS: actual isolated WASM support body and interface independently respond to low-speed overrides with role-tagged F180; no native parity asserted');
+
     console.log('PASS: actual isolated WASM sphere produces support-tagged positive-E XY motion only when explicitly enabled; no native parity asserted');
 
 
