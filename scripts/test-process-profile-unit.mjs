@@ -177,5 +177,14 @@ for(const key of ['support_line_width','support_speed','support_interface_speed'
       /Invalid|outside the safe test range/,key+': '+JSON.stringify(bad));
   }
 }
-assert.throws(()=>parseTestProcessOverrides({enable_support:'1'}),/Unsupported process setting/);
+// In an explicit localhost-only engine lab, a native v2.5.0 support toggle
+// may be submitted deliberately. Do not coerce JS booleans, percentages, numeric
+// 1/0 or an inherited profile's arbitrary value into a generation request.
+assert.deepEqual(parseTestProcessOverrides({enable_support:'0'}),{enable_support:'0'});
+assert.deepEqual(parseTestProcessOverrides({enable_support:'1'}),{enable_support:'1'});
+for (const bad of [0,1,true,false,'true','false','2','1%',null,['1'],['0','1']]) {
+  assert.throws(()=>parseTestProcessOverrides({enable_support:bad}),/native enum/,
+    'Unsafe support toggle should fail closed: '+JSON.stringify(bad));
+}
+console.log('PASS: explicit single native support bool is opt-in; ambiguous toggle values fail closed');
 console.log('PASS: absolute support width and independent body/interface speeds bounded; activation excluded');
