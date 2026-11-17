@@ -1241,6 +1241,41 @@ try {
       JSON.stringify(bridgeReport));
     console.log('PASS: tagged WASM bridge extrusion changes to F120 on actual arch geometry');
 
+    // A first REAL positive support-generation gate. This is an explicitly
+    // opted-in native enable_support=1 on the isolated localhost fixture,
+    // NEVER the default public experience or a physical-printer setting.
+    // Reuse the *same* watertight arch with an unsupported horizontal roof;
+    // compare tagged positive-E XY deposition with only the support toggle
+    // changed. A header flag or a bridge feature cannot count as support.
+    const supportArchSettings={
+      ...bridgeSettings,
+      support_line_width:0.42,support_speed:30,support_interface_speed:30,
+    };
+    const archSupportOff=await sliceRing('bridge-arch-support-off.json',
+      {...supportArchSettings,enable_support:'0'});
+    const archSupportOn=await sliceRing('bridge-arch-support-on.json',
+      {...supportArchSettings,enable_support:'1'});
+    const supportOffAudit=auditSupportDeposition(parseGcodeToolpaths(archSupportOff));
+    const supportOnAudit=auditSupportDeposition(parseGcodeToolpaths(archSupportOn));
+    const supportArchReport={
+      fixture:'watertight 40x20x15 mm OBJ arch; 16x20 mm unsupported tunnel to Z10',
+      engine:'pinned v2.5.0 WASM candidate; isolated localhost opt-in',
+      changed_native_key:'enable_support',baseline:'0',candidate:'1',
+      baseline_audit:supportOffAudit,candidate_audit:supportOnAudit,
+      native_desktop_parity:false,printer_safe:false,public_pages_enabled:false,
+    };
+    await writeFile(parityDir+'/bridge-arch-support-on-feature-diagnostic.json',
+      JSON.stringify(supportArchReport,null,2)+'\\n');
+    console.log('BRIDGE_ARCH_SUPPORT_DIAGNOSTIC '+JSON.stringify(supportArchReport));
+    assert.equal(supportOffAudit.result,'no_tagged_support_body_or_interface',
+      'Disabled support produced positive-E XY support feature paths');
+    assert.equal(supportOnAudit.result,'tagged_support_body_or_interface_observed',
+      'The support-enabled overhang must deposit explicit support body/interface paths');
+    assert.ok(supportOnAudit.roles.body.extrusion_xy_segments>0 ||
+      supportOnAudit.roles.interface.extrusion_xy_segments>0,
+      'Support toggle changed only metadata or unrelated bridge paths');
+    console.log('PASS: real isolated WASM overhang emits support-tagged positive-E XY motion only with enable_support=1; no native parity asserted');
+
 
 
   } finally {
