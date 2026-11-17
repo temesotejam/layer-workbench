@@ -183,13 +183,23 @@ export async function sliceMultiStlWithEngine(engine, items, onProgress, process
   // Validate before creating the native WASM session (fail closed).
   const effectiveProcess = resolveRestrictedProcessSettings(processOverrides, profileCollection);
   const base = makeRestrictedInitConfig(profileCollection);
+  // The pinned OrcaWasm 0.7.0 support smoke sets session.init's
+  // `support_enable: 1`, NOT native PrintConfig's `enable_support` via
+  // applyProfile. Translate ONLY an explicit, validated localhost process
+  // toggle, before creating a session. Never enable support by default.
+  const hasSupportToggle = effectiveProcess !== null &&
+    Object.hasOwn(effectiveProcess,"enable_support");
+  const initConfig = hasSupportToggle
+    ? {...base,support_enable:Number(effectiveProcess.enable_support)} : base;
+  const appliedProcess = effectiveProcess===null ? null : {...effectiveProcess};
+  if (hasSupportToggle) delete appliedProcess.enable_support;
   const session = await engine.createSession();
   try {
-    await session.init(encode(base));
-    if (effectiveProcess !== null) {
-      // Apply one validated effective process fragment, including any selected
-      // inherited settings and explicit overrides, before objects and slicing.
-      await session.applyProfile("orca.native-json", encode(effectiveProcess));
+    await session.init(encode(initConfig));
+    if (appliedProcess !== null && Object.keys(appliedProcess).length>0) {
+      // The support toggle is session-init only. All other bounded process
+      // keys still reach native-json once, before objects and slicing.
+      await session.applyProfile("orca.native-json", encode(appliedProcess));
     }
     const project = makeMultiStlProject(items);
     await session.setObjects(project.blob, project.manifest);
