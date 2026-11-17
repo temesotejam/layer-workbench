@@ -1276,7 +1276,9 @@ try {
     console.log('BRIDGE_SUPPORT_CLASSIFICATION '+supportOnAudit.result);
 
     // The pinned native support-modifier smoke uses a sphere underside at
-    // support_threshold_angle=10. Probe an independently watertight sphere
+    // support_threshold_angle=10. The source-pinned PrintConfig tooltip
+    // clarifies that only slopes BELOW the threshold request support;
+    // the prior 10-degree probe gave zero. Probe a sphere with 70 degrees
     // using identical geometry and all process keys for OFF and ON runs.
     // No G-code hash, config metadata, or bridge-only tag can pass this gate.
     await prepare.locator('#remove-object').click();
@@ -1330,8 +1332,8 @@ try {
     const sphereReport={
       fixture:'watertight 20 mm diameter low-poly sphere, lower point at Z0',
       engine:'pinned v2.5.0 WASM candidate; isolated localhost opt-in',
-      fixed_native_support_type:'normal(auto)',fixed_threshold_angle_degrees:10,
-      changed_native_key:'support_enable',baseline:0,candidate:1,
+      fixed_native_support_type:'normal(auto)',fixed_threshold_angle_degrees:70,
+      changed_native_key:'enable_support',baseline:0,candidate:1,
       baseline_audit:sphereOffAudit,candidate_audit:sphereOnAudit,
       gcode_evidence:sphereOutputDifference,
       native_desktop_parity:false,printer_safe:false,public_pages_enabled:false,

@@ -190,19 +190,20 @@ export async function sliceMultiStlWithEngine(engine, items, onProgress, process
   // BOTH paths. This remains an explicit isolated-localhost opt-in only.
   const hasSupportToggle = effectiveProcess !== null &&
     Object.hasOwn(effectiveProcess,"enable_support");
-  // The pinned upstream support smoke also specifies normal(auto) and a
-  // 10-degree threshold. Use identical bounded auto-support geometry policy
-  // for BOTH toggle states, so enable_support is the sole A/B difference.
-  // These fixed test parameters are never inferred from official presets.
+  // Source-pinned OrcaSlicer v2.5.0 says supports are generated for
+  // overhang slopes BELOW this threshold. A previous 10-degree experiment
+  // selected almost no sphere surfaces. Use a conservative diagnostic 70
+  // degrees in BOTH sessions (not a machine/profile recommendation).
+  // enable_support remains the sole A/B difference.
   const initConfig = hasSupportToggle
     ? {...base,enable_support:effectiveProcess.enable_support,
-        support_type:"normal(auto)",support_threshold_angle:10} : base;
+        support_type:"normal(auto)",support_threshold_angle:70} : base;
   const appliedProcess = effectiveProcess===null ? null : {...effectiveProcess};
   if (hasSupportToggle) {
     // Preserve validated enable_support:"0"|"1" in native-json. Set exactly
     // the same strategy and threshold in both OFF and ON test sessions.
     appliedProcess.support_type="normal(auto)";
-    appliedProcess.support_threshold_angle=10;
+    appliedProcess.support_threshold_angle=70;
   }
   const session = await engine.createSession();
   try {

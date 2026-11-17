@@ -166,11 +166,11 @@ console.log('PASS: support width/body/interface settings reach mocked native-jso
   const applied=calls.find(c=>c.name==='applyProfile').value;
   assert.equal(init.enable_support,'1');
   assert.equal(init.support_type,'normal(auto)');
-  assert.equal(init.support_threshold_angle,10);
+  assert.equal(init.support_threshold_angle,70);
   assert.equal(applied.support_speed,'30');
   assert.equal(applied.enable_support,'1');
   assert.equal(applied.support_type,'normal(auto)');
-  assert.equal(applied.support_threshold_angle,10);
+  assert.equal(applied.support_threshold_angle,70);
   assert.equal(Object.hasOwn(applied,'support_enable'),false);
   assert.equal(Object.hasOwn(init,'support_enable'),false);
 }
@@ -179,9 +179,9 @@ console.log('PASS: support width/body/interface settings reach mocked native-jso
   await sliceMultiStlWithEngine(engine,items,null,{enable_support:'0'});
   assert.equal(calls.find(c=>c.name==='init').value.enable_support,'0');
   assert.equal(calls.find(c=>c.name==='init').value.support_type,'normal(auto)');
-  assert.equal(calls.find(c=>c.name==='init').value.support_threshold_angle,10);
+  assert.equal(calls.find(c=>c.name==='init').value.support_threshold_angle,70);
   assert.deepEqual(calls.find(c=>c.name==='applyProfile').value,
-    {enable_support:'0',support_type:'normal(auto)',support_threshold_angle:10},
+    {enable_support:'0',support_type:'normal(auto)',support_threshold_angle:70},
     'A single support toggle also sets the pinned native support profile explicitly');
 }
 for (const bad of [true,1,2,'true','2',null,['1']]){

@@ -1235,3 +1235,24 @@ The source inspection identifies an ignored setting; **it does not yet prove
 that support material is generated**. The strict support-feature positive
 gate remains in force. Only a new real Chrome/WASM G-code result can resolve
 the PR #73 failure. Avoid reporting support parity or print readiness.
+
+### 2026-11-18: source-pinned threshold semantics and second positive gate
+
+Run [#44170252177](https://github.com/temesotejam/layer-workbench/actions/runs/44170252177)
+verified that correcting the native `enable_support` key still did **not**
+generate any support-labelled XY extrusion in the 20 mm sphere (both 6,641
+motion commands, motion SHA-256 identical). It therefore failed the **strict**
+support-deposition gate; no feature success was inferred.
+
+Official v2.5.0 `PrintConfig.cpp` defines `support_threshold_angle` as
+generating supports for overhangs whose slope is **below** the threshold.
+The prior test's 10° setting selects only a narrow slope region on a sphere
+and is not a valid general positive acceptance fixture. The next isolated
+Chrome probe explicitly sets 70° for **both** OFF and ON on the *same* sphere
+and arch, with all process settings held constant and the native
+`enable_support` toggle as the only changing key. This is diagnostic geometry,
+not a recommended support threshold for printing.
+
+The positive support body/interface G-code assertion is retained as a hard
+FAIL. Until a real isolated Chrome run proves that deposition, PR #73 stays
+unmerged and the public Pages app keeps the WASM engine disabled.
