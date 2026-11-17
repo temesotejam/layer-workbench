@@ -104,6 +104,19 @@ export function resolveOrcaProfileFamily(records,type,selected,options={}) {
     // discard the shipped profile's initial-layer distinction.
     let selectedFilamentVariant=null;
     if(type==="filament"){
+      // The source-pinned v2.5.0 PLA base uses a one-slot material vector.
+      // The approved localhost WASM candidate has only been exercised as PLA;
+      // never misrepresent another selected material as generic test PLA.
+      const materialSource=[...chain].reverse().find(p=>Object.hasOwn(p,"filament_type"));
+      if(materialSource){
+        const material=materialSource.filament_type;
+        if(!Array.isArray(material)||material.length!==1||material[0]!=="PLA")
+          throw new Error("Only single-slot PLA filament_type is verified in the local WASM test");
+        // session.init's proven generic-PLA test wire shape is scalar, while
+        // official material presets store a one-element vector.
+        settings.filament_type="PLA";
+        unsupported.delete("filament_type");
+      }
       const initialNozzle=[...chain].reverse().find(p=>Object.hasOwn(p,"nozzle_temperature_initial_layer"));
       if(initialNozzle){
         const temp=validateNum("nozzle_temperature",initialNozzle.nozzle_temperature_initial_layer,SPECS.filament.nozzle_temperature);

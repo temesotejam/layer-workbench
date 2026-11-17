@@ -3,7 +3,7 @@ import {resolveRestrictedProcessSettings, makeRestrictedInitConfig, sliceMultiSt
 
 const selected = {
   machine: {settings: {nozzle_diameter:"0.4", printable_height:"250"}},
-  filament: {settings: {nozzle_temperature:"220"}},
+  filament: {settings: {nozzle_temperature:"220",filament_type:"PLA"}},
   process: {settings: {layer_height:"0.24", wall_loops:"3", bridge_speed:"50"}},
 };
 assert.deepEqual(resolveRestrictedProcessSettings(null,selected),
@@ -78,6 +78,7 @@ const items=[{bytes:new Uint8Array(134)}];
   assert.equal(init.nozzle_diameter,"0.4");
   assert.equal(init.printable_height,"250");
   assert.equal(init.nozzle_temperature,"220");
+  assert.equal(init.filament_type,"PLA");
   assert.equal(init.layer_height,0.2,"generic process defaults remain diagnostic-only");
   const legacy=makeRestrictedInitConfig({...selected,filament:{settings:{
     nozzle_temperature:"220",bed_temperature:"55"
@@ -106,6 +107,8 @@ const invalidCollections=[
     filament_start_gcode:"M109 S290"}}},
   {...selected,machine:{settings:{nozzle_diameter:["0.4","0.6"],printable_height:"250"}}},
   {...selected,filament:{settings:{nozzle_temperature:["210","240"]}}},
+  {...selected,filament:{settings:{nozzle_temperature:"220",filament_type:"PETG"}}},
+  {...selected,filament:{settings:{nozzle_temperature:"220",filament_type:["PLA"]}}},
   {...selected,filament:{settings:{nozzle_temperature:"220",hot_plate_temp:["65"]}}},
   {...selected,filament:{settings:{nozzle_temperature:"220",
     curr_bed_type:"High Temp Plate",bed_temperature:"65",hot_plate_temp:["55"]}}},
@@ -118,12 +121,12 @@ const invalidCollections=[
 ];
 for(const bad of invalidCollections){
   assert.throws(()=>makeRestrictedInitConfig(bad),
-    /Unsupported|Expected|Invalid|requires|outside|disagree|vector/,
+    /Unsupported|Expected|Invalid|requires|outside|disagree|vector|Only PLA/,
     "Unvetted restricted session.init settings must not pass validation");
   const {engine,calls}=mockedEngine();
   await assert.rejects(
     ()=>sliceMultiStlWithEngine(engine,items,null,null,bad),
-    /Unsupported|Expected|Invalid|requires|outside|disagree|vector/);
+    /Unsupported|Expected|Invalid|requires|outside|disagree|vector|Only PLA/);
   assert.equal(calls.length,0,
     "Invalid machine/filament configuration must be refused before createSession");
 }
