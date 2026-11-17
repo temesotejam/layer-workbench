@@ -18,6 +18,9 @@ assert.deepEqual(resolved.settings.nozzle_temperature_initial_layer,["220"]);
 assert.ok(!resolved.unsupported.includes("nozzle_temperature_initial_layer"));
 assert.ok(resolved.unsupported.includes("hot_plate_temp"),
   "Native bed-type temperature handling must remain explicitly unsupported");
+assert.deepEqual(resolved.settings.filament_diameter,["1.75"],
+  "Pinned v2.5.0 common filament profile supplies one 1.75mm diameter");
+assert.ok(!resolved.unsupported.includes("filament_diameter"));
 assert.deepEqual(resolved.settings.filament_flow_ratio,["0.98"],
   "Pinned official PLA inherits the 0.98 single-filament native flow ratio");
 assert.ok(!resolved.unsupported.includes("filament_flow_ratio"));
