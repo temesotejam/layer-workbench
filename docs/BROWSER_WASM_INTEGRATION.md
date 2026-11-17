@@ -1214,3 +1214,24 @@ The pinned Hiosdra/OrcaWasm source `scripts/smoke-test.mjs` at `60a09e04f1990be3
 The second real Chrome support enablement trial [#44165901370](https://github.com/temesotejam/layer-workbench/actions/runs/44165901370) still found **zero tagged support body/interface deposition** on the bridge and sphere with the same bounded native init plus native-json support settings. The positive gate correctly **FAILed**, so PR #73 must remain unmerged.
 
 A further strictly local read-only diagnostic now records the disabled and enabled sphere G-code SHA-256, byte lengths, positive-E feature-label histogram, and the count of tagged feature comments (including those mentioning support). This distinguishes truly unchanged generated paths from possible feature-label misclassification; no raw G-code is published. Until the Chrome gate observes actual support deposition, there is no supported positive claim or publishable feature.
+
+### 2026-11-18: v2.5.0 native option-name mismatch identified (needs Chrome re-test)
+
+A source-pinned investigation explains why the previous support ON/OFF
+G-code motion SHA-256 values were identical. OrcaSlicer
+[PrintConfig.cpp at 40ecc66f78ed](https://github.com/OrcaSlicer/OrcaSlicer/blob/40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19/src/libslic3r/PrintConfig.cpp)
+registers the **native key `enable_support`**, and its PrintConfig.hpp
+contains `ConfigOptionBool enable_support`. There is **no**
+`support_enable` option in that pinned native registry. However, the
+Hiosdra/OrcaWasm modifier smoke fixture uses `support_enable`; its bridge
+`oneslicer_init` catches unknown keys and silently skips them, while
+`oneslicer_apply_profile` explicitly skips keys absent from
+`print_config_def`. A successful call can therefore leave supports disabled.
+
+The local-only adapter now forwards the *validated string* `enable_support:
+"0"|"1"` under its exact native name to **both** init and native-json.
+Mock tests reject the erroneous alias and preserve disabled generic defaults.
+The source inspection identifies an ignored setting; **it does not yet prove
+that support material is generated**. The strict support-feature positive
+gate remains in force. Only a new real Chrome/WASM G-code result can resolve
+the PR #73 failure. Avoid reporting support parity or print readiness.

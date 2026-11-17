@@ -183,10 +183,11 @@ export async function sliceMultiStlWithEngine(engine, items, onProgress, process
   // Validate before creating the native WASM session (fail closed).
   const effectiveProcess = resolveRestrictedProcessSettings(processOverrides, profileCollection);
   const base = makeRestrictedInitConfig(profileCollection);
-  // The pinned OrcaWasm 0.7.0 support smoke sets session.init's
-  // `support_enable: 1`, NOT native PrintConfig's `enable_support` via
-  // applyProfile. Translate ONLY an explicit, validated localhost process
-  // toggle, before creating a session. Never enable support by default.
+  // Pinned OrcaSlicer v2.5.0 PrintConfig.cpp and PrintConfig.hpp register
+  // `enable_support` (not `support_enable`). The pinned OrcaWasm smoke
+  // fixture used the latter spelling, but its bridge silently skips unknown
+  // keys in init and native-json. Keep the exact validated native key on
+  // BOTH paths. This remains an explicit isolated-localhost opt-in only.
   const hasSupportToggle = effectiveProcess !== null &&
     Object.hasOwn(effectiveProcess,"enable_support");
   // The pinned upstream support smoke also specifies normal(auto) and a
@@ -194,16 +195,12 @@ export async function sliceMultiStlWithEngine(engine, items, onProgress, process
   // for BOTH toggle states, so enable_support is the sole A/B difference.
   // These fixed test parameters are never inferred from official presets.
   const initConfig = hasSupportToggle
-    ? {...base,support_enable:Number(effectiveProcess.enable_support),
+    ? {...base,enable_support:effectiveProcess.enable_support,
         support_type:"normal(auto)",support_threshold_angle:10} : base;
   const appliedProcess = effectiveProcess===null ? null : {...effectiveProcess};
   if (hasSupportToggle) {
-    delete appliedProcess.enable_support;
-    // Pinned OrcaWasm profile smoke explicitly applies native support_enable
-    // via orca.native-json. Session.init alone did not produce supports in
-    // the real Chrome arch/sphere control; preserve both proven API paths.
-    // The same fixed type/threshold are applied to OFF and ON sessions.
-    appliedProcess.support_enable=Number(effectiveProcess.enable_support);
+    // Preserve validated enable_support:"0"|"1" in native-json. Set exactly
+    // the same strategy and threshold in both OFF and ON test sessions.
     appliedProcess.support_type="normal(auto)";
     appliedProcess.support_threshold_angle=10;
   }

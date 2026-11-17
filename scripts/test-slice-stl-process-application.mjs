@@ -155,32 +155,33 @@ console.log("PASS: selected restricted Orca process auto-applied once, bounded o
 }
 console.log('PASS: support width/body/interface settings reach mocked native-json applyProfile');
 
-// The pinned WASM API support smoke uses the session.init key
-// support_enable (numeric 0/1), not the native-profile enable_support key.
-// An explicit local test toggle must reach init and must NOT leak into
-// orca.native-json. No support is enabled in generic fallback.
+// Source-pinned v2.5.0 PrintConfig registers "enable_support" as its native
+// boolean; "support_enable" in the OrcaWasm smoke is an unknown/ignored key.
+// Check BOTH init and native-json transport against the real native key.
+// The generic fallback must never enable supports.
 {
   const {engine,calls}=mockedEngine();
   await sliceMultiStlWithEngine(engine,items,null,{enable_support:'1',support_speed:'30'});
   const init=calls.find(c=>c.name==='init').value;
   const applied=calls.find(c=>c.name==='applyProfile').value;
-  assert.equal(init.support_enable,1);
+  assert.equal(init.enable_support,'1');
   assert.equal(init.support_type,'normal(auto)');
   assert.equal(init.support_threshold_angle,10);
   assert.equal(applied.support_speed,'30');
-  assert.equal(applied.support_enable,1);
+  assert.equal(applied.enable_support,'1');
   assert.equal(applied.support_type,'normal(auto)');
   assert.equal(applied.support_threshold_angle,10);
-  assert.equal(Object.hasOwn(applied,'enable_support'),false);
+  assert.equal(Object.hasOwn(applied,'support_enable'),false);
+  assert.equal(Object.hasOwn(init,'support_enable'),false);
 }
 {
   const {engine,calls}=mockedEngine();
   await sliceMultiStlWithEngine(engine,items,null,{enable_support:'0'});
-  assert.equal(calls.find(c=>c.name==='init').value.support_enable,0);
+  assert.equal(calls.find(c=>c.name==='init').value.enable_support,'0');
   assert.equal(calls.find(c=>c.name==='init').value.support_type,'normal(auto)');
   assert.equal(calls.find(c=>c.name==='init').value.support_threshold_angle,10);
   assert.deepEqual(calls.find(c=>c.name==='applyProfile').value,
-    {support_enable:0,support_type:'normal(auto)',support_threshold_angle:10},
+    {enable_support:'0',support_type:'normal(auto)',support_threshold_angle:10},
     'A single support toggle also sets the pinned native support profile explicitly');
 }
 for (const bad of [true,1,2,'true','2',null,['1']]){
@@ -192,6 +193,7 @@ for (const bad of [true,1,2,'true','2',null,['1']]){
 {
   const {engine,calls}=mockedEngine();
   await sliceMultiStlWithEngine(engine,items,null);
+  assert.equal(Object.hasOwn(calls.find(c=>c.name==='init').value,'enable_support'),false);
   assert.equal(Object.hasOwn(calls.find(c=>c.name==='init').value,'support_enable'),false);
   assert.equal(Object.hasOwn(calls.find(c=>c.name==='init').value,'support_type'),false);
   assert.equal(Object.hasOwn(calls.find(c=>c.name==='init').value,'support_threshold_angle'),false);
