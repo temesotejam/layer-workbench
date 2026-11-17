@@ -136,6 +136,22 @@ for(const bad of [['235','245'],['305'],['0'],['oops']]){
     ? {...p,nozzle_temperature_initial_layer:bad} : p),selection),
     /Multi-extruder|Invalid numeric value|test limits/);
 }
+// The pinned v2.5.0 common PLA profile contains a one-slot diameter vector.
+// It is independent of nozzle count, selected extruder variant and flow ratio.
+const diameterBase=profiles.map(p=>p.name==='Generic PLA @System'
+  ? {...p,filament_diameter:['1.75']} : p);
+const inheritedDiameter=resolve(diameterBase,selection);
+assert.deepEqual(inheritedDiameter.filament.settings.filament_diameter,['1.75']);
+assert.ok(!inheritedDiameter.filament.unsupported.includes('filament_diameter'));
+const diameterChild=diameterBase.map(p=>p.name==='Generic PLA @TestPrinter'
+  ? {...p,filament_diameter:['2.85']} : p);
+assert.deepEqual(resolve(diameterChild,selection).filament.settings.filament_diameter,['2.85']);
+assert.equal(resolve(profiles,selection).filament.settings.filament_diameter,undefined);
+for(const bad of [['1.75','2.85'],['0.9'],['3.01'],[],['bad'],{},['-1']]){
+  assert.throws(()=>resolve(diameterBase.map(p=>p.name==='Generic PLA @System'
+    ? {...p,filament_diameter:bad}:p),selection),
+    /Multi-extruder|Invalid|test limits/);
+}
 // Native filament flow factor is a per-extruder vector. Validate its
 // actual profile inheritance, overrides, single-filament shape, and bounds.
 const flowBase=profiles.map(p=>p.name==='Generic PLA @System'

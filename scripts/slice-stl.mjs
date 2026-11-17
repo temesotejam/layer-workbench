@@ -80,6 +80,7 @@ const FILAMENT_INIT_SCALARS=Object.freeze({
 const FILAMENT_INIT_VECTORS=Object.freeze({
   nozzle_temperature_initial_layer:[160,290],
   filament_flow_ratio:[0.5,1.5],
+  filament_diameter:[1,3],
   filament_max_volumetric_speed:[0.1,200],
 });
 const PLATE_INIT_FIELDS=Object.freeze({
