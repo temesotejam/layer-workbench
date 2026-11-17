@@ -3,7 +3,7 @@ import {resolveOrcaProfileCollection as resolve} from './orca-profile-collection
 const profiles=[
  {type:'machine',name:'base printer',nozzle_diameter:'0.4',printable_height:'250',machine_start_gcode:'G28'},
  {type:'machine',name:'TestPrinter 0.4 nozzle',inherits:'base printer',printable_height:'256'},
- {type:'filament',name:'Generic PLA @System',nozzle_temperature:'210',bed_temperature:'55'},
+ {type:'filament',name:'Generic PLA @System',filament_type:['PLA'],nozzle_temperature:'210',bed_temperature:'55'},
  {type:'filament',name:'Generic PLA @TestPrinter',inherits:'Generic PLA @System',nozzle_temperature:'215',compatible_printers:['TestPrinter 0.4 nozzle']},
  {type:'process',name:'fdm_process_common',layer_height:'0.2',wall_loops:'2'},
  {type:'process',name:'0.16mm Fine @TestPrinter',inherits:'fdm_process_common',layer_height:'0.16',sparse_infill_density:'22',compatible_printers:['TestPrinter 0.4 nozzle']},
@@ -14,6 +14,17 @@ assert.deepEqual(result.machine.chain,['base printer','TestPrinter 0.4 nozzle'])
 assert.equal(result.machine.settings.nozzle_diameter,'0.4');
 assert.equal(result.machine.settings.printable_height,'256');
 assert.equal(result.filament.settings.nozzle_temperature,'215');
+assert.equal(result.filament.settings.filament_type,'PLA');
+assert.ok(!result.filament.unsupported.includes('filament_type'));
+// A non-PLA or ambiguous native material vector must never be forwarded
+// through the generic-PLA-only candidate, including child overrides.
+for(const material of [['PETG'],['ABS'],['PLA','PETG'],[],['pla'],['PLA '],'PLA',[null]]){
+  const materialProfiles=profiles.map(p=>p.name==='Generic PLA @TestPrinter'
+    ? {...p,filament_type:material}:p);
+  assert.throws(()=>resolve(materialProfiles,selection),/Only single-slot PLA filament_type/);
+}
+assert.equal(resolve(profiles.map(p=>p.name==='Generic PLA @TestPrinter'
+  ? {...p,filament_type:['PLA']}:p),selection).filament.settings.filament_type,'PLA');
 assert.equal(result.process.settings.layer_height,'0.16');
 assert.ok(result.machine.unsupported.includes('machine_start_gcode'));
 assert.throws(()=>resolve(profiles,{...selection,machine:'wrong printer'}),/Missing/);
