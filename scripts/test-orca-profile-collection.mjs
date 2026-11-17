@@ -553,3 +553,29 @@ for(const bad of ['50%',0,'801',['15','20'],null,'auto']){
 }
 assert.equal(result.process.settings.initial_layer_speed,undefined);
 console.log('PASS: first-layer speed inheritance, single-nozzle normalization and strict input limits');
+
+// The pinned CR-10 first-layer infill speed overrides independently of
+// first-layer perimeter speed and is never inferred when absent.
+const firstInfillProfiles=profiles.map(rec=>rec.name==='fdm_process_common'
+  ? {...rec,initial_layer_speed:'20',initial_layer_infill_speed:'25'}:
+  rec.name==='0.16mm Fine @TestPrinter'
+    ? {...rec,initial_layer_speed:'15',initial_layer_infill_speed:'20'}:rec);
+const firstInfill=resolve(firstInfillProfiles,selection).process;
+assert.equal(firstInfill.settings.initial_layer_speed,'15');
+assert.equal(firstInfill.settings.initial_layer_infill_speed,'20');
+assert.ok(!firstInfill.unsupported.includes('initial_layer_infill_speed'));
+const inheritedFirstInfill=firstInfillProfiles.map(rec=>{
+  if(rec.name!=='0.16mm Fine @TestPrinter')return rec;
+  const child={...rec};delete child.initial_layer_infill_speed;return child;
+});
+assert.equal(resolve(inheritedFirstInfill,selection).process.settings.initial_layer_infill_speed,'25');
+assert.equal(resolve(firstInfillProfiles.map(rec=>rec.name==='0.16mm Fine @TestPrinter'
+  ? {...rec,initial_layer_infill_speed:['20']}:rec),selection)
+  .process.settings.initial_layer_infill_speed,'20');
+for(const bad of ['50%',0,'801',['20','30'],null,'auto']){
+  assert.throws(()=>resolve(firstInfillProfiles.map(rec=>rec.name==='0.16mm Fine @TestPrinter'
+    ? {...rec,initial_layer_infill_speed:bad}:rec),selection),
+    /Invalid|Multi-extruder|test limits/);
+}
+assert.equal(result.process.settings.initial_layer_infill_speed,undefined);
+console.log('PASS: independent first-layer infill speed parent/child, one slot and strict bounds');

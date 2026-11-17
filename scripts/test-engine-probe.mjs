@@ -756,6 +756,23 @@ try {
     console.log('PASS: source-pinned initial_layer_speed 5 -> 15 changes real first-layer WASM extrusion feedrates',
       JSON.stringify({slowFirstFeeds,pinnedFirstFeeds}));
 
+    // Independent native first-layer infill speed (CR-10 20 mm/s) must
+    // affect actual first-layer deposited feedrates while first-layer
+    // perimeter speed stays fixed at the pinned 15 mm/s. Compare G-code
+    // motion, not profile text or file hashes; this is localhost-only.
+    rawOrca[4].initial_layer_speed='15';
+    const slowInfillGcode=await sliceWithLineWidth('5','initial_layer_infill_speed');
+    const pinnedInfillGcode=await sliceWithLineWidth('20','initial_layer_infill_speed');
+    const slowInfillFeeds=firstLayerFeeds(slowInfillGcode);
+    const pinnedInfillFeeds=firstLayerFeeds(pinnedInfillGcode);
+    assert.notDeepEqual(slowInfillFeeds,pinnedInfillFeeds,
+      'Changing only first-layer infill speed must change actual deposited first-layer feedrates');
+    delete rawOrca[4].initial_layer_infill_speed;
+    delete rawOrca[4].initial_layer_speed;
+    await uploadRawOrca();
+    console.log('PASS: source-pinned initial_layer_infill_speed 5 -> 20 changes real first-layer WASM extrusion feedrates',
+      JSON.stringify({slowInfillFeeds,pinnedInfillFeeds}));
+
     // Test the deliberately opt-in plate mapping through the *real* engine.
     // Default profile used 55C. Inherited upstream-style hot_plate_temp=65C
     // should be passed into session.init only after selecting the hot plate.

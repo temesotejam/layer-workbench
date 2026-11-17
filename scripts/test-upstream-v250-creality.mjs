@@ -80,6 +80,18 @@ assert.equal(process.settings.initial_layer_speed,"15",
   "Pinned CR-10 standard preset inherits 15mm/s first-layer perimeter speed");
 assert.ok(!process.unsupported.includes("initial_layer_speed"),
   "First-layer speed must reach the restricted process adapter");
+// The pinned base common process has no explicit first-layer infill value;
+// Creality common and CR-10 Standard both explicitly specify 20 mm/s.
+assert.ok(!Object.hasOwn(indexed.records.find(p=>p.name==="fdm_process_common"),
+  "initial_layer_infill_speed"),"Pinned base must not imply first-layer infill speed");
+assert.equal(indexed.records.find(p=>p.name==="fdm_process_creality_common")
+  .initial_layer_infill_speed,"20","Creality common first-layer infill speed");
+assert.equal(indexed.records.find(p=>p.name==="0.20mm Standard @Creality CR-10 0.4 nozzle")
+  .initial_layer_infill_speed,"20","CR-10 Standard first-layer infill speed");
+assert.equal(process.settings.initial_layer_infill_speed,"20",
+  "Pinned CR-10 first-layer infill must be independent of perimeter speed 15");
+assert.ok(!process.unsupported.includes("initial_layer_infill_speed"),
+  "Pinned first-layer infill speed must reach the restricted process adapter");
 
  // Exact native v2.5.0 CR-10 0.20mm settings from the pinned upstream
  // child/ancestor chain. These are independent absolute mm/s speeds,

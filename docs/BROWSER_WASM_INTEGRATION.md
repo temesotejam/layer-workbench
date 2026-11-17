@@ -1067,3 +1067,26 @@ only after corresponding Chrome CI passes; successful metadata-only parsing
 is insufficient. Full original profiles, actual-machine safety, native vs
 WASM G-code parity, 3MF project parity and public WASM deployment remain
 unverified. This change does not ship WASM to Pages.
+
+## 2026-11-18: source-pinned independent first-layer infill speed (localhost-only)
+
+Pinned official OrcaSlicer v2.5.0 source commit
+`40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19` contains no
+`initial_layer_infill_speed` in `Creality/process/fdm_process_common.json`,
+but explicitly sets it to **20 mm/s** in both
+`fdm_process_creality_common.json` and
+`0.20mm Standard @Creality CR-10 0.4 nozzle.json`.
+This is independent of `initial_layer_speed: 15` for the first-layer
+perimeters. The restricted profile reader and native process override
+adapter now preserve this key without aliasing, inferencing or accepting
+percentages, multi-extruder vectors and out-of-range values; only bounded
+absolute 1–800 mm/s scalars are accepted in the localhost test.
+
+CI pinned-source tests check both actual upstream files and inheritance.
+Isolated Chrome regression slices the same two-STL plate with perimeter
+speed fixed at 15 mm/s, changing **only** first-layer infill speed between
+5 and 20 mm/s, then compares positive-extrusion first-layer modal F values
+from actual WASM G-code. A change is considered verified only if that
+corresponding Chrome CI run succeeds. Neither metadata agreement nor a
+build PASS establishes full effective-profile parity, real-printer safety,
+3MF equivalence, or permission to publish WASM on GitHub Pages.
