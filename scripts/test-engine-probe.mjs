@@ -408,6 +408,27 @@ try {
     };
     const sparseBaselineGcode=await sliceSparseInfill(
       'test-sparse-infill-baseline.json',sparseInfillSettings);
+    // Source-pinned v2.5.0 Creality stores crosshatch in its common preset
+    // and grid in the CR-10 0.20mm child. Prove the selected setting reaches
+    // actual WASM XY deposition geometry; a changed profile footer/hash alone
+    // does not establish that the infill algorithm was exercised.
+    const gridGcode=await sliceSparseInfill('test-native-grid-infill.json',
+      {...sparseInfillSettings,sparse_infill_pattern:'grid'});
+    const crosshatchGcode=await sliceSparseInfill('test-native-crosshatch-infill.json',
+      {...sparseInfillSettings,sparse_infill_pattern:'crosshatch'});
+    const depositionXY=code=>parseGcodeToolpaths(code).layers.flatMap(layer=>layer.segments)
+      .filter(segment=>segment.extrusion &&
+        Math.hypot(segment.x2-segment.x1,segment.y2-segment.y1)>0.0001)
+      .map(segment=>[segment.x1,segment.y1,segment.x2,segment.y2,segment.z2]
+        .map(n=>Math.round(n*1000)/1000).join(','));
+    const gridPaths=depositionXY(gridGcode);
+    const crosshatchPaths=depositionXY(crosshatchGcode);
+    assert.ok(gridPaths.length>=100 && crosshatchPaths.length>=100,
+      'Native infill-pattern check requires real deposited XY paths for both enum values');
+    assert.notDeepEqual(gridPaths,crosshatchPaths,
+      'grid/crosshatch must alter deposited XY geometry, not only G-code metadata');
+    console.log('PASS: source-pinned grid vs crosshatch reaches real Chrome WASM deposited XY geometry; '+
+      'segments='+gridPaths.length+'/'+crosshatchPaths.length);
     // Exercise bridge_speed against the real isolated candidate. A pair of
     // independent cubes has no guaranteed bridge geometry, so this probes
     // acceptance and nonempty deposition only, NOT bridge F or native parity.
