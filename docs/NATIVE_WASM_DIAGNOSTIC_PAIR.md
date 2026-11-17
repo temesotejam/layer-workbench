@@ -100,3 +100,30 @@ positioning, mesh processing or G-code. Both command streams must still be
 captured with fully resolved equivalent settings and compared, and any
 mismatched inputs must retain `diagnostic_only`/FAIL status. Neither the
 3MF wrapper nor diagnostic G-code is deployed to Pages or declared printable.
+
+## Real G-code pair, explicitly diagnostic only (2026-11-17)
+
+The official native CLI workflow now optionally retrieves the **actual**
+isolated-Chrome cube G-code archived in
+[run 44032175782](https://github.com/temesotejam/layer-workbench/actions/runs/44032175782).
+It compares this browser fixture to the actual native G-code generated from
+the same byte-pinned 684-byte STL at explicit native XYZ bounds
+[128,148] × [128,148] × [0,20] mm. The browser manifest specifies the
+corresponding (128,128,0) translation. The comparison rechecks source
+STL SHA256, browser summary SHA256/bytes, engine version and API.
+
+`scripts/diagnose_live_cube_pair.py` outputs **numeric-only diagnostics**:
+ordered-command mismatch counts, positive-E commands and filament-axis length,
+G1 XY deposition length and G-code hashes. Raw executable G-code and
+licensed full-profile contents are **not** archived by the native workflow.
+
+The diagnostic always reports `parity_pass: false`, including when commands
+happen to match. The native import uses Core 3MF and full official v2.5.0
+source-pinned profiles; browser WASM loads STL and generic PLA development
+settings. This archived browser run is also a historical source revision,
+not a freshly co-built production pair. Its artifact expires in 14 days,
+after which the workflow explicitly skips this optional comparison.
+The archived browser summary had a known literal backslash-n suffix,
+accepted only for this legacy diagnostic. New summaries write valid JSON.
+This is real-engine *difference evidence*, not a same-full-profile G-code
+parity verdict or safe-to-print validation.
