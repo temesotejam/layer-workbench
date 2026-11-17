@@ -886,3 +886,23 @@ inside the accepted localhost test engine. It is **not** full material
 compatibility, official native-vs-WASM G-code parity, an actual extruder
 calibration, physical print safety or permission to enable the public
 Pages engine. Other native machine/process/filament options remain missing.
+
+## 2026-11-17: source-pinned sparse infill pattern routing (localhost only)
+
+The official v2.5.0 source pin `40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19`
+defines `sparse_infill_pattern: "crosshatch"` in
+`Creality/process/fdm_process_common.json`, while
+`0.20mm Standard @Creality CR-10 0.4 nozzle` overrides it to `"grid"`.
+The restricted profile resolver and `session.applyProfile` test adapter now
+accept **only** those two source-pinned exact native enum tokens. Unsupported
+patterns, UI labels, numeric stand-ins and vectors are rejected. A unit test
+checks inheritance and child-override behavior, and pinned-profile CI checks
+both actual upstream values without committing upstream vendor data.
+
+The isolated Chrome test now slices the same two-cube STL project with a
+nonzero infill density under otherwise identical process settings, changing
+**only** grid versus crosshatch. It compares parsed deposited XY motion
+geometry (not merely G-code SHA, metadata or config comments). This is a
+bounded functional check in the accepted localhost WASM candidate. It is not
+a full list of native patterns, desktop/native G-code equivalence, official
+printer readiness, or permission to activate the public Pages slicer.
