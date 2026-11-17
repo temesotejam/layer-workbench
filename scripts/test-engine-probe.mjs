@@ -105,7 +105,7 @@ try {
     gcode_sha256:actualGcodeHash, bytes:Buffer.byteLength(wasmGcode,'utf8'),
     layers:parsedGcode.layers.length, extrusion_segments:parsedGcode.extrusions,
     travel_segments:parsedGcode.travels
-  }, null, 2) + '\\n');
+  }, null, 2) + '\n');
 
   console.log('PASS: actual WASM G-code content: ' +
     parsedGcode.layers.length + ' layers, ' + parsedGcode.extrusions +
