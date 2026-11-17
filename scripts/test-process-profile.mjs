@@ -6,6 +6,9 @@ const LIMITS = {
   layer_height: [0.06,0.4],
   // First-layer physical height in mm, NOT an inferred percentage of layer_height.
   initial_layer_print_height: [0.06,0.5],
+  // Native process line_width in absolute mm only (not e.g. 105%).
+  // Pinned CR-10 0.20mm Standard uses 0.42 mm.
+  line_width: [0.1,2],
   wall_loops: [1,8],
   sparse_infill_density: [0,100],
   top_shell_layers: [0,12],
