@@ -342,4 +342,19 @@ for(const [key,bad] of [
     p.name==="0.16mm Fine @TestPrinter"?{...p,[key]:value}:p),selection),
     /Invalid native process enum/);
 }
+// The actual pinned Creality process inheritance uses crosshatch in common
+// and grid in the CR-10 0.20mm child. Exercise exact override precedence
+// separately from numeric density (which retains percent syntax).
+const fillBase=profiles.map(p=>p.name==="fdm_process_common"
+  ? {...p,sparse_infill_pattern:"crosshatch"} : p);
+const fillChild=fillBase.map(p=>p.name==="0.16mm Fine @TestPrinter"
+  ? {...p,sparse_infill_pattern:"grid"} : p);
+assert.equal(resolve(fillBase,selection).process.settings.sparse_infill_pattern,"crosshatch");
+assert.equal(resolve(fillChild,selection).process.settings.sparse_infill_pattern,"grid");
+assert.ok(!resolve(fillChild,selection).process.unsupported.includes("sparse_infill_pattern"));
+for(const bad of ["Grid","gyroid","",["grid"],null,0]){
+  assert.throws(()=>resolve(fillBase.map(p=>p.name==="0.16mm Fine @TestPrinter"
+    ? {...p,sparse_infill_pattern:bad} : p),selection),/Invalid native process enum/);
+}
+console.log("PASS: source-pinned crosshatch -> grid infill-pattern inheritance and strict enums");
 console.log("PASS: inherited native process wall-generator and gap-fill enums reach restricted adapter; invalid forms rejected");
