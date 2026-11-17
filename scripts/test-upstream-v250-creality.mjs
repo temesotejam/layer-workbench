@@ -18,6 +18,12 @@ assert.equal(machine.settings.nozzle_diameter,"0.4");
 assert.equal(machine.settings.printable_height,"400");
 assert.equal(process.settings.layer_height,"0.2");
 assert.equal(process.settings.wall_loops,"2");
+assert.equal(indexed.records.find(p=>p.name==="fdm_process_common").sparse_infill_pattern,"crosshatch",
+  "Source-pinned Creality ancestor must define exact native crosshatch token");
+assert.equal(process.settings.sparse_infill_pattern,"grid",
+  "CR-10 0.20mm child must override inherited crosshatch with grid");
+assert.ok(!process.unsupported.includes("sparse_infill_pattern"),
+  "Resolved native pattern must be forwarded rather than silently dropped");
 
  // Exact native v2.5.0 CR-10 0.20mm settings from the pinned upstream
  // child/ancestor chain. These are independent absolute mm/s speeds,

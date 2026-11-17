@@ -31,6 +31,9 @@ const INTEGERS = new Set(["wall_loops","top_shell_layers","bottom_shell_layers"]
 const ENUMS = Object.freeze({
   wall_generator: new Set(["classic","arachne"]),
   gap_fill_target: new Set(["everywhere","topbottom","nowhere"]),
+  // Exact values inspected in the source-pinned Creality v2.5.0 chain.
+  // Not an arbitrary native fill-pattern allow-list.
+  sparse_infill_pattern: new Set(["grid","crosshatch"]),
 });
 
 export function parseTestProcessOverrides(input) {
