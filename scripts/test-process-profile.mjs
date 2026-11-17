@@ -64,6 +64,10 @@ const ENUMS = Object.freeze({
   // Exact values inspected in the source-pinned Creality v2.5.0 chain.
   // Not an arbitrary native fill-pattern allow-list.
   sparse_infill_pattern: new Set(["grid","crosshatch"]),
+  // Explicit, bounded opt-in for support-generation evidence on the localhost
+  // COOP/COEP diagnostic page only. Native v2.5.0 stores this bool as "0"/"1".
+  // Never infer "1" from a manufacturer profile or deploy this test path on Pages.
+  enable_support: new Set(["0","1"]),
 });
 
 export function parseTestProcessOverrides(input) {
