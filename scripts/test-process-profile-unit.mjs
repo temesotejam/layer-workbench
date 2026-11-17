@@ -64,4 +64,11 @@ for(const [key,invalid] of [
     assert.throws(()=>parseTestProcessOverrides({[key]:value}),/native enum/,
       key+" should refuse "+String(value));
 }
+assert.deepEqual(parseTestProcessOverrides({sparse_infill_pattern:"grid"}),{sparse_infill_pattern:"grid"});
+assert.deepEqual(parseTestProcessOverrides({sparse_infill_pattern:"crosshatch"}),{sparse_infill_pattern:"crosshatch"});
+for(const bad of ["Grid","gyroid","rectilinear","",["grid"],null,1,"__proto__"]){
+  assert.throws(()=>parseTestProcessOverrides({sparse_infill_pattern:bad}),/native enum/,
+    "Unverified or malformed sparse infill pattern must fail closed: "+String(bad));
+}
+console.log("PASS: exact pinned grid/crosshatch infill tokens accepted; unverified pattern values refused");
 console.log("PASS: exact classic/arachne and everywhere/topbottom/nowhere native process enums; malformed values fail closed");
