@@ -1184,3 +1184,21 @@ exact call paths, including no support enablement in the generic fallback.
 The positive overhang probe remains a FAIL until a new real Chrome run
 observes tagged support extrusion. Do not treat unit or source-profile
 PASS as evidence of support generation or native G-code parity.
+
+### 2026-11-18: sphere positive-gate follow-up to bridge-arch FAIL
+
+The tunnel arch produced **zero** tagged support deposition with both toggle
+values on Chrome run [#44164323045](https://github.com/temesotejam/layer-workbench/actions/runs/44164323045).
+This is a genuine FAIL for the attempted positive assertion, not proof that the
+engine ignores support. A bridge can be self-supported by its bridge extrusion.
+
+The next Chrome candidate uses the **source-pinned support-modifier smoke's**
+explicit `support_enable`, `support_type: normal(auto)`, and threshold of
+10 degrees, applied in `session.init` to both the disabled and enabled
+cases. It retains the arch output as an inconclusive control and adds a
+watertight lower-hemisphere sphere with a Z=0 point for a strict positive
+support-deposition gate. Both sphere slices share the same mesh and bounded
+process settings; only the numeric `support_enable` differs. The local-only
+diagnostic must show source-tagged positive-E XY support body/interface paths
+on the ON case and none on OFF, or CI must FAIL. No public WASM activation,
+full native parity, or print safety is claimed.

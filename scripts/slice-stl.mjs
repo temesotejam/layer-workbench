@@ -189,8 +189,13 @@ export async function sliceMultiStlWithEngine(engine, items, onProgress, process
   // toggle, before creating a session. Never enable support by default.
   const hasSupportToggle = effectiveProcess !== null &&
     Object.hasOwn(effectiveProcess,"enable_support");
+  // The pinned upstream support smoke also specifies normal(auto) and a
+  // 10-degree threshold. Use identical bounded auto-support geometry policy
+  // for BOTH toggle states, so enable_support is the sole A/B difference.
+  // These fixed test parameters are never inferred from official presets.
   const initConfig = hasSupportToggle
-    ? {...base,support_enable:Number(effectiveProcess.enable_support)} : base;
+    ? {...base,support_enable:Number(effectiveProcess.enable_support),
+        support_type:"normal(auto)",support_threshold_angle:10} : base;
   const appliedProcess = effectiveProcess===null ? null : {...effectiveProcess};
   if (hasSupportToggle) delete appliedProcess.enable_support;
   const session = await engine.createSession();

@@ -7,6 +7,7 @@ import {createHash} from 'node:crypto';
 import {parseGcodeToolpaths} from './gcode-preview-parser.mjs';
 import {makeGapRingObj} from './gap-ring-fixture.mjs';
 import {makeBridgeArchObj} from './bridge-arch-fixture.mjs';
+import {makeSupportSphereObj} from './support-sphere-fixture.mjs';
 import {makeParityCubeStl, PARITY_CUBE_STL_SHA256} from './parity-cube-fixture.mjs';
 import {auditBridgeSpeedSegments} from './bridge-feature-diagnostic.mjs';
 import {auditSupportDeposition} from './support-feature-diagnostic.mjs';
@@ -1269,12 +1270,47 @@ try {
     console.log('BRIDGE_ARCH_SUPPORT_DIAGNOSTIC '+JSON.stringify(supportArchReport));
     assert.equal(supportOffAudit.result,'no_tagged_support_body_or_interface',
       'Disabled support produced positive-E XY support feature paths');
-    assert.equal(supportOnAudit.result,'tagged_support_body_or_interface_observed',
-      'The support-enabled overhang must deposit explicit support body/interface paths');
-    assert.ok(supportOnAudit.roles.body.extrusion_xy_segments>0 ||
-      supportOnAudit.roles.interface.extrusion_xy_segments>0,
-      'Support toggle changed only metadata or unrelated bridge paths');
-    console.log('PASS: real isolated WASM overhang emits support-tagged positive-E XY motion only with enable_support=1; no native parity asserted');
+    // A fully bridged arch need not generate auto-support, even when enabled.
+    // Keep this diagnostic as a NEGATIVE/INCONCLUSIVE control instead of
+    // turning legitimate bridge behavior into a false positive or CI failure.
+    console.log('BRIDGE_SUPPORT_CLASSIFICATION '+supportOnAudit.result);
+
+    // The pinned native support-modifier smoke uses a sphere underside at
+    // support_threshold_angle=10. Probe an independently watertight sphere
+    // using identical geometry and all process keys for OFF and ON runs.
+    // No G-code hash, config metadata, or bridge-only tag can pass this gate.
+    await prepare.locator('#remove-object').click();
+    await prepare.locator('#object-count').getByText('0 objects').waitFor();
+    await prepare.locator('#model-file').setInputFiles({
+      name:'low-poly-support-sphere.obj',mimeType:'text/plain',
+      buffer:Buffer.from(makeSupportSphereObj()),
+    });
+    await prepare.locator('#object-count').getByText('1 object').waitFor({timeout:30000});
+    const sphereSupportOff=await sliceRing('sphere-support-off.json',
+      {...supportArchSettings,enable_support:'0'});
+    const sphereSupportOn=await sliceRing('sphere-support-on.json',
+      {...supportArchSettings,enable_support:'1'});
+    const sphereOffAudit=auditSupportDeposition(parseGcodeToolpaths(sphereSupportOff));
+    const sphereOnAudit=auditSupportDeposition(parseGcodeToolpaths(sphereSupportOn));
+    const sphereReport={
+      fixture:'watertight 20 mm diameter low-poly sphere, lower point at Z0',
+      engine:'pinned v2.5.0 WASM candidate; isolated localhost opt-in',
+      fixed_native_support_type:'normal(auto)',fixed_threshold_angle_degrees:10,
+      changed_native_key:'support_enable',baseline:0,candidate:1,
+      baseline_audit:sphereOffAudit,candidate_audit:sphereOnAudit,
+      native_desktop_parity:false,printer_safe:false,public_pages_enabled:false,
+    };
+    await writeFile(parityDir+'/sphere-support-on-feature-diagnostic.json',
+      JSON.stringify(sphereReport,null,2)+'\\n');
+    console.log('SPHERE_SUPPORT_DIAGNOSTIC '+JSON.stringify(sphereReport));
+    assert.equal(sphereOffAudit.result,'no_tagged_support_body_or_interface',
+      'Disabled sphere auto-support produced positive-E XY support deposition');
+    assert.equal(sphereOnAudit.result,'tagged_support_body_or_interface_observed',
+      'Enabled sphere must generate genuine tagged support body/interface XY deposition');
+    assert.ok(sphereOnAudit.roles.body.extrusion_xy_segments>0 ||
+      sphereOnAudit.roles.interface.extrusion_xy_segments>0,
+      'Support-enabled sphere changed only metadata or unrelated toolpaths');
+    console.log('PASS: actual isolated WASM sphere produces support-tagged positive-E XY motion only when explicitly enabled; no native parity asserted');
 
 
 
