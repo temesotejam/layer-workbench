@@ -31,6 +31,8 @@ on:
       - "scripts/orca-vendor-index.mjs"
       - "scripts/parity-cube-fixture.mjs"
       - "scripts/test-parity-cube-fixture.mjs"
+      - "scripts/diagnose_live_cube_pair.py"
+      - "scripts/test_diagnose_live_cube_pair.py"
       - "scripts/wrap_parity_cube_3mf.py"
       - "scripts/test_wrap_parity_cube_3mf.py"
   push:
@@ -63,11 +65,14 @@ on:
       - "scripts/orca-vendor-index.mjs"
       - "scripts/parity-cube-fixture.mjs"
       - "scripts/test-parity-cube-fixture.mjs"
+      - "scripts/diagnose_live_cube_pair.py"
+      - "scripts/test_diagnose_live_cube_pair.py"
       - "scripts/wrap_parity_cube_3mf.py"
       - "scripts/test_wrap_parity_cube_3mf.py"
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   native-cli-probe:
@@ -82,6 +87,9 @@ jobs:
 
       - name: Unit-test shared source STL to explicit Core 3MF conversion offline
         run: python3 -m unittest discover -s scripts -p test_wrap_parity_cube_3mf.py -v
+
+      - name: Unit-test fail-closed G-code paired diagnostic offline
+        run: python3 -m unittest discover -s scripts -p test_diagnose_live_cube_pair.py -v
 
       - name: Unit-test the STL placement audit offline
         run: python3 -m unittest discover -s scripts -p test_verify_native_exported_stl.py -v
@@ -344,6 +352,58 @@ jobs:
             > native-cli-output/native-parity-cube-gcode.sha256
           # G-code and licensed full profiles remain ephemeral; only geometry
           # metrics, scene audit, hashes and text logs enter CI artifacts.
+
+      - name: Verify previous Chrome fixture artifact is still available
+        id: browser_pair
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Read-only, pinned prior success. Archive expires after 14 days.
+          gh api repos/${GITHUB_REPOSITORY}/actions/runs/44032175782/artifacts \
+            > "$RUNNER_TEMP/browser-artifacts.json"
+          if python3 -c '
+          import json,sys
+          a=json.load(open(sys.argv[1]))["artifacts"]
+          matches=[x for x in a if x["name"]=="layer-workbench-wasm-gcode-diagnostic"]
+          assert len(matches)==1
+          x=matches[0]
+          assert x["workflow_run"]["head_sha"]=="4f33ce570108bb8bd90c4f5a2e8eadba000d11d2"
+          sys.exit(0 if not x["expired"] else 1)
+          ' "$RUNNER_TEMP/browser-artifacts.json"; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "SKIPPED: historical Chrome G-code archive expired; no paired comparison."
+          fi
+
+      - name: Download historical real browser-WASM cube G-code (diagnostics only)
+        if: steps.browser_pair.outputs.available == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: layer-workbench-wasm-gcode-diagnostic
+          repository: temesotejam/layer-workbench
+          run-id: 44032175782
+          github-token: ${{ github.token }}
+          path: native-cli-output/wasm-baseline
+
+      - name: Compare actual aligned-source native and WASM G-code numerically
+        if: steps.browser_pair.outputs.available == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # G-code on both sides, same 684-byte source cube; native Core
+          # 3MF wrapper/full profiles and WASM generic PLA are NOT equivalent.
+          python3 scripts/diagnose_live_cube_pair.py \
+            --source-stl native-cli-output/parity-cube.stl \
+            --native native-cli-output/native-parity-cube-gcode/plate_1.gcode \
+            --wasm native-cli-output/wasm-baseline/wasm.gcode \
+            --wasm-summary native-cli-output/wasm-baseline/wasm-gcode-summary.json \
+            --min-extrusion-moves 100 \
+            --report native-cli-output/native-wasm-shared-cube-diagnostic.log
+          grep -q '"parity_pass": false' native-cli-output/native-wasm-shared-cube-diagnostic.log
+          echo "PASS: real native/WASM G-code differences quantified; parity NOT ESTABLISHED"
 
       - name: Verify repeated native full-profile slice has stable ordered G-code commands
         shell: bash
