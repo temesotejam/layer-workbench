@@ -90,12 +90,13 @@ const items=[{bytes:new Uint8Array(134)}];
 {
   const withBed={...selected,filament:{settings:{
     nozzle_temperature:"220",nozzle_temperature_initial_layer:["235"],
-    filament_flow_ratio:["0.98"],filament_max_volumetric_speed:["21"],
+    filament_flow_ratio:["0.98"],filament_diameter:["1.75"],filament_max_volumetric_speed:["21"],
     curr_bed_type:"High Temp Plate",bed_temperature:"65",
     hot_plate_temp:["65"],hot_plate_temp_initial_layer:["75"],
   }}};
   const init=makeRestrictedInitConfig(withBed);
   assert.deepEqual(init.filament_max_volumetric_speed,["21"]);
+  assert.deepEqual(init.filament_diameter,["1.75"]);
   assert.deepEqual(init.nozzle_temperature_initial_layer,["235"]);
   assert.equal(init.curr_bed_type,"High Temp Plate");
   assert.deepEqual(init.hot_plate_temp_initial_layer,["75"]);
@@ -107,6 +108,10 @@ const invalidCollections=[
     filament_start_gcode:"M109 S290"}}},
   {...selected,machine:{settings:{nozzle_diameter:["0.4","0.6"],printable_height:"250"}}},
   {...selected,filament:{settings:{nozzle_temperature:["210","240"]}}},
+  {...selected,filament:{settings:{nozzle_temperature:"220",filament_diameter:["1.75","2.85"]}}},
+  {...selected,filament:{settings:{nozzle_temperature:"220",filament_diameter:["0.99"]}}},
+  {...selected,filament:{settings:{nozzle_temperature:"220",filament_diameter:["3.01"]}}},
+  {...selected,filament:{settings:{nozzle_temperature:"220",filament_diameter:["oops"]}}},
   {...selected,filament:{settings:{nozzle_temperature:"220",filament_type:"PETG"}}},
   {...selected,filament:{settings:{nozzle_temperature:"220",filament_type:["PLA"]}}},
   {...selected,filament:{settings:{nozzle_temperature:"220",hot_plate_temp:["65"]}}},
