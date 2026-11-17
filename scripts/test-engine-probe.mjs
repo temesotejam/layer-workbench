@@ -714,6 +714,24 @@ try {
     await uploadRawOrca();
     console.log('PASS: internal_solid_infill_line_width 0.32 -> 0.72 changes real isolated WASM G-code');
 
+    // Source-pinned CR-10 first-layer width differs from common line_width.
+    // Keep all other widths and the first-layer height unchanged; require a
+    // difference in real G0/G1 motion, not only a config echo or G-code header.
+    rawOrca[4].line_width='0.42';
+    rawOrca[4].outer_wall_line_width='0.42';
+    rawOrca[4].inner_wall_line_width='0.45';
+    rawOrca[4].initial_layer_print_height='0.2';
+    const narrowFirstMotion=motionOnly(await sliceWithLineWidth('0.32','initial_layer_line_width'));
+    const broadFirstMotion=motionOnly(await sliceWithLineWidth('0.72','initial_layer_line_width'));
+    assert.ok(narrowFirstMotion.length>100&&broadFirstMotion.length>100,
+      'First-layer width probe needs substantive real motion commands');
+    assert.notDeepEqual(narrowFirstMotion,broadFirstMotion,
+      'Changing only initial_layer_line_width must alter real WASM G-code motion');
+    for(const key of ['initial_layer_line_width','initial_layer_print_height',
+      'inner_wall_line_width','outer_wall_line_width','line_width'])delete rawOrca[4][key];
+    await uploadRawOrca();
+    console.log('PASS: initial_layer_line_width 0.32 -> 0.72 changes real isolated WASM G-code');
+
     // Test the deliberately opt-in plate mapping through the *real* engine.
     // Default profile used 55C. Inherited upstream-style hot_plate_temp=65C
     // should be passed into session.init only after selecting the hot plate.

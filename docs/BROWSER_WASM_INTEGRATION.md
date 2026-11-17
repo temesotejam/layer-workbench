@@ -1026,3 +1026,22 @@ Only a passing corresponding Chrome CI run establishes this last behavior.
 
 This does not establish native-vs-WASM G-code parity or a print-ready machine
 profile. No WASM engine, licensing resources or public Pages integration changes.
+
+## 2026-11-18: source-pinned initial-layer width in isolated WASM
+
+Pinned OrcaSlicer v2.5.0 commit `40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19`
+defines native `initial_layer_line_width` in the Creality CR-10 chain:
+`0.42` mm in `fdm_process_common`, overridden to `0.5` mm in
+`fdm_process_creality_common` and retained as `0.5` mm in the
+0.20mm Standard child. The localhost-only process resolver forwards the
+independent first-layer extrusion width, preserving native inheritance,
+accepting only absolute 0.1–2.0mm single-tool widths and rejecting percentages,
+multi-tool vectors, missing defaults and malformed overrides.
+
+The pinned-profile CI asserts the actual source values. The isolated Chrome
+regression slices unchanged STL inputs twice with the other widths and
+initial-layer height held fixed, comparing genuine G0/G1 movement commands
+at 0.32mm versus 0.72mm first-layer width. The experiment counts as functional
+evidence only once that real WASM gate passes. It is not same-full-profile
+native/WASM G-code parity, machine certification, full 3MF support, print
+safety, or permission to expose the candidate engine on public GitHub Pages.

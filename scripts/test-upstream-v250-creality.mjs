@@ -22,6 +22,14 @@ assert.equal(process.settings.line_width,"0.42",
   "Official v2.5.0 CR-10 0.20mm process must provide absolute line width");
 assert.ok(!process.unsupported.includes("line_width"),
   "Source-pinned absolute line width must be included in restricted process settings");
+assert.equal(indexed.records.find(p=>p.name==="fdm_process_common").initial_layer_line_width,"0.42",
+  "Pinned base process first layer width is 0.42mm");
+assert.equal(indexed.records.find(p=>p.name==="fdm_process_creality_common").initial_layer_line_width,"0.5",
+  "Creality process ancestor overrides first layer width to 0.5mm");
+assert.equal(process.settings.initial_layer_line_width,"0.5",
+  "CR-10 0.20mm Standard must retain independent first-layer width");
+assert.ok(!process.unsupported.includes("initial_layer_line_width"),
+  "Initial-layer width must be forwarded as an explicit native setting");
 assert.equal(indexed.records.find(p=>p.name==="fdm_process_common").outer_wall_line_width,"0.4",
   "Official v2.5.0 common profile must contain native outer-wall width");
 assert.equal(process.settings.outer_wall_line_width,"0.42",
