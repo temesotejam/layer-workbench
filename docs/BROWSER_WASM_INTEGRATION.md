@@ -1344,3 +1344,18 @@ volume, and support path topology itself can change with configured width.
 If the actual WASM run does not confirm a material effect, leave the PR
 unmerged and investigate rather than relax the assertion. Desktop native
 parity, physical print safety, and public Pages WASM activation remain unverified.
+
+
+The isolated Chrome run
+[#44198131705](https://github.com/temesotejam/layer-workbench/actions/runs/44198131705)
+**PASSED** the new material gate and all Node diagnostic unit tests.
+For 0.32 mm support width, the support-body role contained 1,547 positive-E
+XY segments, 5,380.227929 mm XY length, and 142.44848 mm commanded filament E.
+For 0.72 mm support width, body contained 1,048 segments, 3,367.740516 mm
+XY length, and 227.28496 mm filament E (difference +84.83648 mm).
+The support interface also changed (587 -> 419 segments; 30.2157 ->
+49.51905 mm filament E). Because XY path topology and lengths changed,
+this is **not** a fixed-path extrusion ratio or proof that rendered line
+width matches the nominal setting. It does confirm the width setting
+affects real support-tagged deposited G1 XY commands, not only headers.
+Public Pages still does not load the WASM candidate.
