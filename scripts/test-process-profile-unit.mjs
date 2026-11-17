@@ -145,3 +145,13 @@ for(const bad of ["110%",0,2.01,["0.5"],["0.5","0.6"],"auto",null,-0.1]){
     /Invalid|outside the safe test range/);
 }
 console.log("PASS: independent initial-layer line width is bounded and fails closed");
+
+// v2.5.0 CR-10 first-layer print speed is a distinct native absolute
+// mm/s field, not a percentage or alias for initial-layer infill speed.
+assert.deepEqual(parseTestProcessOverrides({initial_layer_speed:'15',outer_wall_speed:'25'}),
+  {initial_layer_speed:'15',outer_wall_speed:'25'});
+for(const bad of ['50%',0,801,['15'],['15','20'],'auto',null,-1]){
+  assert.throws(()=>parseTestProcessOverrides({initial_layer_speed:bad}),
+    /Invalid|outside the safe test range/);
+}
+console.log('PASS: independent source-pinned first-layer speed is bounded and rejects relative/vector formats');

@@ -72,6 +72,15 @@ assert.equal(process.settings.sparse_infill_pattern,"grid",
 assert.ok(!process.unsupported.includes("sparse_infill_pattern"),
   "Resolved native pattern must be forwarded rather than silently dropped");
 
+assert.equal(indexed.records.find(p=>p.name==="fdm_process_common").initial_layer_speed,"20",
+  "Pinned common process first-layer perimeter speed is 20mm/s");
+assert.equal(indexed.records.find(p=>p.name==="fdm_process_creality_common").initial_layer_speed,"15",
+  "Creality common overrides first-layer perimeter speed to 15mm/s");
+assert.equal(process.settings.initial_layer_speed,"15",
+  "Pinned CR-10 standard preset inherits 15mm/s first-layer perimeter speed");
+assert.ok(!process.unsupported.includes("initial_layer_speed"),
+  "First-layer speed must reach the restricted process adapter");
+
  // Exact native v2.5.0 CR-10 0.20mm settings from the pinned upstream
  // child/ancestor chain. These are independent absolute mm/s speeds,
  // never percent relative presets or replacements for shell/inner speeds.

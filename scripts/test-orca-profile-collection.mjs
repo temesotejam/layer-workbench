@@ -529,3 +529,27 @@ for(const bad of ['110%',0,'2.01',['0.5','0.6'],null,'auto']){
 }
 assert.equal(result.process.settings.initial_layer_line_width,undefined);
 console.log('PASS: pinned first-layer width inherits independently, normalizes one slot and rejects invalid formats');
+
+// First-layer perimeter speed must inherit independently from the native
+// process chain; no fabricated defaults, percentage or multi-tool coercion.
+const firstSpeedProfiles=profiles.map(rec=>rec.name==='fdm_process_common'
+  ? {...rec,initial_layer_speed:'20',outer_wall_speed:'30'}:
+  rec.name==='0.16mm Fine @TestPrinter' ? {...rec,initial_layer_speed:'15'}:rec);
+const firstSpeed=resolve(firstSpeedProfiles,selection).process;
+assert.equal(firstSpeed.settings.initial_layer_speed,'15');
+assert.equal(firstSpeed.settings.outer_wall_speed,'30');
+assert.ok(!firstSpeed.unsupported.includes('initial_layer_speed'));
+const inheritedSpeed=firstSpeedProfiles.map(rec=>{
+  if(rec.name!=='0.16mm Fine @TestPrinter')return rec;
+  const child={...rec};delete child.initial_layer_speed;return child;
+});
+assert.equal(resolve(inheritedSpeed,selection).process.settings.initial_layer_speed,'20');
+assert.equal(resolve(firstSpeedProfiles.map(rec=>rec.name==='0.16mm Fine @TestPrinter'
+  ? {...rec,initial_layer_speed:['15']}:rec),selection).process.settings.initial_layer_speed,'15');
+for(const bad of ['50%',0,'801',['15','20'],null,'auto']){
+  assert.throws(()=>resolve(firstSpeedProfiles.map(rec=>rec.name==='0.16mm Fine @TestPrinter'
+    ? {...rec,initial_layer_speed:bad}:rec),selection),
+    /Invalid|Multi-extruder|test limits/);
+}
+assert.equal(result.process.settings.initial_layer_speed,undefined);
+console.log('PASS: first-layer speed inheritance, single-nozzle normalization and strict input limits');
