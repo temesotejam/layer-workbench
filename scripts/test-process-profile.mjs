@@ -50,6 +50,10 @@ const LIMITS = {
   // Source-pinned CR-10 first-layer infill is 20 mm/s, not the
   // first-layer perimeter speed. No relative percentages or vectors.
   initial_layer_infill_speed: [1,800],
+  // Validated absolute native settings; support generation remains unverified.
+  support_line_width: [0.1,2],
+  support_speed: [1,800],
+  support_interface_speed: [1,800],
 };
 const INTEGERS = new Set(["wall_loops","top_shell_layers","bottom_shell_layers"]);
 // Exact native v2.5.0 process enum tokens; do not accept labels, numeric

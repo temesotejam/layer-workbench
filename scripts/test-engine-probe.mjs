@@ -773,6 +773,18 @@ try {
     console.log('PASS: source-pinned initial_layer_infill_speed 5 -> 20 changes real first-layer WASM extrusion feedrates',
       JSON.stringify({slowInfillFeeds,pinnedInfillFeeds}));
 
+    // Ingestion-only probe: these two cubes do NOT require support, and
+    // enable_support is deliberately blocked. Never call this support parity.
+    rawOrca[4].support_line_width='0.42';
+    rawOrca[4].support_interface_speed='30';
+    const supportConfiguredGcode=await sliceWithLineWidth('30','support_speed');
+    assert.ok(motionOnly(supportConfiguredGcode).length>100,
+      'Native-json support parameter ingestion failed in the real WASM engine');
+    for(const key of ['support_line_width','support_speed',
+      'support_interface_speed'])delete rawOrca[4][key];
+    await uploadRawOrca();
+    console.log('PASS: real isolated WASM accepts native support width and body/interface speed (support disabled; no support toolpath proof)');
+
     // Test the deliberately opt-in plate mapping through the *real* engine.
     // Default profile used 55C. Inherited upstream-style hot_plate_temp=65C
     // should be passed into session.init only after selecting the hot plate.

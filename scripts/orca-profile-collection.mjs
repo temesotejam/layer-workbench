@@ -49,7 +49,11 @@ const SPECS={
     // CR-10 0.20mm Standard specifies its first-layer INFILL speed as
     // 20 mm/s, distinct from the first-layer perimeter 15 mm/s.
     // Bounded absolute scalar only; no % or multi-nozzle inference.
-    initial_layer_infill_speed:[1,800]},
+    initial_layer_infill_speed:[1,800],
+    // Source-pinned CR-10 support width and independent body/interface speeds.
+    // Localhost diagnostic only: support enablement is NOT permitted.
+    support_line_width:[0.1,2],support_speed:[1,800],
+    support_interface_speed:[1,800]},
 };
 const INTEGERS=new Set(['wall_loops','top_shell_layers','bottom_shell_layers']);
 // Pinned native process enums; the limited adapter retains exact wire values.

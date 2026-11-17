@@ -579,3 +579,31 @@ for(const bad of ['50%',0,'801',['20','30'],null,'auto']){
 }
 assert.equal(result.process.settings.initial_layer_infill_speed,undefined);
 console.log('PASS: independent first-layer infill speed parent/child, one slot and strict bounds');
+
+// Support width, body speed and interface speed must be independently inherited,
+// with no synthetic defaults for missing native process settings.
+const supportKeys=['support_line_width','support_speed','support_interface_speed'];
+const supportDefaults={support_line_width:'0.42',support_speed:'40',support_interface_speed:'80'};
+const supportOverrides={support_line_width:'0.4',support_speed:'30',support_interface_speed:'25'};
+const supportProfiles=profiles.map(rec=>rec.name==='fdm_process_common'
+  ? {...rec,...supportDefaults}:rec.name==='0.16mm Fine @TestPrinter'
+    ? {...rec,...supportOverrides}:rec);
+const supportResult=resolve(supportProfiles,selection).process;
+for(const key of supportKeys) {
+  assert.equal(supportResult.settings[key],supportOverrides[key]);
+  assert.ok(!supportResult.unsupported.includes(key));
+  const inherited=supportProfiles.map(rec=>{
+    if(rec.name!=='0.16mm Fine @TestPrinter')return rec;
+    const child={...rec};delete child[key];return child;
+  });
+  assert.equal(resolve(inherited,selection).process.settings[key],supportDefaults[key]);
+  assert.equal(resolve(supportProfiles.map(rec=>rec.name==='0.16mm Fine @TestPrinter'
+    ? {...rec,[key]:[supportOverrides[key]]}:rec),selection).process.settings[key],
+    supportOverrides[key]);
+  for(const bad of ['50%',0,key==='support_line_width'?2.01:801,
+    ['20','30'],null,'auto'])
+    assert.throws(()=>resolve(supportProfiles.map(rec=>rec.name==='0.16mm Fine @TestPrinter'
+      ? {...rec,[key]:bad}:rec),selection),/Invalid|Multi-extruder|test limits/);
+  assert.equal(result.process.settings[key],undefined,'No fabricated '+key);
+}
+console.log('PASS: bounded independent source-pinned support profile inheritance and vector rejection');
