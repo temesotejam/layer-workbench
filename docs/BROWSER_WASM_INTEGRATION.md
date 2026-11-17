@@ -863,3 +863,26 @@ fallback, not a printer-profile claim. This supports **one additional exact
 material key only**, not native filament/multi-extruder parity, real-material
 validation, physical printing or production WASM deployment. Upstream input
 was inspected at source pin `40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19`.
+
+
+## 2026-11-17: source-pinned one-slot filament diameter in restricted localhost bridge
+
+The pinned OrcaSlicer v2.5.0 `fdm_filament_common` profile defines
+`filament_diameter: ["1.75"]`, inherited by `Generic PLA @System`.
+The restricted one-filament adapter now retains this option as a native
+single-element vector, bounded to **1–3 mm** for the isolated diagnostic.
+The inherited child value overrides the parent; multi-value, missing-slot,
+non-numeric and out-of-range explicit values fail closed. Direct callers to
+`makeRestrictedInitConfig` also cannot bypass the bounds before creating
+a WASM session. No automatic fallback from a malformed selected diameter
+to the developer's generic filament setting is permitted.
+
+The pinned-real-profile CI asserts the literal inherited 1.75 mm value.
+The isolated Chrome probe compares **actual XY G1 E numeric values** after
+slicing the same models with only test `filament_diameter` changed from
+1.75 to 2.85 mm; metadata/hash changes alone do not satisfy that gate.
+This proves at most a bounded, single-profile extrusion-command response
+inside the accepted localhost test engine. It is **not** full material
+compatibility, official native-vs-WASM G-code parity, an actual extruder
+calibration, physical print safety or permission to enable the public
+Pages engine. Other native machine/process/filament options remain missing.
