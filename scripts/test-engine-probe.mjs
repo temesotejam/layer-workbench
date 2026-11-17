@@ -7,7 +7,7 @@ import {createHash} from 'node:crypto';
 import {parseGcodeToolpaths} from './gcode-preview-parser.mjs';
 import {makeGapRingObj} from './gap-ring-fixture.mjs';
 import {makeBridgeArchObj} from './bridge-arch-fixture.mjs';
-import {makeParityCubeStl} from './parity-cube-fixture.mjs';
+import {makeParityCubeStl, PARITY_CUBE_STL_SHA256} from './parity-cube-fixture.mjs';
 import {auditBridgeSpeedSegments} from './bridge-feature-diagnostic.mjs';
 import {checkBrowser3mfRoundTrip} from './test-browser-3mf-roundtrip.mjs';
 import {checkBrowserMultiObject3mf} from './test-browser-3mf-multiobject.mjs';
@@ -101,6 +101,7 @@ try {
   await writeFile(parityDir + '/wasm-gcode-summary.json', JSON.stringify({
     engine:'OrcaSlicer WASM candidate', version:'2.5.0', api:'0.7.0',
     fixture:'synthetic 12-triangle cube; generic PLA development profile only',
+    source_stl_sha256:PARITY_CUBE_STL_SHA256,
     gcode_sha256:actualGcodeHash, bytes:Buffer.byteLength(wasmGcode,'utf8'),
     layers:parsedGcode.layers.length, extrusion_segments:parsedGcode.extrusions,
     travel_segments:parsedGcode.travels
