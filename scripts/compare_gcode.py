@@ -246,6 +246,11 @@ def numeric_parameter_deltas(native_command, wasm_command):
                 })
     return deltas
 
+def rounded_mm(value):
+    """Format a rounded diagnostic length without scientific notation."""
+    return format(value.quantize(Decimal('0.000001')).normalize(), 'f')
+
+
 def compare(native, wasm, min_extrusion_moves=0):
     if min_extrusion_moves < 0:
         raise ValueError('minimum extrusion moves must not be negative')
@@ -290,11 +295,11 @@ def compare(native, wasm, min_extrusion_moves=0):
         'native_counted_linear_xy_moves': native_linear_moves,
         'wasm_counted_linear_xy_moves': wasm_linear_moves,
         'native_counted_linear_xy_mm': None if native_linear_xy_mm is None
-            else str(native_linear_xy_mm.quantize(Decimal('0.000001')).normalize()),
+            else rounded_mm(native_linear_xy_mm),
         'wasm_counted_linear_xy_mm': None if wasm_linear_xy_mm is None
-            else str(wasm_linear_xy_mm.quantize(Decimal('0.000001')).normalize()),
+            else rounded_mm(wasm_linear_xy_mm),
         'counted_linear_xy_delta_mm': None if native_linear_xy_mm is None or wasm_linear_xy_mm is None
-            else str((wasm_linear_xy_mm - native_linear_xy_mm).quantize(Decimal('0.000001')).normalize()),
+            else rounded_mm(wasm_linear_xy_mm - native_linear_xy_mm),
         'minimum_extrusion_moves': min_extrusion_moves,
         'input_issues': issues,
         'native_sha256': hashlib.sha256(native.read_bytes()).hexdigest(),
