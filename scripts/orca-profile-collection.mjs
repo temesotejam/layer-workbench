@@ -28,6 +28,9 @@ const INTEGERS=new Set(['wall_loops','top_shell_layers','bottom_shell_layers']);
 const PROCESS_ENUMS=Object.freeze({
   wall_generator:new Set(["classic","arachne"]),
   gap_fill_target:new Set(["everywhere","topbottom","nowhere"]),
+  // Pinned v2.5.0 Creality common uses crosshatch; its CR-10 0.20mm child
+  // overrides this to grid. Other enum tokens require separate verification.
+  sparse_infill_pattern:new Set(["grid","crosshatch"]),
 });
 // Pinned OrcaSlicer v2.5.0 PrintConfig.cpp: curr_bed_type enum and
 // six native per-filament steady/first-layer coInts pairs. UI labels are
