@@ -12,6 +12,8 @@ on:
       - "scripts/test_make_parity_manifest.py"
       - "scripts/orca-multimaterial-gcode-audit.mjs"
       - "scripts/test-orca-multimaterial-gcode-audit.mjs"
+      - "scripts/parity-cube-fixture.mjs"
+      - "scripts/test-parity-cube-fixture.mjs"
       - ".github/workflows/test-gcode-parity.yml"
   pull_request:
     paths:
@@ -23,6 +25,8 @@ on:
       - "scripts/test_make_parity_manifest.py"
       - "scripts/orca-multimaterial-gcode-audit.mjs"
       - "scripts/test-orca-multimaterial-gcode-audit.mjs"
+      - "scripts/parity-cube-fixture.mjs"
+      - "scripts/test-parity-cube-fixture.mjs"
       - ".github/workflows/test-gcode-parity.yml"
   workflow_dispatch:
 
@@ -41,3 +45,4 @@ jobs:
           python3 -m unittest discover -s scripts -p test_check_parity_pair.py -v
           python3 -m unittest discover -s scripts -p test_make_parity_manifest.py -v
           node scripts/test-orca-multimaterial-gcode-audit.mjs
+          node scripts/test-parity-cube-fixture.mjs
