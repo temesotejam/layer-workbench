@@ -732,6 +732,30 @@ try {
     await uploadRawOrca();
     console.log('PASS: initial_layer_line_width 0.32 -> 0.72 changes real isolated WASM G-code');
 
+    // First-layer perimeter speed is an independent source-pinned process
+    // setting (CR-10: 15mm/s). Compare actual modal F on positive-E first
+    // layer toolpaths, not header comments, config echoes or G-code SHA.
+    const firstLayerFeeds=code=>{
+      const layer=parseGcodeToolpaths(code).layers.find(l=>
+        l.segments.some(s=>s.extrusion&&Number.isFinite(s.feedrateMmMin)));
+      assert.ok(layer,'First-layer speed test requires deposited toolpaths');
+      const speeds=layer.segments.filter(s=>s.extrusion&&
+        Number.isFinite(s.feedrateMmMin)&&s.feedrateMmMin>0)
+        .map(s=>Math.round(s.feedrateMmMin*100)/100);
+      assert.ok(speeds.length>10,'First-layer speed test requires substantive extrusion');
+      return [...new Set(speeds)].sort((a,b)=>a-b);
+    };
+    const slowFirstGcode=await sliceWithLineWidth('5','initial_layer_speed');
+    const pinnedFirstGcode=await sliceWithLineWidth('15','initial_layer_speed');
+    const slowFirstFeeds=firstLayerFeeds(slowFirstGcode);
+    const pinnedFirstFeeds=firstLayerFeeds(pinnedFirstGcode);
+    assert.notDeepEqual(slowFirstFeeds,pinnedFirstFeeds,
+      'Changing only initial_layer_speed must affect real first-layer extrusion F values');
+    delete rawOrca[4].initial_layer_speed;
+    await uploadRawOrca();
+    console.log('PASS: source-pinned initial_layer_speed 5 -> 15 changes real first-layer WASM extrusion feedrates',
+      JSON.stringify({slowFirstFeeds,pinnedFirstFeeds}));
+
     // Test the deliberately opt-in plate mapping through the *real* engine.
     // Default profile used 55C. Inherited upstream-style hot_plate_temp=65C
     // should be passed into session.init only after selecting the hot plate.
