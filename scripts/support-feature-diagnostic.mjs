@@ -1,12 +1,18 @@
 // Source-pinned OrcaSlicer v2.5.0 support-path diagnostic (read-only).
 // Exact labels: src/libslic3r/GCode.cpp at 40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19,
 // GCode::extrude_support labels "support material", "support material interface",
-// "support transition", "support ironing". Never infer support from substrings,
+// "support transition", "support ironing". The REAL isolated Chrome G-code on
+// run #44170725864 instead contains explicit TYPE/FEATURE labels "Support"
+// and "Support interface" for the 70-degree sphere; the read-only preview
+// parser preserves those exact normalized tokens. Accept these two verified
+// exact emission aliases too, but never infer support from substrings,
 // a profile value, a comment without deposition, or a travel-only F change.
 // This is NOT full native parity or print-safety verification.
 const LABELS = Object.freeze({
   "support material":"body",
   "support material interface":"interface",
+  "support":"body",
+  "support interface":"interface",
   "support transition":"transition",
   "support ironing":"ironing",
 });
@@ -73,7 +79,7 @@ export function auditSupportDeposition(parsed) {
   return {
     result:supported>0?"tagged_support_body_or_interface_observed":
       "no_tagged_support_body_or_interface",
-    source:"OrcaSlicer v2.5.0 pinned support extrusion labels",
+    source:"OrcaSlicer v2.5.0 pinned support labels and isolated Chrome verified tags",
     roles,
     support_generation_verified:supported>0,
     native_desktop_parity:false,

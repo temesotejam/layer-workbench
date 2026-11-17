@@ -1256,3 +1256,26 @@ not a recommended support threshold for printing.
 The positive support body/interface G-code assertion is retained as a hard
 FAIL. Until a real isolated Chrome run proves that deposition, PR #73 stays
 unmerged and the public Pages app keeps the WASM engine disabled.
+
+### 2026-11-18: support geometry works; exact G-code tag alias found
+
+The 70° native `enable_support` sphere experiment in
+[Chrome #44170725864](https://github.com/temesotejam/layer-workbench/actions/runs/44170725864)
+**generated distinct G-code motion**: 6,641 moves / 5,238 deposited preview
+segments with support OFF versus **9,330 moves / 7,298** deposited segments
+with support ON. It emitted **1,489** segments tagged exactly `support`
+and **586** tagged `support interface`, with 48 explicit support feature
+comments. This is convincing independent geometry evidence, **but the old
+positive test still failed** because its diagnostic recognized only the
+untransformed `support material` and `support material interface` strings
+from `GCode::extrude_support`, rather than the actual normalized browser
+G-code tags. Failures were not silently waived.
+
+The diagnostic now recognizes both **exact** observed emission tags
+(`support`, `support interface`) in addition to the pinned role-label
+strings, with explicit positive/negative unit fixtures. It continues to
+require genuine positive-E XY movements (no metadata-only, travel-only or
+substring matches) and the OFF control must remain free of support deposition.
+Only a subsequent **passing** isolated Chrome test can close the PR #73
+acceptance gate; no desktop native parity or print approval follows from
+this bounded sphere test. GitHub Pages remains untouched.
