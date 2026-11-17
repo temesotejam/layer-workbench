@@ -1279,3 +1279,30 @@ substring matches) and the OFF control must remain free of support deposition.
 Only a subsequent **passing** isolated Chrome test can close the PR #73
 acceptance gate; no desktop native parity or print approval follows from
 this bounded sphere test. GitHub Pages remains untouched.
+
+### 2026-11-18: role-specific support speed deposition gate (PR candidate, CI pending)
+
+The previous localhost-only, COOP/COEP Chrome probe established actual
+support body and interface XY deposition from a 20 mm sphere when native
+`enable_support:"1"` and a fixed 70-degree diagnostic threshold are set.
+That alone does **not** show that the `support_speed` and
+`support_interface_speed` settings change emitted G-code independently.
+
+This opt-in follow-up compares the same sphere, engine artifact, support
+enablement, support width, threshold, and all other process overrides.
+It makes separate experimental slices with **only** `support_speed:3`
+or **only** `support_interface_speed:3`, against the common 30 mm/s
+baseline. The test uses `auditSupportSpeedEffect` to require positive-E
+XY deposition tagged with the *correct role*, a new F180 (3 mm/s)
+in that role, and stable role-specific gross path length and XYZ bounds
+within 0.01 mm. It stores read-only summary statistics rather than raw
+printer-ready G-code in `parity-output/sphere-support-role-speed-diagnostic.json`.
+The independently observed `Support` / `Support interface` G-code tags
+also have dedicated role-isolation unit tests.
+
+**Acceptance is conditional on an actual isolated-Chrome CI PASS.**
+A failed new-rate assertion is not to be waived: acceleration, cooling,
+or volumetric limits may prevent the requested nominal rate and require
+further diagnosis. This does not establish desktop native parity,
+cross-printer profile parity, safe printable G-code, or public Pages WASM
+availability. No candidate is enabled on the public website.
