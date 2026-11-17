@@ -947,3 +947,26 @@ this key is considered functionally verified.
 This is **one more restricted process option**, not a full PrintConfig
 mapping, same-full-profile desktop-vs-WASM toolpath parity, verified real
 printer G-code, or permission to publish the WASM engine on GitHub Pages.
+
+## 2026-11-17: source-pinned independent inner-wall line width (localhost only)
+
+The pinned OrcaSlicer v2.5.0 commit
+`40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19` defines
+`inner_wall_line_width: "0.45"` in both `fdm_process_common` and
+`fdm_process_creality_common`, and the CR-10 0.20mm Standard child
+also sets 0.45 mm. Pinned `PrintConfig.cpp` declares this native key
+as `coFloatOrPercent`. The isolated test adapter accepts **absolute
+0.1–2.0 mm only**, inherited independently of `line_width` and
+`outer_wall_line_width`. Percentages, ambiguous values, multi-nozzle
+vectors and missing-value inference are not accepted.
+
+Source-pinned CI validates the official values; dedicated unit tests
+check inheritance, child precedence, single-nozzle native vectors and
+strict override rejection. The isolated Chrome test holds general and
+outer-wall width at 0.42 mm, changes **only** inner-wall width between
+0.32 and 0.72 mm, and requires a difference in actual G0/G1 motion
+commands. A functional PASS is claimed only if that Chrome gate passes.
+
+This bounded addition does not prove native desktop/WASM full-profile
+G-code parity, correct multi-extruder assignment, physical print quality,
+or safe printable output. No WASM engine is activated on public Pages.

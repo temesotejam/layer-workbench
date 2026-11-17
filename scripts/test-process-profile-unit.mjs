@@ -62,6 +62,16 @@ for(const bad of ["105%",0,2.01,["0.42"],"auto",null,-0.1]){
     /Invalid|outside the safe test range/);
 }
 console.log("PASS: bounded native outer_wall_line_width is independent and rejects ambiguous formats");
+// The official CR-10 0.20mm preset carries an independent 0.45 mm inner-wall width.
+// The localhost adapter must not alias it to common or outer-wall widths.
+assert.deepEqual(parseTestProcessOverrides({
+  line_width:"0.42",outer_wall_line_width:"0.4",inner_wall_line_width:"0.45"
+}),{line_width:"0.42",outer_wall_line_width:"0.4",inner_wall_line_width:"0.45"});
+for (const bad of ["105%",0,2.01,["0.45"],["0.45","0.5"],"auto",null,-0.1]) {
+  assert.throws(()=>parseTestProcessOverrides({inner_wall_line_width:bad}),
+    /Invalid|outside the safe test range/);
+}
+console.log("PASS: bounded native inner_wall_line_width is independent and rejects relative/vector forms");
 console.log('PASS: bounded initial-layer height (mm), no percentages or multi-nozzle vectors');
 console.log('PASS: bounded absolute mm/s test process speeds; percentages and multi-nozzle values rejected');
 console.log('PASS: bounded test process overrides and invalid preset rejection');
