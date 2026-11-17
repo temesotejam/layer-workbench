@@ -1137,3 +1137,29 @@ and does not demonstrate the effect of support speed or width. The next
 acceptance step remains a bounded, explicit localhost-only support-enabled
 overhang fixture with verified role-tagged toolpaths, tested without changing
 the public Pages environment. Never use diagnostic G-code on hardware.
+
+## 2026-11-18: isolated overhang support-generation positive gate (pending CI)
+
+The localhost-only `?engineLab=1` diagnostic accepts the exact OrcaSlicer
+v2.5.0 native `enable_support` tokens `"0"` or `"1"` **only when an explicit
+local process JSON is supplied**. Unknown, numeric, boolean, relative and
+multi-tool representations fail closed. The process panel is restricted to
+cross-origin isolated localhost, and the public Pages application continues
+to ship without the WASM candidate or this opt-in engine lab.
+
+The isolated Chrome probe reuses the existing watertight 40 × 20 × 15 mm
+unsupported tunnel arch (16 mm horizontal opening), holding the mesh,
+wall/gap/bridge settings, and three bounded support widths/speeds constant.
+It slices once with `enable_support:"0"` and once with `"1"`, archives the
+actual per-role positive-E XY deposition evidence to
+`parity-output/bridge-arch-support-on-feature-diagnostic.json`, and requires
+no labelled body/interface deposition in the disabled control but actual
+body/interface deposition in the enabled case. A support flag, config
+comment, bridge-only path or successful slicing is **not** acceptance.
+
+**Status:** code and test are staged; functional support generation is NOT
+claimed until the isolated-Chrome workflow passes on the exact branch SHA.
+Even a green gate proves only a bounded test overhang and one archived
+WASM artifact. Full native-vs-WASM profile/G-code equivalence, real printer
+support behavior, usable 3MF/STEP projects, and print safety remain unverified.
+No output should be sent to a printer.
