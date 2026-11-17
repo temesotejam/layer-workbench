@@ -610,7 +610,7 @@ try {
         const state=document.querySelector('#lab-status')?.textContent||'';
         return state.startsWith('PASS:')||state.startsWith('FAILED');
       },null,{timeout:120000});
-      assert.match(await prepare.locator('#lab-status').innerText(),/^PASS: 2 STL model\\(s\\)/);
+      assert.match(await prepare.locator('#lab-status').innerText(),/^PASS: 2 STL model\(s\)/);
       return prepare.locator('#lab-download').evaluate(async link=>
         await(await fetch(link.href)).text());
     };
