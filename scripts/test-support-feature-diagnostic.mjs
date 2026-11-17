@@ -25,6 +25,7 @@ console.log("PASS: exact v2.5.0 support body/interface/transition/ironing labels
 const ignored=parse([
   "; support material interface","G1 X10 Y0 E1 F120",
   ";TYPE:Non-support material","G1 X20 Y0 E2",
+  ";TYPE:constructor","G1 X25 Y0 E2.5",
   ";TYPE:Support material impostor","G1 X30 Y0 E3",
   ";TYPE:Support material","G0 X40 Y0 F120", // travel only
   "G1 E4 F120", // pure E prime
