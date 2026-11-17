@@ -25,8 +25,11 @@ function collect(parsed) {
       throw new Error("Invalid G-code toolpath layer");
     for(const s of layer.segments) {
       if(!s || s.extrusion!==true) continue;
-      const role=LABELS[normalize(s.feature)];
-      if(!role || !finite(s.x1,s.y1,s.x2,s.y2,s.z1,s.z2))continue;
+      const label=normalize(s.feature);
+      // Reject Object.prototype keys in untrusted feature comments.
+      if(!Object.hasOwn(LABELS,label))continue;
+      const role=LABELS[label];
+      if(!finite(s.x1,s.y1,s.x2,s.y2,s.z1,s.z2))continue;
       const length=Math.hypot(s.x2-s.x1,s.y2-s.y1);
       if(!Number.isFinite(length)||length<=1e-9)continue; // E-only and vertical priming
       out[role].push({...s,xyLength:length});
