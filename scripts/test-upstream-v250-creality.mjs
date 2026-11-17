@@ -49,6 +49,14 @@ assert.equal(indexed.records.find(p=>p.name==="fdm_process_creality_common").top
 assert.equal(process.settings.top_surface_line_width,"0.42",
   "Pinned CR-10 0.20mm child must override top-surface width to 0.42 mm");
 assert.ok(!process.unsupported.includes("top_surface_line_width"));
+assert.equal(indexed.records.find(p=>p.name==="fdm_process_common").internal_solid_infill_line_width,"0.45",
+  "Source-pinned common process has 0.45mm internal solid infill");
+assert.equal(indexed.records.find(p=>p.name==="fdm_process_creality_common").internal_solid_infill_line_width,"0.4",
+  "Creality ancestor overrides the internal solid width to 0.4mm");
+assert.equal(process.settings.internal_solid_infill_line_width,"0.45",
+  "Pinned CR-10 0.20mm child restores independent internal solid width 0.45mm");
+assert.ok(!process.unsupported.includes("internal_solid_infill_line_width"),
+  "Internal solid infill width must reach the restricted WASM process adapter");
 assert.equal(indexed.records.find(p=>p.name==="fdm_process_common").sparse_infill_pattern,"crosshatch",
   "Source-pinned Creality ancestor must define exact native crosshatch token");
 assert.equal(process.settings.sparse_infill_pattern,"grid",

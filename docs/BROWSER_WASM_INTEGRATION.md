@@ -1008,3 +1008,21 @@ and all other widths and top-shell count fixed; only changes in genuine G0/G1
 toolpaths count as acceptance, not metadata changes. This limited development
 proof is not desktop G-code parity, full 3MF support, print safety, or a public
 Pages WASM deployment. The official JSON stays in CI only.
+
+
+## 2026-11-17: pinned internal solid infill width in localhost WASM diagnostics
+
+The restricted localhost process profile resolver and override parser now
+accept `internal_solid_infill_line_width` independently of general, wall,
+sparse infill and top-surface widths. The pinned official OrcaSlicer v2.5.0
+Creality CR-10 0.20mm Standard chain sets it to 0.45mm in the common base,
+0.4mm in the Creality common ancestor and 0.45mm in the CR-10 child. The bridge
+permits only bounded 0.1–2.0mm absolute single-nozzle values; percentage,
+multi-tool, invalid and missing values are never guessed. Unit tests cover
+inheritance, overrides and invalid inputs. The isolated Chrome/WASM regression
+holds other widths, infill density and shell counts constant and requires
+changed actual G0/G1 motion when this one width changes from 0.32mm to 0.72mm.
+Only a passing corresponding Chrome CI run establishes this last behavior.
+
+This does not establish native-vs-WASM G-code parity or a print-ready machine
+profile. No WASM engine, licensing resources or public Pages integration changes.

@@ -119,3 +119,18 @@ for(const bad of ["105%",0,2.01,["0.42"],["0.42","0.5"],"auto",null,-0.1]){
     /Invalid|outside the safe test range/);
 }
 console.log("PASS: independent absolute top_surface_line_width and fail-closed malformed values");
+
+// Internal solid infill width is a separate native setting; do not map it to
+// sparse infill or to generic line_width, even when the values happen to match.
+assert.deepEqual(parseTestProcessOverrides({
+  line_width:"0.42",sparse_infill_line_width:"0.4",
+  top_surface_line_width:"0.42",internal_solid_infill_line_width:"0.45"
+}),{
+  line_width:"0.42",sparse_infill_line_width:"0.4",
+  top_surface_line_width:"0.42",internal_solid_infill_line_width:"0.45"
+});
+for(const bad of ["105%",0,2.01,["0.45"],["0.45","0.5"],"auto",null,-0.1]){
+  assert.throws(()=>parseTestProcessOverrides({internal_solid_infill_line_width:bad}),
+    /Invalid|outside the safe test range/);
+}
+console.log("PASS: internal solid infill width remains independent and rejects relative/vector formats");

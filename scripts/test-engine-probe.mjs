@@ -690,6 +690,30 @@ try {
     await uploadRawOrca();
     console.log('PASS: top_surface_line_width 0.32 -> 0.72 changes real isolated WASM G-code');
 
+    // Pin independent widths and solid-shell counts; vary only the pinned
+    // CR-10 internal solid infill width, and inspect G0/G1 motion rather than
+    // relying on metadata, G-code comments or hash changes.
+    rawOrca[4].line_width='0.42';
+    rawOrca[4].outer_wall_line_width='0.42';
+    rawOrca[4].inner_wall_line_width='0.45';
+    rawOrca[4].sparse_infill_line_width='0.45';
+    rawOrca[4].top_surface_line_width='0.42';
+    rawOrca[4].sparse_infill_density='25%';
+    rawOrca[4].top_shell_layers='5';
+    rawOrca[4].bottom_shell_layers='4';
+    const narrowSolidMotion=motionOnly(await sliceWithLineWidth('0.32','internal_solid_infill_line_width'));
+    const broadSolidMotion=motionOnly(await sliceWithLineWidth('0.72','internal_solid_infill_line_width'));
+    assert.ok(narrowSolidMotion.length>100&&broadSolidMotion.length>100,
+      'Internal-solid width probe needs substantive real motion');
+    assert.notDeepEqual(narrowSolidMotion,broadSolidMotion,
+      'Changing only internal_solid_infill_line_width must alter WASM G-code motion');
+    for(const key of ['internal_solid_infill_line_width','bottom_shell_layers',
+      'top_shell_layers','sparse_infill_density','top_surface_line_width',
+      'sparse_infill_line_width','inner_wall_line_width','outer_wall_line_width',
+      'line_width'])delete rawOrca[4][key];
+    await uploadRawOrca();
+    console.log('PASS: internal_solid_infill_line_width 0.32 -> 0.72 changes real isolated WASM G-code');
+
     // Test the deliberately opt-in plate mapping through the *real* engine.
     // Default profile used 55C. Inherited upstream-style hot_plate_temp=65C
     // should be passed into session.init only after selecting the hot plate.
