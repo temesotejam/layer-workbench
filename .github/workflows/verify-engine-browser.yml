@@ -30,6 +30,8 @@ on:
       - "scripts/test-gap-ring-fixture.mjs"
       - "scripts/bridge-arch-fixture.mjs"
       - "scripts/test-bridge-arch-fixture.mjs"
+      - "scripts/support-sphere-fixture.mjs"
+      - "scripts/test-support-sphere-fixture.mjs"
       - "scripts/bridge-feature-diagnostic.mjs"
       - "scripts/test-bridge-feature-diagnostic.mjs"
       - "scripts/support-feature-diagnostic.mjs"
@@ -77,6 +79,8 @@ on:
       - "scripts/test-gap-ring-fixture.mjs"
       - "scripts/bridge-arch-fixture.mjs"
       - "scripts/test-bridge-arch-fixture.mjs"
+      - "scripts/support-sphere-fixture.mjs"
+      - "scripts/test-support-sphere-fixture.mjs"
       - "scripts/bridge-feature-diagnostic.mjs"
       - "scripts/test-bridge-feature-diagnostic.mjs"
       - "scripts/support-feature-diagnostic.mjs"
@@ -139,6 +143,7 @@ jobs:
           node scripts/test-gcode-speed-colors.mjs
           node scripts/test-gap-ring-fixture.mjs
           node scripts/test-bridge-arch-fixture.mjs
+          node scripts/test-support-sphere-fixture.mjs
           node scripts/test-bridge-feature-diagnostic.mjs
           node scripts/test-support-feature-diagnostic.mjs
           node scripts/test-3mf-viewport-items.mjs
