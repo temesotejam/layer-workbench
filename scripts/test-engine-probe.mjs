@@ -1303,12 +1303,18 @@ try {
         const feature=String(segment.feature||'(unlabelled)').toLowerCase();
         byFeature[feature]=(byFeature[feature]||0)+1;
       }
-      const comments=text.split(/\\r?\\n/).filter(line=>
-        /^\\s*;\\s*(?:TYPE|FEATURE)\\s*:/i.test(line));
+      const lines=text.split(/\r?\n/);
+      const comments=lines.filter(line=>
+        /^\s*;\s*(?:TYPE|FEATURE)\s*:/i.test(line));
+      const motion=lines.map(line=>line.split(';')[0].trim())
+        .filter(line=>/^G(?:0|1|2|3)(?:\s|$)/i.test(line))
+        .map(line=>line.replace(/\s+/g,' '));
       return {
         sha256:createHash('sha256').update(text).digest('hex'),
         utf8_bytes:Buffer.byteLength(text),
         extrusion_segments:parsed.extrusions,
+        gcode_motion_commands:motion.length,
+        gcode_motion_sha256:createHash('sha256').update(motion.join(String.fromCharCode(10))).digest('hex'),
         parsed_positive_e_features:Object.fromEntries(
           Object.entries(byFeature).sort((a,b)=>b[1]-a[1]).slice(0,24)),
         tagged_comment_count:comments.length,
