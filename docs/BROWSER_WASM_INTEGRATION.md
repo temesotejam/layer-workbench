@@ -1318,3 +1318,44 @@ when changed separately, not that unrelated features never change.
 It does not establish desktop native parity, cross-printer profile parity,
 safe printable G-code, or public Pages WASM availability. No candidate is
 enabled on the public website.
+
+
+### 2026-11-18: support-line-width actual filament-E gate (isolated Chrome)
+
+The source-pinned v2.5.0 local bridge already accepts bounded absolute
+support_line_width, but accepting a profile is not evidence of deposition.
+The existing support-on 20 mm sphere probe now runs two additional slices with
+**only** support_line_width differing (0.32 vs 0.72 mm). A new read-only
+support diagnostic follows M82/M83, G90/G91, G92 E, and G20/G21
+while classifying exact Support / Support interface feature tags. It
+counts genuine positive-filament-E G1 XY deposition, rejects ambiguous motion,
+and independently reports support-body and interface filament-feed lengths,
+XY lengths, and deposited segment counts. Header-only, travel, pure priming,
+spoofed feature comments, or changed F-values cannot pass the material gate.
+
+The isolated Chrome gate requires a **measured difference in support-body
+filament feed** between the two otherwise identical slices. Its JSON summary
+is archived under sphere-support-width-filament-diagnostic.json; it does
+not store executable G-code. Synthetic unit tests cover
+absolute/relative extrusion, G92 resets, unit conversion, disallowed commands,
+and exact feature attribution. This experiment does *not* claim a linear
+width-to-volume relationship: E is commanded filament length, not material
+volume, and support path topology itself can change with configured width.
+If the actual WASM run does not confirm a material effect, leave the PR
+unmerged and investigate rather than relax the assertion. Desktop native
+parity, physical print safety, and public Pages WASM activation remain unverified.
+
+
+The isolated Chrome run
+[#44198131705](https://github.com/temesotejam/layer-workbench/actions/runs/44198131705)
+**PASSED** the new material gate and all Node diagnostic unit tests.
+For 0.32 mm support width, the support-body role contained 1,547 positive-E
+XY segments, 5,380.227929 mm XY length, and 142.44848 mm commanded filament E.
+For 0.72 mm support width, body contained 1,048 segments, 3,367.740516 mm
+XY length, and 227.28496 mm filament E (difference +84.83648 mm).
+The support interface also changed (587 -> 419 segments; 30.2157 ->
+49.51905 mm filament E). Because XY path topology and lengths changed,
+this is **not** a fixed-path extrusion ratio or proof that rendered line
+width matches the nominal setting. It does confirm the width setting
+affects real support-tagged deposited G1 XY commands, not only headers.
+Public Pages still does not load the WASM candidate.
