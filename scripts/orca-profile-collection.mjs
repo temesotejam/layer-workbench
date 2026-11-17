@@ -11,6 +11,9 @@ const SPECS={
     // Source-pinned CR-10 v2.5.0 process uses an absolute 0.42 mm width.
     // Relative percentage widths remain unsupported in this test adapter.
     line_width:[0.1,2],
+    // The pinned CR-10 0.20mm child independently uses 0.5mm on layer one.
+    // Accept only absolute width (mm), not native percentage expressions.
+    initial_layer_line_width:[0.1,2],
     // v2.5.0 Creality CR-10 0.20mm specifies 0.42 mm outer walls.
     // Only a bounded absolute width; percentage and vector forms fail closed.
     outer_wall_line_width:[0.1,2],

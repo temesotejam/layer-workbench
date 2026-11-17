@@ -503,3 +503,29 @@ for(const bad of ['105%',0,'2.01',['0.45','0.5'],null,'auto']){
 }
 assert.equal(result.process.settings.internal_solid_infill_line_width,undefined);
 console.log('PASS: internal-solid width inheritance and child override, one-nozzle normalization and fail-closed bounds');
+
+// Native initial-layer width is a separate process field and must honor
+// parent/child precedence instead of inheriting generic line_width.
+const firstWidthRecords=profiles.map(rec=>rec.name==='fdm_process_common'
+  ? {...rec,line_width:'0.42',initial_layer_line_width:'0.42'}:
+  rec.name==='0.16mm Fine @TestPrinter'
+    ? {...rec,initial_layer_line_width:'0.5'}:rec);
+const firstWidth=resolve(firstWidthRecords,selection).process;
+assert.equal(firstWidth.settings.initial_layer_line_width,'0.5');
+assert.equal(firstWidth.settings.line_width,'0.42');
+assert.ok(!firstWidth.unsupported.includes('initial_layer_line_width'));
+const firstInherited=firstWidthRecords.map(rec=>{
+  if(rec.name!=='0.16mm Fine @TestPrinter')return rec;
+  const child={...rec};delete child.initial_layer_line_width;return child;
+});
+assert.equal(resolve(firstInherited,selection).process.settings.initial_layer_line_width,'0.42');
+assert.equal(resolve(firstWidthRecords.map(rec=>rec.name==='0.16mm Fine @TestPrinter'
+  ? {...rec,initial_layer_line_width:['0.5']}:rec),selection)
+  .process.settings.initial_layer_line_width,'0.5');
+for(const bad of ['110%',0,'2.01',['0.5','0.6'],null,'auto']){
+  assert.throws(()=>resolve(firstWidthRecords.map(rec=>rec.name==='0.16mm Fine @TestPrinter'
+    ? {...rec,initial_layer_line_width:bad}:rec),selection),
+    /Invalid|Multi-extruder|test limits/);
+}
+assert.equal(result.process.settings.initial_layer_line_width,undefined);
+console.log('PASS: pinned first-layer width inherits independently, normalizes one slot and rejects invalid formats');

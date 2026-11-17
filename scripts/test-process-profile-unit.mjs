@@ -134,3 +134,14 @@ for(const bad of ["105%",0,2.01,["0.45"],["0.45","0.5"],"auto",null,-0.1]){
     /Invalid|outside the safe test range/);
 }
 console.log("PASS: internal solid infill width remains independent and rejects relative/vector formats");
+
+// First layer has a separate native extrusion width. Never silently alias
+// it to the generic line width or to the first-layer height.
+assert.deepEqual(parseTestProcessOverrides({
+  line_width:"0.42",initial_layer_print_height:"0.2",initial_layer_line_width:"0.5"
+}),{line_width:"0.42",initial_layer_print_height:"0.2",initial_layer_line_width:"0.5"});
+for(const bad of ["110%",0,2.01,["0.5"],["0.5","0.6"],"auto",null,-0.1]){
+  assert.throws(()=>parseTestProcessOverrides({initial_layer_line_width:bad}),
+    /Invalid|outside the safe test range/);
+}
+console.log("PASS: independent initial-layer line width is bounded and fails closed");
