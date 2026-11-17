@@ -452,3 +452,25 @@ for(const bad of ["Grid","gyroid","",["grid"],null,0]){
 }
 console.log("PASS: source-pinned crosshatch -> grid infill-pattern inheritance and strict enums");
 console.log("PASS: inherited native process wall-generator and gap-fill enums reach restricted adapter; invalid forms rejected");
+
+const topWidthRecords=profiles.map(rec=>rec.name==='fdm_process_common'
+  ? {...rec,line_width:'0.45',top_surface_line_width:'0.4'} :
+  rec.name==='0.16mm Fine @TestPrinter' ? {...rec,top_surface_line_width:'0.42'}:rec);
+const topWidth=resolve(topWidthRecords,selection).process;
+assert.equal(topWidth.settings.top_surface_line_width,'0.42');
+assert.equal(topWidth.settings.line_width,'0.45');
+assert.ok(!topWidth.unsupported.includes('top_surface_line_width'));
+const topInherited=topWidthRecords.map(rec=>{
+  if(rec.name!=='0.16mm Fine @TestPrinter')return rec;
+  const copy={...rec};delete copy.top_surface_line_width;return copy;
+});
+assert.equal(resolve(topInherited,selection).process.settings.top_surface_line_width,'0.4');
+assert.equal(resolve(topWidthRecords.map(rec=>rec.name==='0.16mm Fine @TestPrinter'
+  ? {...rec,top_surface_line_width:['0.42']}:rec),selection).process.settings.top_surface_line_width,'0.42');
+for(const bad of ['105%',0,'2.01',['0.42','0.5'],null,'auto']){
+  assert.throws(()=>resolve(topWidthRecords.map(rec=>rec.name==='0.16mm Fine @TestPrinter'
+    ? {...rec,top_surface_line_width:bad}:rec),selection),
+    /Invalid|Multi-extruder|test limits/);
+}
+assert.equal(result.process.settings.top_surface_line_width,undefined);
+console.log('PASS: top-surface width inheritance, independent override and safety bounds');

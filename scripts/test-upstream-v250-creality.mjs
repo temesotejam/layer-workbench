@@ -44,6 +44,11 @@ assert.equal(process.settings.sparse_infill_line_width,"0.45",
   "Official CR-10 0.20mm preset independently uses 0.45 mm sparse infill");
 assert.ok(!process.unsupported.includes("sparse_infill_line_width"),
   "Native sparse-infill width must not be silently dropped");
+assert.equal(indexed.records.find(p=>p.name==="fdm_process_common").top_surface_line_width,"0.4");
+assert.equal(indexed.records.find(p=>p.name==="fdm_process_creality_common").top_surface_line_width,"0.4");
+assert.equal(process.settings.top_surface_line_width,"0.42",
+  "Pinned CR-10 0.20mm child must override top-surface width to 0.42 mm");
+assert.ok(!process.unsupported.includes("top_surface_line_width"));
 assert.equal(indexed.records.find(p=>p.name==="fdm_process_common").sparse_infill_pattern,"crosshatch",
   "Source-pinned Creality ancestor must define exact native crosshatch token");
 assert.equal(process.settings.sparse_infill_pattern,"grid",

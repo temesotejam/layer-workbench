@@ -111,3 +111,11 @@ for(const bad of ["Grid","gyroid","rectilinear","",["grid"],null,1,"__proto__"])
 }
 console.log("PASS: exact pinned grid/crosshatch infill tokens accepted; unverified pattern values refused");
 console.log("PASS: exact classic/arachne and everywhere/topbottom/nowhere native process enums; malformed values fail closed");
+
+assert.deepEqual(parseTestProcessOverrides({line_width:"0.5",top_surface_line_width:"0.42"}),
+  {line_width:"0.5",top_surface_line_width:"0.42"});
+for(const bad of ["105%",0,2.01,["0.42"],["0.42","0.5"],"auto",null,-0.1]){
+  assert.throws(()=>parseTestProcessOverrides({top_surface_line_width:bad}),
+    /Invalid|outside the safe test range/);
+}
+console.log("PASS: independent absolute top_surface_line_width and fail-closed malformed values");

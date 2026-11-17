@@ -20,6 +20,8 @@ const SPECS={
     inner_wall_line_width:[0.1,2],
     // Source-pinned v2.5.0 common and CR-10 0.20mm process use 0.45 mm.
     // Restrict to absolute single-nozzle widths; percentages fail closed.
+    // Pinned CR-10 top surfaces independently use 0.42mm, absolute only.
+    top_surface_line_width:[0.1,2],
     sparse_infill_line_width:[0.1,2],
     wall_loops:[1,8],sparse_infill_density:[0,100],
     top_shell_layers:[0,12],bottom_shell_layers:[0,12],

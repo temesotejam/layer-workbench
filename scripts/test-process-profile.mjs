@@ -17,6 +17,8 @@ const LIMITS = {
   inner_wall_line_width: [0.1,2],
   // Independently carry the native sparse-infill width in absolute mm only.
   // The pinned CR-10 0.20mm process uses 0.45 mm; no relative widths.
+  // Independent absolute top-surface width for the localhost WASM proof.
+  top_surface_line_width: [0.1,2],
   sparse_infill_line_width: [0.1,2],
   wall_loops: [1,8],
   sparse_infill_density: [0,100],

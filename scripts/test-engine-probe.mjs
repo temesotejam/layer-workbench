@@ -672,6 +672,24 @@ try {
     await uploadRawOrca();
     console.log('PASS: sparse_infill_line_width 0.32 -> 0.72 changes real isolated WASM G-code');
 
+    // Pinned v2.5.0 CR-10 top-surface width must affect actual G0/G1 motion.
+    // Hold every other width and top-shell count constant during comparison.
+    rawOrca[4].line_width='0.42';
+    rawOrca[4].outer_wall_line_width='0.42';
+    rawOrca[4].inner_wall_line_width='0.45';
+    rawOrca[4].sparse_infill_line_width='0.45';
+    rawOrca[4].top_shell_layers='5';
+    const narrowTopMotion=motionOnly(await sliceWithLineWidth('0.32','top_surface_line_width'));
+    const broadTopMotion=motionOnly(await sliceWithLineWidth('0.72','top_surface_line_width'));
+    assert.ok(narrowTopMotion.length>100&&broadTopMotion.length>100,
+      'Top-surface width probe needs substantive motion commands');
+    assert.notDeepEqual(narrowTopMotion,broadTopMotion,
+      'Changing only top_surface_line_width must change real WASM motion');
+    for(const key of ['top_surface_line_width','top_shell_layers','sparse_infill_line_width',
+      'inner_wall_line_width','outer_wall_line_width','line_width'])delete rawOrca[4][key];
+    await uploadRawOrca();
+    console.log('PASS: top_surface_line_width 0.32 -> 0.72 changes real isolated WASM G-code');
+
     // Test the deliberately opt-in plate mapping through the *real* engine.
     // Default profile used 55C. Inherited upstream-style hot_plate_temp=65C
     // should be passed into session.init only after selecting the hot plate.

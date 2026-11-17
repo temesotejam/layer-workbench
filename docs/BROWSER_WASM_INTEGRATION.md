@@ -990,3 +990,21 @@ The functional claim remains contingent on that browser test passing.
 Neither the test fixture nor this one-key bridge establishes same-full-profile
 native-vs-WASM G-code parity, multi-tool behavior, print safety or permission
 to enable the public Pages WASM slicer.
+
+## 2026-11-17: source-pinned top-surface line width in isolated WASM
+
+The official OrcaSlicer v2.5.0 commit
+`40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19` defines
+`top_surface_line_width: "0.4"` in both common process ancestors;
+the CR-10 0.20mm Standard child overrides it to `0.42` mm.
+The restricted localhost resolver now inherits this native key separately
+from general, wall and sparse-infill widths. Only bounded absolute
+0.1–2.0 mm values are permitted; relative percentages, ambiguous
+multi-extruder arrays and fabricated missing defaults are rejected.
+
+Source-pinned profile CI checks the real ancestor/child values. Isolated Chrome
+CI slices the same two-STL fixture with 0.32 and 0.72 mm top-surface width
+and all other widths and top-shell count fixed; only changes in genuine G0/G1
+toolpaths count as acceptance, not metadata changes. This limited development
+proof is not desktop G-code parity, full 3MF support, print safety, or a public
+Pages WASM deployment. The official JSON stays in CI only.
