@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import {createHash} from "node:crypto";
 import {makeParityCubeStl, PARITY_CUBE_STL_SHA256} from "./parity-cube-fixture.mjs";
+import {makeMultiStlProject} from "./multi-stl.mjs";
+import {makeSingleStlManifest} from "./slice-stl.mjs";
 
 const cube = makeParityCubeStl();
 assert.equal(cube.byteLength, 684);
@@ -35,4 +37,12 @@ assert.ok([...edges.values()].every(n => n === 2),
 const separate = makeParityCubeStl();
 separate[0] = 255;
 assert.equal(cube[0], 0, "Each consumer must get an independent byte buffer");
+// The browser's real slicing bridge currently constructs this exact native
+// placement for an untransformed, directly selected 20 mm cube STL.
+// Match the independent Core 3MF native CLI diagnostic's build translation.
+// This is an input-manifest invariant, NOT a claim that both slicers preserve it.
+const expectedTransform=[1,0,0,128, 0,1,0,128, 0,0,1,0, 0,0,0,1];
+assert.deepEqual(makeSingleStlManifest(cube).instances[0].transform.matrix,expectedTransform);
+assert.deepEqual(makeMultiStlProject([{bytes:cube}]).manifest.instances[0].transform.matrix,expectedTransform);
+console.log("PASS: isolated WASM cube input manifest specifies 128,128,0 placement");
 console.log("PASS: native/Chrome cube fixture is byte-pinned, manifold, 20 mm per side");
