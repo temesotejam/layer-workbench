@@ -155,3 +155,12 @@ for(const bad of ['50%',0,801,['15'],['15','20'],'auto',null,-1]){
     /Invalid|outside the safe test range/);
 }
 console.log('PASS: independent source-pinned first-layer speed is bounded and rejects relative/vector formats');
+
+// First-layer infill speed must be independent of first-layer perimeters.
+assert.deepEqual(parseTestProcessOverrides({initial_layer_speed:'15',initial_layer_infill_speed:'20'}),
+  {initial_layer_speed:'15',initial_layer_infill_speed:'20'});
+for(const bad of ['50%',0,801,['20'],['20','30'],'auto',null,-1]){
+  assert.throws(()=>parseTestProcessOverrides({initial_layer_infill_speed:bad}),
+    /Invalid|outside the safe test range/);
+}
+console.log('PASS: bounded independent first-layer infill speed refuses relative and vector inputs');

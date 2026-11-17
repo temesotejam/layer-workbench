@@ -47,6 +47,9 @@ const LIMITS = {
   // Pinned v2.5.0 Creality first-layer print speed: 15 mm/s absolute.
   // This is independent of first-layer infill and travel speed.
   initial_layer_speed: [1,800],
+  // Source-pinned CR-10 first-layer infill is 20 mm/s, not the
+  // first-layer perimeter speed. No relative percentages or vectors.
+  initial_layer_infill_speed: [1,800],
 };
 const INTEGERS = new Set(["wall_loops","top_shell_layers","bottom_shell_layers"]);
 // Exact native v2.5.0 process enum tokens; do not accept labels, numeric

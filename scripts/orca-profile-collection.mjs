@@ -45,7 +45,11 @@ const SPECS={
     bridge_speed:[1,800],
     // Source-pinned CR-10 v2.5.0 first-layer perimeter speed is 15 mm/s.
     // Percentages, relative expressions and multiple nozzle values fail closed.
-    initial_layer_speed:[1,800]},
+    initial_layer_speed:[1,800],
+    // CR-10 0.20mm Standard specifies its first-layer INFILL speed as
+    // 20 mm/s, distinct from the first-layer perimeter 15 mm/s.
+    // Bounded absolute scalar only; no % or multi-nozzle inference.
+    initial_layer_infill_speed:[1,800]},
 };
 const INTEGERS=new Set(['wall_loops','top_shell_layers','bottom_shell_layers']);
 // Pinned native process enums; the limited adapter retains exact wire values.
