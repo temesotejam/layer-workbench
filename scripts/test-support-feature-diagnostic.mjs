@@ -38,6 +38,32 @@ assert.deepEqual(observedAudit.roles.body.feedrates_mm_min,[1800]);
 assert.deepEqual(observedAudit.roles.interface.feedrates_mm_min,[900]);
 console.log("PASS: observed real WASM Support / Support interface tags map to exact roles");
 
+// Independent positive-E XY speed diagnostics using the exact observed
+// Chrome emission aliases. Changing one role's F must not masquerade as a
+// change in the other role, even when both support roles are present.
+const observedBodySlow=parse([
+  ";TYPE:Support","G1 X10 Y0 E1 F180",
+  ";TYPE:Support interface","G1 X20 Y0 E2 F900",
+].join("\n"));
+const observedInterfaceSlow=parse([
+  ";TYPE:Support","G1 X10 Y0 E1 F1800",
+  ";TYPE:Support interface","G1 X20 Y0 E2 F180",
+].join("\n"));
+assert.equal(
+  auditSupportSpeedEffect(observed,observedBodySlow,"body",180).result,
+  "observed_tagged_support_feedrate_effect");
+assert.equal(
+  auditSupportSpeedEffect(observed,observedBodySlow,"interface",180).target_feedrate_observed,
+  false);
+assert.equal(
+  auditSupportSpeedEffect(observed,observedInterfaceSlow,"interface",180).result,
+  "observed_tagged_support_feedrate_effect");
+assert.equal(
+  auditSupportSpeedEffect(observed,observedInterfaceSlow,"body",180).target_feedrate_observed,
+  false);
+console.log("PASS: exact observed support labels independently attribute F180 to body vs interface");
+
+
 
 const ignored=parse([
   "; support material interface","G1 X10 Y0 E1 F120",

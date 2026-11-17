@@ -1279,3 +1279,42 @@ substring matches) and the OFF control must remain free of support deposition.
 Only a subsequent **passing** isolated Chrome test can close the PR #73
 acceptance gate; no desktop native parity or print approval follows from
 this bounded sphere test. GitHub Pages remains untouched.
+
+### 2026-11-18: role-specific support speed deposition gate (isolated Chrome PASS)
+
+The previous localhost-only, COOP/COEP Chrome probe established actual
+support body and interface XY deposition from a 20 mm sphere when native
+`enable_support:"1"` and a fixed 70-degree diagnostic threshold are set.
+That alone does **not** show that the `support_speed` and
+`support_interface_speed` settings change emitted G-code independently.
+
+This opt-in follow-up compares the same sphere, engine artifact, support
+enablement, support width, threshold, and all other process overrides.
+It makes separate experimental slices with **only** `support_speed:3`
+or **only** `support_interface_speed:3`, against the common 30 mm/s
+baseline. The test uses `auditSupportSpeedEffect` to require positive-E
+XY deposition tagged with the *correct role*, a new F180 (3 mm/s)
+in that role, and stable role-specific gross path length and XYZ bounds
+within 0.01 mm. It stores read-only summary statistics rather than raw
+printer-ready G-code in `parity-output/sphere-support-role-speed-diagnostic.json`.
+The independently observed `Support` / `Support interface` G-code tags
+also have dedicated role-isolation unit tests.
+
+The actual pinned v2.5.0 isolated-Chrome run
+[#44187421608](https://github.com/temesotejam/layer-workbench/actions/runs/44187421608)
+**PASSED** both strict role-specific speed checks. The body role has 1,489
+deposited XY segments and unchanged 5225.274109 mm length; changing only
+`support_speed` from 30 to 3 mm/s added tagged F180. The interface
+role has 586 deposited XY segments and unchanged 1063.548691 mm length;
+changing only `support_interface_speed` from 30 to 3 mm/s likewise
+added tagged F180. Per-role XYZ bounds are unchanged in both comparisons.
+The independent unit test of exact browser-emitted role aliases also
+passed. The original 30 mm/s baseline emits lower nominal feedrates
+(1124.8, 1310.22, 1591.18 mm/min), so equality with F1800 is **not**
+assumed; speed limits and cooling may affect real toolpaths.
+
+This proves only a bounded G-code feedrate effect on each addressed role
+when changed separately, not that unrelated features never change.
+It does not establish desktop native parity, cross-printer profile parity,
+safe printable G-code, or public Pages WASM availability. No candidate is
+enabled on the public website.
