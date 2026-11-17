@@ -72,6 +72,20 @@ for (const bad of ["105%",0,2.01,["0.45"],["0.45","0.5"],"auto",null,-0.1]) {
     /Invalid|outside the safe test range/);
 }
 console.log("PASS: bounded native inner_wall_line_width is independent and rejects relative/vector forms");
+// Sparse infill is a separate native extrusion-width setting, not an alias
+// for wall or general width. Keep the localhost bridge fail-closed.
+assert.deepEqual(parseTestProcessOverrides({
+  line_width:"0.42",outer_wall_line_width:"0.42",
+  inner_wall_line_width:"0.45",sparse_infill_line_width:"0.45"
+}),{
+  line_width:"0.42",outer_wall_line_width:"0.42",
+  inner_wall_line_width:"0.45",sparse_infill_line_width:"0.45"
+});
+for(const bad of ["105%",0,2.01,["0.45"],["0.45","0.5"],"auto",null,-0.1]){
+  assert.throws(()=>parseTestProcessOverrides({sparse_infill_line_width:bad}),
+    /Invalid|outside the safe test range/);
+}
+console.log("PASS: sparse infill width is independently bounded and rejects relative/vector forms");
 console.log('PASS: bounded initial-layer height (mm), no percentages or multi-nozzle vectors');
 console.log('PASS: bounded absolute mm/s test process speeds; percentages and multi-nozzle values rejected');
 console.log('PASS: bounded test process overrides and invalid preset rejection');

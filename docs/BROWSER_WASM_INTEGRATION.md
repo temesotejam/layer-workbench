@@ -970,3 +970,23 @@ commands. A functional PASS is claimed only if that Chrome gate passes.
 This bounded addition does not prove native desktop/WASM full-profile
 G-code parity, correct multi-extruder assignment, physical print quality,
 or safe printable output. No WASM engine is activated on public Pages.
+
+## 2026-11-17: source-pinned sparse-infill extrusion width (localhost only)
+
+Pinned upstream OrcaSlicer v2.5.0 commit
+`40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19` defines
+`sparse_infill_line_width: "0.45"` in the common Creality process,
+its Creality intermediate preset and the CR-10 0.20mm Standard process.
+The restricted profile resolver preserves the independently inherited key;
+the localhost WASM test adapter accepts only **absolute 0.1–2.0 mm**.
+Percentage expressions, ambiguous values and multi-nozzle vectors fail
+closed. Missing values are not guessed from `line_width` or wall widths.
+
+Pinned-profile CI verifies the exact upstream value. An isolated Chrome
+regression holds general/inner/outer wall widths and sparse infill density
+fixed while changing only sparse-infill width from 0.32 to 0.72 mm; it
+requires actual G0/G1 motion differences, not just JSON or G-code headers.
+The functional claim remains contingent on that browser test passing.
+Neither the test fixture nor this one-key bridge establishes same-full-profile
+native-vs-WASM G-code parity, multi-tool behavior, print safety or permission
+to enable the public Pages WASM slicer.
