@@ -1137,3 +1137,145 @@ and does not demonstrate the effect of support speed or width. The next
 acceptance step remains a bounded, explicit localhost-only support-enabled
 overhang fixture with verified role-tagged toolpaths, tested without changing
 the public Pages environment. Never use diagnostic G-code on hardware.
+
+## 2026-11-18: isolated overhang support-generation positive gate (pending CI)
+
+The localhost-only `?engineLab=1` diagnostic accepts the exact OrcaSlicer
+v2.5.0 native `enable_support` tokens `"0"` or `"1"` **only when an explicit
+local process JSON is supplied**. Unknown, numeric, boolean, relative and
+multi-tool representations fail closed. The process panel is restricted to
+cross-origin isolated localhost, and the public Pages application continues
+to ship without the WASM candidate or this opt-in engine lab.
+
+The isolated Chrome probe reuses the existing watertight 40 × 20 × 15 mm
+unsupported tunnel arch (16 mm horizontal opening), holding the mesh,
+wall/gap/bridge settings, and three bounded support widths/speeds constant.
+It slices once with `enable_support:"0"` and once with `"1"`, archives the
+actual per-role positive-E XY deposition evidence to
+`parity-output/bridge-arch-support-on-feature-diagnostic.json`, and requires
+no labelled body/interface deposition in the disabled control but actual
+body/interface deposition in the enabled case. A support flag, config
+comment, bridge-only path or successful slicing is **not** acceptance.
+
+**Status:** code and test are staged; functional support generation is NOT
+claimed until the isolated-Chrome workflow passes on the exact branch SHA.
+Even a green gate proves only a bounded test overhang and one archived
+WASM artifact. Full native-vs-WASM profile/G-code equivalence, real printer
+support behavior, usable 3MF/STEP projects, and print safety remain unverified.
+No output should be sent to a printer.
+
+### API 0.7.0 support-toggle routing correction (first Chrome failure)
+
+The first isolated Chrome run ([#44162923061](https://github.com/temesotejam/layer-workbench/actions/runs/44162923061))
+completed all prior smoke probes but produced **zero** support-labelled deposited
+segments with both `enable_support:"0"` and `"1"`; the new positive acceptance
+assertion failed, as intended. This cannot be reported as generated support.
+
+The pinned OrcaWasm modifier smoke (`scripts/patch-orcawasm-support-smoke.py`)
+provides more precise API evidence: the engine consumes numeric
+`support_enable: 1` via `session.init`. Passing the official process name
+`enable_support` only into `orca.native-json` did not activate support in that
+Chrome test. The restricted localhost adapter now explicitly translates
+validated `"0"`/`"1"` to numeric `support_enable` **at init only** and
+excludes the process key from `applyProfile`; all other supported process
+settings retain their previous behavior. Mock-session tests require these
+exact call paths, including no support enablement in the generic fallback.
+
+The positive overhang probe remains a FAIL until a new real Chrome run
+observes tagged support extrusion. Do not treat unit or source-profile
+PASS as evidence of support generation or native G-code parity.
+
+### 2026-11-18: sphere positive-gate follow-up to bridge-arch FAIL
+
+The tunnel arch produced **zero** tagged support deposition with both toggle
+values on Chrome run [#44164323045](https://github.com/temesotejam/layer-workbench/actions/runs/44164323045).
+This is a genuine FAIL for the attempted positive assertion, not proof that the
+engine ignores support. A bridge can be self-supported by its bridge extrusion.
+
+The next Chrome candidate uses the **source-pinned support-modifier smoke's**
+explicit `support_enable`, `support_type: normal(auto)`, and threshold of
+10 degrees, applied in `session.init` to both the disabled and enabled
+cases. It retains the arch output as an inconclusive control and adds a
+watertight lower-hemisphere sphere with a Z=0 point for a strict positive
+support-deposition gate. Both sphere slices share the same mesh and bounded
+process settings; only the numeric `support_enable` differs. The local-only
+diagnostic must show source-tagged positive-E XY support body/interface paths
+on the ON case and none on OFF, or CI must FAIL. No public WASM activation,
+full native parity, or print safety is claimed.
+
+### 2026-11-18: explicit native-json support state after sphere FAIL
+
+The next real isolated-Chrome run [#44165269422](https://github.com/temesotejam/layer-workbench/actions/runs/44165269422) still found **no tagged support deposition** on either arch or lower hemisphere, even with explicit init `support_enable:1`, `support_type:normal(auto)`, and threshold 10. This is a **FAIL**, not support equivalence.
+
+The pinned Hiosdra/OrcaWasm source `scripts/smoke-test.mjs` at `60a09e04f1990be39c8f6f35dffef1a2c9e224c4` also sets `support_enable:1` through `applyProfileOnce(..., 'orca.native-json')` in its selected Voron profile smoke. The restricted adapter now forwards the validated numeric support flag and fixed support strategy through **both** `session.init` and `orca.native-json` on the explicit local diagnostic, with identical fixed settings for on/off. The positive sphere audit remains a mandatory FAIL gate until actual tagged deposition is observed; there is no published engine or printer-safety claim.
+
+### 2026-11-18: support-toggle G-code effect classification (pending CI)
+
+The second real Chrome support enablement trial [#44165901370](https://github.com/temesotejam/layer-workbench/actions/runs/44165901370) still found **zero tagged support body/interface deposition** on the bridge and sphere with the same bounded native init plus native-json support settings. The positive gate correctly **FAILed**, so PR #73 must remain unmerged.
+
+A further strictly local read-only diagnostic now records the disabled and enabled sphere G-code SHA-256, byte lengths, positive-E feature-label histogram, and the count of tagged feature comments (including those mentioning support). This distinguishes truly unchanged generated paths from possible feature-label misclassification; no raw G-code is published. Until the Chrome gate observes actual support deposition, there is no supported positive claim or publishable feature.
+
+### 2026-11-18: v2.5.0 native option-name mismatch identified (needs Chrome re-test)
+
+A source-pinned investigation explains why the previous support ON/OFF
+G-code motion SHA-256 values were identical. OrcaSlicer
+[PrintConfig.cpp at 40ecc66f78ed](https://github.com/OrcaSlicer/OrcaSlicer/blob/40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19/src/libslic3r/PrintConfig.cpp)
+registers the **native key `enable_support`**, and its PrintConfig.hpp
+contains `ConfigOptionBool enable_support`. There is **no**
+`support_enable` option in that pinned native registry. However, the
+Hiosdra/OrcaWasm modifier smoke fixture uses `support_enable`; its bridge
+`oneslicer_init` catches unknown keys and silently skips them, while
+`oneslicer_apply_profile` explicitly skips keys absent from
+`print_config_def`. A successful call can therefore leave supports disabled.
+
+The local-only adapter now forwards the *validated string* `enable_support:
+"0"|"1"` under its exact native name to **both** init and native-json.
+Mock tests reject the erroneous alias and preserve disabled generic defaults.
+The source inspection identifies an ignored setting; **it does not yet prove
+that support material is generated**. The strict support-feature positive
+gate remains in force. Only a new real Chrome/WASM G-code result can resolve
+the PR #73 failure. Avoid reporting support parity or print readiness.
+
+### 2026-11-18: source-pinned threshold semantics and second positive gate
+
+Run [#44170252177](https://github.com/temesotejam/layer-workbench/actions/runs/44170252177)
+verified that correcting the native `enable_support` key still did **not**
+generate any support-labelled XY extrusion in the 20 mm sphere (both 6,641
+motion commands, motion SHA-256 identical). It therefore failed the **strict**
+support-deposition gate; no feature success was inferred.
+
+Official v2.5.0 `PrintConfig.cpp` defines `support_threshold_angle` as
+generating supports for overhangs whose slope is **below** the threshold.
+The prior test's 10° setting selects only a narrow slope region on a sphere
+and is not a valid general positive acceptance fixture. The next isolated
+Chrome probe explicitly sets 70° for **both** OFF and ON on the *same* sphere
+and arch, with all process settings held constant and the native
+`enable_support` toggle as the only changing key. This is diagnostic geometry,
+not a recommended support threshold for printing.
+
+The positive support body/interface G-code assertion is retained as a hard
+FAIL. Until a real isolated Chrome run proves that deposition, PR #73 stays
+unmerged and the public Pages app keeps the WASM engine disabled.
+
+### 2026-11-18: support geometry works; exact G-code tag alias found
+
+The 70° native `enable_support` sphere experiment in
+[Chrome #44170725864](https://github.com/temesotejam/layer-workbench/actions/runs/44170725864)
+**generated distinct G-code motion**: 6,641 moves / 5,238 deposited preview
+segments with support OFF versus **9,330 moves / 7,298** deposited segments
+with support ON. It emitted **1,489** segments tagged exactly `support`
+and **586** tagged `support interface`, with 48 explicit support feature
+comments. This is convincing independent geometry evidence, **but the old
+positive test still failed** because its diagnostic recognized only the
+untransformed `support material` and `support material interface` strings
+from `GCode::extrude_support`, rather than the actual normalized browser
+G-code tags. Failures were not silently waived.
+
+The diagnostic now recognizes both **exact** observed emission tags
+(`support`, `support interface`) in addition to the pinned role-label
+strings, with explicit positive/negative unit fixtures. It continues to
+require genuine positive-E XY movements (no metadata-only, travel-only or
+substring matches) and the OFF control must remain free of support deposition.
+Only a subsequent **passing** isolated Chrome test can close the PR #73
+acceptance gate; no desktop native parity or print approval follows from
+this bounded sphere test. GitHub Pages remains untouched.

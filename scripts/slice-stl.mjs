@@ -183,13 +183,35 @@ export async function sliceMultiStlWithEngine(engine, items, onProgress, process
   // Validate before creating the native WASM session (fail closed).
   const effectiveProcess = resolveRestrictedProcessSettings(processOverrides, profileCollection);
   const base = makeRestrictedInitConfig(profileCollection);
+  // Pinned OrcaSlicer v2.5.0 PrintConfig.cpp and PrintConfig.hpp register
+  // `enable_support` (not `support_enable`). The pinned OrcaWasm smoke
+  // fixture used the latter spelling, but its bridge silently skips unknown
+  // keys in init and native-json. Keep the exact validated native key on
+  // BOTH paths. This remains an explicit isolated-localhost opt-in only.
+  const hasSupportToggle = effectiveProcess !== null &&
+    Object.hasOwn(effectiveProcess,"enable_support");
+  // Source-pinned OrcaSlicer v2.5.0 says supports are generated for
+  // overhang slopes BELOW this threshold. A previous 10-degree experiment
+  // selected almost no sphere surfaces. Use a conservative diagnostic 70
+  // degrees in BOTH sessions (not a machine/profile recommendation).
+  // enable_support remains the sole A/B difference.
+  const initConfig = hasSupportToggle
+    ? {...base,enable_support:effectiveProcess.enable_support,
+        support_type:"normal(auto)",support_threshold_angle:70} : base;
+  const appliedProcess = effectiveProcess===null ? null : {...effectiveProcess};
+  if (hasSupportToggle) {
+    // Preserve validated enable_support:"0"|"1" in native-json. Set exactly
+    // the same strategy and threshold in both OFF and ON test sessions.
+    appliedProcess.support_type="normal(auto)";
+    appliedProcess.support_threshold_angle=70;
+  }
   const session = await engine.createSession();
   try {
-    await session.init(encode(base));
-    if (effectiveProcess !== null) {
-      // Apply one validated effective process fragment, including any selected
-      // inherited settings and explicit overrides, before objects and slicing.
-      await session.applyProfile("orca.native-json", encode(effectiveProcess));
+    await session.init(encode(initConfig));
+    if (appliedProcess !== null && Object.keys(appliedProcess).length>0) {
+      // The support toggle is session-init only. All other bounded process
+      // keys still reach native-json once, before objects and slicing.
+      await session.applyProfile("orca.native-json", encode(appliedProcess));
     }
     const project = makeMultiStlProject(items);
     await session.setObjects(project.blob, project.manifest);

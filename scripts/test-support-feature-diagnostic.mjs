@@ -22,11 +22,31 @@ assert.equal(report.native_desktop_parity,false);
 assert.equal(report.printer_safe,false);
 console.log("PASS: exact v2.5.0 support body/interface/transition/ironing labels are independent");
 
+  
+// Real isolated Chrome run #44170725864 emits exact normalized "support"
+// and "support interface" feature tags rather than the literal GCode.cpp
+// role-label strings. Both are positive-E XY moves, never free-text comments.
+const observed=parse([
+  ";TYPE:Support","G1 X10 Y0 E1 F1800",
+  ";TYPE:Support interface","G1 X20 Y0 E2 F900",
+].join("\n"));
+const observedAudit=auditSupportDeposition(observed);
+assert.equal(observedAudit.result,"tagged_support_body_or_interface_observed");
+assert.equal(observedAudit.roles.body.extrusion_xy_segments,1);
+assert.equal(observedAudit.roles.interface.extrusion_xy_segments,1);
+assert.deepEqual(observedAudit.roles.body.feedrates_mm_min,[1800]);
+assert.deepEqual(observedAudit.roles.interface.feedrates_mm_min,[900]);
+console.log("PASS: observed real WASM Support / Support interface tags map to exact roles");
+
+
 const ignored=parse([
   "; support material interface","G1 X10 Y0 E1 F120",
   ";TYPE:Non-support material","G1 X20 Y0 E2",
   ";TYPE:constructor","G1 X25 Y0 E2.5",
   ";TYPE:Support material impostor","G1 X30 Y0 E3",
+  ";TYPE:Support impostor","G1 X31 Y0 E3.1",
+  ";TYPE:Unsupported","G1 X32 Y0 E3.2",
+  ";TYPE:Support interface extension","G1 X33 Y0 E3.3",
   ";TYPE:Support material","G0 X40 Y0 F120", // travel only
   "G1 E4 F120", // pure E prime
   "G1 Z0.5 E5", // vertical prime
