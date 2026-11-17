@@ -26,6 +26,32 @@ for(const material of [['PETG'],['ABS'],['PLA','PETG'],[],['pla'],['PLA '],'PLA'
 assert.equal(resolve(profiles.map(p=>p.name==='Generic PLA @TestPrinter'
   ? {...p,filament_type:['PLA']}:p),selection).filament.settings.filament_type,'PLA');
 assert.equal(result.process.settings.layer_height,'0.16');
+// Outer wall line width is an independent source-pinned native process key.
+// Exercise inherited base, child precedence and rejection of relative widths.
+const outerWidthProfiles=profiles.map(rec=>{
+  if(rec.name==='fdm_process_common')
+    return {...rec,line_width:'0.45',outer_wall_line_width:'0.4'};
+  if(rec.name==='0.16mm Fine @TestPrinter')
+    return {...rec,outer_wall_line_width:'0.42'};
+  return rec;
+});
+const outerResolved=resolve(outerWidthProfiles,selection);
+assert.equal(outerResolved.process.settings.line_width,'0.45');
+assert.equal(outerResolved.process.settings.outer_wall_line_width,'0.42');
+assert.ok(!outerResolved.process.unsupported.includes('outer_wall_line_width'));
+const outerInherited=resolve(outerWidthProfiles.map(rec=>{
+  if(rec.name!=='0.16mm Fine @TestPrinter')return rec;
+  const child={...rec};delete child.outer_wall_line_width;return child;
+}),selection);
+assert.equal(outerInherited.process.settings.outer_wall_line_width,'0.4');
+for(const bad of ['105%',0,'2.01',['0.42'],null,'auto']){
+  assert.throws(()=>resolve(outerWidthProfiles.map(rec=>
+    rec.name==='0.16mm Fine @TestPrinter'
+      ? {...rec,outer_wall_line_width:bad}:rec),selection),
+    /Invalid|Multi-extruder|test limits/);
+}
+assert.equal(result.process.settings.outer_wall_line_width,undefined);
+console.log('PASS: independent outer-wall width inheritance and bounds');
 assert.ok(result.machine.unsupported.includes('machine_start_gcode'));
 assert.throws(()=>resolve(profiles,{...selection,machine:'wrong printer'}),/Missing/);
 assert.throws(()=>resolve(profiles.map(p=>p.name==='Generic PLA @TestPrinter'?{...p,compatible_printers:['Other printer']}:p),selection),/not compatible/);
