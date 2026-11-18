@@ -1536,3 +1536,27 @@ pinned candidate's bounded role-specific response, **not** desktop-native
 G-code equivalence, arbitrary printer preset support, 3MF/UI parity,
 print safety or public-site WASM activation. No heavy engine rebuild
 is required for this profile-only change.
+
+## 2026-11-19: pinned v2.5.0 CR-10 infill direction (isolated Chrome gate)
+
+The official v2.5.0 Creality CR-10 0.20mm process and both of its
+ancestors explicitly set `infill_direction = "45"` degrees at
+source commit `40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19`.
+The restricted localhost-only bridge now permits an independent, finite
+0–360-degree native process angle. Numeric percentages, nonfinite values,
+unverified multi-extruder vectors, and inferred defaults are refused.
+
+The opt-in isolated Chrome probe keeps the two synthetic STL objects, 35%
+sparse infill and grid pattern fixed, and changes only `infill_direction`
+from 0 to 30 degrees. It requires **feature-tagged, positive-E, planar
+sparse-infill segments** from real WASM G-code with different binned XY
+angles. Metadata echoes, file hashes and travel-only paths do not count.
+It records only numerical counts at
+`parity-output/infill-direction-deposition.json`. If there are no
+credible infill segments, the test must FAIL rather than claim success.
+
+This adds one process key to the restricted profile bridge only when
+the pinned-profile and isolated-Chrome checks pass. It does **not**
+prove same-full-profile desktop G-code equivalence, full 3MF/UI parity,
+physical print safety or public GitHub Pages WASM activation. Neither the
+WASM engine binary nor vendor source profiles are changed/published.

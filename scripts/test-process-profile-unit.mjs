@@ -229,3 +229,13 @@ for(const bad of ['-1','301','20%','auto',['20'],null,Infinity,NaN])
   assert.throws(()=>parseTestProcessOverrides({skirt_speed:bad}),
     /Invalid|outside the safe test range/,'Rejected skirt_speed: '+String(bad));
 console.log('PASS: native skirt_speed absolute 0..300 mm/s; relative, vector and nonfinite rejected');
+
+// A native infill angle must remain independent of density and other speeds.
+assert.deepEqual(parseTestProcessOverrides({infill_direction:'45',sparse_infill_density:'35'}),
+  {infill_direction:'45',sparse_infill_density:'35'});
+for(const value of ['0','30','45.5','360'])
+  assert.equal(parseTestProcessOverrides({infill_direction:value}).infill_direction,value);
+for(const bad of [-1,360.01,'45%','auto',['45'],['45','90'],null,NaN,Infinity])
+  assert.throws(()=>parseTestProcessOverrides({infill_direction:bad}),
+    /Invalid|outside the safe test range/,String(bad));
+console.log('PASS: independent native infill direction 0..360 degrees rejects relative/vector inputs');

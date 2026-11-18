@@ -61,6 +61,11 @@ assert.equal(indexed.records.find(p=>p.name==="0.20mm Standard @Creality CR-10 0
 assert.equal(process.settings.skirt_speed,"20",
   "Official absolute skirt_speed must reach the restricted WASM test adapter");
 assert.ok(!process.unsupported.includes("skirt_speed"));
+assert.deepEqual(process.chain.map(name=>indexed.records.find(p=>p.name===name).infill_direction),
+  ["45","45","45"],"Pinned native v2.5.0 CR-10 infill angle across process inheritance");
+assert.equal(process.settings.infill_direction,"45",
+  "Official infill_direction must reach the isolated WASM process adapter in degrees");
+assert.ok(!process.unsupported.includes("infill_direction"));
 assert.equal(process.settings.line_width,"0.42",
   "Official v2.5.0 CR-10 0.20mm process must provide absolute line width");
 assert.ok(!process.unsupported.includes("line_width"),

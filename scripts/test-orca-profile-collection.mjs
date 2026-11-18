@@ -748,3 +748,23 @@ for(const bad of ['-1','301','20%',null,'auto',['20','30']])
     ? {...rec,skirt_speed:bad}:rec),selection),/Invalid|Multi-extruder|test limits/);
 assert.equal(result.process.settings.skirt_speed,undefined);
 console.log('PASS: source-pinned independent skirt_speed inheritance and strict mm/s bounds');
+
+// Native CR-10 v2.5.0 process has infill_direction=45 degrees. A child may
+// override the angle, or inherit it without fabricating missing defaults.
+const directionProfiles=profiles.map(rec=>rec.name==='fdm_process_common'
+  ? {...rec,infill_direction:'45'} : rec.name==='0.16mm Fine @TestPrinter'
+    ? {...rec,infill_direction:'30'} : rec);
+const directionResolved=resolve(directionProfiles,selection);
+assert.equal(directionResolved.process.settings.infill_direction,'30');
+assert.ok(!directionResolved.process.unsupported.includes('infill_direction'));
+assert.equal(resolve(directionProfiles.map(rec=>{
+  if(rec.name!=='0.16mm Fine @TestPrinter')return rec;
+  const child={...rec};delete child.infill_direction;return child;
+}),selection).process.settings.infill_direction,'45');
+assert.equal(resolve(directionProfiles.map(rec=>rec.name==='0.16mm Fine @TestPrinter'
+  ? {...rec,infill_direction:['30']}:rec),selection).process.settings.infill_direction,'30');
+for(const bad of [-1,'360.01','45%',null,'auto',['30','45']])
+  assert.throws(()=>resolve(directionProfiles.map(rec=>rec.name==='0.16mm Fine @TestPrinter'
+    ? {...rec,infill_direction:bad}:rec),selection),/Invalid|Multi-extruder|test limits/);
+assert.equal(result.process.settings.infill_direction,undefined);
+console.log('PASS: bounded native infill_direction inheritance, angle and bad input rejection');
