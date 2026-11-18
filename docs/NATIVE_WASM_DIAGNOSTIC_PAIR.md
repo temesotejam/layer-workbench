@@ -1,7 +1,7 @@
 # Native v2.5.0 vs WASM: diagnostic G-code with unequal inputs
 
 The existing `scripts/check_parity_pair.py` requires SHA256 identity for the
-source model and all three resolved machine/filament/process inputs **before**
+source model, source-bound placement witness and all three resolved machine/filament/process inputs **before**
 running a strict G-code comparison. This gate intentionally blocks current
 full-native vs restricted-WASM presets, which do not represent equivalent
 effective settings. Do not bypass or relabel this condition as parity.
@@ -25,7 +25,7 @@ source revision, or geometry placement. An independent producer log and
 source pin are required. The raw source profiles and executable diagnostic
 G-code should remain in the isolated CI runner or localhost, not Pages.
 
-When machine/filament/process/model SHA256 differs, diagnostic mode still
+When scene/machine/filament/process/model SHA256 differs, diagnostic mode still
 computes ordered G-code differences, commanded positive-E length and G1
 straight deposited-XY length. It reports `different_inputs`,
 `input_hashes_match: false`, `diagnostic_only: true`, and `match: false`;
@@ -127,3 +127,51 @@ The archived browser summary had a known literal backslash-n suffix,
 accepted only for this legacy diagnostic. New summaries write valid JSON.
 This is real-engine *difference evidence*, not a same-full-profile G-code
 parity verdict or safe-to-print validation.
+
+## 2026-11-18: fail-closed placement witness for strict parity fixtures
+
+The strict native-vs-WASM manifest gate now requires a sixth local input:
+`scene.json`, in addition to `model.stl`, `machine.json`,
+`filament.json`, `process.json`, and `gcode.gcode`. Both producers
+must supply a **byte-identical canonical placement witness**; if its
+SHA256 differs, `different_inputs` includes `scene` and parity fails
+*before* G-code comparison unless `--diagnose-mismatched-inputs` is
+explicitly selected. Diagnostic mode remains FAIL even if commands match.
+A missing or malformed scene cannot be bypassed by diagnostic mode.
+
+Required local `scene.json` shape (illustrative, not a real native result):
+
+```json
+{
+  "schema": "layer-workbench-scene-v1",
+  "units": "mm",
+  "matrix_layout": "row-major",
+  "source_model_sha256": "<64 lowercase hex SHA256 of model.stl>",
+  "instances": [
+    {
+      "source_index": 0,
+      "plate_index": 0,
+      "matrix": [1, 0, 0, 128, 0, 1, 0, 128, 0, 0, 1, 0, 0, 0, 0, 1]
+    }
+  ]
+}
+```
+
+Use the **same object order, identifiers, JSON encoding and numerical
+representation** for both producers, otherwise fail closed rather than
+rounding away scene differences. Matrix layout is row-major, units mm,
+1–32 explicit instance entries; the affine final row is `[0,0,0,1]`.
+`source_model_sha256` must match the model file hash in the manifest.
+The scene file is a bounded, *self-reported* input witness: equality does
+**not** verify that the native importer or WASM engine actually obeyed
+these transformations. A separate exported-STL bounds audit and/or
+independently observed rendered/deposited geometry is still required.
+It also does not resolve the known full-native vs restricted-WASM preset
+mismatch, 3MF-vs-STL import differences, or engine/provenance trust.
+
+The existing synthetic manifest unit fixtures now declare and test
+matching placement, shifted placement, missing scene, tampered source,
+invalid affine matrices, and malformed IDs. This closes a logical
+loophole in strict input identity; it is **not** a new real same-profile
+G-code result. No production WASM, third-party data, or public Pages
+artifacts are changed.
