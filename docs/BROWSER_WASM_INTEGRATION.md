@@ -1359,3 +1359,18 @@ this is **not** a fixed-path extrusion ratio or proof that rendered line
 width matches the nominal setting. It does confirm the width setting
 affects real support-tagged deposited G1 XY commands, not only headers.
 Public Pages still does not load the WASM candidate.
+
+### 2026-11-18: vendor-local inherited filament compatibility selection
+
+The inspection-only multi-vendor filament alias selector now resolves
+`compatible_printers` from the nearest filament ancestor *within the same
+vendor namespace*. An explicitly present empty child list replaces any
+inherited list; missing ancestors, cycles, and malformed/duplicate entries
+fail closed rather than silently selecting a printer-specific preset.
+The global `@System` fallback and existing pinned Prusa/Snapmaker selection
+tests remain unchanged. A Node regression test covers inherited compatibility,
+explicit override, malformed metadata, and cycles.
+
+This does not implement the desktop's full compatibility-expression machinery,
+does not resolve printer firmware support, does not forward additional machine
+settings to WASM, and does not certify G-code or public Pages slicing.
