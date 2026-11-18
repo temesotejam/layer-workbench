@@ -1,16 +1,52 @@
 #!/usr/bin/env python3
 """Fail-closed provenance gate for paired native/WASM G-code fixtures.
 
-This validates self-reported fixture hashes; it does not prove producer identity.
+This validates self-reported fixture hashes and scene placement witnesses;
+it does not prove producer identity or actual slicer placement.
 """
 import argparse
 import hashlib
 import json
+import math
 from pathlib import Path
 from compare_gcode import compare
 
 PIN = "40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19"
-KINDS = ("model", "machine", "filament", "process", "gcode")
+# A model STL hash alone does not encode its placement on a build plate.
+# scene.json is a self-reported normalized placement witness from each engine,
+# NOT independent proof that the engine applied the transform.
+KINDS = ("model", "scene", "machine", "filament", "process", "gcode")
+
+
+def validate_scene(path, model_sha256, role):
+    """Reject absent, malformed or unbound placement evidence before comparison."""
+    if path.stat().st_size > 65536:
+        raise ValueError(f"{role}: scene witness exceeds 64 KiB")
+    scene = json.loads(path.read_text(encoding="utf-8"))
+    if (not isinstance(scene, dict) or set(scene) != {
+            "schema", "units", "matrix_layout", "source_model_sha256", "instances"} or
+        scene["schema"] != "layer-workbench-scene-v1" or
+        scene["units"] != "mm" or scene["matrix_layout"] != "row-major" or
+        scene["source_model_sha256"] != model_sha256):
+        raise ValueError(f"{role}: invalid scene schema or unbound source model")
+    instances = scene["instances"]
+    if not isinstance(instances, list) or not 1 <= len(instances) <= 32:
+        raise ValueError(f"{role}: expected 1..32 scene instances")
+    for instance in instances:
+        if not isinstance(instance, dict) or set(instance) != {
+                "source_index", "plate_index", "matrix"}:
+            raise ValueError(f"{role}: invalid scene instance record")
+        for key, maximum in (("source_index", 1023), ("plate_index", 31)):
+            value = instance[key]
+            if type(value) is not int or not 0 <= value <= maximum:
+                raise ValueError(f"{role}: invalid scene {key}")
+        matrix = instance["matrix"]
+        if (not isinstance(matrix, list) or len(matrix) != 16 or
+            any(type(n) not in (int, float) or not math.isfinite(n) or
+                abs(n) > 1_000_000 for n in matrix) or
+            matrix[12:] != [0, 0, 0, 1]):
+            raise ValueError(f"{role}: invalid row-major scene matrix")
+
 
 def read_manifest(path, role):
     data = json.loads(path.read_text(encoding="utf-8"))
@@ -18,7 +54,7 @@ def read_manifest(path, role):
         raise ValueError(f"{role}: incorrect engine or unpinned revision")
     files = data.get("files")
     if not isinstance(files, dict) or set(files) != set(KINDS):
-        raise ValueError(f"{role}: expected model/machine/filament/process/gcode")
+        raise ValueError(f"{role}: expected model/scene/machine/filament/process/gcode")
     out = {}
     for kind in KINDS:
         entry = files[kind]
@@ -37,6 +73,7 @@ def read_manifest(path, role):
         if hashlib.sha256(full.read_bytes()).hexdigest() != sha:
             raise ValueError(f"{role}: SHA256 mismatch for {kind}")
         out[kind] = (sha, full)
+    validate_scene(out["scene"][1], out["model"][0], role)
     return out
 
 def verify(native_manifest, wasm_manifest, minimum=1, diagnose_mismatched_inputs=False):
