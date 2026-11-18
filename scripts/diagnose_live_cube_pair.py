@@ -67,6 +67,9 @@ def diagnostic(native, wasm, wasm_summary, source_stl, minimum=100):
         "native_counted_nonplanar_deposition_moves",
         "wasm_counted_nonplanar_deposition_moves",
         "first_counted_planar_z_differences",
+        "native_only_counted_planar_z_levels", "wasm_only_counted_planar_z_levels",
+        "first_native_only_counted_planar_z_mm",
+        "first_wasm_only_counted_planar_z_mm",
     )
     return {
         "status": "DIAGNOSTIC_ONLY",
