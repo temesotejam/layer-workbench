@@ -32,7 +32,9 @@ const SPECS={
     internal_solid_infill_line_width:[0.1,2],
     // Official v2.5.0 CR-10 0.20mm Standard sets two skirt loops.
     // Only an explicit bounded integer count is accepted in the localhost bridge.
-    wall_loops:[1,8],skirt_loops:[0,10],sparse_infill_density:[0,100],
+    // Pinned CR-10 skirt_distance is 2 mm; upstream coFloat is bounded to 0..60 mm.
+    // This remains a localhost diagnostic and is independent of skirt_loops.
+    wall_loops:[1,8],skirt_loops:[0,10],skirt_distance:[0,60],sparse_infill_density:[0,100],
     top_shell_layers:[0,12],bottom_shell_layers:[0,12],
     // Absolute mm/s only; relative percentage-based speeds are not converted.
     // These bounds constrain diagnostic inputs, not real printer capability.

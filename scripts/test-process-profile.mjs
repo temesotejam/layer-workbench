@@ -29,6 +29,9 @@ const LIMITS = {
   // Source-pinned CR-10 0.20mm Standard uses skirt_loops=2. Integer loops
   // only; enabling a skirt here is a localhost diagnostic, not print approval.
   skirt_loops: [0,10],
+  // OrcaSlicer v2.5.0 PrintConfig.cpp: skirt_distance is a coFloat
+  // with range 0..60 mm, default 2 mm. Local diagnostic only.
+  skirt_distance: [0,60],
   wall_loops: [1,8],
   sparse_infill_density: [0,100],
   top_shell_layers: [0,12],

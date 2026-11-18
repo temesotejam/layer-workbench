@@ -1441,3 +1441,22 @@ response for the test scene and engine candidate only; it does not establish
 native desktop parity, arbitrary model support, real-printer G-code safety,
 or public Pages deployment. No engine build inputs or production settings
 are changed.
+
+
+## 2026-11-18: source-pinned CR-10 skirt distance (localhost proof only)
+
+The upstream pinned OrcaSlicer v2.5.0 PrintConfig.cpp defines
+`skirt_distance` as a millimetre `coFloat`, minimum 0, maximum 60,
+default 2. Both `fdm_process_creality_common` and
+`0.20mm Standard @Creality CR-10 0.4 nozzle` contain `"2"`.
+The restricted raw-process resolver and local-only native-json adapter
+forward this option independently of `skirt_loops`, allowing only
+finite scalar values from 0 to 60. Percentages and multi-nozzle values
+fail closed. Source-pinned inheritance and invalid-input tests are required.
+
+The isolated-Chrome test keeps two skirt loops in the same two-STL scene,
+varies only `skirt_distance` from 1 to 8 mm and checks G0/G1 motion
+differences (not comments or file hash). This diagnostic is not equivalent
+to a native-vs-WASM print-geometry parity verdict and does not certify safe
+printer output. Public Pages engine activation and heavy WASM rebuilds
+remain excluded.
