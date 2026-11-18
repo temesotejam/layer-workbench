@@ -116,6 +116,13 @@ export function parseGcodeToolpaths(source, options={}) {
     if("F" in words && (words.F<=0 || words.F>10_000_000)){
       skippedMalformedMotion++;continue;
     }
+    // Never render a motion with auxiliary words that this read-only parser
+    // does not interpret. In particular G2/G3 P can request extra arc turns;
+    // silently ignoring P would display a plausible but wrong trajectory.
+    // Arc endpoints still advance below, even when their path is omitted.
+    const allowedWords=cmd==="G92"?"XYZE":isArc?"XYZEIJRF":"XYZEF";
+    const unhandledWords=Object.keys(words).some(key=>!allowedWords.includes(key));
+    if(unhandledWords && !isArc){skippedMalformedMotion++;continue;}
     if(cmd==="G92"){
       for(const axis of ["X","Y","Z","E"])if(axis in words)state[axis.toLowerCase()]=words[axis];
       continue;
@@ -132,6 +139,7 @@ export function parseGcodeToolpaths(source, options={}) {
        Math.max(Math.abs(state.x),Math.abs(state.y),Math.abs(state.z))>100_000)
       throw new Error("Toolpath coordinate exceeds preview limits");
     const extrusion=state.e>start.e+1e-7;
+    if(isArc && unhandledWords){skippedArcs++;continue;}
     if(!isArc){
       if(Math.abs(state.x-start.x)>EPS||Math.abs(state.y-start.y)>EPS||Math.abs(state.z-start.z)>EPS)
         append(start.x,start.y,state.x,state.y,start.z,state.z,extrusion);
