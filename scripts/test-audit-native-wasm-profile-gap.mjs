@@ -35,7 +35,37 @@ assert.deepEqual(report.families.process.raw_value_difference_shapes,[{
   key:"sparse_infill_density",native_shape:"string",restricted_shape:"string",
   syntax_only_hint:"density-percent-token-to-numeric"
 }]);
-// Deliberately ambiguous values must NOT inherit the two narrow hints:
+// Native v2.5.0's single-PLA vector and one-slot nozzle-temperature vector
+// are explicitly normalized by the restricted filament resolver. The syntax
+// hints remain weaker than PrintConfig or real WASM behavior.
+const filamentVectorFull={
+  ...full,filament:{...full.filament,filament_type:["PLA"],nozzle_temperature:["220"]}
+};
+const filamentScalarRestricted={
+  ...restricted,filament:{settings:{...restricted.filament.settings,filament_type:"PLA"}}
+};
+const filamentVectorAudit=auditProfileCoverage(filamentVectorFull,filamentScalarRestricted);
+assert.equal(filamentVectorAudit.families.filament.recognized_syntax_only_count,2);
+assert.deepEqual(filamentVectorAudit.families.filament.raw_value_difference_shapes,[
+  {key:"filament_type",native_shape:"array(1)",restricted_shape:"string",
+    syntax_only_hint:"single-PLA-vector-to-scalar"},
+  {key:"nozzle_temperature",native_shape:"array(1)",restricted_shape:"string",
+    syntax_only_hint:"single-nozzle-temperature-vector-to-scalar"}
+]);
+assert.equal(filamentVectorAudit.full_profile_parity_established,false);
+// A different material, a two-temperature vector or out-of-range temperature
+// cannot be silently explained as a safe known adapter transformation.
+const unsafeFilament=auditProfileCoverage({
+  ...full,filament:{...full.filament,filament_type:["ABS"],nozzle_temperature:["200","220"]}
+},filamentScalarRestricted);
+assert.equal(unsafeFilament.families.filament.unexplained_raw_value_difference_count,2);
+assert.equal(auditProfileCoverage({
+  ...full,filament:{...full.filament,nozzle_temperature:["350"]}
+},{
+  ...restricted,filament:{settings:{...restricted.filament.settings,nozzle_temperature:"350"}}
+}).families.filament.unexplained_raw_value_difference_count,1);
+
+// Deliberately ambiguous values must NOT inherit the narrow hints:
 // a multi-nozzle array, a percent-relative speed and a filament vector
 // represented as a scalar can have different native semantics.
 const ambiguousNative={
