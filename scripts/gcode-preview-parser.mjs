@@ -30,6 +30,7 @@ function parseMovementWords(body, units) {
     if(!Number.isFinite(value))return null;
     seen.add(key);
     if("XYZEIJRF".includes(key))words[key]=value*units;
+    else words[key]=value; // Retain uninterpreted S/P for command-specific rejection.
     offset=pattern.lastIndex;
   }
   return words;
