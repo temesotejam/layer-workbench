@@ -195,7 +195,11 @@ export function resolveOrcaProfileFamily(records,type,selected,options={}) {
       if(maxSource){
         const values=Array.isArray(maxSource.filament_max_volumetric_speed)
           ? maxSource.filament_max_volumetric_speed : [maxSource.filament_max_volumetric_speed];
-        if(values.length===1){
+        // A single value may be used without selecting a nozzle variant.
+        // When the user explicitly selects one, however, its native variant
+        // metadata MUST match: otherwise an unrelated flow cap is silently
+        // applied and the requested selection is falsely reported as honored.
+        if(values.length===1 && options.filamentVariant===undefined){
           const limit=validateNum("filament_max_volumetric_speed",values[0],[0.1,200]);
           settings.filament_max_volumetric_speed=[limit];
           unsupported.delete("filament_max_volumetric_speed");
