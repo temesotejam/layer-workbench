@@ -711,7 +711,7 @@ try {
     console.log('WASM_SKIRT_HEIGHT_DEPOSITION '+JSON.stringify(skirtHeightWitness));
     await writeFile(parityDir+'/skirt-height-deposition.json',
       JSON.stringify({fixture:'two synthetic STLs; 2 loops; 2 mm distance; 1 vs 3 layers',
-        ...skirtHeightWitness},null,2)+'\\n');
+        ...skirtHeightWitness},null,2)+'\n');
     assert.equal(shortSkirt.length,1,'One-layer skirt must deposit on exactly one Z level');
     assert.equal(tallSkirt.length,3,'Three-layer skirt must deposit on exactly three Z levels');
     assert.ok(shortSkirt.every(x=>x[1].segments>=4)&&tallSkirt.every(x=>x[1].segments>=4),
