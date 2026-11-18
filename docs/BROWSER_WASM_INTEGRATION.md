@@ -1422,3 +1422,22 @@ Z; it does not geometrically clip arcs at a layer height. The diagnostic
 has no physical-layer validation, printer G-code execution, full desktop
 preview parity, or print safety certification. Public Pages WASM is still
 not enabled.
+
+
+## 2026-11-18: source-pinned CR-10 skirt loop count (isolated proof only)
+
+The official OrcaSlicer v2.5.0 pin `40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19`
+sets `skirt_loops: "1"` in `fdm_process_creality_common`, overridden by
+`skirt_loops: "2"` in `0.20mm Standard @Creality CR-10 0.4 nozzle`.
+The restricted process reader and localhost native-json override adapter now
+carry this *independent* integer setting, bounded to 0–20 loops. Percentages,
+fractional values, negatives and multi-extruder vectors are rejected. The
+pinned-real-profile CI verifies the inherited and child values.
+
+The isolated Chrome regression compares the same two-STL scene with only
+`skirt_loops` changing 0 → 2 and requires **more actual G0/G1 motion
+commands**, not merely different metadata. A PASS demonstrates a skirt loop
+response for the test scene and engine candidate only; it does not establish
+native desktop parity, arbitrary model support, real-printer G-code safety,
+or public Pages deployment. No engine build inputs or production settings
+are changed.
