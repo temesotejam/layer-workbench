@@ -401,3 +401,29 @@ raw G-code, comments, filenames and full licensed profiles. Full native and
 restricted WASM profiles and import paths still differ: every real diagnostic
 remains `DIAGNOSTIC_ONLY` with `parity_pass: false`, and no WASM deployment
 or physical print-safety assertion is made.
+
+## 2026-11-19: native-only 0.28 mm strata explained by pinned startup G-code
+
+The live official-native CLI and historical browser-WASM diagnostic in
+[PR #97](https://github.com/temesotejam/layer-workbench/pull/97) found one
+native-only constant-Z deposition height at **0.28 mm**, with exactly two
+straight G1 positive-E moves, **250 mm** combined XY line length, **30 mm**
+commanded positive E and endpoints within **X=10.1–10.4 mm,
+Y=20–145 mm**. These G1 paths are well outside the shared cube's
+X=128–148 mm object bounds.
+
+Independently, the official upstream-pinned
+[Creality CR-10 0.4 nozzle profile](https://github.com/OrcaSlicer/OrcaSlicer/blob/40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19/resources/profiles/Creality/machine/Creality%20CR-10%200.4%20nozzle.json)
+specifies exactly two **125 mm** introduction/priming lines at those
+coordinates and Z=0.28 mm, with cumulative E commands 15 and 30. The
+source-pinned CI assertion now verifies those four startup-position/motion
+commands and that `machine_start_gcode` remains excluded from the
+restricted browser adapter. This accounts for **the native-only 0.28 mm
+deposition stratum**; it is **not** evidence of a difference in the
+slicer's object first-layer height (the process setting is 0.2 mm).
+
+This does **not** explain or correct the remaining hundreds of differing
+positive-E moves, other per-Z discrepancies, full-profile mismatch or
+native Core 3MF versus WASM STL import. It does not authorize executing
+machine startup G-code in a browser, deploying WASM to Pages or printing
+the unvalidated output. The diagnostic remains `parity_pass: false`.

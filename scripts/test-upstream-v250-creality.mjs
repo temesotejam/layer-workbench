@@ -14,6 +14,26 @@ const machine=resolveOrcaProfileFamily(indexed.records,"machine","Creality CR-10
 const process=resolveOrcaProfileFamily(indexed.records,"process","0.20mm Standard @Creality CR-10 0.4 nozzle");
 assert.deepEqual(machine.chain,["fdm_machine_common","fdm_creality_common","Creality CR-10 0.4 nozzle"]);
 assert.deepEqual(process.chain,["fdm_process_common","fdm_process_creality_common","0.20mm Standard @Creality CR-10 0.4 nozzle"]);
+// Source-pinned root-cause witness for the native-only Z=0.28 mm
+// deposition plane. The original full machine startup script stays CI-only;
+// never forward or execute it in the restricted browser profile adapter.
+const pinnedCr10Start=indexed.records.find(
+  p=>p.name==="Creality CR-10 0.4 nozzle").machine_start_gcode;
+assert.equal(typeof pinnedCr10Start,"string");
+const startupCommands=pinnedCr10Start.split(/\r?\n/).map(
+  line=>line.split(";")[0].trim());
+for(const command of [
+  "G1 X10.1 Y20 Z0.28 F5000.0",
+  "G1 X10.1 Y145.0 Z0.28 F1500.0 E15",
+  "G1 X10.4 Y145.0 Z0.28 F5000.0",
+  "G1 X10.4 Y20 Z0.28 F1500.0 E30",
+]){
+  assert.ok(startupCommands.includes(command),
+    "Pinned official CR-10 priming move missing: "+command);
+}
+assert.ok(machine.unsupported.includes("machine_start_gcode"),
+  "Executable start G-code must remain excluded from restricted WASM forwarding");
+console.log("PASS: pinned native CR-10 Z=0.28 prime lines explained; browser startup G-code excluded");
 assert.equal(machine.settings.nozzle_diameter,"0.4");
 assert.equal(machine.settings.printable_height,"400");
 assert.equal(process.settings.layer_height,"0.2");
