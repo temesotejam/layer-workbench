@@ -9,6 +9,7 @@ import {makeGapRingObj} from './gap-ring-fixture.mjs';
 import {makeBridgeArchObj} from './bridge-arch-fixture.mjs';
 import {makeSupportSphereObj} from './support-sphere-fixture.mjs';
 import {makeParityCubeStl, PARITY_CUBE_STL_SHA256} from './parity-cube-fixture.mjs';
+import {auditWasmCubeDeposition} from './audit-wasm-cube-deposition.mjs';
 import {auditBridgeSpeedSegments} from './bridge-feature-diagnostic.mjs';
 import {auditSupportDeposition,auditSupportSpeedEffect} from './support-feature-diagnostic.mjs';
 import {auditSupportWidthEffect} from './support-extrusion-diagnostic.mjs';
@@ -89,6 +90,12 @@ try {
   assert.ok(wasmGcode.length > 1000 && wasmGcode.length < 20_000_000,
     'Actual WASM G-code is empty or exceeds diagnostic limits');
   const parsedGcode = parseGcodeToolpaths(wasmGcode);
+  // Independent output-side witness: scene/manifest may claim translation
+  // (128,128,0) without the engine actually depositing at that position.
+  const wasmPlacement = auditWasmCubeDeposition(parsedGcode);
+  console.log('WASM_CUBE_DEPOSITION_AUDIT '+JSON.stringify(wasmPlacement));
+  assert.equal(wasmPlacement.passed,true,
+    'Actual browser G-code deposition does not occupy the pinned placed cube envelope');
   assert.ok(parsedGcode.layers.length >= 2, 'Expected multiple sliced Z layers');
   assert.ok(parsedGcode.extrusions > 10, 'Expected positive extrusion toolpaths');
   const commandedRates=parsedGcode.layers.flatMap(layer=>layer.segments)
@@ -107,7 +114,8 @@ try {
     source_stl_sha256:PARITY_CUBE_STL_SHA256,
     gcode_sha256:actualGcodeHash, bytes:Buffer.byteLength(wasmGcode,'utf8'),
     layers:parsedGcode.layers.length, extrusion_segments:parsedGcode.extrusions,
-    travel_segments:parsedGcode.travels
+    travel_segments:parsedGcode.travels,
+    gcode_deposition_placement_witness:wasmPlacement
   }, null, 2) + '\n');
 
   console.log('PASS: actual WASM G-code content: ' +

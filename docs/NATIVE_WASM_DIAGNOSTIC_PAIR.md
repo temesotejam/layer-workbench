@@ -196,3 +196,30 @@ but **only for the native exporter**. It neither proves the browser WASM
 has applied its declared transform nor validates settings, G-code equality,
 3MF round-trip semantics, runtime provenance or print safety. The real
 native/WASM equal-full-profile G-code comparison remains blocked.
+
+## 2026-11-18: independent WASM deposited-path placement witness (opt-in CI)
+
+The isolated Chrome/WASM cube test now audits **actual positive-E XY G-code
+segments** using `scripts/audit-wasm-cube-deposition.mjs`, rather than
+assuming that the declared `(128,128,0)` project matrix was obeyed.
+The test fixture is the byte-pinned 20 mm cube (12 triangles), and its
+independently verified native 3MF export occupies [128,148] mm in X/Y and
+[0,20] mm in Z. WASM deposition must contain at least 50 positive-E XY
+segments, at least 85% within a one-millimeter-expanded XYZ cube envelope,
+an XY span of at least 18.5 mm, near-bottom and near-top Z layers, and no
+silently skipped malformed motions/arcs in the bounded read-only parser.
+The audit records numeric bounds, counts and the fraction inside. It
+allows a small outside priming path without treating travel as deposited
+material. Unit tests reject shifted outputs, sparse corner imitations and
+predominantly outside deposition.
+
+This is **G-code path location evidence**, not an exported WASM mesh face
+audit: a different mesh could produce similar toolpath extents. The nominal
+and printer-dependent wall offsets, skirts/brims and per-layer behavior can
+change the values; a failed gate requires inspecting the real isolated
+Chrome output, not broadening thresholds to force PASS. Its
+`parity_pass` remains false regardless of whether the placement gate
+passes. The G-code still uses the restricted WASM development profile and
+the native CLI still loads full official presets and imports a Core 3MF
+wrapper. No same-input full-profile native-vs-WASM G-code equivalence or
+physical print readiness is asserted. Artifacts remain CI-only.
