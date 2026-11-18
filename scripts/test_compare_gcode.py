@@ -28,6 +28,8 @@ class ComparatorTests(unittest.TestCase):
         self.assertEqual(report['native_counted_nonplanar_deposition_moves'], 1)
         self.assertEqual(report['wasm_counted_nonplanar_deposition_moves'], 1)
         self.assertEqual(report['first_counted_planar_z_differences'], [])
+        self.assertEqual(report['native_only_counted_planar_z_levels'], 0)
+        self.assertEqual(report['wasm_only_counted_planar_z_levels'], 0)
 
     def test_counted_planar_z_differences_report_height_and_move_counts(self):
         native = 'M83\nG0 Z0.2\nG1 X1 E1\nG0 Z0.4\nG1 X2 E1\n'
@@ -40,6 +42,24 @@ class ComparatorTests(unittest.TestCase):
             {'z_mm': '0.4', 'native_moves': 1, 'wasm_moves': 0},
             {'z_mm': '0.6', 'native_moves': 0, 'wasm_moves': 1},
         ])
+        self.assertEqual(report['native_only_counted_planar_z_levels'], 1)
+        self.assertEqual(report['wasm_only_counted_planar_z_levels'], 1)
+        self.assertEqual(report['first_native_only_counted_planar_z_mm'], ['0.4'])
+        self.assertEqual(report['first_wasm_only_counted_planar_z_mm'], ['0.6'])
+
+    def test_missing_z_membership_count_is_not_truncated_to_15(self):
+        native = 'M83\n' + ''.join(
+            f'G0 Z{i / 10}\nG1 X{i} E1\n' for i in range(1, 22))
+        wasm = 'M83\nG0 Z0.1\nG1 X1 E1\n'
+        report = self.run_compare(native, wasm)
+        self.assertEqual(report['native_only_counted_planar_z_levels'], 20)
+        self.assertEqual(report['wasm_only_counted_planar_z_levels'], 0)
+        self.assertEqual(len(report['first_native_only_counted_planar_z_mm']), 15)
+        self.assertEqual(report['first_native_only_counted_planar_z_mm'][0], '0.2')
+        self.assertEqual(report['first_native_only_counted_planar_z_mm'][-1], '1.6')
+        self.assertEqual(report['first_wasm_only_counted_planar_z_mm'], [])
+        self.assertEqual(len(report['first_counted_planar_z_differences']), 15)
+        self.assertFalse(report['match'])
 
     def test_planar_z_metrics_preserve_inch_units_and_g17_arcs(self):
         code = ('G20\nM83\nG0 Z0.01\n'
@@ -56,6 +76,10 @@ class ComparatorTests(unittest.TestCase):
         self.assertIsNone(report['native_counted_planar_z_levels'])
         self.assertIsNone(report['wasm_counted_nonplanar_deposition_moves'])
         self.assertIsNone(report['first_counted_planar_z_differences'])
+        self.assertIsNone(report['native_only_counted_planar_z_levels'])
+        self.assertIsNone(report['wasm_only_counted_planar_z_levels'])
+        self.assertIsNone(report['first_native_only_counted_planar_z_mm'])
+        self.assertIsNone(report['first_wasm_only_counted_planar_z_mm'])
 
     def test_counted_linear_xy_length_excludes_arcs_priming_and_stationary_moves(self):
         code = ('M83\nG1 X3 Y4 E1\nG1 X3 Y4 E1\n'
