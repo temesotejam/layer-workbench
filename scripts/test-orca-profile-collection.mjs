@@ -314,6 +314,41 @@ assert.throws(()=>resolve(variantProfiles.map(p=>p.name==='Generic PLA @TestPrin
 const single=resolve(profiles.map(p=>p.name==='Generic PLA @System'
   ? {...p,filament_max_volumetric_speed:['12']}:p),selection);
 assert.deepEqual(single.filament.settings.filament_max_volumetric_speed,['12']);
+// A single limit is not necessarily for the explicitly selected extruder
+// variant. Verify actual native slot metadata before acknowledging a choice.
+const oneSlotVariant=profiles.map(p=>p.name==='Generic PLA @System'
+  ? {...p,filament_extruder_variant:['Direct Drive Standard'],
+     filament_max_volumetric_speed:['12']}:p);
+const oneSlotExplicit=resolve(oneSlotVariant,selection,
+  {filamentVariant:'Direct Drive Standard'});
+assert.deepEqual(oneSlotExplicit.filament.settings.filament_max_volumetric_speed,['12']);
+assert.deepEqual(oneSlotExplicit.filament.selectedFilamentVariant,{
+  name:'Direct Drive Standard',index:0,source:'Generic PLA @System',maxVolumetricSpeed:'12'
+});
+for(const chosen of ['Bowden Standard','Direct Drive High Flow','',
+  '__proto__',null,1]) {
+  assert.throws(()=>resolve(oneSlotVariant,selection,{filamentVariant:chosen}),
+    /Invalid selected filament variant|not found/,
+    'Explicit mismatched or invalid single-slot selection must fail closed');
+}
+const unnamedSingle=profiles.map(p=>p.name==='Generic PLA @System'
+  ? {...p,filament_max_volumetric_speed:['12']}:p);
+assert.throws(()=>resolve(unnamedSingle,selection,
+  {filamentVariant:'Direct Drive Standard'}),
+  /Invalid or mismatched filament extruder variant vector/,
+  'An unnamed one-slot limit must not silently satisfy an explicit selection');
+for(const variants of [[],['Direct Drive Standard','Bowden Standard'],
+  [''],[null],['Direct Drive Standard','Direct Drive Standard']]) {
+  const invalid=profiles.map(p=>p.name==='Generic PLA @System'
+    ? {...p,filament_extruder_variant:variants,
+      filament_max_volumetric_speed:['12']}:p);
+  assert.throws(()=>resolve(invalid,selection,
+    {filamentVariant:'Direct Drive Standard'}),
+    /Invalid or mismatched filament extruder variant vector/);
+}
+assert.equal(single.filament.selectedFilamentVariant,null,
+  'Without an explicit variant, a single preset limit must remain unlabelled');
+console.log('PASS: explicit one-slot flow variant requires exact source metadata; implicit scalar behavior preserved');
 // Orca process presets inherit top/bottom solid shell counts independently.
 // Only bounded scalar single-extruder values are applied to the test bridge.
 const shellProfiles=profiles.map(p=>{
