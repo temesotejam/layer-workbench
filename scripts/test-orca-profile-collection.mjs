@@ -728,3 +728,23 @@ for (const bad of ['0',21,2.5,'2%',['2','3'],null])
 assert.ok(!resolve(skirtHeightProfiles,selection).process.unsupported.includes('skirt_height'));
 assert.equal(result.process.settings.skirt_height,undefined);
 console.log('PASS: source-pinned skirt_height inherits as an independent bounded integer');
+
+// The source-pinned child overrides an ancestor's independent coFloat skirt
+// speed; absence must not fabricate one from travel or perimeter speed.
+const skirtSpeedProfiles=profiles.map(rec=>rec.name==='fdm_process_common'
+  ? {...rec,skirt_speed:'50'} : rec.name==='0.16mm Fine @TestPrinter'
+    ? {...rec,skirt_speed:'20'} : rec);
+const skirtSpeedResolved=resolve(skirtSpeedProfiles,selection);
+assert.equal(skirtSpeedResolved.process.settings.skirt_speed,'20');
+assert.ok(!skirtSpeedResolved.process.unsupported.includes('skirt_speed'));
+assert.equal(resolve(skirtSpeedProfiles.map(rec=>{
+  if(rec.name!=='0.16mm Fine @TestPrinter')return rec;
+  const child={...rec};delete child.skirt_speed;return child;
+}),selection).process.settings.skirt_speed,'50');
+assert.equal(resolve(skirtSpeedProfiles.map(rec=>rec.name==='0.16mm Fine @TestPrinter'
+  ? {...rec,skirt_speed:['20']}:rec),selection).process.settings.skirt_speed,'20');
+for(const bad of ['-1','301','20%',null,'auto',['20','30']])
+  assert.throws(()=>resolve(skirtSpeedProfiles.map(rec=>rec.name==='0.16mm Fine @TestPrinter'
+    ? {...rec,skirt_speed:bad}:rec),selection),/Invalid|Multi-extruder|test limits/);
+assert.equal(result.process.settings.skirt_speed,undefined);
+console.log('PASS: source-pinned independent skirt_speed inheritance and strict mm/s bounds');
