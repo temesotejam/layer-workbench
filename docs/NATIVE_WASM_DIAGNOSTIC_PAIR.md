@@ -289,3 +289,24 @@ differently spelled commands. Offline regressions cover the false counts.
 This correction improves the credibility of the minimum-extrusion gate and
 numeric diagnostic. It does **not** resolve native/full-profile versus
 restricted-WASM inputs, printer-specific modal rules, or toolpath parity.
+
+## 2026-11-19: read-only constant-Z deposition strata
+
+The strict ordered native/WASM G-code comparator now reports two additional
+**diagnostic-only** summaries per side: the number of distinct Z positions
+with counted positive-E XY motion at a constant height, and the count of
+positive-E XY moves that also change Z (nonplanar moves). A bounded list of
+up to 15 differing Z positions contains the two sides' per-position move
+counts. Position handling includes explicit G0/G1 Z motion, G90/G91, G92 Z
+resets and G20/G21 units; accepted G17 arcs can contribute when their Z is
+constant. This deliberately does **not** infer full slicer layer identity,
+extrusion width, material volume, or print correctness from endpoint Z alone.
+
+Malformed stateful geometry still invalidates the metric (null diagnostics)
+instead of creating a false layer. Numeric Z differences are reported as
+observed without merging levels using an arbitrary tolerance. Strict command
+matching, both producers' input requirements and the requirement that
+unequal full profiles **fail parity** remain unchanged. Tests cover Z ramps,
+relative moves, G92, inch units, arcs, height disagreements, and malformed
+geometry. This is useful for diagnosing eventual real-engine differences;
+**no equal-full-profile native/WASM G-code match is claimed**.
