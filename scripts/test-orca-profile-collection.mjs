@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {resolveOrcaProfileCollection as resolve} from './orca-profile-collection.mjs';
+import {resolveOrcaProfileCollection as resolve, resolveOrcaProfileFamily} from './orca-profile-collection.mjs';
 const profiles=[
  {type:'machine',name:'base printer',nozzle_diameter:'0.4',printable_height:'250',machine_start_gcode:'G28'},
  {type:'machine',name:'TestPrinter 0.4 nozzle',inherits:'base printer',printable_height:'256'},
@@ -10,6 +10,33 @@ const profiles=[
 ];
 const selection={machine:'TestPrinter 0.4 nozzle',filament:'Generic PLA @TestPrinter',process:'0.16mm Fine @TestPrinter'};
 const result=resolve(profiles,selection);
+// Invalid compatibility metadata must fail closed in both public resolver
+// entry points, not just when the complete machine/filament/process collection
+// is supplied. In particular, a string must never act like a substring list.
+const badCompatibility=[
+  'TestPrinter 0.4 nozzle',null,3,{},[''],['  '],[9],
+  [['TestPrinter 0.4 nozzle']],
+  ['TestPrinter 0.4 nozzle','TestPrinter 0.4 nozzle'],
+  ['x'.repeat(161)],
+  Array(1025).fill('Unused printer')
+];
+for(const compatible_printers of badCompatibility) {
+  const badRecords=profiles.map(p=>p.name==='Generic PLA @TestPrinter'
+    ? {...p,compatible_printers}:p);
+  assert.throws(
+    ()=>resolveOrcaProfileFamily(badRecords,'filament','Generic PLA @TestPrinter'),
+    /Invalid compatible_printers/);
+  assert.throws(()=>resolve(badRecords,selection),/Invalid compatible_printers/);
+}
+const multiCompatible=profiles.map(p=>p.name==='Generic PLA @TestPrinter'
+  ? {...p,compatible_printers:['TestPrinter 0.4 nozzle','Other printer 0.4 nozzle']}:p);
+assert.deepEqual(resolveOrcaProfileFamily(multiCompatible,'filament',
+  'Generic PLA @TestPrinter').compatible,
+  ['TestPrinter 0.4 nozzle','Other printer 0.4 nozzle']);
+assert.equal(resolve(multiCompatible,selection).filament.name,'Generic PLA @TestPrinter');
+assert.throws(()=>resolve(multiCompatible,{...selection,machine:'base printer'}),/not compatible/);
+console.log('PASS: exact compatible_printers metadata is validated in direct family and collection resolvers');
+
 assert.deepEqual(result.machine.chain,['base printer','TestPrinter 0.4 nozzle']);
 assert.equal(result.machine.settings.nozzle_diameter,'0.4');
 assert.equal(result.machine.settings.printable_height,'256');

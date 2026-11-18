@@ -79,6 +79,15 @@ const PLATE_OPTIONS=Object.freeze({
 });
 
 const META=new Set(['type','name','inherits','instantiation','from','compatible_printers','setting_id','filament_id','alias']);
+// A malformed compatible_printers record must not bypass machine selection.
+// Check this in the family resolver too: it is also used directly by callers
+// that do not pass through resolveOrcaProfileCollection.
+function validateCompatiblePrinters(raw) {
+  if (!Array.isArray(raw) || raw.length > 1024 ||
+      raw.some(p => typeof p !== "string" || !p.trim() || p.length > 160) ||
+      new Set(raw).size !== raw.length)
+    throw new Error("Invalid compatible_printers");
+}
 function dict(x){return x!==null&&typeof x==='object'&&!Array.isArray(x)&&Object.getPrototypeOf(x)===Object.prototype;}
 function name(x){if(typeof x!=='string'||!x||x.length>160||['__proto__','constructor','prototype'].includes(x))throw new Error('Invalid profile name');return x;}
 function validateNum(key,raw,limits){
@@ -107,6 +116,7 @@ export function resolveOrcaProfileFamily(records,type,selected,options={}) {
     const key=rec.type+':'+name(rec.name);
     if(registry.has(key))throw new Error("Duplicate profile "+key);
     if(rec.inherits!=null&&rec.inherits!=='')name(rec.inherits);
+    if(Object.hasOwn(rec,'compatible_printers'))validateCompatiblePrinters(rec.compatible_printers);
     registry.set(key,rec);
   }
   function resolve(){
@@ -256,8 +266,7 @@ export function resolveOrcaProfileCollection(records, selection, options={}) {
     const key=rec.type+':'+name(rec.name);
     if(registry.has(key))throw new Error('Duplicate profile '+key);
     if(rec.inherits!=null&&rec.inherits!=='')name(rec.inherits);
-    if(rec.compatible_printers!=null&&(!Array.isArray(rec.compatible_printers)||rec.compatible_printers.some(p=>typeof p!=='string')))
-      throw new Error('Invalid compatible_printers');
+    if(Object.hasOwn(rec,'compatible_printers'))validateCompatiblePrinters(rec.compatible_printers);
     registry.set(key,rec);
   }
   const machine=resolveOrcaProfileFamily(records,'machine',selection.machine);
