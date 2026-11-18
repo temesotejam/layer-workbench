@@ -125,6 +125,11 @@ async function main() {
       ", raw-value-review="+row.raw_value_differences_requiring_review.length+
       ", syntax-only-hints="+row.recognized_syntax_only_count+
       ", unexplained="+row.unexplained_raw_value_difference_count);
+    // Name and shape only; never emit original profile values or executable G-code.
+    const unexplained=row.raw_value_difference_shapes.filter(item=>item.syntax_only_hint==="unexplained")
+      .map(item=>({key:item.key,native_shape:item.native_shape,
+        restricted_shape:item.restricted_shape}));
+    if(unexplained.length)console.log(kind+" unexplained raw-value keys: "+JSON.stringify(unexplained));
   }
   console.log("PASS: pinned preset coverage gap recorded (NOT native/WASM parity): "+reportPath);
 }
