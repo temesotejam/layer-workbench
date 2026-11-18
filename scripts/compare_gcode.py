@@ -329,6 +329,47 @@ def only_z_footprints(heights, layers, footprints):
     return result
 
 
+
+def shared_z_footprint_differences(native_layers, wasm_layers,
+                                   native_footprints, wasm_footprints):
+    """Find differing numeric G1 footprints at exact shared deposited Z values.
+
+    Unlike one-sided Z diagnostics, this catches equal move counts with
+    different XY lengths, positive E or endpoint bounds. The overall count
+    is complete; only the first 15 numeric entries are returned. Do not
+    infer feature identities or actual material volume from these metrics.
+    """
+    if native_layers is None or wasm_layers is None:
+        return None, None
+    total = 0
+    examples = []
+    for z in sorted(set(native_layers) & set(wasm_layers)):
+        a, b = native_footprints[z], wasm_footprints[z]
+        changed = (
+            native_layers[z] != wasm_layers[z]
+            or a['linear_moves'] != b['linear_moves']
+            or a['g17_arc_moves'] != b['g17_arc_moves']
+            or rounded_mm(a['linear_xy_mm']) != rounded_mm(b['linear_xy_mm'])
+            or a['linear_positive_e_mm'] != b['linear_positive_e_mm']
+            or a['linear_xy_endpoint_bounds_mm'] != b['linear_xy_endpoint_bounds_mm']
+        )
+        if not changed:
+            continue
+        total += 1
+        if len(examples) < 15:
+            examples.append({
+                'z_mm': format(z.normalize(), 'f'),
+                'native': only_z_footprints([z], native_layers, native_footprints)[0],
+                'wasm': only_z_footprints([z], wasm_layers, wasm_footprints)[0],
+                'wasm_minus_native_linear_xy_mm':
+                    rounded_mm(b['linear_xy_mm'] - a['linear_xy_mm']),
+                'wasm_minus_native_linear_positive_e_mm':
+                    format((b['linear_positive_e_mm'] -
+                            a['linear_positive_e_mm']).normalize(), 'f'),
+            })
+    return total, examples
+
+
 def compare(native, wasm, min_extrusion_moves=0):
     if min_extrusion_moves < 0:
         raise ValueError('minimum extrusion moves must not be negative')
@@ -367,6 +408,9 @@ def compare(native, wasm, min_extrusion_moves=0):
             for z in sorted(set(native_layers) | set(wasm_layers))
             if native_layers.get(z, 0) != wasm_layers.get(z, 0)
         ][:15]
+    (shared_z_footprint_difference_count,
+     shared_z_footprint_examples) = shared_z_footprint_differences(
+         native_layers, wasm_layers, native_footprints, wasm_footprints)
     issues = []
     # A malformed stateful command yields unknown deposition metrics, not
     # zero deposited material. Reject even when the optional minimum is 0:
@@ -426,6 +470,13 @@ def compare(native, wasm, min_extrusion_moves=0):
             only_z_footprints(native_only_z, native_layers, native_footprints),
         'first_wasm_only_counted_planar_z_footprints':
             only_z_footprints(wasm_only_z, wasm_layers, wasm_footprints),
+        # Shared exact Z levels can differ in geometry/E even when the
+        # planar deposited move counts agree. Never classify these as prime
+        # or model features; full-profile parity is still a separate gate.
+        'shared_counted_planar_z_footprint_difference_count':
+            shared_z_footprint_difference_count,
+        'first_shared_counted_planar_z_footprint_differences':
+            shared_z_footprint_examples,
         'minimum_extrusion_moves': min_extrusion_moves,
         'input_issues': issues,
         'native_sha256': hashlib.sha256(native.read_bytes()).hexdigest(),
