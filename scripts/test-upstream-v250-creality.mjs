@@ -18,6 +18,13 @@ assert.equal(machine.settings.nozzle_diameter,"0.4");
 assert.equal(machine.settings.printable_height,"400");
 assert.equal(process.settings.layer_height,"0.2");
 assert.equal(process.settings.wall_loops,"2");
+assert.equal(indexed.records.find(p=>p.name==="fdm_process_creality_common").skirt_loops,"1",
+  "Pinned Creality ancestor skirt count");
+assert.equal(indexed.records.find(p=>p.name==="0.20mm Standard @Creality CR-10 0.4 nozzle").skirt_loops,"2",
+  "Pinned CR-10 child overrides skirt count");
+assert.equal(process.settings.skirt_loops,"2",
+  "Official inherited skirt loops must reach bounded WASM adapter");
+assert.ok(!process.unsupported.includes("skirt_loops"));
 assert.equal(process.settings.line_width,"0.42",
   "Official v2.5.0 CR-10 0.20mm process must provide absolute line width");
 assert.ok(!process.unsupported.includes("line_width"),
