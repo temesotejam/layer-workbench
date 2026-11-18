@@ -137,10 +137,15 @@ def extrusion_move_metrics(commands):
         if not tokens:
             continue
         opcode = tokens[0].upper()
-        if opcode in ('M82', 'M083', 'M82.0'):
+        # M82 is absolute E, M83 is relative E. Preserve padded
+        # command spelling for *strict* comparison, but interpret only these
+        # well-defined numeric aliases in the deposition sanity gate.
+        # The former M083-in-M82 branch could count phantom extrusion after
+        # a relative retract or silently miss a real relative deposition.
+        if re.fullmatch(r'M0*82(?:\.0+)?', opcode):
             absolute_e = True
             continue
-        if opcode in ('M83', 'M083.0', 'M83.0'):
+        if re.fullmatch(r'M0*83(?:\.0+)?', opcode):
             absolute_e = False
             continue
         if opcode == 'G90':

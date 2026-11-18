@@ -274,3 +274,18 @@ raw value shapes among overlapping keys**, but the 389 non-forwarded native
 keys remain and real native/WASM effective configuration and G-code equivalence
 are **not** established. These counts describe one selected profile chain,
 not all OrcaSlicer printers or an available production feature.
+
+## 2026-11-19: padded extruder-mode tokens in parity fixture gate
+
+The read-only `compare_gcode.py` extrusion-count and positive-E length gates
+now interpret zero-padded `M082` as absolute E and `M083` as relative E,
+matching the respective `M82` and `M83` mode meanings. Previously, the
+`M083` spelling incorrectly entered the *absolute* branch while `M082`
+was not recognized, which could count phantom extrusion after a retraction
+or miss real relative-E extrusion. These modes are used **only** for fixture
+deposition metrics: strict ordered G-code comparison still distinguishes
+differently spelled commands. Offline regressions cover the false counts.
+
+This correction improves the credibility of the minimum-extrusion gate and
+numeric diagnostic. It does **not** resolve native/full-profile versus
+restricted-WASM inputs, printer-specific modal rules, or toolpath parity.
