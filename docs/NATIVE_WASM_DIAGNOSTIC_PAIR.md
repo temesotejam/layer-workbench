@@ -364,3 +364,19 @@ restricted development profile and STL, and the browser fixture is
 historical. They cannot establish the cause of the extra height,
 equivalent slicing, or printer safety. Rerunning the diagnostic on the
 same historical pair remains explicitly opt-in and `parity_pass: false`.
+
+## 2026-11-19: fail closed on impossible G17 arcs and unknown deposition
+
+The fixture comparator now rejects an impossible G17 XY arc (missing
+center/radius, invalid radius or inconsistent endpoints) **even if it has
+no positive E**. Previously the validator skipped that arc while allowing
+its changed coordinate state to influence subsequent G1 deposition, so
+an identical invalid native/WASM pair with enough surrounding extrusion
+could erroneously satisfy the minimum-deposition gate. Invalid stateful
+motion also blocks strict fixture matching when the optional minimum is
+zero: unknown metrics can no longer masquerade as zero deposition.
+
+This is a conservative **read-only fixture and diagnostic correctness**
+change. It does not extend G18/G19 arc support, normalize firmware-specific
+dialects, prove official profile equivalence or make any generated G-code
+print-safe. The native/WASM full-profile mismatch remains a release blocker.
