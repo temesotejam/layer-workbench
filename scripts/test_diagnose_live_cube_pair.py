@@ -78,7 +78,7 @@ class PairTests(unittest.TestCase):
         # Preserve the same extrusion count, but start a new constant-Z
         # stratum halfway through the WASM fixture.
         self.wasm.write_text(self.gcode.replace(
-            "G1 X70 Y70 E0.700", "G0 Z0.4\\nG1 X70 Y70 E0.700"),
+            "G1 X70 Y70 E0.700", "G0 Z0.4\nG1 X70 Y70 E0.700"),
             encoding="utf-8")
         self.reset_summary()
         result = self.run_diagnostic()
