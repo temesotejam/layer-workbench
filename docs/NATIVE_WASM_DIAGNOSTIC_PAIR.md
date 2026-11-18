@@ -223,3 +223,18 @@ passes. The G-code still uses the restricted WASM development profile and
 the native CLI still loads full official presets and imports a Core 3MF
 wrapper. No same-input full-profile native-vs-WASM G-code equivalence or
 physical print readiness is asserted. Artifacts remain CI-only.
+
+## 2026-11-18: explicit single-slot filament flow variant guard
+
+The restricted localhost profile resolver now distinguishes a **single
+filament_max_volumetric_speed value with no requested variant** (retained as a
+bounded generic one-slot setting) from an **explicitly requested extruder
+variant**. Previously the latter bypassed the variant-name lookup when the
+speed array had length one: a different or unlisted variant could appear to
+be selected while receiving an unrelated limit. Explicit selection now
+requires a one-element native filament_extruder_variant array with an exact
+matching name, bounded selected flow rate, and reported index 0. Missing,
+mismatched, malformed or multi-value metadata fails closed. Existing pinned
+six-slot Generic PLA selection remains unchanged. Local Node regression tests
+exercise the one-slot and six-slot paths; a passing test does not establish
+native-vs-WASM parity or safe machine operation.
