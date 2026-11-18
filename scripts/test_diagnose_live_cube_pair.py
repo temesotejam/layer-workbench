@@ -63,6 +63,50 @@ class PairTests(unittest.TestCase):
         self.assertNotIn("first_differences", json.dumps(result))
         self.assertNotIn("G1 X", json.dumps(result))
 
+    def test_real_deposition_z_metrics_are_numeric_only(self):
+        result = self.run_diagnostic()
+        metrics = result["metrics"]
+        self.assertEqual(metrics["native_counted_planar_z_levels"], 1)
+        self.assertEqual(metrics["wasm_counted_planar_z_levels"], 1)
+        self.assertEqual(metrics["native_counted_nonplanar_deposition_moves"], 0)
+        self.assertEqual(metrics["wasm_counted_nonplanar_deposition_moves"], 0)
+        self.assertEqual(metrics["first_counted_planar_z_differences"], [])
+        self.assertNotIn("first_differences", json.dumps(result))
+        self.assertNotIn("G1 X", json.dumps(result))
+
+    def test_real_z_height_difference_is_reported_without_parity(self):
+        # Preserve the same extrusion count, but start a new constant-Z
+        # stratum halfway through the WASM fixture.
+        self.wasm.write_text(self.gcode.replace(
+            "G1 X70 Y70 E0.700", "G0 Z0.4\\nG1 X70 Y70 E0.700"),
+            encoding="utf-8")
+        self.reset_summary()
+        result = self.run_diagnostic()
+        metrics = result["metrics"]
+        self.assertEqual(metrics["native_extrusion_moves"], 124)
+        self.assertEqual(metrics["wasm_extrusion_moves"], 124)
+        self.assertEqual(metrics["native_counted_planar_z_levels"], 1)
+        self.assertEqual(metrics["wasm_counted_planar_z_levels"], 2)
+        self.assertEqual(metrics["first_counted_planar_z_differences"], [
+            {"z_mm": "0", "native_moves": 124, "wasm_moves": 69},
+            {"z_mm": "0.4", "native_moves": 0, "wasm_moves": 55},
+        ])
+        self.assertFalse(result["parity_pass"])
+        self.assertFalse(result["ordered_commands_equal"])
+
+    def test_nonplanar_real_deposition_is_not_a_planar_layer(self):
+        self.wasm.write_text(self.gcode.replace(
+            "G1 X70 Y70 E0.700", "G1 X70 Y70 Z0.4 E0.700"),
+            encoding="utf-8")
+        self.reset_summary()
+        metrics = self.run_diagnostic()["metrics"]
+        self.assertEqual(metrics["wasm_counted_nonplanar_deposition_moves"], 1)
+        self.assertEqual(metrics["wasm_counted_planar_z_levels"], 2)
+        self.assertEqual(metrics["first_counted_planar_z_differences"], [
+            {"z_mm": "0", "native_moves": 124, "wasm_moves": 69},
+            {"z_mm": "0.4", "native_moves": 0, "wasm_moves": 54},
+        ])
+
     def test_identical_gcode_is_still_not_profile_parity(self):
         self.wasm.write_text(self.gcode, encoding="utf-8")
         self.reset_summary()
