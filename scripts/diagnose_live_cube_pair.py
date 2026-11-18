@@ -61,6 +61,12 @@ def diagnostic(native, wasm, wasm_summary, source_stl, minimum=100):
         "native_counted_linear_xy_moves", "wasm_counted_linear_xy_moves",
         "native_counted_linear_xy_mm", "wasm_counted_linear_xy_mm",
         "counted_linear_xy_delta_mm", "mismatched_commands",
+        # Actual real-engine Z-strata observations, not synthetic fixture
+        # estimates. Unknown/unsupported motion produces null, not a layer.
+        "native_counted_planar_z_levels", "wasm_counted_planar_z_levels",
+        "native_counted_nonplanar_deposition_moves",
+        "wasm_counted_nonplanar_deposition_moves",
+        "first_counted_planar_z_differences",
     )
     return {
         "status": "DIAGNOSTIC_ONLY",

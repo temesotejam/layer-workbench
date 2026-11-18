@@ -310,3 +310,29 @@ unequal full profiles **fail parity** remain unchanged. Tests cover Z ramps,
 relative moves, G92, inch units, arcs, height disagreements, and malformed
 geometry. This is useful for diagnosing eventual real-engine differences;
 **no equal-full-profile native/WASM G-code match is claimed**.
+
+## 2026-11-19: real-engine deposited Z-strata diagnostic
+
+The existing historical real-G-code native/WASM cube pair can now surface the
+read-only per-Z deposition counters added to the strict comparator. In
+`scripts/diagnose_live_cube_pair.py`, the `metrics` object includes native
+and WASM counts of constant-Z positive-E XY strata, nonplanar positive-E XY
+moves, and a bounded list (at most 15) of the first Z positions whose move
+counts differ. The numbers come from the **actual G-code bytes** supplied to
+that diagnostic, not from declared preview settings or test fixture labels.
+Malformed/unsupported stateful commands can yield null diagnostics instead
+of fabricated planar levels. This deliberately excludes raw toolpath commands,
+first command differences, full licensed profiles and print-ready G-code
+from the archived numeric-only report. Regression cases cover unchanged
+planar counts, a shifted deposition height with unchanged total extrusion
+moves, and a nonplanar XY/Z extrusion not counted as a planar move.
+
+The real-engine workflow still uses a historical WASM Chrome artifact,
+which may expire; if unavailable, that optional pairing is skipped. The
+native input is a placed Core 3MF wrapper with full v2.5.0 source-pinned
+presets; WASM uses source STL and a restricted generic-PLA profile. Even
+when both outputs are present and analyzed, the report **always** says
+`parity_pass: false`. These diagnostics cannot demonstrate equal effective
+profiles, complete layer topology, engine identity, full G-code parity, or
+physical print safety. The production Pages site and headless WASM candidate
+are not modified by this diagnostic-only change.
