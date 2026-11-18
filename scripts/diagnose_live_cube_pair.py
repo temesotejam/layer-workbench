@@ -72,6 +72,10 @@ def diagnostic(native, wasm, wasm_summary, source_stl, minimum=100):
         "first_wasm_only_counted_planar_z_mm",
         "first_native_only_counted_planar_z_footprints",
         "first_wasm_only_counted_planar_z_footprints",
+        # Shared deposited heights with unequal G1 footprints (even if
+        # their positive-E move counts match). Still numeric-only.
+        "shared_counted_planar_z_footprint_difference_count",
+        "first_shared_counted_planar_z_footprint_differences",
     )
     return {
         "status": "DIAGNOSTIC_ONLY",
