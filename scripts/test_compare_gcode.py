@@ -61,6 +61,34 @@ class ComparatorTests(unittest.TestCase):
         self.assertEqual(report['wasm_counted_positive_e_mm'], '4.29')
         self.assertEqual(report['counted_positive_e_delta_mm'], '0')
 
+    def test_leading_zero_m083_is_relative_not_absolute(self):
+        # The previous M083 branch incorrectly set absolute E. That made
+        # an E0 move after a relative retraction look like deposited plastic.
+        gcode = ('G90\nM083\nG1 X1 E1\nG1 X2 E-0.5\n'
+                 'G1 X3 E0\nG1 X4 E1\n')
+        report = self.run_compare(gcode, gcode, min_extrusion_moves=2)
+        self.assertTrue(report['match'], report)
+        self.assertEqual(report['native_extrusion_moves'], 2)
+        self.assertEqual(report['native_counted_positive_e_mm'], '2')
+        self.assertFalse(self.run_compare(
+            gcode, gcode, min_extrusion_moves=3)['match'])
+
+    def test_leading_zero_m082_restores_absolute_e(self):
+        # Starting in relative E, M082 must make E0.5 a retraction from E1.
+        gcode = ('M83\nG1 X1 E1\nM082\n'
+                 'G1 X2 E0.5\nG1 X3 E1.5\n')
+        report = self.run_compare(gcode, gcode, min_extrusion_moves=2)
+        self.assertTrue(report['match'], report)
+        self.assertEqual(report['native_extrusion_moves'], 2)
+        self.assertEqual(report['native_counted_positive_e_mm'], '2')
+        # Ordered-command comparison remains strict despite equivalent mode.
+        distinct = self.run_compare(
+            'M082\nG1 X1 E1\n', 'M82\nG1 X1 E1\n',
+            min_extrusion_moves=1)
+        self.assertFalse(distinct['match'])
+        self.assertEqual(distinct['mismatched_commands'], 1)
+        self.assertEqual(distinct['native_extrusion_moves'], 1)
+
     def test_counted_positive_e_delta_is_diagnostic_not_a_parity_override(self):
         native = 'M83\nG1 X10 E1\nG1 X20 E1\n'
         wasm = 'M83\nG1 X10 E1\nG1 X20 E2\n'
