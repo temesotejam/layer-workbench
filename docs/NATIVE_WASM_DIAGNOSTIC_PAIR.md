@@ -427,3 +427,36 @@ positive-E moves, other per-Z discrepancies, full-profile mismatch or
 native Core 3MF versus WASM STL import. It does not authorize executing
 machine startup G-code in a browser, deploying WASM to Pages or printing
 the unvalidated output. The diagnostic remains `parity_pass: false`.
+
+## 2026-11-19: compare G1 footprints at Z heights present on BOTH sides
+
+The numeric-only native/WASM cube diagnostic previously reported planar
+positive-E move-count differences and G1 endpoint footprints only for Z
+positions **missing from one side**. It could not show a change in XY
+path length, G1-positive E or XY bounds when both outputs deposited at
+the same exact Z with the same move count.
+
+The comparator now counts **all** shared deposited Z positions with
+different numeric G1 footprints and includes at most 15 sorted samples in
+`first_shared_counted_planar_z_footprint_differences`. Each sample has the
+exact Z, the native and WASM numeric footprints (move counts, G1 lengths,
+positive E, endpoint bounds and G17-arc counts), plus WASM-minus-native G1
+length and positive-E differences. Differences in XY distance are rounded
+to 0.000001 mm for diagnostic display, not as toolpath equivalence; bounds
+and filament E remain exact decimal observations. The separate full
+`shared_counted_planar_z_footprint_difference_count` is not truncated.
+
+This is useful for separating the *known* native-only Z=0.28 mm startup
+prime paths from additional differences at Z values **shared** with WASM.
+The analysis does **not** remove, rewrite or label startup G-code or
+subtract any path from the strict ordered comparison. It never assumes
+a feature is an object wall, infill or priming command. Curved G17
+path lengths and arc interior extents remain omitted, nonplanar moves are
+not included, and malformed stateful geometry fails closed with null
+footprint results. It archives only numeric summaries, not executable
+toolpaths or original licensed profiles.
+
+The two real engines still differ in their effective machine/filament/
+process presets and native Core 3MF versus browser STL import path.
+Therefore every real comparison stays `DIAGNOSTIC_ONLY` with
+`parity_pass: false`; no real print-safety or G-code equivalence is implied.
