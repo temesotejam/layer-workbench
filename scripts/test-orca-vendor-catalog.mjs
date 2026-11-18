@@ -43,4 +43,46 @@ const ambiguous=extractOrcaVendorCatalog([
   filamentVendor("Vendor B",[{name:"Generic PLA @B",compatible_printers:["Printer X"]}])
 ]);
 assert.throws(()=>selectOrcaFilamentPreset(ambiguous,"Generic PLA","Printer X"),/Ambiguous/);
+// Real Orca compatible_printers may be inherited; selection must use the
+// nearest ancestor within the same vendor, not just the leaf's own JSON.
+const inheritedCatalog=extractOrcaVendorCatalog([
+  globalFilaments,
+  filamentVendor("Tuned",[
+    {name:"local PLA base",compatible_printers:["Printer X"],filament_type:"PLA"},
+    {name:"Generic PLA @Tuned",inherits:"local PLA base"}
+  ])
+]);
+assert.equal(selectOrcaFilamentPreset(inheritedCatalog,"Generic PLA","Printer X").vendor,"Tuned");
+assert.equal(selectOrcaFilamentPreset(inheritedCatalog,"Generic PLA","Printer Y").vendor,
+  "OrcaFilamentLibrary");
+const disabledOverride=extractOrcaVendorCatalog([
+  globalFilaments,
+  filamentVendor("Tuned",[
+    {name:"local PLA base",compatible_printers:["Printer X"]},
+    {name:"Generic PLA @Tuned",inherits:"local PLA base",compatible_printers:[]}
+  ])
+]);
+assert.equal(selectOrcaFilamentPreset(disabledOverride,"Generic PLA","Printer X").vendor,
+  "OrcaFilamentLibrary","Explicit empty child list must override inherited compatibility");
+for(const invalid of ["Printer X",null,["Printer X","Printer X"],[null],[""]]) {
+  const malformed=extractOrcaVendorCatalog([
+    globalFilaments,
+    filamentVendor("Tuned",[
+      {name:"local PLA base",compatible_printers:invalid},
+      {name:"Generic PLA @Tuned",inherits:"local PLA base"}
+    ])
+  ]);
+  assert.throws(()=>selectOrcaFilamentPreset(malformed,"Generic PLA","Printer X"),
+    /Invalid inherited compatible_printers/);
+}
+for(const [kind,base] of [
+  ["missing",{name:"Generic PLA @Tuned",inherits:"absent base"}],
+  ["cycle",{name:"Generic PLA @Tuned",inherits:"Generic PLA @Tuned"}]
+]) {
+  const bad=extractOrcaVendorCatalog([globalFilaments,filamentVendor("Tuned",[base])]);
+  assert.throws(()=>selectOrcaFilamentPreset(bad,"Generic PLA","Printer X"),
+    kind==="missing"?/Missing vendor filament ancestor/:/inheritance cycle/);
+}
+console.log("PASS: inherited filament compatibility, explicit override, malformed and cyclic ancestry");
+
 console.log("PASS: multi-vendor namespaces, filament alias precedence and global fallback");
