@@ -50,9 +50,11 @@ class PairTests(unittest.TestCase):
         value = b"other model"
         (self.root / "wasm" / "model.txt").write_bytes(value)
         self.change("wasm", lambda m: m["files"]["model"].update(sha256=hashlib.sha256(value).hexdigest()))
+        self.mutate_scene("wasm", lambda scene: scene.update(
+            source_model_sha256=hashlib.sha256(value).hexdigest()))
         report = verify(self.manifest("native"), self.manifest("wasm"))
         self.assertFalse(report["match"])
-        self.assertEqual(report["different_inputs"], ["model"])
+        self.assertEqual(report["different_inputs"], ["model", "scene"])
         self.assertNotIn("gcode_comparison", report)
 
     def test_opt_in_diagnostic_compares_commands_but_never_grants_parity(self):
@@ -79,6 +81,8 @@ class PairTests(unittest.TestCase):
         (self.root / "wasm" / "model.txt").write_bytes(modified_model)
         self.change("wasm", lambda m: m["files"]["model"].update(
             sha256=hashlib.sha256(modified_model).hexdigest()))
+        self.mutate_scene("wasm", lambda scene: scene.update(
+            source_model_sha256=hashlib.sha256(modified_model).hexdigest()))
         modified_gcode = b"G1 X1 E0.1\nG1 X3 E0.2\n"
         (self.root / "wasm" / "gcode.txt").write_bytes(modified_gcode)
         self.change("wasm", lambda m: m["files"]["gcode"].update(
@@ -86,7 +90,7 @@ class PairTests(unittest.TestCase):
         report = verify(self.manifest("native"), self.manifest("wasm"),
                         diagnose_mismatched_inputs=True)
         self.assertFalse(report["match"])
-        self.assertEqual(report["different_inputs"], ["model"])
+        self.assertEqual(report["different_inputs"], ["model", "scene"])
         self.assertEqual(report["gcode_comparison"]["mismatched_commands"], 1)
         self.assertEqual(report["gcode_comparison"]["counted_linear_xy_delta_mm"], "1")
 
