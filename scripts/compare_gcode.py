@@ -123,6 +123,11 @@ def extrusion_move_metrics(commands):
     counted_e_mm = Decimal(0)
     counted_linear_xy_mm = Decimal(0)
     counted_linear_moves = 0
+    # Only deposition on a constant-Z move is assigned to a Z plane.
+    # Simultaneous XY+Z extrusion remains counted, but not as a flat layer.
+    planar_layer_moves = {}
+    nonplanar_deposition_moves = 0
+    z_position = Decimal(0)
     absolute_e = True
     absolute_xyz = True
     absolute_arc_centers = False
@@ -177,13 +182,13 @@ def extrusion_move_metrics(commands):
                 if stateful:
                     # Opaque move/reset syntax leaves the position unknown.
                     # Never use later moves to satisfy the fixture gate.
-                    return 0, None, None, 0
+                    return 0, None, None, 0, None, None
                 continue
             letter = match[1].upper()
             if stateful and (letter in words or letter in ('G', 'M', 'N', 'T')):
                 # Duplicate words or embedded opcodes have firmware-dependent
                 # interpretation; the conservative deposition gate must fail.
-                return 0, None, None, 0
+                return 0, None, None, 0, None, None
             words[letter] = Decimal(match[2])
         if opcode == 'G92':
             for axis in xy:
@@ -191,10 +196,13 @@ def extrusion_move_metrics(commands):
                     xy[axis] = words[axis] * units
             if 'E' in words:
                 e_position = words['E'] * units
+            if 'Z' in words:
+                z_position = words['Z'] * units
             continue
         if not MOTION.fullmatch(opcode):
             continue
         start_xy = xy.copy()
+        start_z = z_position
         moved_xy = False
         for axis in xy:
             if axis not in words:
@@ -203,6 +211,9 @@ def extrusion_move_metrics(commands):
             new_position = requested if absolute_xyz else xy[axis] + requested
             moved_xy |= new_position != xy[axis]
             xy[axis] = new_position
+        if 'Z' in words:
+            requested_z = words['Z'] * units
+            z_position = requested_z if absolute_xyz else z_position + requested_z
         if 'E' not in words:
             continue
         requested_e = words['E'] * units
@@ -218,6 +229,10 @@ def extrusion_move_metrics(commands):
             continue
         count += 1
         counted_e_mm += delta
+        if start_z == z_position:
+            planar_layer_moves[z_position] = planar_layer_moves.get(z_position, 0) + 1
+        else:
+            nonplanar_deposition_moves += 1
         if code == 1:
             # Only G1 XY deposition is a straight segment. G17 arcs remain
             # in the extrusion count/E total but are excluded from this metric.
@@ -225,7 +240,8 @@ def extrusion_move_metrics(commands):
             dy = xy['Y'] - start_xy['Y']
             counted_linear_xy_mm += (dx * dx + dy * dy).sqrt()
             counted_linear_moves += 1
-    return count, counted_e_mm, counted_linear_xy_mm, counted_linear_moves
+    return (count, counted_e_mm, counted_linear_xy_mm, counted_linear_moves,
+            planar_layer_moves, nonplanar_deposition_moves)
 
 
 def count_extrusion_moves(commands):
@@ -273,8 +289,21 @@ def compare(native, wasm, min_extrusion_moves=0):
                     entry['parameter_deltas'] = deltas
                 differences.append(entry)
     native_motion, wasm_motion = count_motion(a), count_motion(b)
-    native_extrusion, native_e_mm, native_linear_xy_mm, native_linear_moves = extrusion_move_metrics(a)
-    wasm_extrusion, wasm_e_mm, wasm_linear_xy_mm, wasm_linear_moves = extrusion_move_metrics(b)
+    (native_extrusion, native_e_mm, native_linear_xy_mm, native_linear_moves,
+     native_layers, native_nonplanar) = extrusion_move_metrics(a)
+    (wasm_extrusion, wasm_e_mm, wasm_linear_xy_mm, wasm_linear_moves,
+     wasm_layers, wasm_nonplanar) = extrusion_move_metrics(b)
+    # Bounded, read-only per-Z differences: do not imply that a Z plane
+    # represents a complete OrcaSlicer layer or deposited volume.
+    planar_layer_differences = None
+    if native_layers is not None and wasm_layers is not None:
+        planar_layer_differences = [
+            {'z_mm': format(z.normalize(), 'f'),
+             'native_moves': native_layers.get(z, 0),
+             'wasm_moves': wasm_layers.get(z, 0)}
+            for z in sorted(set(native_layers) | set(wasm_layers))
+            if native_layers.get(z, 0) != wasm_layers.get(z, 0)
+        ][:15]
     issues = []
     if native_motion == 0:
         issues.append('native input has no G0/G1/G2/G3 motion commands')
@@ -305,6 +334,13 @@ def compare(native, wasm, min_extrusion_moves=0):
             else rounded_mm(wasm_linear_xy_mm),
         'counted_linear_xy_delta_mm': None if native_linear_xy_mm is None or wasm_linear_xy_mm is None
             else rounded_mm(wasm_linear_xy_mm - native_linear_xy_mm),
+        # Exact numeric Z locations of constant-height positive-E XY moves,
+        # including valid G17 arcs. Changing Z during deposition is excluded.
+        'native_counted_planar_z_levels': None if native_layers is None else len(native_layers),
+        'wasm_counted_planar_z_levels': None if wasm_layers is None else len(wasm_layers),
+        'native_counted_nonplanar_deposition_moves': native_nonplanar,
+        'wasm_counted_nonplanar_deposition_moves': wasm_nonplanar,
+        'first_counted_planar_z_differences': planar_layer_differences,
         'minimum_extrusion_moves': min_extrusion_moves,
         'input_issues': issues,
         'native_sha256': hashlib.sha256(native.read_bytes()).hexdigest(),
