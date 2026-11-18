@@ -81,7 +81,7 @@ permissions:
 jobs:
   native-cli-probe:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -136,8 +136,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get update -qq
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+          # Hosted runners sometimes select a very slow regional EC2
+          # Ubuntu mirror; the last two PR probes reached the job timeout
+          # while downloading ordinary dependencies. Change only that mirror
+          # on this ephemeral runner, retaining Ubuntu's signed repositories
+          # and its separate security source.
+          for source in /etc/apt/apt-mirrors.txt /etc/apt/sources.list.d/ubuntu.sources; do
+            if [ -f "${source}" ] && grep -Eq '([a-z0-9-]+\\.)?ec2\\.archive\\.ubuntu\\.com' "${source}"; then
+              sudo sed -i -E 's@https?://[a-z0-9.-]+\\.ec2\\.archive\\.ubuntu\\.com/ubuntu@http://archive.ubuntu.com/ubuntu@g' "${source}"
+              echo "Switched regional EC2 archive mirror to standard Ubuntu archive in ${source}"
+            fi
+          done
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 install -y --no-install-recommends \
             libopengl0 libwebkit2gtk-4.1-0 libjavascriptcoregtk-4.1-0 libglu1-mesa
 
       - name: Exercise official native headless help and independent Core 3MF import
