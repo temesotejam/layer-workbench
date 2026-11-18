@@ -28,7 +28,7 @@ const LIMITS = {
   internal_solid_infill_line_width: [0.1,2],
   // Source-pinned CR-10 0.20mm Standard uses skirt_loops=2. Integer loops
   // only; enabling a skirt here is a localhost diagnostic, not print approval.
-  skirt_loops: [0,20],
+  skirt_loops: [0,10],
   wall_loops: [1,8],
   sparse_infill_density: [0,100],
   top_shell_layers: [0,12],
