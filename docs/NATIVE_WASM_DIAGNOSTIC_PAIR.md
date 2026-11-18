@@ -336,3 +336,31 @@ when both outputs are present and analyzed, the report **always** says
 profiles, complete layer topology, engine identity, full G-code parity, or
 physical print safety. The production Pages site and headless WASM candidate
 are not modified by this diagnostic-only change.
+
+
+## 2026-11-19: distinguish absent Z planes from differing move counts
+
+The real native/WASM G-code comparison now reports *all* exact, counted
+constant-Z deposition heights present on only one side as numeric membership
+counts, plus at most 15 sorted decimal heights per direction. These new
+`native_only_counted_planar_z_levels` and
+`wasm_only_counted_planar_z_levels` counters complement the existing
+`first_counted_planar_z_differences` field, which also contains shared
+heights with unequal positive-E move counts. The full membership counts
+are **not** truncated to the first 15 example heights. Malformed modal
+geometry yields null values rather than fabricated heights. This diagnostic
+does not merge near-equal Z values, infer true layer identity or archive
+executable G-code. Regression tests cover equal sets, shifts, more than
+15 unmatched heights and invalid motion.
+
+The preceding real-engine [native CLI probe #44368290038](https://github.com/temesotejam/layer-workbench/actions/runs/44368290038)
+passed on 2026-11-18 UTC and yielded 101 native versus 100 historical
+WASM constant-Z deposited heights. Its bounded numeric differences include
+a native-only deposited height at **0.28 mm** (two counted moves).
+The G-code had 3,896 native and 3,492 WASM counted positive-E movements.
+These are **not** same-effective-profile G-code results: the native side
+used full source-pinned v2.5.0 presets and Core 3MF while WASM used a
+restricted development profile and STL, and the browser fixture is
+historical. They cannot establish the cause of the extra height,
+equivalent slicing, or printer safety. Rerunning the diagnostic on the
+same historical pair remains explicitly opt-in and `parity_pass: false`.
