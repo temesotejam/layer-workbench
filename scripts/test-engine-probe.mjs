@@ -784,6 +784,51 @@ try {
     await uploadRawOrca();
     console.log('PASS: native skirt_speed independently changes actual skirt-tagged positive-E XY feedrate');
 
+    // Source-pinned CR-10 v2.5.0 has a native 45-degree infill direction.
+    // Hold two-STL geometry, 35% density and grid pattern constant; change
+    // only infill_direction. Metadata/header/hash-only changes cannot pass.
+    rawOrca[4].sparse_infill_pattern='grid';
+    rawOrca[4].sparse_infill_density='35%';
+    const infillAtZero=await sliceWithLineWidth('0','infill_direction');
+    const infillAtThirty=await sliceWithLineWidth('30','infill_direction');
+    const infillOrientationWitness=code=>{
+      const parsed=parseGcodeToolpaths(code);
+      assert.equal(parsed.skippedArcs,0,'Cannot verify infill angle with skipped arcs');
+      assert.equal(parsed.skippedMalformedMotion,0,'Cannot verify infill angle with malformed motion');
+      const histogram=new Map();
+      let depositedSegments=0;
+      for(const layer of parsed.layers)for(const s of layer.segments){
+        const feature=String(s.feature||'');
+        if(!s.extrusion||!feature.includes('infill')||
+           /solid|bridge|surface|gap|support/.test(feature)||
+           !Number.isFinite(s.z1)||!Number.isFinite(s.z2)||
+           Math.abs(s.z1-s.z2)>0.0005)continue;
+        const dx=s.x2-s.x1,dy=s.y2-s.y1;
+        if(Math.hypot(dx,dy)<1)continue;
+        const degrees=(Math.atan2(dy,dx)*180/Math.PI+360)%180;
+        const bin=(Math.round(degrees/5)*5)%180;
+        histogram.set(bin,(histogram.get(bin)||0)+1);
+        depositedSegments++;
+      }
+      assert.ok(depositedSegments>=12,'Need actual feature-tagged sparse-infill XY extrusion');
+      return {depositedSegments,angle_bins_degrees:Object.fromEntries(
+        [...histogram.entries()].sort((a,b)=>a[0]-b[0]).map(([a,n])=>[String(a),n]))};
+    };
+    const infillWitness={baseline_angle_degrees:0,test_angle_degrees:30,
+      baseline:infillOrientationWitness(infillAtZero),
+      test:infillOrientationWitness(infillAtThirty),
+      desktop_native_parity:false,printer_ready:false};
+    assert.notDeepEqual(infillWitness.baseline.angle_bins_degrees,
+      infillWitness.test.angle_bins_degrees,
+      'Native infill_direction must change positive-E sparse-infill XY orientation, not metadata');
+    await writeFile(parityDir+'/infill-direction-deposition.json',
+      JSON.stringify(infillWitness,null,2)+'\n');
+    console.log('PASS: isolated WASM sparse-infill deposition rotates with native infill_direction');
+    delete rawOrca[4].infill_direction;
+    delete rawOrca[4].sparse_infill_pattern;
+    delete rawOrca[4].sparse_infill_density;
+    await uploadRawOrca();
+
     const narrowWidthMotion=motionOnly(await sliceWithLineWidth('0.35'));
     const broadWidthMotion=motionOnly(await sliceWithLineWidth('0.65'));
     assert.ok(narrowWidthMotion.length>100&&broadWidthMotion.length>100,
