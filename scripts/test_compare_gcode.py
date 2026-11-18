@@ -467,5 +467,41 @@ class ComparatorTests(unittest.TestCase):
         self.assertEqual(report['native_extrusion_moves'], 1)
         self.assertFalse(report['match'])
 
+    def test_native_only_z_footprint_uses_actual_g1_geometry(self):
+        native = ('M83\nG0 Z0.28\nG1 X1 Y1 E0.1\n'
+                  'G1 X3 Y1 E0.2\nG0 Z0.4\nG1 X4 Y1 E0.3\n')
+        wasm = 'M83\nG0 Z0.4\nG1 X4 Y1 E0.3\n'
+        report = self.run_compare(native, wasm, min_extrusion_moves=1)
+        self.assertFalse(report['match'])
+        self.assertEqual(report['native_only_counted_planar_z_levels'], 1)
+        self.assertEqual(report['first_native_only_counted_planar_z_footprints'], [{
+            'z_mm': '0.28', 'deposition_moves': 2,
+            'linear_moves': 2, 'g17_arc_moves': 0,
+            'linear_xy_mm': '3.414214', 'linear_positive_e_mm': '0.3',
+            'linear_xy_endpoint_bounds_mm': ['0', '0', '3', '1'],
+        }])
+        self.assertEqual(report['first_wasm_only_counted_planar_z_footprints'], [])
+
+    def test_arc_is_not_mistaken_for_straight_line_footprint(self):
+        native = ('M83\nG0 Z0.28\nG2 I1 J0 E0.5\n'
+                  'G1 X2 E0.25\nG0 Z0.4\nG1 X3 E0.1\n')
+        wasm = 'M83\nG0 Z0.4\nG1 X3 E0.1\n'
+        report = self.run_compare(native, wasm, min_extrusion_moves=1)
+        detail = report['first_native_only_counted_planar_z_footprints'][0]
+        self.assertEqual(detail['deposition_moves'], 2)
+        self.assertEqual(detail['linear_moves'], 1)
+        self.assertEqual(detail['g17_arc_moves'], 1)
+        self.assertEqual(detail['linear_xy_mm'], '2')
+        self.assertEqual(detail['linear_positive_e_mm'], '0.25')
+        self.assertEqual(detail['linear_xy_endpoint_bounds_mm'], ['0', '0', '2', '0'])
+
+    def test_invalid_arc_has_no_invented_z_footprint(self):
+        code = 'M83\nG0 Z0.28\nG2 X9 R1 E1\nG1 X10 E1\n'
+        report = self.run_compare(code, code, min_extrusion_moves=0)
+        self.assertFalse(report['match'])
+        self.assertIsNone(report['first_native_only_counted_planar_z_footprints'])
+        self.assertIsNone(report['first_wasm_only_counted_planar_z_footprints'])
+
+
 if __name__ == '__main__':
     unittest.main()

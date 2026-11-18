@@ -126,6 +126,9 @@ def extrusion_move_metrics(commands):
     # Only deposition on a constant-Z move is assigned to a Z plane.
     # Simultaneous XY+Z extrusion remains counted, but not as a flat layer.
     planar_layer_moves = {}
+    # Numeric-only footprint for each observed constant-Z deposited stratum.
+    # G17 arc lengths and mid-arc extrema are deliberately NOT approximated.
+    planar_linear_stats = {}
     nonplanar_deposition_moves = 0
     z_position = Decimal(0)
     absolute_e = True
@@ -182,13 +185,13 @@ def extrusion_move_metrics(commands):
                 if stateful:
                     # Opaque move/reset syntax leaves the position unknown.
                     # Never use later moves to satisfy the fixture gate.
-                    return 0, None, None, 0, None, None
+                    return 0, None, None, 0, None, None, None
                 continue
             letter = match[1].upper()
             if stateful and (letter in words or letter in ('G', 'M', 'N', 'T')):
                 # Duplicate words or embedded opcodes have firmware-dependent
                 # interpretation; the conservative deposition gate must fail.
-                return 0, None, None, 0, None, None
+                return 0, None, None, 0, None, None, None
             words[letter] = Decimal(match[2])
         if opcode == 'G92':
             for axis in xy:
@@ -221,7 +224,7 @@ def extrusion_move_metrics(commands):
         # Unsupported non-XY planes retain their existing excluded status.
         if code in (2, 3) and plane == 'G17' and not valid_g17_arc(
                 start_xy, xy, words, units, absolute_arc_centers):
-            return 0, None, None, 0, None, None
+            return 0, None, None, 0, None, None, None
         if 'E' not in words:
             continue
         requested_e = words['E'] * units
@@ -237,6 +240,13 @@ def extrusion_move_metrics(commands):
         counted_e_mm += delta
         if start_z == z_position:
             planar_layer_moves[z_position] = planar_layer_moves.get(z_position, 0) + 1
+            footprint = planar_linear_stats.setdefault(
+                z_position, {'linear_moves': 0, 'g17_arc_moves': 0,
+                             'linear_xy_mm': Decimal(0),
+                             'linear_positive_e_mm': Decimal(0),
+                             'linear_xy_endpoint_bounds_mm': None})
+            if code in (2, 3):
+                footprint['g17_arc_moves'] += 1
         else:
             nonplanar_deposition_moves += 1
         if code == 1:
@@ -244,10 +254,24 @@ def extrusion_move_metrics(commands):
             # in the extrusion count/E total but are excluded from this metric.
             dx = xy['X'] - start_xy['X']
             dy = xy['Y'] - start_xy['Y']
-            counted_linear_xy_mm += (dx * dx + dy * dy).sqrt()
+            length = (dx * dx + dy * dy).sqrt()
+            counted_linear_xy_mm += length
             counted_linear_moves += 1
+            if start_z == z_position:
+                footprint['linear_moves'] += 1
+                footprint['linear_xy_mm'] += length
+                footprint['linear_positive_e_mm'] += delta
+                bounds = footprint['linear_xy_endpoint_bounds_mm']
+                for point in (start_xy, xy):
+                    x, y = point['X'], point['Y']
+                    if bounds is None:
+                        bounds = [x, y, x, y]
+                    else:
+                        bounds = [min(bounds[0], x), min(bounds[1], y),
+                                  max(bounds[2], x), max(bounds[3], y)]
+                footprint['linear_xy_endpoint_bounds_mm'] = bounds
     return (count, counted_e_mm, counted_linear_xy_mm, counted_linear_moves,
-            planar_layer_moves, nonplanar_deposition_moves)
+            planar_layer_moves, nonplanar_deposition_moves, planar_linear_stats)
 
 
 def count_extrusion_moves(commands):
@@ -278,6 +302,33 @@ def rounded_mm(value):
     return format(value.quantize(Decimal('0.000001')).normalize(), 'f')
 
 
+def only_z_footprints(heights, layers, footprints):
+    """Bounded, numeric-only deposited G1 footprint at absent Z positions.
+
+    Endpoint bounds omit arc interior points; lengths omit G17 curves.
+    This deliberately cannot classify a feature, determine layer identity,
+    prove equal settings or certify physical toolpaths.
+    """
+    if heights is None:
+        return None
+    result = []
+    for z in heights[:15]:
+        data = footprints[z]
+        bounds = data['linear_xy_endpoint_bounds_mm']
+        result.append({
+            'z_mm': format(z.normalize(), 'f'),
+            'deposition_moves': layers[z],
+            'linear_moves': data['linear_moves'],
+            'g17_arc_moves': data['g17_arc_moves'],
+            'linear_xy_mm': rounded_mm(data['linear_xy_mm']),
+            'linear_positive_e_mm': format(
+                data['linear_positive_e_mm'].normalize(), 'f'),
+            'linear_xy_endpoint_bounds_mm': None if bounds is None else [
+                format(value.normalize(), 'f') for value in bounds],
+        })
+    return result
+
+
 def compare(native, wasm, min_extrusion_moves=0):
     if min_extrusion_moves < 0:
         raise ValueError('minimum extrusion moves must not be negative')
@@ -296,9 +347,9 @@ def compare(native, wasm, min_extrusion_moves=0):
                 differences.append(entry)
     native_motion, wasm_motion = count_motion(a), count_motion(b)
     (native_extrusion, native_e_mm, native_linear_xy_mm, native_linear_moves,
-     native_layers, native_nonplanar) = extrusion_move_metrics(a)
+     native_layers, native_nonplanar, native_footprints) = extrusion_move_metrics(a)
     (wasm_extrusion, wasm_e_mm, wasm_linear_xy_mm, wasm_linear_moves,
-     wasm_layers, wasm_nonplanar) = extrusion_move_metrics(b)
+     wasm_layers, wasm_nonplanar, wasm_footprints) = extrusion_move_metrics(b)
     # Bounded, read-only per-Z differences: do not imply that a Z plane
     # represents a complete OrcaSlicer layer or deposited volume.
     planar_layer_differences = None
@@ -369,6 +420,12 @@ def compare(native, wasm, min_extrusion_moves=0):
             else [format(z.normalize(), 'f') for z in native_only_z[:15]],
         'first_wasm_only_counted_planar_z_mm': None if wasm_only_z is None
             else [format(z.normalize(), 'f') for z in wasm_only_z[:15]],
+        # Endpoint-only G1 footprint; arcs counted but not geometrically
+        # reconstructed. Bounded by the existing 15 per-direction Z samples.
+        'first_native_only_counted_planar_z_footprints':
+            only_z_footprints(native_only_z, native_layers, native_footprints),
+        'first_wasm_only_counted_planar_z_footprints':
+            only_z_footprints(wasm_only_z, wasm_layers, wasm_footprints),
         'minimum_extrusion_moves': min_extrusion_moves,
         'input_issues': issues,
         'native_sha256': hashlib.sha256(native.read_bytes()).hexdigest(),

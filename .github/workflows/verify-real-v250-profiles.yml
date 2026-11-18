@@ -16,6 +16,9 @@ on:
       - "scripts/orca-vendor-catalog.mjs"
       - "scripts/test-orca-vendor-catalog.mjs"
       - "scripts/test-upstream-v250-multi-vendor.mjs"
+      - "scripts/fetch-upstream-v250-fixture.py"
+      - "scripts/test-upstream-v250-profiles.mjs"
+      - "scripts/test-upstream-v250-creality.mjs"
       - "scripts/test-hot-plate-bridge.mjs"
       - ".github/workflows/verify-real-v250-profiles.yml"
   push:

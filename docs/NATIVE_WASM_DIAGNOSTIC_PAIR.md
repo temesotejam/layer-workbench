@@ -380,3 +380,50 @@ This is a conservative **read-only fixture and diagnostic correctness**
 change. It does not extend G18/G19 arc support, normalize firmware-specific
 dialects, prove official profile equivalence or make any generated G-code
 print-safe. The native/WASM full-profile mismatch remains a release blocker.
+
+## 2026-11-19: numeric deposition footprints for one-sided Z planes
+
+The real native/WASM cube diagnostic now includes up to 15 per-direction
+**read-only G1 deposition footprints** for Z positions observed only on one
+side. For each height it reports positive-E planar move count, counted G1
+line versus G17-arc moves, G1 XY path length (mm), G1 positive-E command
+length (mm), and min/max X/Y of the **G1 endpoints**. Full-circle or curved
+G17 segments count as arcs but their length/interior extrema are deliberately
+excluded rather than guessed. A plane consisting only of arcs has null G1
+endpoint bounds. Malformed modal geometry gives null footprints and a
+failed input gate; it never produces inferred valid toolpaths.
+
+This specifically helps investigate the previously observed native-only
+Z=0.28 mm two-move stratum: its actual footprint may distinguish a tiny
+start/prime segment from an object-scale feature, but no feature identity
+or cause is inferred from bounds alone. The numeric-only report excludes
+raw G-code, comments, filenames and full licensed profiles. Full native and
+restricted WASM profiles and import paths still differ: every real diagnostic
+remains `DIAGNOSTIC_ONLY` with `parity_pass: false`, and no WASM deployment
+or physical print-safety assertion is made.
+
+## 2026-11-19: native-only 0.28 mm strata explained by pinned startup G-code
+
+The live official-native CLI and historical browser-WASM diagnostic in
+[PR #97](https://github.com/temesotejam/layer-workbench/pull/97) found one
+native-only constant-Z deposition height at **0.28 mm**, with exactly two
+straight G1 positive-E moves, **250 mm** combined XY line length, **30 mm**
+commanded positive E and endpoints within **X=10.1–10.4 mm,
+Y=20–145 mm**. These G1 paths are well outside the shared cube's
+X=128–148 mm object bounds.
+
+Independently, the official upstream-pinned
+[Creality CR-10 0.4 nozzle profile](https://github.com/OrcaSlicer/OrcaSlicer/blob/40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19/resources/profiles/Creality/machine/Creality%20CR-10%200.4%20nozzle.json)
+specifies exactly two **125 mm** introduction/priming lines at those
+coordinates and Z=0.28 mm, with cumulative E commands 15 and 30. The
+source-pinned CI assertion now verifies those four startup-position/motion
+commands and that `machine_start_gcode` remains excluded from the
+restricted browser adapter. This accounts for **the native-only 0.28 mm
+deposition stratum**; it is **not** evidence of a difference in the
+slicer's object first-layer height (the process setting is 0.2 mm).
+
+This does **not** explain or correct the remaining hundreds of differing
+positive-E moves, other per-Z discrepancies, full-profile mismatch or
+native Core 3MF versus WASM STL import. It does not authorize executing
+machine startup G-code in a browser, deploying WASM to Pages or printing
+the unvalidated output. The diagnostic remains `parity_pass: false`.
