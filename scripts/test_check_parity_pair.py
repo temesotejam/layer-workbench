@@ -20,6 +20,17 @@ class PairTests(unittest.TestCase):
                 data = (kind + " synthetic fixture").encode() if kind != "gcode" else b"G1 X1 E0.1\nG1 X2 E0.2\n"
                 (directory / (kind + ".txt")).write_bytes(data)
                 files[kind] = {"path": kind + ".txt", "sha256": hashlib.sha256(data).hexdigest()}
+            scene = {
+                "schema": "layer-workbench-scene-v1",
+                "units": "mm", "matrix_layout": "row-major",
+                "source_model_sha256": files["model"]["sha256"],
+                "instances": [{"source_index": 0, "plate_index": 0,
+                               "matrix": [1, 0, 0, 128, 0, 1, 0, 128,
+                                          0, 0, 1, 0, 0, 0, 0, 1]}],
+            }
+            payload = json.dumps(scene, sort_keys=True).encode()
+            (directory / "scene.json").write_bytes(payload)
+            files["scene"] = {"path": "scene.json", "sha256": hashlib.sha256(payload).hexdigest()}
             (directory / "manifest.json").write_text(json.dumps(
                 {"engine": role, "upstream_commit": PIN, "files": files}))
 
@@ -96,6 +107,52 @@ class PairTests(unittest.TestCase):
         self.assertFalse(report["match"])
         self.assertTrue(report["gcode_comparison"]["match"])
         self.assertEqual(report["different_inputs"], ["filament"])
+
+    def mutate_scene(self, role, fn):
+        file = self.root / role / "scene.json"
+        data = json.loads(file.read_text())
+        fn(data)
+        payload = json.dumps(data, sort_keys=True).encode()
+        file.write_bytes(payload)
+        self.change(role, lambda m: m["files"]["scene"].update(
+            sha256=hashlib.sha256(payload).hexdigest()))
+
+    def test_same_model_and_profiles_with_different_placement_fails_closed(self):
+        self.mutate_scene("wasm", lambda scene: scene["instances"][0]["matrix"].__setitem__(3, 130))
+        report = verify(self.manifest("native"), self.manifest("wasm"))
+        self.assertFalse(report["match"])
+        self.assertEqual(report["different_inputs"], ["scene"])
+        self.assertFalse(report["input_hashes_match"])
+        self.assertNotIn("gcode_comparison", report)
+        diagnostic = verify(self.manifest("native"), self.manifest("wasm"),
+                            diagnose_mismatched_inputs=True)
+        self.assertFalse(diagnostic["match"])
+        self.assertTrue(diagnostic["diagnostic_only"])
+        self.assertTrue(diagnostic["gcode_comparison"]["match"])
+
+    def test_missing_scene_witness_rejected(self):
+        self.change("native", lambda m: m["files"].pop("scene"))
+        with self.assertRaisesRegex(ValueError, "expected model/scene"):
+            verify(self.manifest("native"), self.manifest("wasm"))
+
+    def test_scene_must_bind_to_model_hash(self):
+        self.mutate_scene("wasm", lambda scene: scene.update(
+            source_model_sha256="0" * 64))
+        with self.assertRaisesRegex(ValueError, "unbound source model"):
+            verify(self.manifest("native"), self.manifest("wasm"))
+
+    def test_non_affine_or_nonfinite_scene_rejected(self):
+        self.mutate_scene("wasm", lambda scene: scene["instances"][0]["matrix"].__setitem__(15, 0))
+        with self.assertRaisesRegex(ValueError, "invalid row-major scene matrix"):
+            verify(self.manifest("native"), self.manifest("wasm"))
+        self.mutate_scene("wasm", lambda scene: scene["instances"][0]["matrix"].__setitem__(15, float("nan")))
+        with self.assertRaisesRegex(ValueError, "invalid row-major scene matrix"):
+            verify(self.manifest("native"), self.manifest("wasm"))
+
+    def test_scene_bool_index_is_not_numeric_index(self):
+        self.mutate_scene("wasm", lambda scene: scene["instances"][0].update(source_index=True))
+        with self.assertRaisesRegex(ValueError, "invalid scene source_index"):
+            verify(self.manifest("native"), self.manifest("wasm"))
 
     def test_tampered_profile_rejected(self):
         (self.root / "native" / "machine.txt").write_bytes(b"tampered")
