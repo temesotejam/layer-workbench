@@ -1,5 +1,5 @@
 // Bounded read-only preview parser for G-code from the isolated WASM lab.
-// Linear G0/G1 and bounded G17 XY planar/helical G2/G3 arcs (I/J center or R radius) are visualized.
+// Linear G0/G1 and bounded G17/G18/G19 planar/helical G2/G3 arcs (I/J/K center or R radius) are visualized.
 // Unsupported arc forms are *not* drawn as misleading straight chords, but
 // their modal XYZE end positions still advance so subsequent paths stay aligned.
 // This is a diagnostic renderer, not a firmware interpreter or print safety check.
@@ -140,80 +140,80 @@ export function parseGcodeToolpaths(source, options={}) {
        Math.max(Math.abs(state.x),Math.abs(state.y),Math.abs(state.z))>100_000)
       throw new Error("Toolpath coordinate exceeds preview limits");
     const extrusion=state.e>start.e+1e-7;
-    // K is a Z-center offset for G18/G19 arcs. Those planes are not
-    // rendered here, but their valid numeric words must not prevent the
-    // modal XYZE endpoint from advancing. In G17, K is uninterpreted:
-    // omit the arc rather than silently drawing a false XY path.
-    const unsupportedPlanarCenter=state.plane==="G17"&&"K" in words;
-    if(isArc && (unhandledWords||unsupportedPlanarCenter)){skippedArcs++;continue;}
+    // Plane axes follow a right-handed basis: XY (+Z), ZX (+Y), YZ (+X).
+    // This preserves G2/G3 handedness when looking along each plane normal.
+    // Unrelated center words fail closed rather than producing a false arc.
+    const plane=state.plane==="G18"
+      ? {u:"z",v:"x",w:"y",offsetU:"K",offsetV:"I"}
+      : state.plane==="G19"
+      ? {u:"y",v:"z",w:"x",offsetU:"J",offsetV:"K"}
+      : {u:"x",v:"y",w:"z",offsetU:"I",offsetV:"J"};
+    const unexpectedCenter=["I","J","K"].some(key=>
+      key in words && key!==plane.offsetU && key!==plane.offsetV);
+    if(isArc && (unhandledWords||unexpectedCenter)){skippedArcs++;continue;}
     if(!isArc){
       if(Math.abs(state.x-start.x)>EPS||Math.abs(state.y-start.y)>EPS||Math.abs(state.z-start.z)>EPS)
         append(start.x,start.y,state.x,state.y,start.z,state.z,extrusion);
       continue;
     }
-    // Even for omitted arcs, the modal endpoint above must advance.
-    // R is a signed radius: positive selects the minor arc, negative the
-    // major arc. Reject ambiguous R+I/J, impossible chords, and R full circles.
+    // R is signed: positive selects the minor arc, negative the major arc.
+    // A centered full circle is valid; a radius-only full circle is ambiguous.
+    const {u,v,w,offsetU,offsetV}=plane;
+    const u0=start[u],v0=start[v],u1=state[u],v1=state[v];
     const hasRadius="R" in words;
-    const hasCenter="I" in words||"J" in words;
-    if(state.plane!=="G17"||hasRadius===hasCenter){
-      skippedArcs++;continue;
-    }
-    let cx,cy;
+    const hasCenter=offsetU in words||offsetV in words;
+    if(hasRadius===hasCenter){skippedArcs++;continue;}
+    let cu,cv;
     if(hasRadius){
-      const dx=state.x-start.x,dy=state.y-start.y;
-      const chord=Math.hypot(dx,dy),radius=Math.abs(words.R);
-      if(!Number.isFinite(radius)||radius<EPS||chord<EPS||
-         chord>2*radius+1e-7){
+      const du=u1-u0,dv=v1-v0;
+      const chord=Math.hypot(du,dv),radius=Math.abs(words.R);
+      if(!Number.isFinite(radius)||radius<EPS||chord<EPS||chord>2*radius+1e-7){
         skippedArcs++;continue;
       }
       const h2=radius*radius-chord*chord/4;
       if(h2< -1e-7){skippedArcs++;continue;}
       const h=Math.sqrt(Math.max(0,h2));
-      const mx=(start.x+state.x)/2,my=(start.y+state.y)/2;
-      const ox=-dy*h/chord,oy=dx*h/chord;
-      const candidates=[[mx+ox,my+oy],[mx-ox,my-oy]].map(([x,y])=>{
-        const from=Math.atan2(start.y-y,start.x-x);
-        const to=Math.atan2(state.y-y,state.x-x);
+      const mu=(u0+u1)/2,mv=(v0+v1)/2;
+      const ou=-dv*h/chord,ov=du*h/chord;
+      const candidates=[[mu+ou,mv+ov],[mu-ou,mv-ov]].map(([a,b])=>{
+        const from=Math.atan2(v0-b,u0-a),to=Math.atan2(v1-b,u1-a);
         const sweep=cmd==="G3"?((to-from)%TAU+TAU)%TAU:
           -((from-to)%TAU+TAU)%TAU;
-        return {x,y,sweep};
+        return {a,b,sweep};
       });
       const selected=candidates.find(c=>words.R<0
         ? Math.abs(c.sweep)>Math.PI+1e-7
         : Math.abs(c.sweep)>EPS&&Math.abs(c.sweep)<=Math.PI+1e-7);
       if(!selected){skippedArcs++;continue;}
-      cx=selected.x;cy=selected.y;
+      cu=selected.a;cv=selected.b;
     }else{
-      cx=state.absoluteArcCenters?(words.I??start.x):start.x+(words.I??0);
-      cy=state.absoluteArcCenters?(words.J??start.y):start.y+(words.J??0);
+      cu=state.absoluteArcCenters?(words[offsetU]??u0):u0+(words[offsetU]??0);
+      cv=state.absoluteArcCenters?(words[offsetV]??v0):v0+(words[offsetV]??0);
     }
-    const r0=Math.hypot(start.x-cx,start.y-cy);
-    const r1=Math.hypot(state.x-cx,state.y-cy);
+    const r0=Math.hypot(u0-cu,v0-cv),r1=Math.hypot(u1-cu,v1-cv);
     if(!Number.isFinite(r0)||!Number.isFinite(r1)||r0<EPS||
        Math.abs(r0-r1)>Math.max(0.05,r0*0.001)){
       skippedArcs++;continue;
     }
-    const a0=Math.atan2(start.y-cy,start.x-cx);
-    const a1=Math.atan2(state.y-cy,state.x-cx);
+    const a0=Math.atan2(v0-cv,u0-cu),a1=Math.atan2(v1-cv,u1-cu);
     let sweep=cmd==="G3"?((a1-a0)%TAU+TAU)%TAU:-((a0-a1)%TAU+TAU)%TAU;
-    const fullCircle=Math.hypot(state.x-start.x,state.y-start.y)<1e-7;
+    const fullCircle=Math.hypot(u1-u0,v1-v0)<1e-7;
     if(Math.abs(sweep)<1e-9 && fullCircle)sweep=cmd==="G3"?TAU:-TAU;
     if(Math.abs(sweep)<1e-9){skippedArcs++;continue;}
-    // At least one segment per millimeter or 10 degrees. Large arcs fail
-    // closed rather than silently drawing a grossly simplified trajectory.
+    // Bound segment count and retain true 3D coordinates, including the
+    // third-axis interpolation of vertical-plane helices.
     const steps=Math.ceil(Math.max(Math.abs(sweep)*r0,Math.abs(sweep)/(Math.PI/18)));
     if(steps>4096){skippedArcs++;continue;}
-    let px=start.x,py=start.y,pz=start.z;
+    let previous={x:start.x,y:start.y,z:start.z};
     for(let i=1;i<=steps;i++){
       const a=a0+sweep*i/steps;
-      const x=i===steps?state.x:cx+r0*Math.cos(a);
-      const y=i===steps?state.y:cy+r0*Math.sin(a);
-      const z=i===steps?state.z:start.z+(state.z-start.z)*i/steps;
-      // Preserve true 3D helix heights while grouping the complete arc in
-      // its destination Z bucket for the existing 2D layer picker.
-      append(px,py,x,y,pz,z,extrusion,state.z);
-      px=x;py=y;pz=z;
+      const point={x:start.x,y:start.y,z:start.z};
+      point[u]=i===steps?u1:cu+r0*Math.cos(a);
+      point[v]=i===steps?v1:cv+r0*Math.sin(a);
+      point[w]=i===steps?state[w]:start[w]+(state[w]-start[w])*i/steps;
+      // Keep existing 2D layer-picker semantics (group by destination Z).
+      append(previous.x,previous.y,point.x,point.y,previous.z,point.z,extrusion,state.z);
+      previous=point;
     }
     renderedArcs++;
   }
