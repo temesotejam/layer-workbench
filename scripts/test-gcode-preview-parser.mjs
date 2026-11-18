@@ -115,7 +115,7 @@ assert.throws(()=>parseGcodeToolpaths("G0 X10 Y0\nG3 X0 Y10 R10",{maxSegments:2}
 // S is also not interpreted; omit these arcs but preserve the commanded
 // modal endpoint for the next supported linear move.
 for(const auxiliary of ["P2","S1"]){
-  const omitted=parseGcodeToolpaths("G90\\nM82\\nG0 X0 Y0 Z0.2\\nG2 X10 Y0 R5 "+aux+" E1\\nG1 X20 Y0 E2");
+  const omitted=parseGcodeToolpaths("G90\nM82\nG0 X0 Y0 Z0.2\nG2 X10 Y0 R5 "+aux+" E1\nG1 X20 Y0 E2");
   assert.equal(omitted.renderedArcs,0);
   assert.equal(omitted.skippedArcs,1);
   assert.equal(omitted.skippedMalformedMotion,0);
@@ -124,10 +124,10 @@ for(const auxiliary of ["P2","S1"]){
 }
 // Non-arc unhandled words must not change XYZ/E modal state or generate a
 // phantom deposition path, including malformed G92 coordinate resets.
-const ignoredAuxLinear=parseGcodeToolpaths("G90\\nM82\\nG1 X10 P2 E1\\nG1 X20 E2");
+const ignoredAuxLinear=parseGcodeToolpaths("G90\nM82\nG1 X10 P2 E1\nG1 X20 E2");
 assert.equal(ignoredAuxLinear.skippedMalformedMotion,1);
 assert.deepEqual(ignoredAuxLinear.layers[0].segments.map(s=>[s.x1,s.x2]),[[0,20]]);
-const ignoredAuxReset=parseGcodeToolpaths("G90\\nM82\\nG1 X10 E1\\nG92 X99 S1\\nG1 X20 E2");
+const ignoredAuxReset=parseGcodeToolpaths("G90\nM82\nG1 X10 E1\nG92 X99 S1\nG1 X20 E2");
 assert.equal(ignoredAuxReset.skippedMalformedMotion,1);
 assert.deepEqual(ignoredAuxReset.layers[0].segments.map(s=>[s.x1,s.x2]),[[0,10],[10,20]]);
 console.log("PASS: unsupported auxiliary arc words omit misleading paths while retaining modal endpoints");
