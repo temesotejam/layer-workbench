@@ -1,5 +1,5 @@
 import {createThreeDToolpathPreview} from "./gcode-3d-preview.mjs";
-import {parseGcodeToolpaths} from "./gcode-preview-parser.mjs";
+import {parseGcodeToolpaths,isPlanarLayerSegment} from "./gcode-preview-parser.mjs";
 import {gcodeSelectorColor} from "./gcode-tool-colors.mjs";
 import {ALL_GCODE_PATHS,gcodeFeatureOptions,visibleGcodeSegment} from "./gcode-feature-filter.mjs";
 
@@ -18,7 +18,7 @@ export function createLayerPreview(container) {
     </div>
     <canvas id="lab-toolpath-canvas" width="360" height="360" role="img" aria-label="Generated G-code extrusion and travel toolpaths by layer"></canvas>
     <p id="lab-preview-stats"></p>
-    <p>Type filtering is based only on explicit ;TYPE: or ;FEATURE: G-code comments, not independently verified native feature classes. A selected type hides travels in both views. Extrusion is orange for one/unknown T selector; multiple T selectors use distinct colors. Gray dashed: travel. Colors identify G-code T numbers, not actual filament colors or physical nozzles. G0/G1 and XY G2/G3 I/J or R arcs are approximated; helical, non-XY, invalid arcs and firmware macros are omitted. Diagnostic only.</p>
+    <p>Type filtering is based only on explicit ;TYPE: or ;FEATURE: G-code comments, not independently verified native feature classes. A selected type hides travels in both views. Extrusion is orange for one/unknown T selector; multiple T selectors use distinct colors. Gray dashed: travel. Colors identify G-code T numbers, not actual filament colors or physical nozzles. Only paths lying entirely at the selected Z are drawn in 2D; sloped and vertical-plane paths are shown in 3D only, never flattened into false horizontal toolpaths. Bounded G17/G18/G19 arcs are approximated in 3D; invalid arcs and firmware macros are omitted. Diagnostic only.</p>
   `;
   container.appendChild(section);
   const threeD=createThreeDToolpathPreview(container,{
@@ -42,9 +42,12 @@ export function createLayerPreview(container) {
     const w=canvas.width,h=canvas.height;
     ctx.fillStyle="#171d24";
     ctx.fillRect(0,0,w,h);
-    const visible=layer.segments.filter(segment=>visibleGcodeSegment(segment,selectedFeature));
+    const eligible=layer.segments.filter(segment=>visibleGcodeSegment(segment,selectedFeature));
+    const visible=eligible.filter(segment=>isPlanarLayerSegment(segment,layer.z));
+    const nonPlanarCount=eligible.length-visible.length;
+    const omittedInfo=nonPlanarCount?` · ${nonPlanarCount} nonplanar paths in 3D only`:"";
     if(visible.length===0){
-      info.textContent=`${index+1}/${parsed.layers.length} · Z=${layer.z.toFixed(3)} mm · no matching paths on this layer`;
+      info.textContent=`${index+1}/${parsed.layers.length} · Z=${layer.z.toFixed(3)} mm · no matching planar paths${omittedInfo}`;
       canvas.dataset.segmentCount="0";
       return;
     }
@@ -101,7 +104,7 @@ export function createLayerPreview(container) {
     const feedInfo=Number.isFinite(minFeed)
       ? ` · commanded F ${minFeed.toFixed(1)}–${maxFeed.toFixed(1)} mm/s`
       : " · commanded F unavailable";
-    info.textContent=`${index+1}/${parsed.layers.length} · Z=${layer.z.toFixed(3)} mm · ${layer.segments.length} segments${feedInfo}`;
+    info.textContent=`${index+1}/${parsed.layers.length} · Z=${layer.z.toFixed(3)} mm · ${visible.length} planar segments${feedInfo}${omittedInfo}`;
     canvas.dataset.segmentCount=String(visible.length);
   }
   slider.addEventListener("input",()=>{
@@ -135,7 +138,7 @@ export function createLayerPreview(container) {
       slider.max=String(parsed.layers.length-1);
       slider.value=String(parsed.layers.length-1);
       const selectors=parsed.selectedToolIds.length>1?` · T selectors: ${parsed.selectedToolIds.map(id=>"T"+id).join(", ")}`:"";
-      stats.textContent=`${parsed.layers.length} Z levels · ${parsed.extrusions} extrusion segments · ${parsed.travels} travel segments · ${parsed.renderedArcs} approximated XY arcs · ${parsed.skippedArcs} unsupported arcs · ${parsed.skippedMalformedMotion} malformed motion commands omitted${selectors}`;
+      stats.textContent=`${parsed.layers.length} Z levels · ${parsed.extrusions} extrusion segments · ${parsed.travels} travel segments · ${parsed.renderedArcs} approximated 3D arcs · ${parsed.skippedArcs} unsupported arcs · ${parsed.skippedMalformedMotion} malformed motion commands omitted${selectors}`;
       section.hidden=false;
       render(Number(slider.value));
       threeD.show(parsed);
