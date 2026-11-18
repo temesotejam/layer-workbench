@@ -30,7 +30,9 @@ const SPECS={
     // independent 0.45mm value (Creality common: 0.4mm). Accept only absolute
     // single-nozzle widths; relative percentages remain unsupported.
     internal_solid_infill_line_width:[0.1,2],
-    wall_loops:[1,8],sparse_infill_density:[0,100],
+    // Official v2.5.0 CR-10 0.20mm Standard sets two skirt loops.
+    // Only an explicit bounded integer count is accepted in the localhost bridge.
+    wall_loops:[1,8],skirt_loops:[0,10],sparse_infill_density:[0,100],
     top_shell_layers:[0,12],bottom_shell_layers:[0,12],
     // Absolute mm/s only; relative percentage-based speeds are not converted.
     // These bounds constrain diagnostic inputs, not real printer capability.
@@ -55,7 +57,7 @@ const SPECS={
     support_line_width:[0.1,2],support_speed:[1,800],
     support_interface_speed:[1,800]},
 };
-const INTEGERS=new Set(['wall_loops','top_shell_layers','bottom_shell_layers']);
+const INTEGERS=new Set(['wall_loops','skirt_loops','top_shell_layers','bottom_shell_layers']);
 // Pinned native process enums; the limited adapter retains exact wire values.
 // No inferred default or desktop/print parity is implied by this allow-list.
 const PROCESS_ENUMS=Object.freeze({

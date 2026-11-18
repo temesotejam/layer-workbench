@@ -26,6 +26,9 @@ const LIMITS = {
   // Independently forward pinned CR-10 internal solid infill extrusion width.
   // Local diagnostic only: absolute mm, no percentage or nozzle vectors.
   internal_solid_infill_line_width: [0.1,2],
+  // Source-pinned CR-10 0.20mm Standard uses skirt_loops=2. Integer loops
+  // only; enabling a skirt here is a localhost diagnostic, not print approval.
+  skirt_loops: [0,10],
   wall_loops: [1,8],
   sparse_infill_density: [0,100],
   top_shell_layers: [0,12],
@@ -55,7 +58,7 @@ const LIMITS = {
   support_speed: [1,800],
   support_interface_speed: [1,800],
 };
-const INTEGERS = new Set(["wall_loops","top_shell_layers","bottom_shell_layers"]);
+const INTEGERS = new Set(["wall_loops","skirt_loops","top_shell_layers","bottom_shell_layers"]);
 // Exact native v2.5.0 process enum tokens; do not accept labels, numeric
 // stand-ins, lists or guessed defaults. This is localhost-only.
 const ENUMS = Object.freeze({

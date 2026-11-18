@@ -625,6 +625,22 @@ try {
       return prepare.locator('#lab-download').evaluate(async link=>
         await(await fetch(link.href)).text());
     };
+
+    // The pinned 0.20mm CR-10 child specifies skirt_loops=2. On the same
+    // two-STL isolated scene, compare actual G0/G1 paths with only skirt count
+    // changed (0 -> 2). A settings echo, G-code comment or SHA is insufficient.
+    const skirtOffMotion=motionOnly(await sliceWithLineWidth('0','skirt_loops'));
+    const skirtOnMotion=motionOnly(await sliceWithLineWidth('2','skirt_loops'));
+    assert.ok(skirtOffMotion.length>100&&skirtOnMotion.length>100,
+      'Skirt probe requires substantive real G-code paths');
+    assert.ok(skirtOnMotion.length>skirtOffMotion.length,
+      'Two skirt loops must add G0/G1 movements rather than only metadata');
+    assert.notDeepEqual(skirtOffMotion,skirtOnMotion,
+      'Native skirt_loops must change isolated WASM motion commands');
+    delete rawOrca[4].skirt_loops;
+    await uploadRawOrca();
+    console.log('PASS: source-pinned skirt_loops 0 -> 2 adds real WASM G-code moves');
+
     const narrowWidthMotion=motionOnly(await sliceWithLineWidth('0.35'));
     const broadWidthMotion=motionOnly(await sliceWithLineWidth('0.65'));
     assert.ok(narrowWidthMotion.length>100&&broadWidthMotion.length>100,

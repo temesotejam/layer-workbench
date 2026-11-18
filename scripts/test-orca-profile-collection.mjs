@@ -669,3 +669,22 @@ for(const key of supportKeys) {
   assert.equal(result.process.settings[key],undefined,'No fabricated '+key);
 }
 console.log('PASS: bounded independent source-pinned support profile inheritance and vector rejection');
+
+
+// CR-10 v2.5.0 style skirt count must inherit and override independently.
+const skirtProfiles=profiles.map(rec=>rec.name==='fdm_process_common'
+  ? {...rec,skirt_loops:'1'} : rec.name==='0.16mm Fine @TestPrinter'
+    ? {...rec,skirt_loops:'2'} : rec);
+assert.equal(resolve(skirtProfiles,selection).process.settings.skirt_loops,'2');
+assert.equal(resolve(skirtProfiles.map(rec=>{
+  if(rec.name!=='0.16mm Fine @TestPrinter')return rec;
+  const child={...rec};delete child.skirt_loops;return child;
+}),selection).process.settings.skirt_loops,'1');
+assert.equal(resolve(skirtProfiles.map(rec=>rec.name==='0.16mm Fine @TestPrinter'
+  ? {...rec,skirt_loops:['2']} : rec),selection).process.settings.skirt_loops,'2');
+for(const bad of ['2%',2.5,-1,11,'auto',['2','3'],null]) {
+  assert.throws(()=>resolve(skirtProfiles.map(rec=>rec.name==='0.16mm Fine @TestPrinter'
+    ? {...rec,skirt_loops:bad}:rec),selection),/Invalid|Multi-extruder|test limits/);
+}
+assert.ok(!resolve(skirtProfiles,selection).process.unsupported.includes('skirt_loops'));
+console.log('PASS: native skirt_loops selection, inheritance and bounded integer validation');
