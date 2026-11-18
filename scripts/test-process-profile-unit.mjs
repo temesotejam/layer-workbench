@@ -193,8 +193,9 @@ console.log('PASS: absolute support width and independent body/interface speeds 
 // A pinned v2.5.0 integer skirt count is distinct from speed and width.
 assert.deepEqual(parseTestProcessOverrides({skirt_loops:"0"}),{skirt_loops:"0"});
 assert.deepEqual(parseTestProcessOverrides({skirt_loops:"2"}),{skirt_loops:"2"});
+assert.deepEqual(parseTestProcessOverrides({skirt_loops:"10"}),{skirt_loops:"10"});
 for(const bad of ["2%","2.5",-1,11,"auto",["2"],null]) {
   assert.throws(()=>parseTestProcessOverrides({skirt_loops:bad}),
     /Invalid|outside the safe test range/,String(bad));
 }
-console.log("PASS: isolated WASM process skirt_loops accepts only integer 0..20");
+console.log("PASS: isolated WASM process skirt_loops accepts only integer 0..10");
