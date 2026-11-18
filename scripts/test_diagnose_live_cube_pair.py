@@ -97,6 +97,15 @@ class PairTests(unittest.TestCase):
         self.assertEqual(metrics["wasm_only_counted_planar_z_levels"], 1)
         self.assertEqual(metrics["first_native_only_counted_planar_z_mm"], [])
         self.assertEqual(metrics["first_wasm_only_counted_planar_z_mm"], ["0.4"])
+        footprint = metrics["first_wasm_only_counted_planar_z_footprints"]
+        self.assertEqual(len(footprint), 1)
+        self.assertEqual(footprint[0]["z_mm"], "0.4")
+        self.assertEqual(footprint[0]["linear_moves"], 55)
+        self.assertEqual(footprint[0]["g17_arc_moves"], 0)
+        self.assertEqual(footprint[0]["linear_positive_e_mm"], "0.55")
+        self.assertEqual(footprint[0]["linear_xy_endpoint_bounds_mm"],
+                         ["69", "69", "124", "124"])
+        self.assertEqual(metrics["first_native_only_counted_planar_z_footprints"], [])
         self.assertFalse(result["parity_pass"])
         self.assertFalse(result["ordered_commands_equal"])
 

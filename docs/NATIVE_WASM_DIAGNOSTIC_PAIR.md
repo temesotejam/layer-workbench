@@ -380,3 +380,24 @@ This is a conservative **read-only fixture and diagnostic correctness**
 change. It does not extend G18/G19 arc support, normalize firmware-specific
 dialects, prove official profile equivalence or make any generated G-code
 print-safe. The native/WASM full-profile mismatch remains a release blocker.
+
+## 2026-11-19: numeric deposition footprints for one-sided Z planes
+
+The real native/WASM cube diagnostic now includes up to 15 per-direction
+**read-only G1 deposition footprints** for Z positions observed only on one
+side. For each height it reports positive-E planar move count, counted G1
+line versus G17-arc moves, G1 XY path length (mm), G1 positive-E command
+length (mm), and min/max X/Y of the **G1 endpoints**. Full-circle or curved
+G17 segments count as arcs but their length/interior extrema are deliberately
+excluded rather than guessed. A plane consisting only of arcs has null G1
+endpoint bounds. Malformed modal geometry gives null footprints and a
+failed input gate; it never produces inferred valid toolpaths.
+
+This specifically helps investigate the previously observed native-only
+Z=0.28 mm two-move stratum: its actual footprint may distinguish a tiny
+start/prime segment from an object-scale feature, but no feature identity
+or cause is inferred from bounds alone. The numeric-only report excludes
+raw G-code, comments, filenames and full licensed profiles. Full native and
+restricted WASM profiles and import paths still differ: every real diagnostic
+remains `DIAGNOSTIC_ONLY` with `parity_pass: false`, and no WASM deployment
+or physical print-safety assertion is made.

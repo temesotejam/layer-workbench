@@ -70,6 +70,8 @@ def diagnostic(native, wasm, wasm_summary, source_stl, minimum=100):
         "native_only_counted_planar_z_levels", "wasm_only_counted_planar_z_levels",
         "first_native_only_counted_planar_z_mm",
         "first_wasm_only_counted_planar_z_mm",
+        "first_native_only_counted_planar_z_footprints",
+        "first_wasm_only_counted_planar_z_footprints",
     )
     return {
         "status": "DIAGNOSTIC_ONLY",
