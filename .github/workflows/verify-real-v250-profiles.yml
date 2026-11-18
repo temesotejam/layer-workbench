@@ -12,6 +12,10 @@ on:
       - "scripts/audit-native-wasm-profile-gap.mjs"
       - "scripts/test-audit-native-wasm-profile-gap.mjs"
       - "scripts/test-orca-profile-collection.mjs"
+      - "scripts/orca-vendor-index.mjs"
+      - "scripts/orca-vendor-catalog.mjs"
+      - "scripts/test-orca-vendor-catalog.mjs"
+      - "scripts/test-upstream-v250-multi-vendor.mjs"
       - "scripts/test-hot-plate-bridge.mjs"
       - ".github/workflows/verify-real-v250-profiles.yml"
   push:
