@@ -154,7 +154,7 @@ const invalidVertical=parseGcodeToolpaths("G18\nG0 X0 Z10\nG3 X10 Z0 I0 K-10 J1 
 assert.equal(invalidVertical.renderedArcs,0);
 assert.equal(invalidVertical.skippedArcs,1);
 assert.equal(invalidVertical.extrusions,1);
-assert.equal(invalidVertical.layers.at(-1).segments.at(-1).x1,10);
+assert.equal(invalidVertical.layers.find(l=>l.z===0).segments.at(-1).x1,10);
 const repeatTurnVertical=parseGcodeToolpaths("G19\nG0 Y10 Z0\nG3 Y0 Z10 J-10 K0 P2 E1\nG1 Y-10 E2");
 assert.equal(repeatTurnVertical.renderedArcs,0);
 assert.equal(repeatTurnVertical.skippedArcs,1);
