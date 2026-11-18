@@ -110,6 +110,28 @@ assert.equal(parseGcodeToolpaths("G0 X0 Y0 Z0.2\nG2 X10 Y0 R-5").skippedArcs,1);
 const inchRadius=parseGcodeToolpaths("G20\nG0 X1 Y0 Z0.01\nG3 X0 Y1 R1");
 assert.equal(inchRadius.renderedArcs,1);
 assert.throws(()=>parseGcodeToolpaths("G0 X10 Y0\nG3 X0 Y10 R10",{maxSegments:2}),/complex/);
+// Auxiliary G2/G3 P words can represent multiple turns in some firmware.
+// Without implementing their semantics, drawing a single-turn arc is wrong.
+// S is also not interpreted; omit these arcs but preserve the commanded
+// modal endpoint for the next supported linear move.
+for(const auxiliary of ["P2","S1"]){
+  const omitted=parseGcodeToolpaths("G90\nM82\nG0 X0 Y0 Z0.2\nG2 X10 Y0 R5 "+auxiliary+" E1\nG1 X20 Y0 E2");
+  assert.equal(omitted.renderedArcs,0);
+  assert.equal(omitted.skippedArcs,1);
+  assert.equal(omitted.skippedMalformedMotion,0);
+  assert.equal(omitted.extrusions,1);
+  assert.deepEqual(omitted.layers[0].segments.filter(s=>s.extrusion).map(s=>[s.x1,s.x2]),[[10,20]]);
+}
+// Non-arc unhandled words must not change XYZ/E modal state or generate a
+// phantom deposition path, including malformed G92 coordinate resets.
+const ignoredAuxLinear=parseGcodeToolpaths("G90\nM82\nG1 X10 P2 E1\nG1 X20 E2");
+assert.equal(ignoredAuxLinear.skippedMalformedMotion,1);
+assert.deepEqual(ignoredAuxLinear.layers[0].segments.map(s=>[s.x1,s.x2]),[[0,20]]);
+const ignoredAuxReset=parseGcodeToolpaths("G90\nM82\nG1 X10 E1\nG92 X99 S1\nG1 X20 E2");
+assert.equal(ignoredAuxReset.skippedMalformedMotion,1);
+assert.deepEqual(ignoredAuxReset.layers[0].segments.map(s=>[s.x1,s.x2]),[[0,10],[10,20]]);
+console.log("PASS: unsupported auxiliary arc words omit misleading paths while retaining modal endpoints");
+
 console.log('PASS: bounded XY planar/helical arcs (CW, CCW, full circle, absolute/relative center), R minor/major, Z interpolation and skipped endpoint safety');
 console.log('PASS: G-code linear extrusion, travel, layers, relative moves, safety limits');
 
