@@ -217,3 +217,15 @@ for (const bad of ['0','21','2.5','2%','auto',['2'],null,-1])
   assert.throws(()=>parseTestProcessOverrides({skirt_height:bad}),
     /Invalid|outside the safe test range/,'Malformed skirt_height '+String(bad));
 console.log('PASS: native skirt_height 1..20 integer layers and invalid inputs fail closed');
+
+// CR-10 v2.5.0 child has skirt_speed=20 mm/s, independently of the
+// 0..10 loop count, millimetre distance and integer height.
+assert.deepEqual(parseTestProcessOverrides({
+  skirt_speed:'20',skirt_loops:'2',skirt_distance:'2',skirt_height:'2'
+}),{skirt_speed:'20',skirt_loops:'2',skirt_distance:'2',skirt_height:'2'});
+for(const value of ['0','3','20','300'])
+  assert.equal(parseTestProcessOverrides({skirt_speed:value}).skirt_speed,value);
+for(const bad of ['-1','301','20%','auto',['20'],null,Infinity,NaN])
+  assert.throws(()=>parseTestProcessOverrides({skirt_speed:bad}),
+    /Invalid|outside the safe test range/,'Rejected skirt_speed: '+String(bad));
+console.log('PASS: native skirt_speed absolute 0..300 mm/s; relative, vector and nonfinite rejected');
