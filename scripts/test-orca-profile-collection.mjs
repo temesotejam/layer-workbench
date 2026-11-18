@@ -682,7 +682,7 @@ assert.equal(resolve(skirtProfiles.map(rec=>{
 }),selection).process.settings.skirt_loops,'1');
 assert.equal(resolve(skirtProfiles.map(rec=>rec.name==='0.16mm Fine @TestPrinter'
   ? {...rec,skirt_loops:['2']} : rec),selection).process.settings.skirt_loops,'2');
-for(const bad of ['2%',2.5,-1,21,'auto',['2','3'],null]) {
+for(const bad of ['2%',2.5,-1,11,'auto',['2','3'],null]) {
   assert.throws(()=>resolve(skirtProfiles.map(rec=>rec.name==='0.16mm Fine @TestPrinter'
     ? {...rec,skirt_loops:bad}:rec),selection),/Invalid|Multi-extruder|test limits/);
 }
