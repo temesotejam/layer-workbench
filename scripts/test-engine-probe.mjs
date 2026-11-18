@@ -10,6 +10,7 @@ import {makeBridgeArchObj} from './bridge-arch-fixture.mjs';
 import {makeSupportSphereObj} from './support-sphere-fixture.mjs';
 import {makeParityCubeStl, PARITY_CUBE_STL_SHA256} from './parity-cube-fixture.mjs';
 import {auditWasmCubeDeposition} from './audit-wasm-cube-deposition.mjs';
+import {auditWasmSkirtDistance} from './audit-wasm-skirt-distance.mjs';
 import {auditBridgeSpeedSegments} from './bridge-feature-diagnostic.mjs';
 import {auditSupportDeposition,auditSupportSpeedEffect} from './support-feature-diagnostic.mjs';
 import {auditSupportWidthEffect} from './support-extrusion-diagnostic.mjs';
@@ -645,12 +646,24 @@ try {
     // skirt_distance (upstream coFloat, mm). Verify actual G0/G1 trajectories,
     // not profile comments, metadata echoes, or G-code hashes.
     rawOrca[4].skirt_loops='2';
-    const nearSkirtMotion=motionOnly(await sliceWithLineWidth('1','skirt_distance'));
-    const farSkirtMotion=motionOnly(await sliceWithLineWidth('8','skirt_distance'));
+    const nearSkirtGcode=await sliceWithLineWidth('1','skirt_distance');
+    const farSkirtGcode=await sliceWithLineWidth('8','skirt_distance');
+    const nearSkirtMotion=motionOnly(nearSkirtGcode);
+    const farSkirtMotion=motionOnly(farSkirtGcode);
     assert.ok(nearSkirtMotion.length>100&&farSkirtMotion.length>100,
       'Skirt distance test needs substantive real WASM paths');
     assert.notDeepEqual(nearSkirtMotion,farSkirtMotion,
       'Native skirt_distance 1 -> 8 mm must alter real G0/G1 paths, not only metadata');
+    // Independent geometric witness: only explicit Skirt-tagged positive-E
+    // planar XY paths count. Exclude header echoes, prime lines and travel.
+    const skirtGeometry=auditWasmSkirtDistance(
+      parseGcodeToolpaths(nearSkirtGcode),parseGcodeToolpaths(farSkirtGcode));
+    console.log('WASM_SKIRT_DISTANCE_GEOMETRY '+JSON.stringify(skirtGeometry));
+    await writeFile(parityDir+'/skirt-distance-geometry.json',
+      JSON.stringify({fixture:'two synthetic STLs; localhost only; 2 skirts; 1 vs 8 mm',
+        ...skirtGeometry},null,2)+'\n');
+    assert.equal(skirtGeometry.passed,true,
+      'Skirt-tagged deposited XY envelope did not expand with skirt_distance');
     delete rawOrca[4].skirt_distance;
     delete rawOrca[4].skirt_loops;
     await uploadRawOrca();

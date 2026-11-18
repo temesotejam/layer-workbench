@@ -1460,3 +1460,26 @@ differences (not comments or file hash). This diagnostic is not equivalent
 to a native-vs-WASM print-geometry parity verdict and does not certify safe
 printer output. Public Pages engine activation and heavy WASM rebuilds
 remain excluded.
+
+## 2026-11-18: actual deposited skirt-distance XY envelope (local-only gate)
+
+The previous source-pinned regression established only that changing
+`skirt_distance` from 1 to 8 mm altered G0/G1 motion in the 2-STL fixture.
+The additional `scripts/audit-wasm-skirt-distance.mjs` audit now inspects
+*actual positive-E planar XY toolpaths*, restricted to explicitly emitted
+`;TYPE:Skirt` or `;FEATURE:Skirt` tags in the bounded read-only parser.
+It records both XY bounding boxes, segment counts and span increases;
+travel, prime lines, non-skirt extrusion, sloped paths and G-code comments
+cannot by themselves satisfy the gate. Synthetic tests cover absent feature
+tags, zero expansion, reversed expansion, skipped arcs/malformed motion,
+and invalid coordinates. The isolated Chrome probe records the numbers in
+`parity-output/skirt-distance-geometry.json` and requires the larger
+distance to expand BOTH XY spans by at least 2 mm without shrinking the
+previous envelope by more than 0.5 mm.
+
+A PASS only witnesses that this local WASM fixture produced outward skirt
+deposition in both XY dimensions. Feature tags are required; if the engine
+does not emit exact tags the gate correctly FAILS rather than inventing
+a feature classification. This does **not** establish the exact 7 mm native
+offset, 3MF/toolpath parity, G-code safety for a printer, or public Pages
+WASM activation. No heavy engine binary/build inputs are modified.

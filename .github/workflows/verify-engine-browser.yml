@@ -28,6 +28,8 @@ on:
       - "scripts/test-parity-cube-fixture.mjs"
       - "scripts/audit-wasm-cube-deposition.mjs"
       - "scripts/test-audit-wasm-cube-deposition.mjs"
+      - "scripts/audit-wasm-skirt-distance.mjs"
+      - "scripts/test-audit-wasm-skirt-distance.mjs"
       - "scripts/gap-ring-fixture.mjs"
       - "scripts/test-gap-ring-fixture.mjs"
       - "scripts/bridge-arch-fixture.mjs"
@@ -81,6 +83,8 @@ on:
       - "scripts/test-parity-cube-fixture.mjs"
       - "scripts/audit-wasm-cube-deposition.mjs"
       - "scripts/test-audit-wasm-cube-deposition.mjs"
+      - "scripts/audit-wasm-skirt-distance.mjs"
+      - "scripts/test-audit-wasm-skirt-distance.mjs"
       - "scripts/gap-ring-fixture.mjs"
       - "scripts/test-gap-ring-fixture.mjs"
       - "scripts/bridge-arch-fixture.mjs"
@@ -151,6 +155,7 @@ jobs:
           node scripts/test-gcode-speed-colors.mjs
           node scripts/test-gap-ring-fixture.mjs
           node scripts/test-audit-wasm-cube-deposition.mjs
+          node scripts/test-audit-wasm-skirt-distance.mjs
           node scripts/test-bridge-arch-fixture.mjs
           node scripts/test-support-sphere-fixture.mjs
           node scripts/test-bridge-feature-diagnostic.mjs
