@@ -296,7 +296,13 @@ def compare(native, wasm, min_extrusion_moves=0):
     # Bounded, read-only per-Z differences: do not imply that a Z plane
     # represents a complete OrcaSlicer layer or deposited volume.
     planar_layer_differences = None
+    native_only_z = None
+    wasm_only_z = None
     if native_layers is not None and wasm_layers is not None:
+        # Set membership is independent of how many moves each shared Z has.
+        # Keep exact Decimal heights; never silently round distinct planes.
+        native_only_z = sorted(set(native_layers) - set(wasm_layers))
+        wasm_only_z = sorted(set(wasm_layers) - set(native_layers))
         planar_layer_differences = [
             {'z_mm': format(z.normalize(), 'f'),
              'native_moves': native_layers.get(z, 0),
@@ -341,6 +347,15 @@ def compare(native, wasm, min_extrusion_moves=0):
         'native_counted_nonplanar_deposition_moves': native_nonplanar,
         'wasm_counted_nonplanar_deposition_moves': wasm_nonplanar,
         'first_counted_planar_z_differences': planar_layer_differences,
+        # The 15-position preview of changed move counts does not tell us
+        # whether an entire deposited Z plane is absent on one side.
+        # Report full membership counts and bounded numeric-only examples.
+        'native_only_counted_planar_z_levels': None if native_only_z is None else len(native_only_z),
+        'wasm_only_counted_planar_z_levels': None if wasm_only_z is None else len(wasm_only_z),
+        'first_native_only_counted_planar_z_mm': None if native_only_z is None
+            else [format(z.normalize(), 'f') for z in native_only_z[:15]],
+        'first_wasm_only_counted_planar_z_mm': None if wasm_only_z is None
+            else [format(z.normalize(), 'f') for z in wasm_only_z[:15]],
         'minimum_extrusion_moves': min_extrusion_moves,
         'input_issues': issues,
         'native_sha256': hashlib.sha256(native.read_bytes()).hexdigest(),

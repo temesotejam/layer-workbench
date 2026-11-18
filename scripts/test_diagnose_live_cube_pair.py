@@ -71,6 +71,8 @@ class PairTests(unittest.TestCase):
         self.assertEqual(metrics["native_counted_nonplanar_deposition_moves"], 0)
         self.assertEqual(metrics["wasm_counted_nonplanar_deposition_moves"], 0)
         self.assertEqual(metrics["first_counted_planar_z_differences"], [])
+        self.assertEqual(metrics["native_only_counted_planar_z_levels"], 0)
+        self.assertEqual(metrics["wasm_only_counted_planar_z_levels"], 0)
         self.assertNotIn("first_differences", json.dumps(result))
         self.assertNotIn("G1 X", json.dumps(result))
 
@@ -91,6 +93,10 @@ class PairTests(unittest.TestCase):
             {"z_mm": "0", "native_moves": 124, "wasm_moves": 69},
             {"z_mm": "0.4", "native_moves": 0, "wasm_moves": 55},
         ])
+        self.assertEqual(metrics["native_only_counted_planar_z_levels"], 0)
+        self.assertEqual(metrics["wasm_only_counted_planar_z_levels"], 1)
+        self.assertEqual(metrics["first_native_only_counted_planar_z_mm"], [])
+        self.assertEqual(metrics["first_wasm_only_counted_planar_z_mm"], ["0.4"])
         self.assertFalse(result["parity_pass"])
         self.assertFalse(result["ordered_commands_equal"])
 
