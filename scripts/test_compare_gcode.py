@@ -12,6 +12,51 @@ class ComparatorTests(unittest.TestCase):
             second.write_text(wasm, encoding='utf-8')
             return compare(first, second, **kwargs)
 
+
+    def test_counted_planar_z_levels_track_g0_g92_and_relative_z(self):
+        # Count real XY deposition at a constant Z. An XY+Z extrusion
+        # changes height and must not masquerade as an ordinary layer.
+        code = ('G21\nM83\nG0 Z0.2\nG1 X10 E1\n'
+                'G1 X20 Z0.4 E1\nG1 X30 E1\n'
+                'G91\nG0 Z0.2\nG1 X10 E1\n'
+                'G90\nG92 Z1\nG1 X50 E1\n')
+        report = self.run_compare(code, code, min_extrusion_moves=5)
+        self.assertTrue(report['match'], report)
+        self.assertEqual(report['native_extrusion_moves'], 5)
+        self.assertEqual(report['native_counted_planar_z_levels'], 4)
+        self.assertEqual(report['wasm_counted_planar_z_levels'], 4)
+        self.assertEqual(report['native_counted_nonplanar_deposition_moves'], 1)
+        self.assertEqual(report['wasm_counted_nonplanar_deposition_moves'], 1)
+        self.assertEqual(report['first_counted_planar_z_differences'], [])
+
+    def test_counted_planar_z_differences_report_height_and_move_counts(self):
+        native = 'M83\nG0 Z0.2\nG1 X1 E1\nG0 Z0.4\nG1 X2 E1\n'
+        wasm = 'M83\nG0 Z0.2\nG1 X1 E1\nG0 Z0.6\nG1 X2 E1\n'
+        report = self.run_compare(native, wasm, min_extrusion_moves=2)
+        self.assertFalse(report['match'])
+        self.assertEqual(report['native_counted_planar_z_levels'], 2)
+        self.assertEqual(report['wasm_counted_planar_z_levels'], 2)
+        self.assertEqual(report['first_counted_planar_z_differences'], [
+            {'z_mm': '0.4', 'native_moves': 1, 'wasm_moves': 0},
+            {'z_mm': '0.6', 'native_moves': 0, 'wasm_moves': 1},
+        ])
+
+    def test_planar_z_metrics_preserve_inch_units_and_g17_arcs(self):
+        code = ('G20\nM83\nG0 Z0.01\n'
+                'G2 I1 J0 E0.1\nG21\nG3 X50.8 R25.4 E1\n')
+        report = self.run_compare(code, code, min_extrusion_moves=2)
+        self.assertTrue(report['match'], report)
+        self.assertEqual(report['native_counted_planar_z_levels'], 1)
+        self.assertEqual(report['native_counted_nonplanar_deposition_moves'], 0)
+
+    def test_invalid_motion_does_not_create_a_false_planar_layer(self):
+        gcode = 'M83\nG1 X1 E1 X2\n'
+        report = self.run_compare(gcode, gcode, min_extrusion_moves=1)
+        self.assertFalse(report['match'])
+        self.assertIsNone(report['native_counted_planar_z_levels'])
+        self.assertIsNone(report['wasm_counted_nonplanar_deposition_moves'])
+        self.assertIsNone(report['first_counted_planar_z_differences'])
+
     def test_counted_linear_xy_length_excludes_arcs_priming_and_stationary_moves(self):
         code = ('M83\nG1 X3 Y4 E1\nG1 X3 Y4 E1\n'
                 'G2 I1 J0 E1\nG1 X6 Y8 E1\n'
