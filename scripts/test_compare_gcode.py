@@ -67,6 +67,50 @@ class ComparatorTests(unittest.TestCase):
         self.assertEqual(report['first_native_only_counted_planar_z_mm'], ['0.4'])
         self.assertEqual(report['first_wasm_only_counted_planar_z_mm'], ['0.6'])
 
+    def test_shared_z_footprint_detects_geometry_change_with_equal_move_counts(self):
+        native = ('M83\nG0 Z0.2\nG1 X3 Y4 E1\nG1 X6 Y8 E1\n')
+        wasm = ('M83\nG0 Z0.2\nG1 X3 Y4 E1\nG1 X6 Y9 E1\n')
+        report = self.run_compare(native, wasm, min_extrusion_moves=2)
+        self.assertEqual(report['first_counted_planar_z_differences'], [])
+        self.assertEqual(report['native_only_counted_planar_z_levels'], 0)
+        self.assertEqual(report['shared_counted_planar_z_footprint_difference_count'], 1)
+        sample = report['first_shared_counted_planar_z_footprint_differences'][0]
+        self.assertEqual(sample['z_mm'], '0.2')
+        self.assertEqual(sample['native']['deposition_moves'], 2)
+        self.assertEqual(sample['wasm']['deposition_moves'], 2)
+        self.assertEqual(sample['native']['linear_xy_mm'], '10')
+        self.assertEqual(sample['wasm']['linear_xy_mm'], '10.830952')
+        self.assertEqual(sample['wasm_minus_native_linear_xy_mm'], '0.830952')
+        self.assertEqual(sample['wasm_minus_native_linear_positive_e_mm'], '0')
+        self.assertEqual(sample['wasm']['linear_xy_endpoint_bounds_mm'],
+                         ['0', '0', '6', '9'])
+        self.assertFalse(report['match'])
+
+    def test_shared_z_footprint_detects_positive_e_change_with_equal_shape(self):
+        native = 'M83\nG0 Z0.2\nG1 X1 E1\n'
+        wasm = 'M83\nG0 Z0.2\nG1 X1 E2\n'
+        report = self.run_compare(native, wasm, min_extrusion_moves=1)
+        self.assertEqual(report['shared_counted_planar_z_footprint_difference_count'], 1)
+        sample = report['first_shared_counted_planar_z_footprint_differences'][0]
+        self.assertEqual(sample['native']['linear_xy_mm'], '1')
+        self.assertEqual(sample['wasm']['linear_xy_mm'], '1')
+        self.assertEqual(sample['wasm_minus_native_linear_positive_e_mm'], '1')
+
+    def test_shared_z_footprint_full_count_and_bounded_examples(self):
+        native = 'M83\n' + ''.join(
+            f'G0 Z{i / 10}\nG0 X0\nG1 X10 E1\n' for i in range(1, 20))
+        wasm = 'M83\n' + ''.join(
+            f'G0 Z{i / 10}\nG0 X0\nG1 X11 E1\n' for i in range(1, 20))
+        report = self.run_compare(native, wasm)
+        self.assertEqual(report['shared_counted_planar_z_footprint_difference_count'], 19)
+        samples = report['first_shared_counted_planar_z_footprint_differences']
+        self.assertEqual(len(samples), 15)
+        self.assertEqual(samples[0]['z_mm'], '0.1')
+        self.assertEqual(samples[-1]['z_mm'], '1.5')
+        same = self.run_compare(native, native)
+        self.assertEqual(same['shared_counted_planar_z_footprint_difference_count'], 0)
+        self.assertEqual(same['first_shared_counted_planar_z_footprint_differences'], [])
+
     def test_missing_z_membership_count_is_not_truncated_to_15(self):
         native = 'M83\n' + ''.join(
             f'G0 Z{i / 10}\nG1 X{i} E1\n' for i in range(1, 22))
@@ -96,6 +140,8 @@ class ComparatorTests(unittest.TestCase):
         self.assertIsNone(report['native_counted_planar_z_levels'])
         self.assertIsNone(report['wasm_counted_nonplanar_deposition_moves'])
         self.assertIsNone(report['first_counted_planar_z_differences'])
+        self.assertIsNone(report['shared_counted_planar_z_footprint_difference_count'])
+        self.assertIsNone(report['first_shared_counted_planar_z_footprint_differences'])
         self.assertIsNone(report['native_only_counted_planar_z_levels'])
         self.assertIsNone(report['wasm_only_counted_planar_z_levels'])
         self.assertIsNone(report['first_native_only_counted_planar_z_mm'])
