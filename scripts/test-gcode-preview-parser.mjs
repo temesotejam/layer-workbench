@@ -113,7 +113,7 @@ console.log("PASS: invalid G18/G19 arcs preserve modal endpoints");
 
 // Bounded vertical-plane arcs are now tessellated in real XYZ (not a
 // misleading XY chord). G18 uses a right-handed ZX basis, G19 a YZ basis.
-const verticalXZ=parseGcodeToolpaths("G21\\nG90\\nM82\\nG0 X0 Y0 Z10\\nG18\\nG3 X10 Y5 Z0 I0 K-10 E1\\nG1 X20 E2");
+const verticalXZ=parseGcodeToolpaths("G21\nG90\nM82\nG0 X0 Y0 Z10\nG18\nG3 X10 Y5 Z0 I0 K-10 E1\nG1 X20 E2");
 assert.equal(verticalXZ.renderedArcs,1);
 assert.equal(verticalXZ.skippedArcs,0);
 assert.equal(verticalXZ.skippedMalformedMotion,0);
@@ -125,7 +125,7 @@ assert.ok(xzSegments.slice(0,-1).every(p=>p.y2>=p.y1&&p.y2<=5),
 assert.deepEqual([xzSegments.at(-1).x1,xzSegments.at(-1).x2,
   xzSegments.at(-1).y1,xzSegments.at(-1).z1],[10,20,5,0]);
 
-const verticalYZ=parseGcodeToolpaths("G21\\nG90\\nM82\\nG0 X0 Y10 Z0\\nG19\\nG3 X5 Y0 Z10 J-10 K0 E1\\nG1 Y-10 E2");
+const verticalYZ=parseGcodeToolpaths("G21\nG90\nM82\nG0 X0 Y10 Z0\nG19\nG3 X5 Y0 Z10 J-10 K0 E1\nG1 Y-10 E2");
 assert.equal(verticalYZ.renderedArcs,1);
 assert.equal(verticalYZ.skippedArcs,0);
 const yzSegments=verticalYZ.layers.find(l=>l.z===10).segments;
@@ -137,29 +137,29 @@ assert.deepEqual([yzSegments.at(-1).y1,yzSegments.at(-1).y2,
   yzSegments.at(-1).x1,yzSegments.at(-1).z1],[0,-10,5,10]);
 
 for(const input of [
-  "G18\\nG0 X0 Z10\\nG3 X10 Z0 R10 E1",
-  "G19\\nG0 Y10 Z0\\nG3 Y0 Z10 R10 E1",
-  "G18\\nG0 X10 Z0\\nG2 X0 Z10 I-10 K0 E1",
-  "G18\\nG0 X0 Z10\\nG90.1\\nG3 X10 Z0 I0 K0 E1",
-  "G19\\nG0 Y10 Z0\\nG91\\nG3 Y-10 Z10 J-10 K0 E1",
+  "G18\nG0 X0 Z10\nG3 X10 Z0 R10 E1",
+  "G19\nG0 Y10 Z0\nG3 Y0 Z10 R10 E1",
+  "G18\nG0 X10 Z0\nG2 X0 Z10 I-10 K0 E1",
+  "G18\nG0 X0 Z10\nG90.1\nG3 X10 Z0 I0 K0 E1",
+  "G19\nG0 Y10 Z0\nG91\nG3 Y-10 Z10 J-10 K0 E1",
 ]){
   const rotated=parseGcodeToolpaths(input);
   assert.equal(rotated.renderedArcs,1,input);
   assert.equal(rotated.skippedArcs,0,input);
 }
-const verticalCircle=parseGcodeToolpaths("G18\\nG0 X10 Z0\\nG2 I-10 K0 E1");
+const verticalCircle=parseGcodeToolpaths("G18\nG0 X10 Z0\nG2 I-10 K0 E1");
 assert.equal(verticalCircle.renderedArcs,1);
 assert.ok(verticalCircle.extrusions>=36);
-const invalidVertical=parseGcodeToolpaths("G18\\nG0 X0 Z10\\nG3 X10 Z0 I0 K-10 J1 E1\\nG1 X20 E2");
+const invalidVertical=parseGcodeToolpaths("G18\nG0 X0 Z10\nG3 X10 Z0 I0 K-10 J1 E1\nG1 X20 E2");
 assert.equal(invalidVertical.renderedArcs,0);
 assert.equal(invalidVertical.skippedArcs,1);
 assert.equal(invalidVertical.extrusions,1);
 assert.equal(invalidVertical.layers.at(-1).segments.at(-1).x1,10);
-const repeatTurnVertical=parseGcodeToolpaths("G19\\nG0 Y10 Z0\\nG3 Y0 Z10 J-10 K0 P2 E1\\nG1 Y-10 E2");
+const repeatTurnVertical=parseGcodeToolpaths("G19\nG0 Y10 Z0\nG3 Y0 Z10 J-10 K0 P2 E1\nG1 Y-10 E2");
 assert.equal(repeatTurnVertical.renderedArcs,0);
 assert.equal(repeatTurnVertical.skippedArcs,1);
 assert.equal(repeatTurnVertical.layers.at(-1).segments.at(-1).y1,0);
-assert.throws(()=>parseGcodeToolpaths("G18\\nG0 X0 Z10\\nG3 X10 Z0 I0 K-10 E1",{maxSegments:4}),/complex/);
+assert.throws(()=>parseGcodeToolpaths("G18\nG0 X0 Z10\nG3 X10 Z0 I0 K-10 E1",{maxSegments:4}),/complex/);
 console.log("PASS: bounded G18/G19 vertical arcs and helices render real 3D geometry; invalid/extra-turn forms omit safely");
 
 // Relative XYZ and explicit absolute I/J center semantics.
