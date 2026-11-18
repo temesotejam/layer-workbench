@@ -71,7 +71,7 @@ assert.equal(isPlanarLayerSegment({z1:0.20049,z2:0.20049},0.2),true);
 assert.equal(isPlanarLayerSegment({z1:0.2,z2:0.2},NaN),false);
 assert.equal(isPlanarLayerSegment({z1:NaN,z2:0.2},0.2),false);
 assert.equal(isPlanarLayerSegment({},0.2),true); // old records without source heights
-const zOnlyTravel=parseGcodeToolpaths("G0 X0 Y0 Z0.2\\nG0 Z0.4\\nG1 X10 E1");
+const zOnlyTravel=parseGcodeToolpaths("G0 X0 Y0 Z0.2\nG0 Z0.4\nG1 X10 E1");
 assert.equal(isPlanarLayerSegment(zOnlyTravel.layers.at(-1).segments[0],0.4),false);
 assert.equal(isPlanarLayerSegment(zOnlyTravel.layers.at(-1).segments[1],0.4),true);
 
