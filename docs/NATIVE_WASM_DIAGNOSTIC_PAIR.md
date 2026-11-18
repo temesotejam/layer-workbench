@@ -175,3 +175,24 @@ invalid affine matrices, and malformed IDs. This closes a logical
 loophole in strict input identity; it is **not** a new real same-profile
 G-code result. No production WASM, third-party data, or public Pages
 artifacts are changed.
+
+## 2026-11-18: independent native placed-triangle audit
+
+The official v2.5.0 native CLI's shared 20 mm cube test now also runs
+`scripts/audit_native_parity_cube_geometry.py` **after** exporting the
+positioned Core 3MF to STL with `--arrange 0`. It reads the original 684-byte
+SHA256-pinned STL independently, applies the fixed (128,128,0) source-to-bed
+translation to every triangle, then compares the native export's 12 placed
+triangles. Face order, vertex order and winding may differ, but changing
+triangle connectivity fails even when the XYZ bounding box remains identical.
+
+The export audit rejects changed source bytes, multiple/missing STL exports,
+non-finite coordinates, inconsistent triangle counts, out-of-bounds
+translations, and excessive per-vertex deviations (>0.001 mm). The audit
+emits numeric JSON only, and is included in the native CLI workflow before
+native slicing; its unit tests are also run by the lightweight parity CI.
+This is stronger placement evidence than comparing only the outer bounds,
+but **only for the native exporter**. It neither proves the browser WASM
+has applied its declared transform nor validates settings, G-code equality,
+3MF round-trip semantics, runtime provenance or print safety. The real
+native/WASM equal-full-profile G-code comparison remains blocked.
