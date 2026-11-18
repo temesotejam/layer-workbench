@@ -13,6 +13,26 @@ class ComparatorTests(unittest.TestCase):
             return compare(first, second, **kwargs)
 
 
+    def test_invalid_g17_arc_does_not_allow_later_deposition_to_pass(self):
+        # Previously an impossible arc was silently skipped but mutated XY,
+        # allowing surrounding valid G1 moves to satisfy the minimum gate.
+        for arc in ("G2 X2 E1", "G2 X2", "G3 X2 R0 E-1"):
+            with self.subTest(arc=arc):
+                gcode = "M83\nG1 X1 E1\n" + arc + "\nG1 X3 E1\n"
+                result = self.run_compare(gcode, gcode, min_extrusion_moves=2)
+                self.assertFalse(result["match"], result)
+                self.assertIsNone(result["native_counted_planar_z_levels"])
+                self.assertIsNone(result["native_counted_positive_e_mm"])
+                self.assertIn("malformed stateful geometry", " ".join(result["input_issues"]))
+
+    def test_identical_malformed_stateful_gcode_fails_even_without_minimum(self):
+        result = self.run_compare("M83\nG1 X1 E1 X2\n",
+                                  "M83\nG1 X1 E1 X2\n")
+        self.assertFalse(result["match"], result)
+        self.assertEqual(result["mismatched_commands"], 0)
+        self.assertIsNone(result["native_counted_planar_z_levels"])
+        self.assertEqual(len(result["input_issues"]), 2)
+
     def test_counted_planar_z_levels_track_g0_g92_and_relative_z(self):
         # Count real XY deposition at a constant Z. An XY+Z extrusion
         # changes height and must not masquerade as an ordinary layer.
