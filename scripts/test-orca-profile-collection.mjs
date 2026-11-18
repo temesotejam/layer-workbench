@@ -688,3 +688,23 @@ for(const bad of ['2%',2.5,-1,11,'auto',['2','3'],null]) {
 }
 assert.ok(!resolve(skirtProfiles,selection).process.unsupported.includes('skirt_loops'));
 console.log('PASS: native skirt_loops selection, inheritance and bounded integer validation');
+
+// Native coFloat skirt_distance (0..60 mm) inherits independently of skirt_loops.
+const skirtDistanceProfiles=profiles.map(rec=>rec.name==='fdm_process_common'
+  ? {...rec,skirt_distance:'2'} : rec.name==='0.16mm Fine @TestPrinter'
+    ? {...rec,skirt_distance:'8.5'} : rec);
+assert.equal(resolve(skirtDistanceProfiles,selection).process.settings.skirt_distance,'8.5');
+assert.equal(resolve(skirtDistanceProfiles.map(rec=>{
+  if(rec.name!=='0.16mm Fine @TestPrinter')return rec;
+  const child={...rec};delete child.skirt_distance;return child;
+}),selection).process.settings.skirt_distance,'2');
+for(const value of ['0','60']) {
+  assert.equal(resolve(skirtDistanceProfiles.map(rec=>rec.name==='0.16mm Fine @TestPrinter'
+    ? {...rec,skirt_distance:value}:rec),selection).process.settings.skirt_distance,value);
+}
+for(const bad of ['2%',-1,60.01,['2','3'],null,'auto']) {
+  assert.throws(()=>resolve(skirtDistanceProfiles.map(rec=>rec.name==='0.16mm Fine @TestPrinter'
+    ? {...rec,skirt_distance:bad}:rec),selection),/Invalid|Multi-extruder|test limits/);
+}
+assert.ok(!resolve(skirtDistanceProfiles,selection).process.unsupported.includes('skirt_distance'));
+console.log('PASS: native skirt_distance inheritance, bounded floating-point and invalid input rejection');

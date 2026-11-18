@@ -25,6 +25,13 @@ assert.equal(indexed.records.find(p=>p.name==="0.20mm Standard @Creality CR-10 0
 assert.equal(process.settings.skirt_loops,"2",
   "Official inherited skirt loops must reach bounded WASM adapter");
 assert.ok(!process.unsupported.includes("skirt_loops"));
+assert.equal(indexed.records.find(p=>p.name==="fdm_process_creality_common").skirt_distance,"2",
+  "Pinned Creality common skirt distance in mm");
+assert.equal(indexed.records.find(p=>p.name==="0.20mm Standard @Creality CR-10 0.4 nozzle").skirt_distance,"2",
+  "Pinned CR-10 child skirt distance in mm");
+assert.equal(process.settings.skirt_distance,"2",
+  "Official skirt_distance must reach bounded WASM adapter");
+assert.ok(!process.unsupported.includes("skirt_distance"));
 assert.equal(process.settings.line_width,"0.42",
   "Official v2.5.0 CR-10 0.20mm process must provide absolute line width");
 assert.ok(!process.unsupported.includes("line_width"),

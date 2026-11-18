@@ -199,3 +199,13 @@ for(const bad of ["2%","2.5",-1,11,"auto",["2"],null]) {
     /Invalid|outside the safe test range/,String(bad));
 }
 console.log("PASS: isolated WASM process skirt_loops accepts only integer 0..10");
+
+// Official v2.5.0 skirt_distance: absolute millimetres, float 0..60 inclusive.
+for(const value of ["0","2","2.5","60"]) {
+  assert.deepEqual(parseTestProcessOverrides({skirt_distance:value}),{skirt_distance:value});
+}
+for(const bad of ["-1","60.1","2%","auto",["2"],null,NaN,Infinity]) {
+  assert.throws(()=>parseTestProcessOverrides({skirt_distance:bad}),
+    /Invalid|outside the safe test range/,String(bad));
+}
+console.log("PASS: source-pinned skirt_distance float 0..60 mm rejects percentages and vectors");

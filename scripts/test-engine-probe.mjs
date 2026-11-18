@@ -641,6 +641,21 @@ try {
     await uploadRawOrca();
     console.log('PASS: source-pinned skirt_loops 0 -> 2 adds real WASM G-code moves');
 
+    // Keep two source-pinned loops on the same two-STL bed and change ONLY
+    // skirt_distance (upstream coFloat, mm). Verify actual G0/G1 trajectories,
+    // not profile comments, metadata echoes, or G-code hashes.
+    rawOrca[4].skirt_loops='2';
+    const nearSkirtMotion=motionOnly(await sliceWithLineWidth('1','skirt_distance'));
+    const farSkirtMotion=motionOnly(await sliceWithLineWidth('8','skirt_distance'));
+    assert.ok(nearSkirtMotion.length>100&&farSkirtMotion.length>100,
+      'Skirt distance test needs substantive real WASM paths');
+    assert.notDeepEqual(nearSkirtMotion,farSkirtMotion,
+      'Native skirt_distance 1 -> 8 mm must alter real G0/G1 paths, not only metadata');
+    delete rawOrca[4].skirt_distance;
+    delete rawOrca[4].skirt_loops;
+    await uploadRawOrca();
+    console.log('PASS: source-pinned skirt_distance 1 -> 8 mm changes real WASM motion G-code');
+
     const narrowWidthMotion=motionOnly(await sliceWithLineWidth('0.35'));
     const broadWidthMotion=motionOnly(await sliceWithLineWidth('0.65'));
     assert.ok(narrowWidthMotion.length>100&&broadWidthMotion.length>100,
