@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Create a self-reported parity fixture manifest from local files.
 
-Does not prove which slicer generated the files. Verify source and toolchain separately.
+Does not prove which slicer applied the scene transforms. Verify source, observed\ngeometry and toolchain independently.
 """
 import argparse
 import hashlib
@@ -11,6 +11,7 @@ from check_parity_pair import KINDS, PIN
 
 NAMES = {
     "model": "model.stl",
+    "scene": "scene.json",
     "machine": "machine.json",
     "filament": "filament.json",
     "process": "process.json",
