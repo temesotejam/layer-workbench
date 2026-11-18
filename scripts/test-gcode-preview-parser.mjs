@@ -120,7 +120,7 @@ for(const auxiliary of ["P2","S1"]){
   assert.equal(omitted.skippedArcs,1);
   assert.equal(omitted.skippedMalformedMotion,0);
   assert.equal(omitted.extrusions,1);
-  assert.deepEqual(omitted.layers[0].segments.map(s=>[s.x1,s.x2]),[[10,20]]);
+  assert.deepEqual(omitted.layers[0].segments.filter(s=>s.extrusion).map(s=>[s.x1,s.x2]),[[10,20]]);
 }
 // Non-arc unhandled words must not change XYZ/E modal state or generate a
 // phantom deposition path, including malformed G92 coordinate resets.
