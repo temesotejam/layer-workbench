@@ -209,3 +209,11 @@ for(const bad of ["-1","60.1","2%","auto",["2"],null,NaN,Infinity]) {
     /Invalid|outside the safe test range/,String(bad));
 }
 console.log("PASS: source-pinned skirt_distance float 0..60 mm rejects percentages and vectors");
+
+// Native skirt height is an independent positive integer count of layers.
+for (const value of ['1','2','3','20'])
+  assert.deepEqual(parseTestProcessOverrides({skirt_height:value}),{skirt_height:value});
+for (const bad of ['0','21','2.5','2%','auto',['2'],null,-1])
+  assert.throws(()=>parseTestProcessOverrides({skirt_height:bad}),
+    /Invalid|outside the safe test range/,'Malformed skirt_height '+String(bad));
+console.log('PASS: native skirt_height 1..20 integer layers and invalid inputs fail closed');

@@ -708,3 +708,23 @@ for(const bad of ['2%',-1,60.01,['2','3'],null,'auto']) {
 }
 assert.ok(!resolve(skirtDistanceProfiles,selection).process.unsupported.includes('skirt_distance'));
 console.log('PASS: native skirt_distance inheritance, bounded floating-point and invalid input rejection');
+
+// Three-level native skirt height must override/inherit independently of
+// skirt loops or distance without inventing a missing default.
+const skirtHeightProfiles=profiles.map(rec=>rec.name==='fdm_process_common'
+  ? {...rec,skirt_height:'2'} : rec.name==='0.16mm Fine @TestPrinter'
+    ? {...rec,skirt_height:'3'} : rec);
+assert.equal(resolve(skirtHeightProfiles,selection).process.settings.skirt_height,'3');
+assert.equal(resolve(skirtHeightProfiles.map(rec=>{
+  if(rec.name!=='0.16mm Fine @TestPrinter')return rec;
+  const child={...rec};delete child.skirt_height;return child;
+}),selection).process.settings.skirt_height,'2');
+assert.equal(resolve(skirtHeightProfiles.map(rec=>rec.name==='0.16mm Fine @TestPrinter'
+  ? {...rec,skirt_height:['3']}:rec),selection).process.settings.skirt_height,'3');
+for (const bad of ['0',21,2.5,'2%',['2','3'],null])
+  assert.throws(()=>resolve(skirtHeightProfiles.map(rec=>rec.name==='0.16mm Fine @TestPrinter'
+    ? {...rec,skirt_height:bad}:rec),selection),
+    /Invalid|Multi-extruder|test limits/);
+assert.ok(!resolve(skirtHeightProfiles,selection).process.unsupported.includes('skirt_height'));
+assert.equal(result.process.settings.skirt_height,undefined);
+console.log('PASS: source-pinned skirt_height inherits as an independent bounded integer');
