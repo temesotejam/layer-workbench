@@ -723,6 +723,67 @@ try {
     await uploadRawOrca();
     console.log('PASS: isolated WASM skirt_height adds real Skirt-tagged deposited Z levels');
 
+    // Pinned CR-10 0.20mm process specifies native skirt_speed=20 mm/s.
+    // Keep scene, loop count, distance and height constant. Only this
+    // absolute speed changes to 3 mm/s. A header-only difference cannot pass.
+    rawOrca[4].skirt_loops='2';
+    rawOrca[4].skirt_distance='2';
+    rawOrca[4].skirt_height='1';
+    const normalSkirtSpeed=await sliceWithLineWidth('20','skirt_speed');
+    const slowSkirtSpeed=await sliceWithLineWidth('3','skirt_speed');
+    const skirtSpeedWitness=code=>{
+      const parsed=parseGcodeToolpaths(code);
+      assert.equal(parsed.skippedArcs,0,'Skirt speed audit must parse every arc');
+      assert.equal(parsed.skippedMalformedMotion,0,'Skirt speed audit must parse every motion');
+      const deposited=parsed.layers.flatMap(layer=>layer.segments).filter(s=>
+        s.feature==='skirt' && s.extrusion===true &&
+        Number.isFinite(s.z1) && Number.isFinite(s.z2) &&
+        Math.abs(s.z2-s.z1)<0.0005 &&
+        Math.hypot(s.x2-s.x1,s.y2-s.y1)>0.000001);
+      assert.ok(deposited.length>=8,'Need genuine tagged skirt deposition, not comments/travel');
+      assert.ok(deposited.every(s=>Number.isFinite(s.feedrateMmMin)&&s.feedrateMmMin>0),
+        'Missing commanded F on skirt deposition');
+      const bounds=[Infinity,-Infinity,Infinity,-Infinity];
+      let xyLength=0;
+      const feedrates=new Set();
+      for(const s of deposited){
+        xyLength+=Math.hypot(s.x2-s.x1,s.y2-s.y1);
+        bounds[0]=Math.min(bounds[0],s.x1,s.x2);
+        bounds[1]=Math.max(bounds[1],s.x1,s.x2);
+        bounds[2]=Math.min(bounds[2],s.y1,s.y2);
+        bounds[3]=Math.max(bounds[3],s.y1,s.y2);
+        feedrates.add(Math.round(s.feedrateMmMin*100)/100);
+      }
+      return {segments:deposited.length,xy_length_mm:xyLength,
+        xy_bounds_mm:bounds,feedrates_mm_min:[...feedrates].sort((a,b)=>a-b)};
+    };
+    const normalSkirt=skirtSpeedWitness(normalSkirtSpeed);
+    const slowSkirt=skirtSpeedWitness(slowSkirtSpeed);
+    assert.equal(slowSkirt.segments,normalSkirt.segments,
+      'Changing only skirt speed should preserve deposited segment count');
+    assert.ok(Math.abs(slowSkirt.xy_length_mm-normalSkirt.xy_length_mm)<=0.02,
+      'Speed-only override changed geometric skirt path length');
+    assert.ok(slowSkirt.xy_bounds_mm.every((v,i)=>
+      Math.abs(v-normalSkirt.xy_bounds_mm[i])<=0.05),
+      'Speed-only override changed skirt XY envelope');
+    const newlySlow=slowSkirt.feedrates_mm_min.filter(f=>f>0&&f<=240&&
+      !normalSkirt.feedrates_mm_min.some(b=>Math.abs(b-f)<0.01));
+    const skirtSpeedDiagnostic={fixture:'two synthetic STL; 2 skirt loops; 2mm distance; 1 layer',
+      baseline_speed_mm_s:20,experiment_speed_mm_s:3,
+      baseline:normalSkirt,experiment:slowSkirt,new_low_feedrates_mm_min:newlySlow,
+      desktop_native_parity:false,printer_ready:false};
+    console.log('WASM_SKIRT_SPEED_DEPOSITION '+JSON.stringify(skirtSpeedDiagnostic));
+    await writeFile(parityDir+'/skirt-speed-deposition.json',
+      JSON.stringify(skirtSpeedDiagnostic,null,2)+'\n');
+    assert.ok(newlySlow.length>0,
+      'Skirt speed 3 mm/s must introduce a new slower F on genuinely deposited skirt-tagged XY paths');
+    delete rawOrca[4].skirt_speed;
+    delete rawOrca[4].skirt_height;
+    delete rawOrca[4].skirt_distance;
+    delete rawOrca[4].skirt_loops;
+    await uploadRawOrca();
+    console.log('PASS: native skirt_speed independently changes actual skirt-tagged positive-E XY feedrate');
+
     const narrowWidthMotion=motionOnly(await sliceWithLineWidth('0.35'));
     const broadWidthMotion=motionOnly(await sliceWithLineWidth('0.65'));
     assert.ok(narrowWidthMotion.length>100&&broadWidthMotion.length>100,
