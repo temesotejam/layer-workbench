@@ -37,7 +37,11 @@ const SPECS={
     wall_loops:[1,8],skirt_loops:[0,10],skirt_distance:[0,60],
     // Native v2.5.0 CR-10 chain resolves skirt_height 2 -> 1 -> 2.
     // Locally accept only bounded positive integer deposition layer counts.
-    skirt_height:[1,20],sparse_infill_density:[0,100],
+    skirt_height:[1,20],
+    // Official v2.5.0 CR-10 child uses absolute skirt_speed=20 mm/s.
+    // Native zero means fall back to the layer extrusion speed. Bound the
+    // localhost diagnostic to 0..300; never reinterpret percentages as speed.
+    skirt_speed:[0,300],sparse_infill_density:[0,100],
     top_shell_layers:[0,12],bottom_shell_layers:[0,12],
     // Absolute mm/s only; relative percentage-based speeds are not converted.
     // These bounds constrain diagnostic inputs, not real printer capability.

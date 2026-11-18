@@ -1506,3 +1506,33 @@ published on Pages.
 This proves a narrow setting-to-toolpath response only if the isolated
 Chrome CI passes. It is **not** full upstream UI/3MF/G-code parity, nor
 verification of native desktop per-object skirts/draft-shields or print safety.
+
+## 2026-11-19: source-pinned CR-10 skirt speed (isolated browser gate)
+
+The official pinned OrcaSlicer v2.5.0 `PrintConfig.cpp` defines `skirt_speed`
+as a `coFloat` in **mm/s**, minimum 0 (zero requests native default-layer
+extrusion speed), and default 50 mm/s. The selected Creality CR-10
+`0.20mm Standard @Creality CR-10 0.4 nozzle` explicitly sets **20 mm/s**.
+The restricted localhost test adapter resolves this independent setting
+from the inherited process chain and forwards only a finite absolute scalar
+in the deliberately conservative local range 0..300 mm/s. Percentages,
+negative/nonfinite values, unverified multiple values and inferred defaults
+remain rejected. This is not an endorsed speed range for a real printer.
+
+An opt-in isolated Chrome regression holds two synthetic STLs, two skirt
+loops, 2 mm distance, one layer and every other process setting fixed, and
+changes **only** `skirt_speed` from 20 to 3 mm/s. It requires real
+`Skirt`-tagged, positive-E horizontal XY deposition with finite modal
+G-code F feedrates, nearly unchanged skirt XY length/envelope and a new
+slow deposited F value not found in the baseline. A header echo, raw
+G-code hash, travel move or other feature's speed cannot pass.
+It records read-only evidence at `parity-output/skirt-speed-deposition.json`
+without uploading raw executable G-code to Pages.
+
+The strict check may fail if engine behavior, speed caps or layer-time
+slowdown prevent the expected role-specific F difference; investigate
+the logs instead of weakening the gate. Even a PASS proves only the
+pinned candidate's bounded role-specific response, **not** desktop-native
+G-code equivalence, arbitrary printer preset support, 3MF/UI parity,
+print safety or public-site WASM activation. No heavy engine rebuild
+is required for this profile-only change.

@@ -35,6 +35,9 @@ const LIMITS = {
   // Native coInt: number of skirt layers, NOT millimetres.
   // Local diagnostic only; zero/negative and fractional modes are not vetted.
   skirt_height: [1,20],
+  // Native v2.5.0 coFloat skirt speed (mm/s): 0 means native fallback.
+  // 300 is a conservative local test-only ceiling, not a machine limit.
+  skirt_speed: [0,300],
   wall_loops: [1,8],
   sparse_infill_density: [0,100],
   top_shell_layers: [0,12],
