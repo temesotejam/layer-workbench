@@ -1380,3 +1380,25 @@ settings to WASM, and does not certify G-code or public Pages slicing.
 The opt-in read-only preview accepts numeric `K` offset words on `G2/G3` commands. On an XZ (`G18`) or YZ (`G19`) arc it still **does not draw** the unsupported curved path, but now advances the explicitly commanded XYZ/E endpoint before interpreting the next supported `G0/G1` move. Previously its strict word scanner rejected `K` as malformed and left the modal endpoint stale, making subsequent deposited line segments appear to start at the wrong coordinates. In a G17 XY arc, a `K` word is not interpreted, so the curve is omitted rather than drawn with the ignored offset. `K` on G0/G1/G92 remains unsupported and rejected.
 
 This is a conservative visualization correction, **not** G18/G19 arc tessellation, CNC/firmware emulation, validated G-code execution, or native OrcaSlicer preview parity. Regression tests cover skipped-arc counts, preserved Z/E and follow-up extrusion coordinates for both planes, G17 fail-closed behavior, and rejection of unexpected linear K words. The Chrome/WASM CI's existing Node parser step runs these tests; it does not enable experimental WASM on public Pages.
+
+
+## 2026-11-18: bounded G18/G19 vertical-plane G-code preview
+
+The localhost diagnostic preview now tessellates bounded circular/helical G2/G3
+arcs in all three conventional planes: G17 (XY, I/J), G18 (ZX, K/I),
+and G19 (YZ, J/K). Using each plane's right-handed coordinate basis
+preserves clockwise/counterclockwise direction when viewed along its positive
+normal. Arcs may use the two in-plane center offsets or a signed R radius;
+the third axis is linearly interpolated for true 3D helical segments. The
+existing 2D layer picker still groups an entire arc by its destination Z:
+this does **not** make a vertical-plane arc into a single horizontal layer.
+
+Explicit P multi-turn commands, unexpected cross-plane center words, invalid
+radii, ambiguous center/radius combinations, and arcs over the segment budget
+remain omitted (while validly parsed modal XYZ/E endpoints advance). This is
+**read-only visualization**, not full RS274 firmware emulation, cutter offset
+handling, native OrcaSlicer preview equivalence, or evidence of printable G-code.
+CI regression tests cover G18/G19 3D midpoints, CW/CCW direction,
+radius and absolute/relative centers, helical third-axis interpolation,
+subsequent linear paths, full circles and fail-closed input.
+The public Pages application remains unchanged, with WASM candidate disabled.
