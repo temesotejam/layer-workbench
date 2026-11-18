@@ -32,6 +32,10 @@ assert.equal(indexed.records.find(p=>p.name==="0.20mm Standard @Creality CR-10 0
 assert.equal(process.settings.skirt_distance,"2",
   "Official skirt_distance must reach bounded WASM adapter");
 assert.ok(!process.unsupported.includes("skirt_distance"));
+assert.deepEqual(process.chain.map(name=>indexed.records.find(p=>p.name===name).skirt_height),
+  ["2","1","2"],"Pinned CR-10 skirt layer height inheritance");
+assert.equal(process.settings.skirt_height,"2","Official skirt_height reaches restricted WASM bridge");
+assert.ok(!process.unsupported.includes("skirt_height"));
 assert.equal(process.settings.line_width,"0.42",
   "Official v2.5.0 CR-10 0.20mm process must provide absolute line width");
 assert.ok(!process.unsupported.includes("line_width"),

@@ -1483,3 +1483,26 @@ does not emit exact tags the gate correctly FAILS rather than inventing
 a feature classification. This does **not** establish the exact 7 mm native
 offset, 3MF/toolpath parity, G-code safety for a printer, or public Pages
 WASM activation. No heavy engine binary/build inputs are modified.
+
+
+## 2026-11-18: official CR-10 skirt-height and deposited-layer verification
+
+Official pinned OrcaSlicer v2.5.0 Creality chain contains `skirt_height`
+`2 → 1 → 2` across process common, Creality common and the CR-10 0.20mm
+Standard child. The restricted localhost profile importer now forwards
+bounded positive integer `skirt_height` 1–20 layers independently of
+`skirt_loops` and millimetre-valued `skirt_distance`, rejecting percentages,
+fractional values, zero, unverified arrays, and invented defaults.
+
+In isolated Chrome, the same two-STL scene holds `skirt_loops=2` and
+`skirt_distance=2` mm constant and varies **only** `skirt_height` from
+1 to 3. The integration gate groups actual **Skirt-tagged, positive-E, planar
+XY deposition** by commanded Z, requiring one versus three Z levels and
+the same first-layer XY envelope. Unparsed G-code arcs or invalid motion fail
+the test. Results are saved as local CI diagnostic
+`parity-output/skirt-height-deposition.json`; no raw executable G-code is
+published on Pages.
+
+This proves a narrow setting-to-toolpath response only if the isolated
+Chrome CI passes. It is **not** full upstream UI/3MF/G-code parity, nor
+verification of native desktop per-object skirts/draft-shields or print safety.

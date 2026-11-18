@@ -669,6 +669,60 @@ try {
     await uploadRawOrca();
     console.log('PASS: source-pinned skirt_distance 1 -> 8 mm changes real WASM motion G-code');
 
+    // Fixed two-STL plate and two loops, 2mm skirt distance; vary ONLY
+    // native skirt_height 1 vs 3. Count actual positive-E, Skirt-tagged
+    // horizontal XY deposition by Z; travel, comments, and non-skirt
+    // extrusions must not be counted as evidence.
+    rawOrca[4].skirt_loops='2';
+    rawOrca[4].skirt_distance='2';
+    const skirtOne=await sliceWithLineWidth('1','skirt_height');
+    const skirtThree=await sliceWithLineWidth('3','skirt_height');
+    const depositedSkirtLayers=gcode=>{
+      const parsed=parseGcodeToolpaths(gcode);
+      assert.equal(parsed.skippedArcs,0,'Cannot verify skirt height when arcs are skipped');
+      assert.equal(parsed.skippedMalformedMotion,0,'Cannot verify skirt height with malformed motion');
+      const byZ=new Map();
+      for(const layer of parsed.layers)for(const s of layer.segments){
+        if(s.feature!=='skirt'||s.extrusion!==true||!Number.isFinite(s.z1)||
+           !Number.isFinite(s.z2)||Math.abs(s.z2-s.z1)>0.0005||
+           Math.hypot(s.x2-s.x1,s.y2-s.y1)<=1e-6)continue;
+        const key=(Math.round(s.z2*1000)/1000).toFixed(3);
+        const record=byZ.get(key)||{segments:0,bounds:[[Infinity,-Infinity],[Infinity,-Infinity]]};
+        record.segments++;
+        for(const pt of [[s.x1,s.y1],[s.x2,s.y2]])for(let axis=0;axis<2;axis++){
+          record.bounds[axis][0]=Math.min(record.bounds[axis][0],pt[axis]);
+          record.bounds[axis][1]=Math.max(record.bounds[axis][1],pt[axis]);
+        }
+        byZ.set(key,record);
+      }
+      return [...byZ].sort((a,b)=>Number(a[0])-Number(b[0]));
+    };
+    const shortSkirt=depositedSkirtLayers(skirtOne);
+    const tallSkirt=depositedSkirtLayers(skirtThree);
+    const sameFirst=shortSkirt.length>0&&tallSkirt.length>0&&
+      shortSkirt[0][0]===tallSkirt[0][0]&&
+      [0,1].every(a=>[0,1].every(b=>
+        Math.abs(shortSkirt[0][1].bounds[a][b]-tallSkirt[0][1].bounds[a][b])<=0.1));
+    const skirtHeightWitness={short_layers_mm:shortSkirt.map(x=>Number(x[0])),
+      tall_layers_mm:tallSkirt.map(x=>Number(x[0])),
+      short_segments:shortSkirt.map(x=>x[1].segments),
+      tall_segments:tallSkirt.map(x=>x[1].segments),
+      same_first_layer_envelope:sameFirst,parity_pass:false};
+    console.log('WASM_SKIRT_HEIGHT_DEPOSITION '+JSON.stringify(skirtHeightWitness));
+    await writeFile(parityDir+'/skirt-height-deposition.json',
+      JSON.stringify({fixture:'two synthetic STLs; 2 loops; 2 mm distance; 1 vs 3 layers',
+        ...skirtHeightWitness},null,2)+'\n');
+    assert.equal(shortSkirt.length,1,'One-layer skirt must deposit on exactly one Z level');
+    assert.equal(tallSkirt.length,3,'Three-layer skirt must deposit on exactly three Z levels');
+    assert.ok(shortSkirt.every(x=>x[1].segments>=4)&&tallSkirt.every(x=>x[1].segments>=4),
+      'Require multiple genuinely deposited segments on every Skirt-tagged level');
+    assert.ok(sameFirst,'Skirt height must preserve first-layer XY envelope');
+    delete rawOrca[4].skirt_height;
+    delete rawOrca[4].skirt_distance;
+    delete rawOrca[4].skirt_loops;
+    await uploadRawOrca();
+    console.log('PASS: isolated WASM skirt_height adds real Skirt-tagged deposited Z levels');
+
     const narrowWidthMotion=motionOnly(await sliceWithLineWidth('0.35'));
     const broadWidthMotion=motionOnly(await sliceWithLineWidth('0.65'));
     assert.ok(narrowWidthMotion.length>100&&broadWidthMotion.length>100,

@@ -32,6 +32,9 @@ const LIMITS = {
   // OrcaSlicer v2.5.0 PrintConfig.cpp: skirt_distance is a coFloat
   // with range 0..60 mm, default 2 mm. Local diagnostic only.
   skirt_distance: [0,60],
+  // Native coInt: number of skirt layers, NOT millimetres.
+  // Local diagnostic only; zero/negative and fractional modes are not vetted.
+  skirt_height: [1,20],
   wall_loops: [1,8],
   sparse_infill_density: [0,100],
   top_shell_layers: [0,12],
@@ -61,7 +64,7 @@ const LIMITS = {
   support_speed: [1,800],
   support_interface_speed: [1,800],
 };
-const INTEGERS = new Set(["wall_loops","skirt_loops","top_shell_layers","bottom_shell_layers"]);
+const INTEGERS = new Set(["wall_loops","skirt_loops","skirt_height","top_shell_layers","bottom_shell_layers"]);
 // Exact native v2.5.0 process enum tokens; do not accept labels, numeric
 // stand-ins, lists or guessed defaults. This is localhost-only.
 const ENUMS = Object.freeze({

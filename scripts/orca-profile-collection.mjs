@@ -34,7 +34,10 @@ const SPECS={
     // Only an explicit bounded integer count is accepted in the localhost bridge.
     // Pinned CR-10 skirt_distance is 2 mm; upstream coFloat is bounded to 0..60 mm.
     // This remains a localhost diagnostic and is independent of skirt_loops.
-    wall_loops:[1,8],skirt_loops:[0,10],skirt_distance:[0,60],sparse_infill_density:[0,100],
+    wall_loops:[1,8],skirt_loops:[0,10],skirt_distance:[0,60],
+    // Native v2.5.0 CR-10 chain resolves skirt_height 2 -> 1 -> 2.
+    // Locally accept only bounded positive integer deposition layer counts.
+    skirt_height:[1,20],sparse_infill_density:[0,100],
     top_shell_layers:[0,12],bottom_shell_layers:[0,12],
     // Absolute mm/s only; relative percentage-based speeds are not converted.
     // These bounds constrain diagnostic inputs, not real printer capability.
@@ -59,7 +62,7 @@ const SPECS={
     support_line_width:[0.1,2],support_speed:[1,800],
     support_interface_speed:[1,800]},
 };
-const INTEGERS=new Set(['wall_loops','skirt_loops','top_shell_layers','bottom_shell_layers']);
+const INTEGERS=new Set(['wall_loops','skirt_loops','skirt_height','top_shell_layers','bottom_shell_layers']);
 // Pinned native process enums; the limited adapter retains exact wire values.
 // No inferred default or desktop/print parity is implied by this allow-list.
 const PROCESS_ENUMS=Object.freeze({
