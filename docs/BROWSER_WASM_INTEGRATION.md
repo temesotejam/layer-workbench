@@ -1402,3 +1402,23 @@ CI regression tests cover G18/G19 3D midpoints, CW/CCW direction,
 radius and absolute/relative centers, helical third-axis interpolation,
 subsequent linear paths, full circles and fail-closed input.
 The public Pages application remains unchanged, with WASM candidate disabled.
+
+
+### 2026-11-18: 2D planar-layer guard after vertical-plane arc support
+
+The local-only 2D G-code layer preview now draws a segment only if its
+actual source and destination Z coincide (within 1e-7 mm), and that
+height is within the 0.001 mm destination-Z display bucket. True sloped
+G0/G1 movements, G17 helices, and tessellated G18/G19 vertical-plane
+arc sections are **omitted from 2D**, with a per-layer omitted count.
+They remain visible with their actual XYZ endpoints in the 3D view.
+This avoids representing nonhorizontal deposition as a fictitious XY
+layer trace, even when the parser groups a complete arc under its final Z.
+Regression tests cover helix segments, vertical-plane arcs, pure Z travel,
+ordinary horizontal deposition and invalid heights.
+
+The 3D slider still groups whole arc paths by their commanded destination
+Z; it does not geometrically clip arcs at a layer height. The diagnostic
+has no physical-layer validation, printer G-code execution, full desktop
+preview parity, or print safety certification. Public Pages WASM is still
+not enabled.
