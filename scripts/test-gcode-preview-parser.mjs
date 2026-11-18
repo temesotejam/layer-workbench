@@ -78,6 +78,39 @@ assert.ok(Math.abs(relativeHelix.layers.at(-1).segments.at(-1).z2-0.5)<1e-9);
 const otherPlane=parseGcodeToolpaths("G18\nG2 X10 Z1 I5 E1\nG1 X20 E2");
 assert.equal(otherPlane.skippedArcs,1);
 assert.equal(otherPlane.layers.at(-1).segments.at(-1).x1,10);
+// G18/G19 use the K word for a Z-center offset. The preview deliberately
+// omits their curves, but must still advance XYZ/E before a later G1.
+// Otherwise the later extrusion is falsely drawn from the old endpoint.
+for(const [plane,arc,next,axis] of [
+  ["G18","G2 X10 Z1 I5 K0 E1","G1 X20 E2","x"],
+  ["G19","G3 Y10 Z1 J5 K0 E1","G1 Y20 E2","y"],
+]){
+  const nonXY=parseGcodeToolpaths(`G21\nG90\nM82\n${plane}\nG0 X0 Y0 Z0\n${arc}\n${next}`);
+  assert.equal(nonXY.renderedArcs,0);
+  assert.equal(nonXY.skippedArcs,1);
+  assert.equal(nonXY.skippedMalformedMotion,0);
+  assert.equal(nonXY.extrusions,1);
+  const deposited=nonXY.layers.at(-1).segments.at(-1);
+  assert.equal(deposited[axis+"1"],10);
+  assert.equal(deposited[axis+"2"],20);
+  assert.equal(deposited.z1,1);
+  assert.equal(deposited.z2,1);
+}
+// K is not a center offset of the supported G17 XY plane. Reject the
+// geometry as unhandled while preserving its commanded endpoint and E.
+const xyWithK=parseGcodeToolpaths("G17\nG90\nM82\nG0 X10 Y0 Z0.2\nG3 X0 Y10 I-10 J0 K1 E1\nG1 X0 Y20 E2");
+assert.equal(xyWithK.renderedArcs,0);
+assert.equal(xyWithK.skippedArcs,1);
+assert.equal(xyWithK.skippedMalformedMotion,0);
+assert.deepEqual(xyWithK.layers.at(-1).segments.at(-1).y1,10);
+assert.deepEqual(xyWithK.layers.at(-1).segments.at(-1).y2,20);
+// A K word on linear moves is still unsupported: it cannot shift modal
+// XYZ/E or silently create a false extrusion.
+const linearWithK=parseGcodeToolpaths("G90\nM82\nG1 X10 K1 E1\nG1 X20 E2");
+assert.equal(linearWithK.skippedMalformedMotion,1);
+assert.deepEqual(linearWithK.layers[0].segments.map(s=>[s.x1,s.x2]),[[0,20]]);
+console.log("PASS: G18/G19 K offset arcs preserve modal endpoints without rendering unsupported geometry");
+
 // Relative XYZ and explicit absolute I/J center semantics.
 const relative=parseGcodeToolpaths("G90\nG0 X10 Y0 Z0.2\nG91\nG3 X-10 Y10 I-10 J0 E1");
 assert.equal(relative.renderedArcs,1);
