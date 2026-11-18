@@ -1430,7 +1430,7 @@ The official OrcaSlicer v2.5.0 pin `40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19`
 sets `skirt_loops: "1"` in `fdm_process_creality_common`, overridden by
 `skirt_loops: "2"` in `0.20mm Standard @Creality CR-10 0.4 nozzle`.
 The restricted process reader and localhost native-json override adapter now
-carry this *independent* integer setting, bounded to 0–20 loops. Percentages,
+carry this *independent* integer setting, bounded to 0–10 loops. Percentages,
 fractional values, negatives and multi-extruder vectors are rejected. The
 pinned-real-profile CI verifies the inherited and child values.
 
