@@ -19,6 +19,17 @@ function rawRepresentationHint(kind,key,native,restricted) {
       Array.isArray(native) && native.length === 1 && numeric(native[0]) &&
       numeric(restricted) && Number(native[0]) === Number(restricted))
     return "single-nozzle-vector-to-scalar";
+  // The restricted one-filament PLA bridge accepts these explicit single-slot
+  // native arrays, but only these exact fields and this verified PLA material.
+  if(kind === "filament" && key === "filament_type" &&
+      Array.isArray(native) && native.length === 1 &&
+      native[0] === "PLA" && restricted === "PLA")
+    return "single-PLA-vector-to-scalar";
+  if(kind === "filament" && key === "nozzle_temperature" &&
+      Array.isArray(native) && native.length === 1 && numeric(native[0]) &&
+      numeric(restricted) && Number(native[0]) === Number(restricted) &&
+      Number(restricted) >= 160 && Number(restricted) <= 290)
+    return "single-nozzle-temperature-vector-to-scalar";
   if(kind === "process" && key === "sparse_infill_density" &&
       typeof native === "string" && /^\d+(?:\.\d+)?%$/.test(native.trim()) &&
       numeric(restricted) && Number(native.trim().slice(0,-1)) === Number(restricted))
