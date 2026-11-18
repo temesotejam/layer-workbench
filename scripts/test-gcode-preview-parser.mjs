@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {parseGcodeToolpaths} from './gcode-preview-parser.mjs';
+import {parseGcodeToolpaths,isPlanarLayerSegment} from './gcode-preview-parser.mjs';
 import {gcodeSelectorColor} from './gcode-tool-colors.mjs';
 const sample=`G21
 G90
@@ -60,6 +60,21 @@ assert.equal(helixParts[0].z1,0.2);
 assert.ok(helixParts.every(p=>p.z2>p.z1));
 assert.ok(Math.abs(helixParts.at(-1).z2-0.4)<1e-9);
 assert.deepEqual([helix.layers.at(-1).segments.at(-1).y1,helix.layers.at(-1).segments.at(-1).y2],[10,20]);
+
+ // 2D must never project helical/vertical-plane deposition as a horizontal
+ // line at the commanded destination layer. 3D keeps every XYZ segment.
+assert.ok(helixParts.every(p=>!isPlanarLayerSegment(p,0.4)));
+assert.ok(isPlanarLayerSegment(helix.layers.at(-1).segments.at(-1),0.4));
+assert.equal(isPlanarLayerSegment({z1:0.2,z2:0.4},0.4),false);
+assert.equal(isPlanarLayerSegment({z1:0.2,z2:0.2},0.4),false);
+assert.equal(isPlanarLayerSegment({z1:0.20049,z2:0.20049},0.2),true);
+assert.equal(isPlanarLayerSegment({z1:0.2,z2:0.2},NaN),false);
+assert.equal(isPlanarLayerSegment({z1:NaN,z2:0.2},0.2),false);
+assert.equal(isPlanarLayerSegment({},0.2),true); // old records without source heights
+const zOnlyTravel=parseGcodeToolpaths("G0 X0 Y0 Z0.2\nG0 Z0.4\nG1 X10 E1");
+assert.equal(isPlanarLayerSegment(zOnlyTravel.layers.at(-1).segments[0],0.4),false);
+assert.equal(isPlanarLayerSegment(zOnlyTravel.layers.at(-1).segments[1],0.4),true);
+
 // A full-circle helix has no XY endpoint displacement but still winds in 3D.
 const risingCircle=parseGcodeToolpaths("G0 X10 Y0 Z0.2\nG2 Z0.6 I-10 J0 E1");
 assert.equal(risingCircle.renderedArcs,1);
@@ -124,6 +139,8 @@ assert.ok(xzSegments.slice(0,-1).every(p=>p.y2>=p.y1&&p.y2<=5),
   'G18 third-axis Y helix must be interpolated');
 assert.deepEqual([xzSegments.at(-1).x1,xzSegments.at(-1).x2,
   xzSegments.at(-1).y1,xzSegments.at(-1).z1],[10,20,5,0]);
+assert.ok(xzSegments.slice(0,-1).every(p=>!isPlanarLayerSegment(p,0)));
+assert.ok(isPlanarLayerSegment(xzSegments.at(-1),0));
 
 const verticalYZ=parseGcodeToolpaths("G21\nG90\nM82\nG0 X0 Y10 Z0\nG19\nG3 X5 Y0 Z10 J-10 K0 E1\nG1 Y-10 E2");
 assert.equal(verticalYZ.renderedArcs,1);

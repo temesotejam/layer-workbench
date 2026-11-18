@@ -20,7 +20,7 @@ export function createThreeDToolpathPreview(container,{onLayerChange}={}) {
     <output id="lab-3d-color-legend" aria-live="polite"></output>
     <output id="lab-3d-layer-info"></output>
     <div id="lab-3d-canvas" aria-label="3D G-code toolpath preview" role="img"></div>
-    <p>The 2D and 3D layer sliders stay synchronized. Choose accumulated layers or a single Z layer. Changing the 2D type selector also filters 3D deposition paths; this follows only explicit G-code feature comments. Tool-selector mode uses orange for one/unknown T selector and distinct colors for multiple T selectors. Commanded-speed mode groups modal G-code F values in mm/s; it does not show achieved motion speed or account for acceleration. Blue-gray: travel. XY planar and helical arcs are approximated; non-XY and invalid arcs are omitted. Diagnostic only; not native OrcaSlicer Preview or a print safety check.</p>
+    <p>The 2D and 3D layer sliders stay synchronized. Choose accumulated layers or a single Z layer. Changing the 2D type selector also filters 3D deposition paths; this follows only explicit G-code feature comments. Tool-selector mode uses orange for one/unknown T selector and distinct colors for multiple T selectors. Commanded-speed mode groups modal G-code F values in mm/s; it does not show achieved motion speed or account for acceleration. Blue-gray: travel. Bounded G17/G18/G19 planar and helical arcs are approximated in actual XYZ; invalid arcs are omitted. The layer slider groups complete paths by destination Z, so a vertical-plane arc can cross other Z heights even in single-layer mode. Diagnostic only; not native OrcaSlicer Preview or a print safety check.</p>
   `;
   container.appendChild(section);
   const host=section.querySelector("#lab-3d-canvas");

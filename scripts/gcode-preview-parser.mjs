@@ -35,6 +35,16 @@ function parseMovementWords(body, units) {
   }
   return words;
 }
+// The 2D layer picker must not flatten a sloped or vertical-plane path
+// into a fictitious horizontal deposition. The shared parser groups arcs by
+// commanded destination Z for bounded 3D display, not for planar clipping.
+// Legacy external 3D records may omit z1/z2 and are treated as layer-Z.
+export function isPlanarLayerSegment(segment, layerZ) {
+  const z1=segment.z1??layerZ;
+  const z2=segment.z2??layerZ;
+  return Number.isFinite(layerZ)&&Number.isFinite(z1)&&Number.isFinite(z2)
+    && Math.abs(z1-z2)<=1e-7 && Math.abs(z1-layerZ)<=0.0005001;
+}
 export function parseGcodeToolpaths(source, options={}) {
   if(typeof source!=="string" || source.length>(options.maxChars??20_000_000))
     throw new Error("Invalid or oversized G-code preview input");
