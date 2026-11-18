@@ -17,6 +17,14 @@ class ManifestGeneratorTests(unittest.TestCase):
             for kind, name in NAMES.items():
                 payload = b"G1 X1 E0.1\nG1 X2 E0.3\n" if kind == "gcode" else (kind + " fixture").encode()
                 (folder / name).write_bytes(payload)
+            model_hash = hashlib.sha256((folder / NAMES["model"]).read_bytes()).hexdigest()
+            scene = {"schema": "layer-workbench-scene-v1",
+                     "units": "mm", "matrix_layout": "row-major",
+                     "source_model_sha256": model_hash,
+                     "instances": [{"source_index": 0, "plate_index": 0,
+                                    "matrix": [1, 0, 0, 128, 0, 1, 0, 128,
+                                               0, 0, 1, 0, 0, 0, 0, 1]}]}
+            (folder / NAMES["scene"]).write_text(json.dumps(scene, sort_keys=True))
 
     def test_generated_manifests_accept_identical_fixtures(self):
         for role in ("native", "wasm"):
@@ -44,6 +52,11 @@ class ManifestGeneratorTests(unittest.TestCase):
         model.unlink()
         model.symlink_to(outside)
         with self.assertRaisesRegex(ValueError, "missing or unsafe"):
+            generate(self.root / "native", "native")
+
+    def test_missing_scene_file_fails_manifest_generation(self):
+        (self.root / "native" / NAMES["scene"]).unlink()
+        with self.assertRaisesRegex(ValueError, "missing or unsafe fixture: scene"):
             generate(self.root / "native", "native")
 
     def test_invalid_role_rejected(self):
