@@ -142,8 +142,8 @@ jobs:
           # on this ephemeral runner, retaining Ubuntu's signed repositories
           # and its separate security source.
           for source in /etc/apt/apt-mirrors.txt /etc/apt/sources.list.d/ubuntu.sources; do
-            if [ -f "${source}" ] && grep -Eq '([a-z0-9-]+\\.)?ec2\\.archive\\.ubuntu\\.com' "${source}"; then
-              sudo sed -i -E 's@https?://[a-z0-9.-]+\\.ec2\\.archive\\.ubuntu\\.com/ubuntu@http://archive.ubuntu.com/ubuntu@g' "${source}"
+            if [ -f "${source}" ] && grep -Eq '([a-z0-9-]+\.)?ec2\.archive\.ubuntu\.com' "${source}"; then
+              sudo sed -i -E 's@https?://[a-z0-9.-]+\.ec2\.archive\.ubuntu\.com/ubuntu@http://archive.ubuntu.com/ubuntu@g' "${source}"
               echo "Switched regional EC2 archive mirror to standard Ubuntu archive in ${source}"
             fi
           done
