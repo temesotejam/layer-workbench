@@ -115,7 +115,7 @@ assert.throws(()=>parseGcodeToolpaths("G0 X10 Y0\nG3 X0 Y10 R10",{maxSegments:2}
 // S is also not interpreted; omit these arcs but preserve the commanded
 // modal endpoint for the next supported linear move.
 for(const auxiliary of ["P2","S1"]){
-  const omitted=parseGcodeToolpaths("G90\nM82\nG0 X0 Y0 Z0.2\nG2 X10 Y0 R5 "+aux+" E1\nG1 X20 Y0 E2");
+  const omitted=parseGcodeToolpaths("G90\nM82\nG0 X0 Y0 Z0.2\nG2 X10 Y0 R5 "+auxiliary+" E1\nG1 X20 Y0 E2");
   assert.equal(omitted.renderedArcs,0);
   assert.equal(omitted.skippedArcs,1);
   assert.equal(omitted.skippedMalformedMotion,0);
