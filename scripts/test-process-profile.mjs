@@ -40,6 +40,8 @@ const LIMITS = {
   skirt_speed: [0,300],
   wall_loops: [1,8],
   sparse_infill_density: [0,100],
+  // Pinned native v2.5.0 process angle in degrees, never % or vector.
+  infill_direction: [0,360],
   top_shell_layers: [0,12],
   bottom_shell_layers: [0,12],
   // Absolute millimetres/second for localhost WASM tests only.
