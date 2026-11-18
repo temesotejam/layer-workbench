@@ -35,6 +35,8 @@ on:
       - "scripts/test_diagnose_live_cube_pair.py"
       - "scripts/wrap_parity_cube_3mf.py"
       - "scripts/test_wrap_parity_cube_3mf.py"
+      - "scripts/audit_native_parity_cube_geometry.py"
+      - "scripts/test_audit_native_parity_cube_geometry.py"
   push:
     branches: [main]
     paths:
@@ -69,6 +71,8 @@ on:
       - "scripts/test_diagnose_live_cube_pair.py"
       - "scripts/wrap_parity_cube_3mf.py"
       - "scripts/test_wrap_parity_cube_3mf.py"
+      - "scripts/audit_native_parity_cube_geometry.py"
+      - "scripts/test_audit_native_parity_cube_geometry.py"
 
 permissions:
   contents: read
@@ -87,6 +91,9 @@ jobs:
 
       - name: Unit-test shared source STL to explicit Core 3MF conversion offline
         run: python3 -m unittest discover -s scripts -p test_wrap_parity_cube_3mf.py -v
+
+      - name: Unit-test native shared-cube face-level geometry gate offline
+        run: python3 -m unittest discover -s scripts -p test_audit_native_parity_cube_geometry.py -v
 
       - name: Unit-test fail-closed G-code paired diagnostic offline
         run: python3 -m unittest discover -s scripts -p test_diagnose_live_cube_pair.py -v
@@ -312,6 +319,14 @@ jobs:
           print('Placement input geometry matches isolated WASM manifest 128,128,0')
           print('Profiles, CLI import format and actual G-code remain unpaired')
           PY
+          # Independent STL-facet witness: the native exported geometry must
+          # agree with every placed source triangle, not merely with its AABB.
+          python3 scripts/audit_native_parity_cube_geometry.py \
+            --source native-cli-output/parity-cube.stl \
+            --export-dir native-cli-output/native-parity-cube-export \
+            --report native-cli-output/native-parity-cube-faces.json
+          grep -q '"passed": true' native-cli-output/native-parity-cube-faces.json
+          grep -q '"parity_pass": false' native-cli-output/native-parity-cube-faces.json
           mkdir -p native-cli-output/native-parity-cube-gcode
           timeout 240s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
             native-cli-output/parity-cube-positioned.3mf \
