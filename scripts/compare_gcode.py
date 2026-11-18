@@ -214,6 +214,14 @@ def extrusion_move_metrics(commands):
         if 'Z' in words:
             requested_z = words['Z'] * units
             z_position = requested_z if absolute_xyz else z_position + requested_z
+        code = int(Decimal(opcode[1:]))
+        # An impossible G17 arc changes the interpreted XY endpoint even
+        # when E is absent or retracting. Silently ignoring it would let
+        # later straight moves satisfy a false deposition/parity gate.
+        # Unsupported non-XY planes retain their existing excluded status.
+        if code in (2, 3) and plane == 'G17' and not valid_g17_arc(
+                start_xy, xy, words, units, absolute_arc_centers):
+            return 0, None, None, 0, None, None
         if 'E' not in words:
             continue
         requested_e = words['E'] * units
@@ -221,11 +229,9 @@ def extrusion_move_metrics(commands):
         e_position = requested_e if absolute_e else e_position + requested_e
         if delta <= 0 or not EXTRUSION_MOTION.fullmatch(opcode):
             continue
-        code = int(Decimal(opcode[1:]))
         if code == 1 and not moved_xy:
             continue
-        if code in (2, 3) and (plane != 'G17' or not valid_g17_arc(
-                start_xy, xy, words, units, absolute_arc_centers)):
+        if code in (2, 3) and plane != 'G17':
             continue
         count += 1
         counted_e_mm += delta
@@ -311,6 +317,13 @@ def compare(native, wasm, min_extrusion_moves=0):
             if native_layers.get(z, 0) != wasm_layers.get(z, 0)
         ][:15]
     issues = []
+    # A malformed stateful command yields unknown deposition metrics, not
+    # zero deposited material. Reject even when the optional minimum is 0:
+    # two identical *invalid* files must never pass the strict fixture gate.
+    if native_layers is None:
+        issues.append('native has unsupported or malformed stateful geometry')
+    if wasm_layers is None:
+        issues.append('wasm has unsupported or malformed stateful geometry')
     if native_motion == 0:
         issues.append('native input has no G0/G1/G2/G3 motion commands')
     if wasm_motion == 0:
