@@ -63,6 +63,23 @@ class PairTests(unittest.TestCase):
         self.assertNotIn("first_differences", json.dumps(result))
         self.assertNotIn("G1 X", json.dumps(result))
 
+    def test_real_pair_shared_z_footprints_expose_geometry_not_commands(self):
+        # Existing synthetic native/WASM fixtures differ in XY geometry,
+        # not their positive-E move counts or deposited Z membership.
+        result = self.run_diagnostic()
+        metrics = result["metrics"]
+        self.assertEqual(metrics["native_only_counted_planar_z_levels"], 0)
+        self.assertEqual(metrics["wasm_only_counted_planar_z_levels"], 0)
+        self.assertEqual(metrics["first_counted_planar_z_differences"], [])
+        self.assertEqual(metrics["shared_counted_planar_z_footprint_difference_count"], 1)
+        sample = metrics["first_shared_counted_planar_z_footprint_differences"][0]
+        self.assertEqual(sample["z_mm"], "0")
+        self.assertEqual(sample["native"]["deposition_moves"], 124)
+        self.assertEqual(sample["wasm"]["deposition_moves"], 124)
+        self.assertFalse(result["parity_pass"])
+        self.assertNotIn("first_differences", json.dumps(result))
+        self.assertNotIn("G1 X", json.dumps(result))
+
     def test_real_deposition_z_metrics_are_numeric_only(self):
         result = self.run_diagnostic()
         metrics = result["metrics"]
