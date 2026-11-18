@@ -25,11 +25,11 @@ function parseMovementWords(body, units) {
     // F is a modal commanded feedrate (mm/min after unit conversion),
     // not actual toolhead velocity; S/P remain uninterpreted auxiliary words.
     // Unrecognised axes and repeated words are not safe to infer.
-    if(seen.has(key)||!"XYZEIJRFSP".includes(key))return null;
+    if(seen.has(key)||!"XYZEIJKRFSP".includes(key))return null;
     const value=Number(match[2]);
     if(!Number.isFinite(value))return null;
     seen.add(key);
-    if("XYZEIJRF".includes(key))words[key]=value*units;
+    if("XYZEIJKRF".includes(key))words[key]=value*units;
     else words[key]=value; // Retain uninterpreted S/P for command-specific rejection.
     offset=pattern.lastIndex;
   }
@@ -121,7 +121,7 @@ export function parseGcodeToolpaths(source, options={}) {
     // does not interpret. In particular G2/G3 P can request extra arc turns;
     // silently ignoring P would display a plausible but wrong trajectory.
     // Arc endpoints still advance below, even when their path is omitted.
-    const allowedWords=cmd==="G92"?"XYZE":isArc?"XYZEIJRF":"XYZEF";
+    const allowedWords=cmd==="G92"?"XYZE":isArc?"XYZEIJKRF":"XYZEF";
     const unhandledWords=Object.keys(words).some(key=>!allowedWords.includes(key));
     if(unhandledWords && !isArc){skippedMalformedMotion++;continue;}
     if(cmd==="G92"){
@@ -140,7 +140,12 @@ export function parseGcodeToolpaths(source, options={}) {
        Math.max(Math.abs(state.x),Math.abs(state.y),Math.abs(state.z))>100_000)
       throw new Error("Toolpath coordinate exceeds preview limits");
     const extrusion=state.e>start.e+1e-7;
-    if(isArc && unhandledWords){skippedArcs++;continue;}
+    // K is a Z-center offset for G18/G19 arcs. Those planes are not
+    // rendered here, but their valid numeric words must not prevent the
+    // modal XYZE endpoint from advancing. In G17, K is uninterpreted:
+    // omit the arc rather than silently drawing a false XY path.
+    const unsupportedPlanarCenter=state.plane==="G17"&&"K" in words;
+    if(isArc && (unhandledWords||unsupportedPlanarCenter)){skippedArcs++;continue;}
     if(!isArc){
       if(Math.abs(state.x-start.x)>EPS||Math.abs(state.y-start.y)>EPS||Math.abs(state.z-start.z)>EPS)
         append(start.x,start.y,state.x,state.y,start.z,state.z,extrusion);
