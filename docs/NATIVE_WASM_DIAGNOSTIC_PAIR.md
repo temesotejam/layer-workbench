@@ -246,10 +246,13 @@ now emits a read-only `raw_value_difference_shapes` table for overlapping
 machine, process and filament option keys. It reports the source/restricted
 JSON value shapes and a conservative `syntax_only_hint` without copying
 potentially executable G-code, original values or full licensed profiles
-into the summary. Two source-checked local-adapter representations are
+into the summary. Four source-checked local-adapter representations are
 recognized: a single-nozzle `nozzle_diameter` vector becoming a scalar,
 and `sparse_infill_density`'s decimal percent token becoming a bare numeric
-percentage. These keys **remain** in the raw differences list.
+percentage. Two additional source-checked one-slot filament conversions
+are recognized: `filament_type` (only `["PLA"]` to `"PLA"`) and
+`nozzle_temperature` (one bounded numeric nozzle temperature to a scalar).
+These keys **remain** in the raw differences list.
 
 Every other unequal JSON value is explicitly `unexplained`, including
 multi-nozzle arrays, percent-relative speed settings and unapproved
@@ -262,3 +265,12 @@ Synthetic regression tests reject over-broad conversions, and the
 source-pinned CI runs the audit on real v2.5.0 fixture records. Option-key
 gaps, full-preset forwarding, native-vs-WASM G-code parity and physical
 printer behavior remain unresolved; nothing is enabled on public Pages.
+
+On the pinned Creality CR-10 / Generic PLA diagnostic, the updated gate
+reports 109 machine, 212 process and 68 filament native keys absent from the
+restricted bridge. The four same-key raw differences are all accounted for
+by the four documented *syntax* conversions. This leaves zero **unclassified
+raw value shapes among overlapping keys**, but the 389 non-forwarded native
+keys remain and real native/WASM effective configuration and G-code equivalence
+are **not** established. These counts describe one selected profile chain,
+not all OrcaSlicer printers or an available production feature.
