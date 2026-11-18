@@ -30,9 +30,35 @@ export function extractOrcaVendorCatalog(entries) {
 function aliasOf(name) {
   return name.split("@",1)[0].trim();
 }
-function compatibleWith(record,printerVariant) {
-  const list=record.compatible_printers;
-  return Array.isArray(list)&&list.includes(printerVariant);
+// Resolve compatibility inside ONE vendor's filament inheritance chain.
+// A child with an explicit [] disables an ancestor's compatibility; unknown or
+// malformed metadata is never treated as an implicit "compatible" match.
+function compatibleWith(vendor, record, printerVariant) {
+  const family=new Map();
+  for(const item of vendor.records||[]) {
+    if(item.type!=="filament")continue;
+    if(family.has(item.name))throw new Error("Duplicate vendor filament: "+item.name);
+    family.set(item.name,item);
+  }
+  let current=record;
+  const visited=new Set();
+  for(let depth=0;depth<=20;depth++) {
+    if(visited.has(current.name))throw new Error("Filament compatibility inheritance cycle: "+current.name);
+    visited.add(current.name);
+    if(Object.hasOwn(current,"compatible_printers")) {
+      const values=current.compatible_printers;
+      if(!Array.isArray(values)||values.length>1024||
+          values.some(v=>typeof v!=="string"||!v.trim()||v.length>160)||
+          new Set(values).size!==values.length)
+        throw new Error("Invalid inherited compatible_printers: "+current.name);
+      return values.includes(printerVariant);
+    }
+    if(!current.inherits)return false;
+    const parent=family.get(current.inherits);
+    if(!parent)throw new Error("Missing vendor filament ancestor: "+current.inherits);
+    current=parent;
+  }
+  throw new Error("Filament compatibility inheritance too deep");
 }
 // Orca's global filament library is a separate bundle. A vendor-specific
 // preset may replace a global preset with the same alias for compatible
@@ -46,7 +72,7 @@ export function selectOrcaFilamentPreset(catalog,filamentAlias,printerVariant) {
     for(const record of vendor.records||[]) {
       if(record.type!=="filament"||aliasOf(record.name)!==filamentAlias.trim())continue;
       const global=vendor.name==="OrcaFilamentLibrary"&&record.name.endsWith("@System");
-      const compatible=compatibleWith(record,printerVariant);
+      const compatible=compatibleWith(vendor,record,printerVariant);
       if(global||compatible)matches.push({vendor:vendor.name,name:record.name,record,global,compatible});
     }
   }
