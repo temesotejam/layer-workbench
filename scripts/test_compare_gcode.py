@@ -616,7 +616,7 @@ class ComparatorTests(unittest.TestCase):
         self.assertFalse(report['match'])
         rows = report['feature_category_deltas']
         self.assertEqual([r['feature'] for r in rows],
-                         ['outer wall', 'inner wall', 'sparse infill'])
+                         ['inner wall', 'outer wall', 'sparse infill'])
         by_tag = {r['feature']: r for r in rows}
         self.assertEqual(by_tag['outer wall']['wasm_minus_native_linear_xy_mm'], '5')
         self.assertEqual(by_tag['outer wall']['wasm_minus_native_positive_e_mm'], '0.5')
