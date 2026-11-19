@@ -170,6 +170,23 @@ console.log('PASS: support width/body/interface settings reach mocked native-jso
 }
 console.log('PASS: independent internal bridge ratio reaches mocked native-json profile transport');
 
+// Ensure the vertical-shell enum reaches the restricted engine API unchanged.
+// A mocked transport proves forwarding, not slicer geometry equivalence.
+{
+  const preset={...selected,process:{settings:{
+    ...selected.process.settings,ensure_vertical_shell_thickness:'ensure_all',
+    top_shell_layers:'5',bottom_shell_layers:'4'
+  }}};
+  const {engine,calls}=mockedEngine();
+  await sliceMultiStlWithEngine(engine,items,null,null,preset);
+  const applied=calls.find(c=>c.name==='applyProfile');
+  assert.equal(applied.format,'orca.native-json');
+  assert.equal(applied.value.ensure_vertical_shell_thickness,'ensure_all');
+  assert.equal(applied.value.top_shell_layers,'5');
+  assert.equal(applied.value.bottom_shell_layers,'4');
+}
+console.log('PASS: exact v2.5.0 vertical shell enum reaches mocked native-json transport');
+
 // Source-pinned v2.5.0 PrintConfig registers "enable_support" as its native
 // boolean; "support_enable" in the OrcaWasm smoke is an unknown/ignored key.
 // Check BOTH init and native-json transport against the real native key.

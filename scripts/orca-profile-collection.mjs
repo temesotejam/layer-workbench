@@ -84,6 +84,10 @@ const INTEGERS=new Set(['wall_loops','skirt_loops','skirt_height','top_shell_lay
 // Pinned native process enums; the limited adapter retains exact wire values.
 // No inferred default or desktop/print parity is implied by this allow-list.
 const PROCESS_ENUMS=Object.freeze({
+  // Pinned v2.5.0 PrintConfig.cpp coEnum: how solid regions are added
+  // alongside sloped walls. The CR-10 0.20mm Standard child uses ensure_all.
+  // Retain exact serialized values, never the desktop UI labels.
+  ensure_vertical_shell_thickness:new Set(["none","ensure_critical_only","ensure_moderate","ensure_all"]),
   wall_generator:new Set(["classic","arachne"]),
   gap_fill_target:new Set(["everywhere","topbottom","nowhere"]),
   // Pinned v2.5.0 Creality common uses crosshatch; its CR-10 0.20mm child

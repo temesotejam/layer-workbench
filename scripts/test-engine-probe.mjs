@@ -627,6 +627,24 @@ try {
         await(await fetch(link.href)).text());
     };
 
+    // Source-pinned CR-10 child explicitly uses ensure_all; demonstrate that
+    // the localhost-isolated WASM engine accepts the exact enum and generates
+    // actual positive-E XY deposition. This does NOT prove a geometry change:
+    // the current two-STL fixture lacks a controlled sloped-wall witness.
+    const protectedShell=await sliceWithLineWidth('ensure_all',
+      'ensure_vertical_shell_thickness');
+    const protectedPaths=parseGcodeToolpaths(protectedShell);
+    assert.equal(protectedPaths.skippedMalformedMotion,0,
+      'Protected-shell proof cannot accept malformed movements');
+    assert.ok(protectedPaths.layers.flatMap(l=>l.segments)
+      .filter(s=>s.extrusion && Number.isFinite(s.commandedPositiveEMm)
+        && s.commandedPositiveEMm>0 &&
+        Math.hypot(s.x2-s.x1,s.y2-s.y1)>0.0001).length>100,
+      'Native vertical-shell enum must be accepted by real WASM slicing with genuine XY deposition');
+    delete rawOrca[4].ensure_vertical_shell_thickness;
+    await uploadRawOrca();
+    console.log('PASS: source-pinned vertical shell ensure_all accepted by isolated WASM (no path-parity claim)');
+
     // Source-pinned native PrintConfig.cpp includes both monotonic and
     // rectilinear for INTERNAL SOLID infill; the CR-10 child selects monotonic.
     // Hold the exact same two-STL scene and other settings constant. Accept

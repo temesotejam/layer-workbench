@@ -85,6 +85,9 @@ const INTEGERS = new Set(["wall_loops","skirt_loops","skirt_height","top_shell_l
 // Exact native v2.5.0 process enum tokens; do not accept labels, numeric
 // stand-ins, lists or guessed defaults. This is localhost-only.
 const ENUMS = Object.freeze({
+  // Source-pinned v2.5.0 enum; not a 0/1 flag or arbitrary text label.
+  // This option can alter internal solid regions even with shell layers fixed.
+  ensure_vertical_shell_thickness: new Set(["none","ensure_critical_only","ensure_moderate","ensure_all"]),
   wall_generator: new Set(["classic","arachne"]),
   gap_fill_target: new Set(["everywhere","topbottom","nowhere"]),
   // Exact values inspected in the source-pinned Creality v2.5.0 chain.
