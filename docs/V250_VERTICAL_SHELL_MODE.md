@@ -35,3 +35,31 @@ Public Pages, published engine binaries, real machine settings, printers
 and executable start/end G-code are unchanged. No output is certified for
 physical printing. This is only a source-pinned test bridge, not OrcaSlicer
 v2.5.0 feature or visual parity.
+
+
+## 2026-11-19: real sloped-geometry mode comparison (experimental)
+
+The opt-in isolated Chrome test now uses the already audited low-poly
+sphere OBJ, a true sloped-wall geometry rather than the earlier pair of cubes.
+It slices the **same mesh twice** with identical bounded diagnostic settings
+(layer height 0.25 mm; wall loops 2; density 15%; one top/one bottom shell;
+minimum shell thicknesses 0; support disabled). Only
+`ensure_vertical_shell_thickness` changes from `none` to `ensure_all`.
+
+`scripts/vertical-shell-diagnostic.mjs` inspects only explicit
+`internal solid infill` feature-tagged *positive-E, planar XY deposition*
+from the actual WASM G-code parser. It reports counts, deposited XY length,
+commanded E length and changed Z positions using order/direction-invariant,
+0.001 mm-rounded stroke signatures. This identifies potential changes to
+path geometry **or segmentation**; it is not an equal-extrusion/semantic
+equivalence check. Other features, altered headers, and a changed G-code
+hash cannot be counted as a positive shell-response witness. The synthetic
+unit tests also exclude nonplanar, zero-E, malformed and unrelated strokes.
+
+The CI-produced `parity-output/sphere-vertical-shell-mode-deposition.json`
+is diagnostic-only; it contains numeric summaries, no executable G-code
+or upstream profile files. When the two actual outputs do not show distinct
+tagged internal-solid strokes, the check logs an explicit **KNOWN GAP**
+rather than incorrectly asserting effect. A positive result establishes
+only a real WASM deposition change in this one geometry, not native
+v2.5.0 equivalence, full profile compatibility or printer safety.
