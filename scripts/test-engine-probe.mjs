@@ -1757,7 +1757,7 @@ try {
       ...slopeShellAudit,
     };
     await writeFile(parityDir+'/sphere-vertical-shell-mode-deposition.json',
-      JSON.stringify(slopeShellReport,null,2)+'\\n');
+      JSON.stringify(slopeShellReport,null,2)+'\n');
     console.log('VERTICAL_SHELL_SLOPE_DIAGNOSTIC '+JSON.stringify(slopeShellReport));
     assert.ok(slopeShellAudit.baseline.positive_e_xy_strokes_all_features>100 &&
       slopeShellAudit.candidate.positive_e_xy_strokes_all_features>100,
