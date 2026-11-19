@@ -608,10 +608,10 @@ class ComparatorTests(unittest.TestCase):
 
 
     def test_feature_category_deltas_are_signed_and_ranked_by_xy_gap(self):
-        native = ('M83\\n;TYPE:Outer wall\\nG1 X3 Y4 E1\\n'
-                  ';TYPE:Sparse infill\\nG1 X6 Y8 E2\\n')
-        wasm = ('M83\\n;TYPE:Outer wall\\nG1 X6 Y8 E1.5\\n'
-                ';TYPE:Inner wall\\nG1 X9 Y12 E1\\n')
+        native = ('M83\n;TYPE:Outer wall\nG1 X3 Y4 E1\n'
+                  ';TYPE:Sparse infill\nG1 X6 Y8 E2\n')
+        wasm = ('M83\n;TYPE:Outer wall\nG1 X6 Y8 E1.5\n'
+                ';TYPE:Inner wall\nG1 X9 Y12 E1\n')
         report = self.run_compare(native, wasm, min_extrusion_moves=2)
         self.assertFalse(report['match'])
         rows = report['feature_category_deltas']
@@ -629,7 +629,7 @@ class ComparatorTests(unittest.TestCase):
         self.assertEqual(self.run_compare(native, native)['feature_category_deltas'], [])
 
     def test_feature_category_deltas_are_unknown_for_invalid_stateful_gcode(self):
-        bad = 'M83\\n;TYPE:Inner wall\\nG1 X1 X2 E1\\n'
+        bad = 'M83\n;TYPE:Inner wall\nG1 X1 X2 E1\n'
         report = self.run_compare(bad, bad)
         self.assertIsNone(report['feature_category_deltas'])
         self.assertFalse(report['match'])
