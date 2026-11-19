@@ -25,4 +25,25 @@ assert.throws(()=>editManifestInstanceTransform(original,'second',[...changed.sl
 assert.throws(()=>editManifestInstanceTransform(original,'second',[0,0,0,175, 0,0,0,90, 0,0,1,0, 0,0,0,1]),/Singular/);
 assert.throws(()=>editManifestInstanceTransform({...original,instances:[original.instances[0],original.instances[0]]},'first',changed),/duplicate/);
 assert.throws(()=>editManifestInstanceTransform({...original,instances:[]},'first',changed),/instances/);
-console.log('PASS: isolated manifest edit updates only selected instance; invalid and duplicate inputs rejected');
+// A valid native manifest may contain multiple instances of ONE object.
+const sharedObject=structuredClone(original);
+sharedObject.instances[1].objectId='object-0';
+assert.equal(editManifestInstanceTransform(sharedObject,'second',changed).instances[1].objectId,'object-0');
+for (const [bad, error] of [
+  [{...original,objects:[original.objects[0],original.objects[0]]},/duplicate project objects/],
+  [{...original,plates:[original.plates[0],original.plates[0]]},/duplicate project plates/],
+  [{...original,instances:[{...original.instances[0],objectId:'missing'},original.instances[1]]},/Orphaned/],
+  [{...original,instances:[original.instances[0],{...original.instances[1],plateId:'missing'}]},/Orphaned/],
+  [{...original,objects:[]},/project objects/],
+  [{...original,plates:[]},/project plates/],
+  [{...original,instances:[original.instances[0],{
+    ...original.instances[1],transform:{matrix:[...changed.slice(0,3),NaN,...changed.slice(4)]}
+  }]},/affine instance matrix/],
+  [{...original,instances:[original.instances[0],{
+    ...original.instances[1],transform:{matrix:[...changed.slice(0,12),2,0,0,1]}
+  }]},/Non-affine/],
+  [{...original,instances:[original.instances[0],{
+    ...original.instances[1],transform:{matrix:[0,0,0,175,0,0,0,90,0,0,1,0,0,0,0,1]}
+  }]},/Singular/],
+]) assert.throws(()=>editManifestInstanceTransform(bad,'first',changed),error);
+console.log('PASS: isolated manifest edit preserves legal shared-object instances and rejects orphan/invalid sibling graphs');
