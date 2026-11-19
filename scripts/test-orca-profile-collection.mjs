@@ -879,3 +879,29 @@ for(const key of ['top_shell_thickness','bottom_shell_thickness']) {
 }
 assert.equal(resolve(profiles,selection).process.settings.top_shell_thickness,undefined);
 console.log('PASS: source native top/bottom shell thickness, inheritance, zero-disable, one-slot bounds');
+
+// Official v2.5.0 CR-10 inherits top skin monotonicline from Creality common,
+// then overrides it to monotonic in its 0.20mm child. Bottom is independent.
+const skinRecords=[
+  {type:"process",name:"Skin Base",top_surface_pattern:"monotonicline",bottom_surface_pattern:"monotonic"},
+  {type:"process",name:"Skin Child",inherits:"Skin Base",top_surface_pattern:"monotonic"}
+];
+const skinResolved=resolveOrcaProfileFamily(skinRecords,"process","Skin Child");
+assert.equal(skinResolved.settings.top_surface_pattern,"monotonic");
+assert.equal(skinResolved.settings.bottom_surface_pattern,"monotonic");
+assert.ok(!skinResolved.unsupported.includes("top_surface_pattern"));
+assert.ok(!skinResolved.unsupported.includes("bottom_surface_pattern"));
+const skinBase=resolveOrcaProfileFamily(skinRecords,"process","Skin Base");
+assert.equal(skinBase.settings.top_surface_pattern,"monotonicline");
+const skinRect=resolveOrcaProfileFamily([
+  {...skinRecords[0],bottom_surface_pattern:"rectilinear"},skinRecords[1]
+],"process","Skin Child");
+assert.equal(skinRect.settings.bottom_surface_pattern,"rectilinear");
+assert.equal(skinRect.settings.top_surface_pattern,"monotonic");
+for(const key of ["top_surface_pattern","bottom_surface_pattern"]){
+  for(const bad of ["Concentric","",["monotonic"],null,123,"__proto__"])
+    assert.throws(()=>resolveOrcaProfileFamily([
+      {type:"process",name:"Bad Skin",[key]:bad}
+    ],"process","Bad Skin"),/native process enum/,key+" rejects "+String(bad));
+}
+console.log("PASS: independent top/bottom surface pattern inheritance and fail-closed native enums");
