@@ -7,6 +7,8 @@ on:
       - "scripts/native-manifest-edit.mjs"
       - "scripts/test-native-manifest-edit.mjs"
       - "scripts/compare_3mf_metadata.py"
+      - "scripts/compare_3mf_build_preservation.py"
+      - "scripts/test_compare_3mf_build_preservation.py"
       - "scripts/test-browser-3mf-native-edit.mjs"
       - "scripts/test-candidate-browser-3mf.mjs"
       - "scripts/test-browser-3mf-private-instance-edit.mjs"
@@ -28,6 +30,8 @@ on:
       - "scripts/native-manifest-edit.mjs"
       - "scripts/test-native-manifest-edit.mjs"
       - "scripts/compare_3mf_metadata.py"
+      - "scripts/compare_3mf_build_preservation.py"
+      - "scripts/test_compare_3mf_build_preservation.py"
       - "scripts/test-browser-3mf-native-edit.mjs"
       - "scripts/test-browser-3mf-independent-core-import.mjs"
       - "scripts/make_3mf_two_build_fixture.py"
@@ -79,6 +83,8 @@ jobs:
           node scripts/test-diagnose-in-session-3mf-reslice.mjs
           node --check scripts/test-browser-3mf-native-edit.mjs
           node --check scripts/test-browser-3mf-independent-core-import.mjs
+          python3 -m py_compile scripts/compare_3mf_build_preservation.py
+          python3 -m unittest discover -s scripts -p test_compare_3mf_build_preservation.py -v
           node --check scripts/native-manifest-edit.mjs
           node scripts/test-native-manifest-edit.mjs
       - name: Assert each cube's own XYZ placement in isolated Chrome
@@ -101,6 +107,12 @@ jobs:
               --candidate "parity-output/${variant}.3mf" \
               --scope ancillary \
               --report "parity-output/${variant}-ancillary-preservation.json"
+            # Independent exact-byte verification of EVERYTHING inside the
+            # Core model XML except a single selected build transform value.
+            python3 scripts/compare_3mf_build_preservation.py \
+              --baseline parity-output/independent-core-two-build.3mf \
+              --candidate "parity-output/${variant}.3mf" \
+              --report "parity-output/${variant}-core-model-preservation.json"
           done
           # Core input was generated independently of the WASM exporter.
           # The probe records unsupported imports separately from strict
