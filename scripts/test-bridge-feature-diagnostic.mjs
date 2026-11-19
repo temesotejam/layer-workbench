@@ -144,3 +144,62 @@ assert.equal(tinyDrift.bridge_path_geometry_consistent,true);
 assert.equal(tinyDrift.target_feedrate_observed,true);
 assert.equal(shifted.native_desktop_parity,false);
 console.log("PASS: bridge speed evidence requires subtype length/envelope invariance, not merely a new F target");
+
+// Native internal_bridge_flow must not be "proved" by a conventional Bridge
+// label or by changed headers/hash. These are synthetic negative controls;
+// the real, still opt-in Chrome arch runs are independently recorded.
+const {auditInternalBridgeFlowSegments}=await import("./bridge-feature-diagnostic.mjs");
+const flow=(feature,e,x1=0,x2=10)=>({
+  feature,commandedPositiveEMm:e,extrusion:true,x1,x2,y1:0,y2:0
+});
+const baseFlow=[flow("Internal bridge",4),flow("Bridge",6),
+  flow("External bridge",2)];
+const reducedFlow=[flow("Internal bridge",2),flow("Bridge",6),
+  flow("External bridge",2)];
+const goodFlow=auditInternalBridgeFlowSegments(baseFlow,reducedFlow);
+assert.equal(goodFlow.result,"observed_internal_bridge_flow_effect");
+assert.equal(goodFlow.internal_positive_e_decreased,true);
+assert.equal(goodFlow.external_bridge_e_stable,true);
+assert.equal(goodFlow.baseline.internal.positive_e_mm,4);
+assert.equal(goodFlow.candidate.internal.positive_e_mm,2);
+assert.equal(goodFlow.baseline.other_bridge.positive_e_mm,8);
+assert.equal(goodFlow.native_desktop_parity,false);
+assert.equal(goodFlow.printer_safe,false);
+assert.equal(goodFlow.public_pages_enabled,false);
+assert.equal(auditInternalBridgeFlowSegments(
+  [flow("Bridge",4)],[flow("Bridge",2)]
+).result,"inconclusive_no_tagged_internal_bridge");
+assert.equal(auditInternalBridgeFlowSegments(
+  [flow("Internal bridge",4)],[flow("Internal bridge",2)]
+).result,"inconclusive_no_external_bridge_control");
+assert.equal(auditInternalBridgeFlowSegments(baseFlow,[
+  flow("Internal bridge",2),flow("Bridge",5),flow("External bridge",1)
+]).result,"external_bridge_flow_changed_control_failed");
+assert.equal(auditInternalBridgeFlowSegments(baseFlow,[
+  flow("Internal bridge",2,1,11),flow("Bridge",6),
+  flow("External bridge",2)
+]).result,"bridge_geometry_changed_flow_unverified");
+assert.equal(auditInternalBridgeFlowSegments(baseFlow,[
+  flow("Internal bridge",4),flow("Bridge",6),flow("External bridge",2)
+]).result,"internal_bridge_flow_effect_unverified");
+for(const impostor of ["Cambridge","not bridge","bridge overhang",
+  "internal bridge support","unknown internal bridge"]){
+  assert.equal(auditInternalBridgeFlowSegments(
+    [flow(impostor,4),flow("Bridge",6)],
+    [flow(impostor,2),flow("Bridge",6)]
+  ).result,"inconclusive_no_tagged_internal_bridge",impostor);
+}
+// Reject phantom extrusion-only moves, unbounded numbers and missing E.
+for(const invalid of [
+  {...flow("Internal bridge",1),x2:0},
+  {...flow("Internal bridge",1),x2:NaN},
+  {...flow("Internal bridge",1),commandedPositiveEMm:null},
+  {...flow("Internal bridge",1),commandedPositiveEMm:0},
+  {...flow("Internal bridge",1),extrusion:false},
+]){
+  assert.equal(auditInternalBridgeFlowSegments(
+    [invalid,flow("Bridge",6)],[invalid,flow("Bridge",6)]
+  ).result,"inconclusive_no_tagged_internal_bridge");
+}
+assert.throws(()=>auditInternalBridgeFlowSegments(null,[]),/Invalid/);
+console.log("PASS: internal bridge flow evidence separates true internal G1 E, ordinary bridge controls, and invalid/impostor paths");
