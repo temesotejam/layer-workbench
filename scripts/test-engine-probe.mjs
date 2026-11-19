@@ -1505,12 +1505,14 @@ try {
     await writeFile(parityDir+'/bridge-arch-internal-flow-diagnostic.json',
       JSON.stringify(internalFlowReport,null,2)+'\n');
     console.log('INTERNAL_BRIDGE_FLOW_DIAGNOSTIC '+JSON.stringify(internalFlowReport));
-    if(internalFlowReport.result==='observed_internal_bridge_flow_effect'){
-      console.log('PASS: actual tagged internal bridge E decreases while external bridge control remains stable');
-    }else{
-      console.log('KNOWN GAP: internal_bridge_flow real effect NOT established: '+
-        internalFlowReport.result);
-    }
+    // This pinned real-engine arch emitted 180 internal and 107 ordinary
+    // bridge-positive-E G1 segments in the first accepted run. Promote
+    // the independently measured effect to a hard CI acceptance gate:
+    // a header/hash-only or ordinary-bridge-only change must now FAIL.
+    assert.equal(internalFlowReport.result,'observed_internal_bridge_flow_effect',
+      'Expected reduced *internal* tagged E and unchanged external bridge control: '+
+      JSON.stringify(internalFlowReport));
+    console.log('PASS: actual tagged internal bridge E decreases while external bridge control remains stable');
 
     // A first REAL positive support-generation gate. This is an explicitly
     // opted-in native enable_support=1 on the isolated localhost fixture,
