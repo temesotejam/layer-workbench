@@ -283,6 +283,16 @@ def extrusion_move_metrics(commands, feature_context=None, feature_stats=None,
             continue
         words = {}
         stateful = opcode == 'G92' or bool(MOTION.fullmatch(opcode))
+        # The numeric diagnostic is not a firmware interpreter. Reject extra
+        # motion axes and vendor parameters rather than silently counting a
+        # plausible XY/E path with different actual modal semantics.
+        if stateful:
+            if opcode == 'G92':
+                allowed_stateful_words = frozenset('XYZE')
+            elif int(Decimal(opcode[1:])) in (0, 1):
+                allowed_stateful_words = frozenset('XYZEF')
+            else:
+                allowed_stateful_words = frozenset('XYZEIJKRF')
         for token in tokens[1:]:
             match = PARAM.fullmatch(token)
             if not match:
@@ -292,9 +302,9 @@ def extrusion_move_metrics(commands, feature_context=None, feature_stats=None,
                     return 0, None, None, 0, None, None, None
                 continue
             letter = match[1].upper()
-            if stateful and (letter in words or letter in ('G', 'M', 'N', 'T')):
-                # Duplicate words or embedded opcodes have firmware-dependent
-                # interpretation; the conservative deposition gate must fail.
+            if stateful and (letter in words or letter not in allowed_stateful_words):
+                # Duplicate, unhandled or nonstandard motion parameters have
+                # firmware-dependent meaning; never infer deposition from them.
                 return 0, None, None, 0, None, None, None
             words[letter] = Decimal(match[2])
         if opcode == 'G92':
@@ -326,8 +336,11 @@ def extrusion_move_metrics(commands, feature_context=None, feature_stats=None,
         # when E is absent or retracting. Silently ignoring it would let
         # later straight moves satisfy a false deposition/parity gate.
         # Unsupported non-XY planes retain their existing excluded status.
-        if code in (2, 3) and plane == 'G17' and not valid_g17_arc(
-                start_xy, xy, words, units, absolute_arc_centers):
+        if code in (2, 3) and plane == 'G17' and (
+                'K' in words or not valid_g17_arc(
+                    start_xy, xy, words, units, absolute_arc_centers)):
+            # K belongs to non-XY planes; ignoring it would make an
+            # unsupported/misconfigured arc look like verified G17 geometry.
             return 0, None, None, 0, None, None, None
         if 'E' not in words:
             continue
