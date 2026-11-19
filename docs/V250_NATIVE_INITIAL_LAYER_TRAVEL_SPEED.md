@@ -31,3 +31,7 @@ G-code, complete effective-profile parity, or a valid print job. The
 native Core 3MF and restricted browser profile paths are still distinct.
 See `docs/NATIVE_WASM_DIAGNOSTIC_PAIR.md` for the remaining true-parity
 gates. The browser WASM engine stays off public Pages.
+
+## G2/G3 first-layer exclusion (2026-11-20)
+
+The shared preview parser retains each segment's original `sourceMotion` (`G0`, `G1`, `G2` or `G3`). A bounded G2/G3 curve is tessellated for visualization, but the interpolated segments do **not** carry actual per-stroke extrusion commands. The first-layer F comparison therefore fails closed if a rendered arc (deposition **or** travel) appears on the measured first layer; otherwise equal-looking sampled chords or partial linear subsets could incorrectly pass a speed-only experiment. Later-layer arcs do not invalidate this first-layer-only witness. Regression fixtures cover G2 travel and G3 deposition. This is not arc extrusion simulation or a native/WASM same-profile comparison.

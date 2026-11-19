@@ -15,6 +15,11 @@ function inspect(parsed) {
       xyLen(s)>0.001&&Math.abs(s.z2-s.z1)<0.001)).sort((a,b)=>a.z-b.z);
   if(!layers.length)throw Error('No deposited first layer');
   const layer=layers[0];
+  // G2/G3 tessellation is for preview only: each sampled line lacks the
+  // source arc's commanded per-stroke E. Reject curves on the measured layer
+  // rather than certify a misleading linear XY/E match or travel pairing.
+  if(layer.segments.some(s=>s.sourceMotion==="G2"||s.sourceMotion==="G3"))
+    throw Error('Unsupported first-layer G2/G3 arcs in travel-speed diagnostic');
   // A travel-speed-only A/B test must preserve *extruded filament length*,
   // not merely the XY outline. Same XY with changed E is not identical
   // deposition. Bound E and compare to the G-code's reported precision.
