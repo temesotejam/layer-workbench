@@ -1651,3 +1651,31 @@ solid infill trajectories or the same effective full profile as native
 OrcaSlicer. No engine binaries, start G-code, real printer integration or
 public Pages WASM enablement are changed. Full native/WASM parity and print
 safety remain unverified.
+
+## 2026-11-19: native internal solid monotonic/rectilinear experiment (localhost only)
+
+In the [source-pinned OrcaSlicer v2.5.0 PrintConfig.cpp](https://github.com/OrcaSlicer/OrcaSlicer/blob/40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19/src/libslic3r/PrintConfig.cpp),
+`internal_solid_infill_pattern` is a native coEnum whose allowed values
+reuse `def_top_fill_pattern`; the latter explicitly includes `monotonic`
+and `rectilinear`. The pinned Creality CR-10 0.20mm Standard profile
+still explicitly selects `monotonic`. Only these two audited wire tokens
+are admitted by the *localhost-only* restricted raw-profile resolver and
+override parser. Sparse, top-surface and other pattern settings remain
+independent; arbitrary enum labels, vectors and unsupported values fail closed.
+
+The isolated Chrome regression keeps the two-STL Prepare scene and all
+process settings fixed and changes only the internal solid pattern from
+monotonic to rectilinear. It requires more than ten **actual** linear,
+planar, explicitly `internal solid infill`-tagged, positive-filament-E
+XY strokes in each G-code output, then requires a change in their
+ordered deposition stroke sequence. Header text, metadata, non-solid
+features, G-code hash changes and unclassified paths cannot satisfy the
+gate. A numeric-only summary is written to
+`parity-output/internal-solid-pattern-deposition.json`; executable G-code
+is not included in this summary. The CI must PASS before integration.
+
+A changed *ordered* stroke sequence alone does not prove that the
+unordered XY geometry differs, that native desktop uses the same effective
+full profiles, that the 2,616 mm previously observed native/WASM solid
+gap is reduced, or that G-code is physically safe. No candidate is made
+available on public Pages by this experiment.

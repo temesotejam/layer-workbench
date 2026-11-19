@@ -84,9 +84,11 @@ const PROCESS_ENUMS=Object.freeze({
   // Pinned v2.5.0 Creality common uses crosshatch; its CR-10 0.20mm child
   // overrides this to grid. Other enum tokens require separate verification.
   sparse_infill_pattern:new Set(["grid","crosshatch"]),
-  // Official CR-10 0.20mm Standard independently selects monotonic for
-  // internal solid infill; this is not the sparse fill pattern or top surface.
-  internal_solid_infill_pattern:new Set(["monotonic"]),
+  // CR-10 0.20mm Standard pins monotonic. PrintConfig.cpp in source-pinned
+  // v2.5.0 also explicitly lists rectilinear for the same coEnum via
+  // def_top_fill_pattern. Limit this localhost test bridge to these two
+  // audited wire values; no invented default or unrelated sparse pattern.
+  internal_solid_infill_pattern:new Set(["monotonic","rectilinear"]),
 });
 // Pinned OrcaSlicer v2.5.0 PrintConfig.cpp: curr_bed_type enum and
 // six native per-filament steady/first-layer coInts pairs. UI labels are

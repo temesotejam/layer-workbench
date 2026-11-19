@@ -627,16 +627,49 @@ try {
         await(await fetch(link.href)).text());
     };
 
-    // The official CR-10 0.20mm child uses monotonic for INTERNAL SOLID
-    // infill, not sparse grid or a surface pattern. Confirm that this exact
-    // new enum survives the localhost profile bridge and a real WASM slice.
-    // One accepted value is not evidence of an alternate pattern's geometry
-    // or native full-profile G-code parity.
+    // Source-pinned native PrintConfig.cpp includes both monotonic and
+    // rectilinear for INTERNAL SOLID infill; the CR-10 child selects monotonic.
+    // Hold the exact same two-STL scene and other settings constant. Accept
+    // only actual feature-tagged horizontal, positive-filament-E G1 XY strokes;
+    // a changed header/hash or a sparse/top-surface path must not pass.
     const monotonicSolid=await sliceWithLineWidth('monotonic','internal_solid_infill_pattern');
-    assert.ok(motionOnly(monotonicSolid).length>100,
-      'Pinned monotonic internal solid infill profile produced no real motion');
+    const rectilinearSolid=await sliceWithLineWidth('rectilinear','internal_solid_infill_pattern');
+    const internalSolidDeposition=code=>{
+      const parsed=parseGcodeToolpaths(code);
+      assert.equal(parsed.skippedMalformedMotion,0,
+        'Internal solid comparison cannot ignore malformed motion');
+      assert.equal(parsed.skippedArcs,0,
+        'Internal solid comparison cannot silently omit arcs');
+      return parsed.layers.flatMap(layer=>layer.segments)
+        .filter(s=>s.extrusion && s.feature==='internal solid infill'
+          && Number.isFinite(s.commandedPositiveEMm) && s.commandedPositiveEMm>0
+          && Number.isFinite(s.z1) && Number.isFinite(s.z2)
+          && Math.abs(s.z1-s.z2)<1e-7
+          && Math.hypot(s.x2-s.x1,s.y2-s.y1)>0.0001)
+        .map(s=>[s.x1,s.y1,s.x2,s.y2,s.z2].map(n=>
+          Math.round(n*1000)/1000).join(','));
+    };
+    const solidMonotonicPaths=internalSolidDeposition(monotonicSolid);
+    const solidRectilinearPaths=internalSolidDeposition(rectilinearSolid);
+    assert.ok(solidMonotonicPaths.length>10 && solidRectilinearPaths.length>10,
+      'Both native internal solid patterns require real tagged positive-E XY deposition: '
+        +solidMonotonicPaths.length+'/'+solidRectilinearPaths.length);
+    assert.notDeepEqual(solidMonotonicPaths,solidRectilinearPaths,
+      'Internal solid monotonic vs rectilinear must change tagged deposition stroke sequence, not only metadata');
+    await writeFile(parityDir+'/internal-solid-pattern-deposition.json',
+      JSON.stringify({
+        fixture:'same isolated two-STL Prepare scene; generic PLA; diagnostic only',
+        native_key:'internal_solid_infill_pattern',
+        baseline:'monotonic',candidate:'rectilinear',
+        feature:'internal solid infill',
+        baseline_tagged_positive_e_xy_strokes:solidMonotonicPaths.length,
+        candidate_tagged_positive_e_xy_strokes:solidRectilinearPaths.length,
+        tagged_stroke_sequence_changed:true,
+        full_native_profile_parity:false,printer_safe:false,public_pages_enabled:false
+      },null,2)+'\n');
     delete rawOrca[4].internal_solid_infill_pattern;
-    console.log('PASS: source-pinned internal solid monotonic process option accepted by real WASM slice');
+    await uploadRawOrca();
+    console.log('PASS: native internal solid monotonic/rectilinear changes real feature-tagged WASM G1 deposition sequence');
 
     // The pinned 0.20mm CR-10 child specifies skirt_loops=2. On the same
     // two-STL isolated scene, compare actual G0/G1 paths with only skirt count
