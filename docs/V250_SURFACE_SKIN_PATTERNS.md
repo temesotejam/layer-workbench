@@ -22,3 +22,14 @@ This change does not modify the public Pages deployment, enable user-provided ex
 The isolated Chrome acceptance now A/B-slices the unchanged two-STL development fixture, varying only one native pattern key between `monotonic` and `rectilinear`, returning the other key to its previous state before starting the next comparison. It writes bounded JSON summaries `parity-output/top-surface-pattern-deposition.json` and `parity-output/bottom-surface-pattern-deposition.json`. An `observed_...` result means only a tagged path signature changed in this fixture. If no tagged surface strokes exist on either side, or no difference is measured, the result is explicitly `inconclusive_...`; CI does not relabel that result as pattern-path proof.
 
 This is a localhost test using generic PLA and a partial profile. Differences in G-code stroke ordering or path geometry do not establish physical surface quality, native full-profile parity, or print safety. A same-full-profile native CLI comparison is still needed; public Pages remains unchanged.
+
+### Real isolated Chrome measurement (PR #113)
+
+[Initial diagnostic CI #44539991995](https://github.com/temesotejam/layer-workbench/actions/runs/44539991995) **PASS**. On an unchanged two-cube development plate, `monotonic` → `rectilinear` changed the **unordered, 0.001 mm-rounded, exact-feature XY stroke geometry signature**, even though total path length/E can remain identical:
+
+| Only changed key | Tagged Z | Monotonic strokes | Rectilinear strokes | XY path length, both | Positive commanded E, both |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `top_surface_pattern` | 20.04 mm | 265 | 265 | 1718.82728 mm | 42.06131 mm |
+| `bottom_surface_pattern` | 0.20 mm | 239 | 237 | 1547.50711 mm | 52.84719 mm |
+
+Since actual **tagged geometry differences** were observed independently for both roles, the pinned fixture CI was tightened to require `observed_tagged_skin_geometry_difference` for each. The comparator itself still reports inconclusive evidence when supplied missing or identical tagged paths. These measures do **not** demonstrate any improvement in printed surface texture, equivalent native toolpaths, machine calibration, or print safety.
