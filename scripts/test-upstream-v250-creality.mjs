@@ -256,6 +256,8 @@ for(const [key,expected] of Object.entries({
 }
 assert.equal(process.record.enable_support,'0');
 assert.equal(process.record.initial_layer_travel_speed,'50%');
-assert.ok(process.unsupported.includes('initial_layer_travel_speed'),
-  'Relative 50% native travel setting must not be mistaken for 50 mm/s');
+assert.equal(process.settings.initial_layer_travel_speed,'50%',
+  'Official CR-10 relative first-layer travel must remain 50% of travel_speed');
+assert.ok(!process.unsupported.includes('initial_layer_travel_speed'),
+  'Pinned relative first-layer travel now reaches bounded WASM adapter as a percent token');
 console.log('PASS: pinned CR-10 support settings forwarded; support disabled and relative travel excluded');
