@@ -549,5 +549,62 @@ class ComparatorTests(unittest.TestCase):
         self.assertIsNone(report['first_wasm_only_counted_planar_z_footprints'])
 
 
+    def test_feature_census_separates_tagged_wall_infill_and_unknown(self):
+        # Tags do NOT enter canonical ordered equality, but expose numeric
+        # feature-level attribution when the slicer emits explicit comments.
+        native = ('M83\nG0 Z0.2\n;TYPE:Outer wall\n'
+                  'G1 X3 Y4 E1\n; FEATURE: Sparse infill\n'
+                  'G1 X6 Y8 E2\n;TYPE:customer secret /tmp/private.gcode\n'
+                  'G1 X7 Y8 E1\n')
+        wasm = native.replace(';TYPE:Outer wall', ';TYPE:Inner wall')
+        report = self.run_compare(native, wasm, min_extrusion_moves=3)
+        self.assertTrue(report['match'], 'Comment tags are not G-code commands')
+        self.assertEqual(report['mismatched_commands'], 0)
+        n = report['native_feature_tagged_planar_g1']
+        w = report['wasm_feature_tagged_planar_g1']
+        self.assertEqual(n['known_tagged_moves'], 2)
+        self.assertEqual(n['unclassified_moves'], 1)
+        self.assertEqual(n['by_feature']['outer wall'],
+                         {'moves': 1, 'linear_xy_mm': '5', 'positive_e_mm': '1'})
+        self.assertEqual(n['by_feature']['sparse infill'],
+                         {'moves': 1, 'linear_xy_mm': '5', 'positive_e_mm': '2'})
+        self.assertEqual(w['by_feature']['inner wall']['moves'], 1)
+        self.assertEqual(report['feature_category_differences'],
+                         ['inner wall', 'outer wall'])
+        self.assertNotIn('customer secret', str(n))
+        self.assertNotIn('/tmp/private.gcode', str(report['feature_category_differences']))
+
+    def test_malformed_and_inline_feature_tags_cannot_inherit_or_invent_labels(self):
+        gcode = ('M83\n;TYPE:Outer wall\nG1 X1 E1\n'
+                 ';TYPE: ;malformed\nG1 X2 E1 ;TYPE:Outer wall\n'
+                 '; random text saying TYPE:Outer wall\nG1 X3 E1\n'
+                 ';FEATURE:Gap infill\nG1 X4 E1\n')
+        report = self.run_compare(gcode, gcode)
+        census = report['native_feature_tagged_planar_g1']
+        self.assertEqual(census['known_tagged_moves'], 2)
+        self.assertEqual(census['unclassified_moves'], 2)
+        self.assertEqual(census['by_feature']['outer wall']['moves'], 1)
+        self.assertEqual(census['by_feature']['gap infill']['moves'], 1)
+
+    def test_feature_census_rejects_nonplanar_arc_and_stationary_prime(self):
+        gcode = ('M83\n;TYPE:Bridge\nG1 X1 E1\n'
+                 'G1 X2 Z1 E1\nG2 I1 J0 E1\n'
+                 'G1 X2 E1\nG1 X3 E1\n')
+        report = self.run_compare(gcode, gcode)
+        self.assertTrue(report['match'], report)
+        census = report['native_feature_tagged_planar_g1']
+        self.assertEqual(census['by_feature']['bridge'],
+                         {'moves': 2, 'linear_xy_mm': '2', 'positive_e_mm': '2'})
+        self.assertEqual(report['feature_category_differences'], [])
+
+    def test_invalid_stateful_geometry_has_unknown_feature_census(self):
+        code = 'M83\n;TYPE:Inner wall\nG1 X1 X2 E1\n'
+        report = self.run_compare(code, code)
+        self.assertFalse(report['match'])
+        self.assertIsNone(report['native_feature_tagged_planar_g1'])
+        self.assertIsNone(report['wasm_feature_tagged_planar_g1'])
+        self.assertIsNone(report['feature_category_differences'])
+
+
 if __name__ == '__main__':
     unittest.main()
