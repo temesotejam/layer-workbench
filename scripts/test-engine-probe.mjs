@@ -736,10 +736,14 @@ try {
       await writeFile(parityDir+'/'+surfaceKey.replaceAll('_','-')+'-deposition.json',
         JSON.stringify(report,null,2)+'\n');
       console.log('SURFACE_SKIN_PATTERN_DIAGNOSTIC '+JSON.stringify(report));
-      if(audit.result.startsWith('observed_'))
-        console.log('PASS: '+surfaceKey+' changes exact feature-tagged surface XY deposition: '+audit.result);
-      else
-        console.log('INCONCLUSIVE: '+surfaceKey+' A/B produced no confirmed tagged skin change: '+audit.result);
+      // The pinned candidate/fixture has now demonstrated changes in both
+      // independent outer-skin roles. Treat a lost/missing tag or an unchanged
+      // geometry signature as a regression, not as a silently green smoke.
+      assert.equal(audit.result,'observed_tagged_skin_geometry_difference',
+        surfaceKey+' must change genuine tagged skin geometry: '+JSON.stringify(report));
+      assert.equal(audit.changed_geometry_z_count>0,true,
+        surfaceKey+' must have at least one changed deposited Z stratum');
+      console.log('PASS: '+surfaceKey+' changes exact feature-tagged skin XY geometry (not desktop parity)');
       delete rawOrca[4][surfaceKey];
       await uploadRawOrca();
     }
