@@ -547,6 +547,20 @@ for(const bad of ["Grid","gyroid","",["grid"],null,0]){
   assert.throws(()=>resolve(fillBase.map(p=>p.name==="0.16mm Fine @TestPrinter"
     ? {...p,sparse_infill_pattern:bad} : p),selection),/Invalid native process enum/);
 }
+// Native internal solid infill pattern is distinct from sparse infill. The
+// pinned CR-10 0.20mm child selects monotonic; never default it by inference.
+const solidPatternProfiles=fillChild.map(p=>p.name==="0.16mm Fine @TestPrinter"
+  ? {...p,internal_solid_infill_pattern:"monotonic"}:p);
+const solidPattern=resolve(solidPatternProfiles,selection).process;
+assert.equal(solidPattern.settings.internal_solid_infill_pattern,"monotonic");
+assert.equal(solidPattern.settings.sparse_infill_pattern,"grid");
+assert.ok(!solidPattern.unsupported.includes("internal_solid_infill_pattern"));
+assert.equal(resolve(fillChild,selection).process.settings.internal_solid_infill_pattern,undefined);
+for(const bad of ["Monotonic","grid","rectilinear","",["monotonic"],null,0]) {
+  assert.throws(()=>resolve(fillChild.map(p=>p.name==="0.16mm Fine @TestPrinter"
+    ? {...p,internal_solid_infill_pattern:bad}:p),selection),/Invalid native process enum/);
+}
+console.log("PASS: pinned internal solid infill monotonic enum is independent and fail-closed");
 console.log("PASS: source-pinned crosshatch -> grid infill-pattern inheritance and strict enums");
 console.log("PASS: inherited native process wall-generator and gap-fill enums reach restricted adapter; invalid forms rejected");
 
