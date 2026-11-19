@@ -76,6 +76,9 @@ const LIMITS = {
   // Source-pinned CR-10 first-layer infill is 20 mm/s, not the
   // first-layer perimeter speed. No relative percentages or vectors.
   initial_layer_infill_speed: [1,800],
+  // Native coFloatOrPercent: a first-layer travel percentage is relative to
+  // travel_speed, never an absolute mm/s value. Explicit local test only.
+  initial_layer_travel_speed: [1,1500],
   // Validated absolute native settings; support generation remains unverified.
   support_line_width: [0.1,2],
   support_speed: [1,800],
@@ -129,6 +132,16 @@ export function parseTestProcessOverrides(input) {
     const range = LIMITS[key];
     if (typeof raw !== "number" && typeof raw !== "string")
       throw new Error("Invalid value for " + key);
+    if (key === "initial_layer_travel_speed" && typeof raw === "string") {
+      const percent = /^(\d+(?:\.\d+)?)%$/.exec(raw.trim());
+      if (percent) {
+        const ratio = Number(percent[1]);
+        if (!Number.isFinite(ratio) || ratio < 1 || ratio > 200)
+          throw new Error("Setting " + key + " is outside the safe test range.");
+        clean[key] = String(ratio) + "%";
+        continue;
+      }
+    }
     if (typeof raw === "string" && !/^\d+(?:\.\d+)?$/.test(raw.trim()))
       throw new Error("Invalid numeric value for " + key);
     const value = Number(raw);
