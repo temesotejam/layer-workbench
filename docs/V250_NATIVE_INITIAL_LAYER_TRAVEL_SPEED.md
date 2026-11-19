@@ -12,13 +12,18 @@ G-code; the changed profile is sliced once more without auto-arrange.
 `scripts/verify-native-initial-layer-travel.mjs` parses actual generated
 G-code, locates the first positive-E planar deposition layer, and pairs
 non-depositing planar XY moves by exact rounded start/end/Z geometry.
-It checks the deposited geometry remains identical, **all** qualifying
+It checks the first-layer deposited geometry **and commanded positive-E amount**
+remain identical (rounded to 5 decimal places per linear stroke), **all** qualifying
 travels match on both sides, all modal F values are available, at least
 one travel speeds up and at least one approximately doubles. Malformed
-motion or skipped arcs fail closed. A shared-subset match is not enough
+motion, invalid deposited E or skipped arcs fail closed. A shared-subset match is not enough
 for this controlled experiment. The measured native F values are written
 to a short-lived CI report; no raw licensed profiles, executable or
 printer G-code are published.
+
+The native CI path filters now include the shared comparator, its unit test
+and the parser, so changes in those dependencies trigger the real native
+probe rather than relying only on previous green results.
 
 This confirms only a native **commanded** first-layer travel speed effect.
 It does not establish speed on a real printer, identical native/WASM

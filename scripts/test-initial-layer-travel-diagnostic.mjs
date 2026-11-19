@@ -23,6 +23,14 @@ assert.equal(compareFirstLayerTravelFeedrates(
   'Changed second-layer F is not first-layer evidence');
 const geometry=compareFirstLayerTravelFeedrates(parsed(2400,3600,0),parsed(4800,3600,0.1));
 assert.equal(geometry.same_deposition_geometry,false);
+// The geometry can be identical while extrusion amount differs.
+// That must not pass a speed-only experiment as "same deposition".
+const changedE=parseGcodeToolpaths(sample(4800,3600,0).replace(
+  'G1 X7 Y0 E0.15 F900','G1 X7 Y0 E0.25 F900'));
+const extrusionMismatch=compareFirstLayerTravelFeedrates(parsed(2400,3600,0),changedE);
+assert.equal(extrusionMismatch.matched_travels,3);
+assert.equal(extrusionMismatch.same_deposition_geometry,false,
+  'Same XY paths with changed positive-E must fail deposition identity');
 assert.equal(geometry.matched_travels,2);
 assert.throws(()=>compareFirstLayerTravelFeedrates(
   {...parsed(2400,3600,0),skippedMalformedMotion:1},parsed(4800,3600,0)),/skipped/);

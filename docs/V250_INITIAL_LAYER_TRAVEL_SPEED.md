@@ -14,7 +14,9 @@ changing only initial_layer_travel_speed from 50% to 100%. The parser
 selects the first positive-E planar XY deposition layer and compares modal
 F on non-depositing planar XY moves with identical start/end geometry.
 It rejects skipped arcs, malformed motion and missing F and requires
-unchanged deposited geometry. The numeric paired F results are saved in
+unchanged first-layer deposited XY geometry **and commanded E amount**.
+The new E check rejects a case where identical XY paths hid changed
+filament-axis extrusion during the speed-only A/B experiment. The numeric paired F results are saved in
 parity-output/first-layer-travel-feedrates.json (14-day CI artifact).
 
 Unit tests exclude later-layer changes and altered first-layer geometry.
