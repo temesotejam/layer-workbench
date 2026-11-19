@@ -538,3 +538,12 @@ the same bounded metrics and keeps `parity_pass: false`, since the two
 effective profiles and source import paths remain unequal. Local-only
 verification does not certify full OrcaSlicer UI/3MF/G-code parity, machine
 safety, or authorize WASM activation on public Pages.
+
+
+## 2026-11-20: fail-closed stateful G-code diagnostic guard
+
+The strict native/WASM comparator still compares the complete ordered command stream, but its **numeric** deposited-XY/E summaries previously ignored extra motion parameters such as `G1 X10 E1 A90` or `G2 ... P2`. A pair of identical unsupported commands could therefore pass the numeric fixture sanity gate even though the meaning of the extra axis or arc-turn request was not modeled.
+
+`scripts/compare_gcode.py` now rejects unhandled stateful words before interpreting G0/G1, G2/G3, or G92. Ordinary XYZ/E, commanded F and G17 I/J or R remain recognized; a G17 K center offset, vendor axes, P-turn arcs, or auxiliary S on a motion fail the numeric gate with unknown metrics and a non-PASS verdict, **even if both files are command-identical**. Regression tests cover both rejection and legal G17/feedrate motions.
+
+This is deliberately stricter than many printer firmwares. It is a **diagnostic confidence guard**, not a claim that any rejected G-code is invalid for a printer. The true same-effective-profile/native-vs-WASM parity gate remains unmet, and no public engine deployment or printable output is authorized.
