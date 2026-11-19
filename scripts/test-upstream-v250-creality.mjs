@@ -175,6 +175,19 @@ for(const [key,speed] of Object.entries({
   assert.ok(!process.unsupported.includes(key),"supported speed must not appear as unsupported: "+key);
 }
 
+// Genuine pinned Creality v2.5.0 child also carries minimum shell thickness
+// in mm; zero disables the bottom thickness floor, not bottom shell layers.
+const pinnedShellChain=process.chain.map(name=>indexed.records.find(p=>p.name===name));
+assert.deepEqual(pinnedShellChain.map(p=>p.top_shell_thickness),
+  [undefined,'0.8','0.8']);
+assert.deepEqual(pinnedShellChain.map(p=>p.bottom_shell_thickness),
+  [undefined,'0','0']);
+assert.equal(process.settings.top_shell_thickness,'0.8');
+assert.equal(process.settings.bottom_shell_thickness,'0');
+assert.ok(!process.unsupported.includes('top_shell_thickness'));
+assert.ok(!process.unsupported.includes('bottom_shell_thickness'));
+console.log('PASS: real source-pinned top 0.8 mm and disabled bottom 0 mm thickness forwarded independently');
+
 // Pinned Orca v2.5.0 ships child overrides: 5 top and 4 bottom solid layers.
 // These are tested native process keys, not inferred desktop GUI defaults.
 assert.equal(process.settings.top_shell_layers,"5");

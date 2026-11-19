@@ -46,6 +46,11 @@ const SPECS={
     // Do not accept relative angles or multi-tool vectors in localhost lab.
     infill_direction:[0,360],
     top_shell_layers:[0,12],bottom_shell_layers:[0,12],
+    // Source-pinned Creality v2.5.0 child: top 0.8 mm, bottom 0 mm.
+    // These native coFloat values are absolute minimum solid thicknesses,
+    // independent of integer layer counts. 0 disables the minimum.
+    // Local single-nozzle proof only; no relative or vector inputs.
+    top_shell_thickness:[0,5],bottom_shell_thickness:[0,5],
     // Absolute mm/s only; relative percentage-based speeds are not converted.
     // These bounds constrain diagnostic inputs, not real printer capability.
     outer_wall_speed:[1,800],inner_wall_speed:[1,800],travel_speed:[1,1500],

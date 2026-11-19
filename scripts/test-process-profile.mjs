@@ -44,6 +44,11 @@ const LIMITS = {
   infill_direction: [0,360],
   top_shell_layers: [0,12],
   bottom_shell_layers: [0,12],
+  // Native v2.5.0 coFloat minimum shell thickness in millimetres.
+  // The pinned CR-10 child uses 0.8 mm top, 0 mm bottom (disabled).
+  // 0..5 mm is a conservative LOCAL test bound, not the native maximum.
+  top_shell_thickness: [0,5],
+  bottom_shell_thickness: [0,5],
   // Absolute millimetres/second for localhost WASM tests only.
   // Percentages and vendor-specific relative speed modes remain unsupported.
   outer_wall_speed: [1,800],

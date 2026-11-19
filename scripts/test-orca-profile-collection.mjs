@@ -824,3 +824,33 @@ for(const bad of [-1,'360.01','45%',null,'auto',['30','45']])
     ? {...rec,infill_direction:bad}:rec),selection),/Invalid|Multi-extruder|test limits/);
 assert.equal(result.process.settings.infill_direction,undefined);
 console.log('PASS: bounded native infill_direction inheritance, angle and bad input rejection');
+
+// Real Orca schema has separate minimum shell thicknesses (mm), which
+// override zero or absent ancestors independently of shell layer counts.
+const shellThicknessParents=profiles.map(p=>p.name==='fdm_process_common'
+  ? {...p,top_shell_thickness:'0.6',bottom_shell_thickness:'0.4'} :
+    p.name==='0.16mm Fine @TestPrinter'
+      ? {...p,top_shell_thickness:'0.8',bottom_shell_thickness:'0'} : p);
+const thickResolved=resolve(shellThicknessParents,selection).process;
+assert.equal(thickResolved.settings.top_shell_thickness,'0.8');
+assert.equal(thickResolved.settings.bottom_shell_thickness,'0');
+assert.equal(thickResolved.settings.wall_loops,'2');
+assert.ok(!thickResolved.unsupported.includes('top_shell_thickness'));
+assert.ok(!thickResolved.unsupported.includes('bottom_shell_thickness'));
+const inheritedThickness=resolve(shellThicknessParents.map(p=>{
+  if(p.name!=='0.16mm Fine @TestPrinter')return p;
+  const child={...p};delete child.top_shell_thickness;
+  delete child.bottom_shell_thickness;return child;
+}),selection).process;
+assert.equal(inheritedThickness.settings.top_shell_thickness,'0.6');
+assert.equal(inheritedThickness.settings.bottom_shell_thickness,'0.4');
+for(const key of ['top_shell_thickness','bottom_shell_thickness']) {
+  assert.equal(resolve(shellThicknessParents.map(p=>p.name==='0.16mm Fine @TestPrinter'
+    ? {...p,[key]:['0.8']}:p),selection).process.settings[key],'0.8');
+  for(const bad of ['1.2%','-1','5.01',['0.8','1.2'],null,'auto'])
+    assert.throws(()=>resolve(shellThicknessParents.map(p=>
+      p.name==='0.16mm Fine @TestPrinter'?{...p,[key]:bad}:p),selection),
+      /Invalid|Multi-extruder|test limits/);
+}
+assert.equal(resolve(profiles,selection).process.settings.top_shell_thickness,undefined);
+console.log('PASS: source native top/bottom shell thickness, inheritance, zero-disable, one-slot bounds');
