@@ -1,13 +1,13 @@
 # OrcaSlicer v2.5.0 top/bottom surface patterns — restricted localhost acceptance
 
-Source pin: OrcaSlicer v2.5.0 `40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19`, official `resources/profiles/BBL/process/fdm_process_common.json`, `resources/profiles/Creality/process/fdm_process_creality_common.json`, and `resources/profiles/Creality/process/0.20mm Standard @Creality CR-10 0.4 nozzle.json`.
+Source pin: OrcaSlicer v2.5.0 `40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19`, official `resources/profiles/Creality/process/fdm_process_common.json`, `resources/profiles/Creality/process/fdm_process_creality_common.json`, and `resources/profiles/Creality/process/0.20mm Standard @Creality CR-10 0.4 nozzle.json`.
 
 These are **distinct** native process keys, not synonyms for `internal_solid_infill_pattern` or `sparse_infill_pattern`:
 
 | Native process key | fdm common | Creality common | CR-10 child | Effective |
 | --- | --- | --- | --- | --- |
-| `top_surface_pattern` | `monotonicline` | `monotonicline` | `monotonic` | `monotonic` |
-| `bottom_surface_pattern` | `monotonic` | `monotonic` | `monotonic` | `monotonic` |
+| `top_surface_pattern` | *not set* | `monotonicline` | `monotonic` | `monotonic` |
+| `bottom_surface_pattern` | *not set* | `monotonic` | `monotonic` | `monotonic` |
 
 The explicit localhost-only profile resolver and process override parser now retain two independent values, with only three source-known tokens: `monotonic`, `monotonicline`, `rectilinear`. Everything else, including UI labels, arrays, objects and unknown patterns, fails closed. The pinned profile CI tests **actual fetched upstream JSON files**, not bundled copies. These settings are forwarded as-is to the existing opt-in isolated Chrome WASM test bridge. No default is invented if a profile omits either key.
 
