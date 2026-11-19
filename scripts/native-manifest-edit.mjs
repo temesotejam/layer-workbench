@@ -33,12 +33,20 @@ function uniqueRecordIds(records, label) {
 export function editManifestInstanceTransform(manifest, instanceId, matrix) {
   if (!manifest || manifest.schemaVersion !== '0.7.0')
     throw new Error('Invalid v0.7.0 project manifest');
+  const meshIds = uniqueRecordIds(manifest.meshes, 'meshes');
   const objectIds = uniqueRecordIds(manifest.objects, 'objects');
   const plateIds = uniqueRecordIds(manifest.plates, 'plates');
   const instanceIds = uniqueRecordIds(manifest.instances, 'instances');
   if (typeof instanceId !== 'string' || !instanceId || instanceId.length > 128)
     throw new Error('Invalid project instance ID');
   validateAffineMatrix(matrix);
+  // Every object, including one with no current instance, must resolve to a
+  // declared mesh. Otherwise setObjects may replace a valid project with an
+  // incomplete native graph while this diagnostic edit reports success.
+  for (const object of manifest.objects) {
+    if (!meshIds.has(object.meshId))
+      throw new Error('Orphaned project object mesh reference');
+  }
   for (const instance of manifest.instances) {
     if (!objectIds.has(instance.objectId) || !plateIds.has(instance.plateId))
       throw new Error('Orphaned project instance object or plate reference');
