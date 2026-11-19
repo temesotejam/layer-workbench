@@ -734,7 +734,7 @@ try {
         ...audit
       };
       await writeFile(parityDir+'/'+surfaceKey.replaceAll('_','-')+'-deposition.json',
-        JSON.stringify(report,null,2)+'\\n');
+        JSON.stringify(report,null,2)+'\n');
       console.log('SURFACE_SKIN_PATTERN_DIAGNOSTIC '+JSON.stringify(report));
       if(audit.result.startsWith('observed_'))
         console.log('PASS: '+surfaceKey+' changes exact feature-tagged surface XY deposition: '+audit.result);
