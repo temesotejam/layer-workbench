@@ -68,6 +68,49 @@ class Test3MFMetadata(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'No selected'):
                 compare(p, p, 'metadata')
 
+    def test_ancillary_scope_catches_unknown_vendor_assets_and_relationships(self):
+        with tempfile.TemporaryDirectory() as d:
+            a, b = pathlib.Path(d) / 'a.3mf', pathlib.Path(d) / 'b.3mf'
+            extra = {"_rels/.rels": b'<Relationships/>',
+                     "3D/Textures/paint.png": b'opaque-original',
+                     "Vendor/secret-settings.bin": b'\\x00\\x01\\x02'}
+            make(a, extra=extra)
+            make(b, extra={**extra, "3D/Textures/paint.png": b'opaque-changed'})
+            self.assertTrue(compare(a, b, 'metadata')['match'],
+                            'Metadata-only scope must remain narrow')
+            report = compare(a, b, 'ancillary')
+            self.assertFalse(report['match'])
+            self.assertEqual([part['path'] for part in report['changed']],
+                             ['3D/Textures/paint.png'])
+            self.assertIn('_rels/.rels', inventory(a))
+            make(b, extra={"_rels/.rels": b'<Relationships/>'})
+            report = compare(a, b, 'ancillary')
+            self.assertEqual(report['missing'],
+                             ['3D/Textures/paint.png', 'Vendor/secret-settings.bin'])
+
+    def test_ancillary_scope_allows_model_transform_only_changes(self):
+        with tempfile.TemporaryDirectory() as d:
+            a, b = pathlib.Path(d) / 'a.3mf', pathlib.Path(d) / 'b.3mf'
+            extra = {"_rels/.rels": b'<Relationships/>',
+                     "3D/Textures/color.png": b'opaque-bytes'}
+            make(a, model=b'<model>original build transform</model>', extra=extra)
+            make(b, model=b'<model>edited build transform</model>', extra=extra,
+                 ordering=True)
+            self.assertFalse(compare(a, b, 'all')['match'])
+            self.assertTrue(compare(a, b, 'ancillary')['match'])
+            make(b, extra={**extra, "[Content_Types].xml": b'<Types>changed</Types>'})
+            self.assertEqual([part['path'] for part in compare(a, b, 'ancillary')['changed']],
+                             ['[Content_Types].xml'])
+
+    def test_ancillary_scope_rejects_mandatory_content_types_only(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = pathlib.Path(d) / 'core.3mf'
+            with zipfile.ZipFile(p, 'w') as archive:
+                archive.writestr('[Content_Types].xml', TYPES)
+                archive.writestr('3D/3dmodel.model', MODEL)
+            with self.assertRaisesRegex(ValueError, 'No ancillary'):
+                compare(p, p, 'ancillary')
+
 
 if __name__ == '__main__':
     unittest.main()

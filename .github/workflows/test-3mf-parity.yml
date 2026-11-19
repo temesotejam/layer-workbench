@@ -24,6 +24,9 @@ on:
 
   pull_request:
     paths:
+      - "scripts/compare_3mf_metadata.py"
+      - "scripts/test_compare_3mf_metadata.py"
+      - "docs/V250_3MF_ANCILLARY_PRESERVATION.md"
       - "scripts/patch_orcawasm_private_instance_edit.py"
       - "scripts/test_patch_orcawasm_private_instance_edit.py"
       - "scripts/patch-orcawasm-support-smoke.py"
