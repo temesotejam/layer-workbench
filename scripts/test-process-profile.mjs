@@ -61,6 +61,10 @@ const LIMITS = {
   // Native bridge_flow is a scalar extrusion multiplier, not a speed or %.
   // This diagnostic range is deliberately narrower than real printer profiles.
   bridge_flow: [0.1,2],
+  // Distinct native v2.5.0 internal-bridge extrusion multiplier. Pinned
+  // CR-10 0.20mm Standard sets 1 while bridge_flow is 0.95; do not alias.
+  // Localhost test only: reject percentages and multi-nozzle vectors.
+  internal_bridge_flow: [0.1,2],
   // Pinned v2.5.0 Creality first-layer print speed: 15 mm/s absolute.
   // This is independent of first-layer infill and travel speed.
   initial_layer_speed: [1,800],

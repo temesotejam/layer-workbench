@@ -54,6 +54,20 @@ for(const value of ['0.1','0.55','0.95','1','2'])
 for(const bad of ['0','2.01','95%','auto',['0.95'],['0.95','1'],null,Infinity,NaN,-1])
   assert.throws(()=>parseTestProcessOverrides({bridge_flow:bad}),
     /Invalid|outside the safe test range/,String(bad));
+// Internal bridges use their own native extrusion multiplier. The source-pinned
+// CR-10 child has internal_bridge_flow=1 even though bridge_flow=0.95.
+// Retain both independently and reject ambiguous values rather than aliasing.
+assert.deepEqual(parseTestProcessOverrides({
+  bridge_flow:'0.95',internal_bridge_flow:'1'
+}),{bridge_flow:'0.95',internal_bridge_flow:'1'});
+for(const value of ['0.1','0.55','1','2'])
+  assert.equal(parseTestProcessOverrides({internal_bridge_flow:value}).internal_bridge_flow,value);
+for(const bad of ['0','2.01','95%','auto',['1'],['1','0.95'],null,Infinity,NaN,-1])
+  assert.throws(()=>parseTestProcessOverrides({internal_bridge_flow:bad}),
+    /Invalid|outside the safe test range/,String(bad));
+assert.equal(parseTestProcessOverrides({bridge_flow:'0.95'}).internal_bridge_flow,undefined);
+assert.equal(parseTestProcessOverrides({internal_bridge_flow:'1'}).bridge_flow,undefined);
+console.log('PASS: internal bridge flow is bounded and independent of external bridge flow');
 console.log('PASS: bounded source-pinned bridge flow ratio rejects percentage, vector and malformed input');
 console.log('PASS: pinned process deposition speeds survive bounded override parsing; relative and multi-tool forms fail closed');
 assert.deepEqual(parseTestProcessOverrides({line_width:"0.42"}),{line_width:"0.42"});

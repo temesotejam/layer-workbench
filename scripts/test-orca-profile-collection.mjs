@@ -96,6 +96,27 @@ for(const bad of ['95%',0,'2.01',['0.55','0.95'],null,'auto'])
     ? {...p,bridge_flow:bad}:p),selection),/Invalid|Multi-extruder|test limits/);
 assert.equal(result.process.settings.bridge_flow,undefined);
 console.log('PASS: native bridge_flow inheritance and safe scalar bounds');
+// Source-pinned internal_bridge_flow is an independent native process key, not
+// an alias of bridge_flow. Keep ancestor inheritance and child precedence.
+const internalBridgeProfiles=profiles.map(p=>p.name==="fdm_process_common"
+  ? {...p,bridge_flow:'0.95',internal_bridge_flow:'0.9'}
+  : p.name==="0.16mm Fine @TestPrinter"
+    ? {...p,bridge_flow:'0.55',internal_bridge_flow:'1'}:p);
+const internalChild=resolve(internalBridgeProfiles,selection).process;
+assert.equal(internalChild.settings.internal_bridge_flow,'1');
+assert.equal(internalChild.settings.bridge_flow,'0.55');
+assert.ok(!internalChild.unsupported.includes('internal_bridge_flow'));
+const internalInherited=resolve(internalBridgeProfiles.map(p=>{
+  if(p.name!=="0.16mm Fine @TestPrinter")return p;
+  const child={...p};delete child.internal_bridge_flow;return child;
+}),selection).process;
+assert.equal(internalInherited.settings.internal_bridge_flow,'0.9');
+assert.equal(internalInherited.settings.bridge_flow,'0.55');
+for(const bad of ['95%',0,'2.01',['0.9','1'],null,'auto'])
+  assert.throws(()=>resolve(internalBridgeProfiles.map(p=>p.name==="0.16mm Fine @TestPrinter"
+    ? {...p,internal_bridge_flow:bad}:p),selection),/Invalid|Multi-extruder|test limits/);
+assert.equal(result.process.settings.internal_bridge_flow,undefined);
+console.log('PASS: independent internal_bridge_flow source inheritance and scalar bounds');
 assert.equal(result.process.settings.outer_wall_line_width,undefined);
 console.log('PASS: independent outer-wall width inheritance and bounds');
 // The child overrides its inherited inner-wall width without changing outer

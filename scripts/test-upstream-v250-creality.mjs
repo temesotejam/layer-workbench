@@ -70,6 +70,15 @@ assert.ok(!process.unsupported.includes("infill_direction"));
 assert.equal(indexed.records.find(p=>p.name==="0.20mm Standard @Creality CR-10 0.4 nozzle").bridge_flow,"0.95");
 assert.equal(process.settings.bridge_flow,"0.95");
 assert.ok(!process.unsupported.includes("bridge_flow"));
+// Confirm the native child (not a guessed generic default) independently sets
+// internal bridge flow to 1; bridge_flow in that same child remains 0.95.
+const internalFlowChain=process.chain.map(name=>
+  indexed.records.find(p=>p.name===name).internal_bridge_flow);
+assert.deepEqual(internalFlowChain,[undefined,undefined,"1"]);
+assert.equal(process.settings.internal_bridge_flow,"1");
+assert.notEqual(process.settings.internal_bridge_flow,process.settings.bridge_flow);
+assert.ok(!process.unsupported.includes("internal_bridge_flow"));
+console.log("PASS: pinned v2.5.0 CR-10 internal-bridge flow is separate from external bridge flow");
 assert.equal(process.settings.line_width,"0.42",
   "Official v2.5.0 CR-10 0.20mm process must provide absolute line width");
 assert.ok(!process.unsupported.includes("line_width"),

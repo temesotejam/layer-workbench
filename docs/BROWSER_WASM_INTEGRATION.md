@@ -1588,3 +1588,23 @@ tests a limited external bridge effect, *not* the internal bridge multiplier,
 full native preset equivalence, or safe machine G-code. The output is an
 opt-in localhost diagnostic and the full-profile native/WASM parity gate
 remains unmet.
+
+## 2026-11-19: independent source-pinned internal bridge flow forwarding (localhost)
+
+The official OrcaSlicer v2.5.0 source at pinned commit
+`40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19`, in
+`resources/profiles/Creality/process/0.20mm Standard @Creality CR-10 0.4 nozzle.json`,
+sets **`bridge_flow: "0.95"`** and **`internal_bridge_flow: "1"`** in the same
+process child. Previously, the restricted single-extruder process adapter
+only forwarded `bridge_flow`. The second native key now has an independent
+bounded scalar allow-list (0.1–2) in both inheritance resolution and the
+local test process parser. Unit tests cover missing values, overrides, inherited
+values, ratios versus percentages, malformed/vector inputs, and a mocked
+`session.applyProfile("orca.native-json", ...)` call preserving both keys.
+
+This verifies a **source-pinned profile-to-API forwarding boundary**, not an
+observed change in actual internal-bridge toolpaths. A real isolated
+Chrome/WASM fixture with verified internal bridge paths and a native same-profile
+comparison remain necessary before claiming behavioral parity. The public
+GitHub Pages engine remains disabled. These G-code outputs are not certified
+for printing.
