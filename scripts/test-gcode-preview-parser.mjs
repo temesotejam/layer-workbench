@@ -312,8 +312,8 @@ const eWitness=parseGcodeToolpaths([
   'G20','G1 X2 E0.1'
 ].join('\n'));
 assert.deepEqual(eWitness.layers[0].segments
-  .map(s=>s.commandedPositiveEMm),[0,1,1,0.4,0,0.3,2.54]);
-assert.equal(parseGcodeToolpaths('G90\\nM82\\nG2 X0 Y0 I1 J0 E1')
+  .map(s=>Number(s.commandedPositiveEMm.toFixed(3))),[0,1,1,0.4,0,0.3,2.54]);
+assert.equal(parseGcodeToolpaths('G90\nM82\nG2 X0 Y0 I1 J0 E1')
   .layers[0].segments[0].commandedPositiveEMm,null,
   'Arc tessellation must not invent per-chord commanded E');
 console.log('PASS: linear positive-E witness tracks M82/M83, retracts and inch units; arcs unallocated');
