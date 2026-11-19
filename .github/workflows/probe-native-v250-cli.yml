@@ -23,6 +23,9 @@ on:
       - "scripts/test-export-bridge-arch-stl.mjs"
       - "scripts/bridge-arch-fixture.mjs"
       - "scripts/obj-to-stl.mjs"
+      - "scripts/initial-layer-travel-diagnostic.mjs"
+      - "scripts/test-initial-layer-travel-diagnostic.mjs"
+      - "scripts/gcode-preview-parser.mjs"
       - "scripts/verify-native-initial-layer-travel.mjs"
       - "scripts/test-verify-native-initial-layer-travel.mjs"
       - "scripts/test_verify_native_outer_wall_speed.py"
@@ -61,6 +64,9 @@ on:
       - "scripts/test-export-bridge-arch-stl.mjs"
       - "scripts/bridge-arch-fixture.mjs"
       - "scripts/obj-to-stl.mjs"
+      - "scripts/initial-layer-travel-diagnostic.mjs"
+      - "scripts/test-initial-layer-travel-diagnostic.mjs"
+      - "scripts/gcode-preview-parser.mjs"
       - "scripts/verify-native-initial-layer-travel.mjs"
       - "scripts/test-verify-native-initial-layer-travel.mjs"
       - "scripts/test_verify_native_outer_wall_speed.py"
@@ -113,6 +119,9 @@ jobs:
 
       - name: Unit-test native outer-wall deposition speed audit offline
         run: python3 -m unittest discover -s scripts -p test_verify_native_outer_wall_speed.py -v
+
+      - name: Unit-test shared first-layer F and deposited-E comparison offline
+        run: node scripts/test-initial-layer-travel-diagnostic.mjs
 
       - name: Unit-test native first-layer travel F diagnostic offline
         run: node scripts/test-verify-native-initial-layer-travel.mjs

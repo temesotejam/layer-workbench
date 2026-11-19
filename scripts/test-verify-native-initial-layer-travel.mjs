@@ -16,6 +16,10 @@ assert.equal(yes.native_wasm_parity,false);
 assert.equal(yes.printer_ready,false);
 assert.throws(()=>verifyNativeFirstLayerTravel(sample(2400),sample(2400)),/did not increase/);
 assert.throws(()=>verifyNativeFirstLayerTravel(sample(2400),sample(4800,0.1)),/deposited geometry/);
+assert.throws(()=>verifyNativeFirstLayerTravel(sample(2400),
+  sample(4800).replace('G1 X7 Y0 E0.15 F900','G1 X7 Y0 E0.25 F900')),
+  /deposited geometry/,
+  'Changed extrusion amount cannot masquerade as unchanged deposition');
 // An extra non-depositing path must not be hidden by three matching paths.
 assert.throws(()=>verifyNativeFirstLayerTravel(sample(2400),
   sample(4800,0,'G1 X9 Y0 F4800')),/travel geometry\/count/);

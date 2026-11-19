@@ -15,8 +15,15 @@ function inspect(parsed) {
       xyLen(s)>0.001&&Math.abs(s.z2-s.z1)<0.001)).sort((a,b)=>a.z-b.z);
   if(!layers.length)throw Error('No deposited first layer');
   const layer=layers[0];
+  // A travel-speed-only A/B test must preserve *extruded filament length*,
+  // not merely the XY outline. Same XY with changed E is not identical
+  // deposition. Bound E and compare to the G-code's reported precision.
   const dep=layer.segments.filter(s=>s.extrusion===true&&s.commandedPositiveEMm>0&&
-    xyLen(s)>0.001&&Math.abs(s.z2-s.z1)<0.001).map(motionKey).sort();
+    xyLen(s)>0.001&&Math.abs(s.z2-s.z1)<0.001).map(s=>{
+    if(!Number.isFinite(s.commandedPositiveEMm)||s.commandedPositiveEMm>100_000)
+      throw Error('Invalid first-layer deposited E');
+    return motionKey(s)+'/E'+s.commandedPositiveEMm.toFixed(5);
+  }).sort();
   const travel=layer.segments.filter(s=>s.extrusion===false&&xyLen(s)>=0.5&&
     Math.abs(s.z2-s.z1)<0.001);
   if(travel.some(s=>!Number.isFinite(s.feedrateMmMin)||s.feedrateMmMin<=0))
