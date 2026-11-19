@@ -460,3 +460,26 @@ The two real engines still differ in their effective machine/filament/
 process presets and native Core 3MF versus browser STL import path.
 Therefore every real comparison stays `DIAGNOSTIC_ONLY` with
 `parity_pass: false`; no real print-safety or G-code equivalence is implied.
+
+
+## 2026-11-19: explicitly tagged G1 feature census (read-only diagnostic)
+
+The numeric-only native/WASM comparator now reports **separate known-feature
+and unclassified planar positive-E G1** totals from complete G-code runs.
+Only standalone \`;TYPE:\` and \`; FEATURE:\` directives with labels in a
+finite audited vocabulary count. Unknown, malformed, overlong or
+semicolon-suffixed feature tags clear the previous classification; inline
+comments, header prose, and arbitrary strings never become feature labels
+in the archived report. Each recognized feature reports straight XY path
+length (rounded to six decimals), positive commanded E-axis length and move
+count. Nonplanar deposition, G17 arcs, travel and stationary E-only priming
+are **not** classified as planar G1.
+
+The feature-category mismatch list is complete but bounded by the fixed
+known vocabulary. A missing or unrecognized tag yields **unclassified**,
+not an invented wall/infill/bridge category. If stateful geometry is
+malformed, the feature census is null and the original strict fixture gate
+fails. Source tags are untrusted hints; even identical tag distributions
+and aggregate lengths do not prove equal ordered paths, full-profile
+native/WASM parity, physical extrusion or print safety. The strict ordered
+comparison and public WASM-disabled Pages behavior are unchanged.
