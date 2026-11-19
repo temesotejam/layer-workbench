@@ -44,6 +44,17 @@ const verticalModeChain=process.chain.map(name=>
   indexed.records.find(p=>p.name===name).ensure_vertical_shell_thickness);
 assert.deepEqual(verticalModeChain,[undefined,undefined,"ensure_all"]);
 assert.equal(process.settings.ensure_vertical_shell_thickness,"ensure_all");
+// Real pinned v2.5.0 preset chain: top skin monotonicline -> monotonic,
+// bottom monotonic in all three ancestors. Do not map either to internal solid.
+assert.deepEqual(process.chain.map(n=>indexed.records.find(p=>p.name===n).top_surface_pattern),
+  ["monotonicline","monotonicline","monotonic"]);
+assert.deepEqual(process.chain.map(n=>indexed.records.find(p=>p.name===n).bottom_surface_pattern),
+  ["monotonic","monotonic","monotonic"]);
+assert.equal(process.settings.top_surface_pattern,"monotonic");
+assert.equal(process.settings.bottom_surface_pattern,"monotonic");
+assert.ok(!process.unsupported.includes("top_surface_pattern"));
+assert.ok(!process.unsupported.includes("bottom_surface_pattern"));
+console.log("PASS: official CR-10 independent top/bottom skin pattern inheritance");
 assert.ok(!process.unsupported.includes("ensure_vertical_shell_thickness"));
 console.log("PASS: pinned CR-10 vertical shell mode ensure_all resolved independently");
 assert.equal(process.settings.wall_loops,"2");
