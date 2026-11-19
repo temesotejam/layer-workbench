@@ -6,6 +6,8 @@ on:
     branches: [main]
     paths:
       - "scripts/compare_3mf_metadata.py"
+      - "scripts/compare_3mf_build_preservation.py"
+      - "scripts/test_compare_3mf_build_preservation.py"
       - "scripts/test_compare_3mf_metadata.py"
       - "scripts/three_mf_instance_expansion.py"
       - "scripts/test_three_mf_instance_expansion.py"
@@ -47,6 +49,8 @@ jobs:
           set -euo pipefail
           python3 -m py_compile scripts/compare_3mf_metadata.py
           python3 -m unittest discover -s scripts -p test_compare_3mf_metadata.py -v
+          python3 -m py_compile scripts/compare_3mf_build_preservation.py
+          python3 -m unittest discover -s scripts -p test_compare_3mf_build_preservation.py -v
           python3 -m unittest discover -s scripts -p test_audit_3mf_scene.py -v
           python3 -m unittest discover -s scripts -p test_three_mf_instance_expansion.py -v
           python3 -m unittest discover -s scripts -p test_check_3mf_stl_bounds.py -v
