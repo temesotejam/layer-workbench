@@ -23,3 +23,7 @@ Unit tests exclude later-layer changes and altered first-layer geometry.
 The real Chrome test fails if no first-layer travel F increase is measured.
 This measures commanded speed response only, not desktop native parity,
 physical print speed, a guaranteed 2:1 ratio on all travels or print safety.
+
+## Arc provenance guard (2026-11-20)
+
+Each interpolated G2/G3 display segment now retains the original arc command type. Because the preview does not assign the true commanded E to each interpolated stroke, the first-layer A/B witness rejects curved deposition **and** curved travel on the measured first layer rather than treating sampled geometry as linear G1 motion. Unrelated later-layer arcs are allowed. See `docs/V250_NATIVE_INITIAL_LAYER_TRAVEL_SPEED.md` for native negative controls. No public-slicer behavior or printability assertion changes.

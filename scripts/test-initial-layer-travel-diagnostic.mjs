@@ -36,4 +36,24 @@ assert.throws(()=>compareFirstLayerTravelFeedrates(
   {...parsed(2400,3600,0),skippedMalformedMotion:1},parsed(4800,3600,0)),/skipped/);
 assert.throws(()=>compareFirstLayerTravelFeedrates(
   {...parsed(2400,3600,0),skippedArcs:1},parsed(4800,3600,0)),/skipped/);
-console.log('PASS: first-layer travel percent diagnostic, XY matching and negative controls');
+// Curved paths are visualized as lines, but those lines do not carry the
+// source G2/G3 command's per-segment extrusion amount.
+const curved=parseGcodeToolpaths(sample(2400,3600,0).replace(
+  'G1 X7 Y0 E0.15 F900','G3 X7 Y0 I0.5 J0 E0.15 F900'));
+assert.equal(curved.renderedArcs,1);
+assert.ok(curved.layers.find(l=>l.z===0.2).segments.some(s=>s.sourceMotion==='G3'));
+assert.throws(()=>compareFirstLayerTravelFeedrates(curved,parsed(4800,3600,0)),
+  /first-layer G2\/G3 arcs/,
+  'Tessellated arc must not certify identical first-layer deposition');
+const curvedTravel=parseGcodeToolpaths(sample(2400,3600,0).replace(
+  'G1 X6 Y0 F2400','G2 X6 Y0 I1.5 J0 F2400'));
+assert.equal(curvedTravel.renderedArcs,1);
+assert.throws(()=>compareFirstLayerTravelFeedrates(curvedTravel,parsed(4800,3600,0)),
+  /first-layer G2\/G3 arcs/);
+const laterArc='\nG3 X17 Y0 I0.5 J0 E0.15 F900';
+const afterFirstLayer=compareFirstLayerTravelFeedrates(
+  parseGcodeToolpaths(sample(2400,3600,0)+laterArc),
+  parseGcodeToolpaths(sample(4800,3600,0)+laterArc));
+assert.equal(afterFirstLayer.same_deposition_geometry,true,
+  'An unrelated later-layer arc must not invalidate the first-layer witness');
+console.log('PASS: first-layer travel percent diagnostic, E equality, curved-path fail-closed and negative controls');

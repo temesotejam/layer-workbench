@@ -26,4 +26,8 @@ assert.throws(()=>verifyNativeFirstLayerTravel(sample(2400),
 assert.throws(()=>verifyNativeFirstLayerTravel(sample(2400),
   sample(4800,0,'G1 X9 Y0 K1 F4800')),/skipped/);
 assert.throws(()=>verifyNativeFirstLayerTravel('',sample(4800)),/Missing or oversized/);
-console.log('PASS: native first-layer travel modal F strict matching and negative cases');
+assert.throws(()=>verifyNativeFirstLayerTravel(
+  sample(2400).replace('G1 X7 Y0 E0.15 F900','G3 X7 Y0 I0.5 J0 E0.15 F900'),
+  sample(4800)),/first-layer G2\/G3 arcs/,
+  'Rendered arcs are not linear deposition with known per-stroke E');
+console.log('PASS: native first-layer travel modal F strict matching, E and arc negative controls');
