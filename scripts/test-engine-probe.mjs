@@ -671,6 +671,38 @@ try {
     await uploadRawOrca();
     console.log('PASS: native internal solid monotonic/rectilinear changes real feature-tagged WASM G1 deposition sequence');
 
+    // Native 2.5.0 thickness settings are a minimum solid depth in mm,
+    // independent of top/bottom solid-layer counts. Use one-layer shells
+    // and contrast 0 mm (off) vs 1.6 mm (on) over the SAME two-STL scene.
+    // Require real positive-E toolpath geometry, never header/hash alone.
+    rawOrca[4].top_shell_layers='1';
+    rawOrca[4].bottom_shell_layers='1';
+    rawOrca[4].sparse_infill_density='15%';
+    const thinShell=await sliceWithLineWidth('0','top_shell_thickness');
+    const thickShell=await sliceWithLineWidth('1.6','top_shell_thickness');
+    const realDepositedStrokes=gcode=>{
+      const parsed=parseGcodeToolpaths(gcode);
+      assert.equal(parsed.skippedMalformedMotion,0,'Cannot compare malformed shell toolpaths');
+      assert.equal(parsed.skippedArcs,0,'Cannot silently discard shell arcs');
+      return parsed.layers.flatMap(l=>l.segments).filter(s=>s.extrusion &&
+        Number.isFinite(s.commandedPositiveEMm) && s.commandedPositiveEMm>0 &&
+        Math.hypot(s.x2-s.x1,s.y2-s.y1)>1e-5).map(s=>
+          [s.feature,s.z2,s.x1,s.y1,s.x2,s.y2].map(x=>typeof x==='number'
+            ? Math.round(x*1000)/1000 : x).join(','));
+    };
+    const thinStrokes=realDepositedStrokes(thinShell);
+    const thickStrokes=realDepositedStrokes(thickShell);
+    assert.ok(thinStrokes.length>100 && thickStrokes.length>100,
+      'Both shell thickness tests require substantial deposited lines');
+    assert.notDeepEqual(thinStrokes,thickStrokes,
+      'Minimum top thickness 0 -> 1.6 mm must change real deposited XY G1 paths');
+    delete rawOrca[4].top_shell_thickness;
+    delete rawOrca[4].top_shell_layers;
+    delete rawOrca[4].bottom_shell_layers;
+    delete rawOrca[4].sparse_infill_density;
+    await uploadRawOrca();
+    console.log('PASS: minimum top shell thickness changes actual isolated Chrome/WASM deposited XY toolpaths');
+
     // The pinned 0.20mm CR-10 child specifies skirt_loops=2. On the same
     // two-STL isolated scene, compare actual G0/G1 paths with only skirt count
     // changed (0 -> 2). A settings echo, G-code comment or SHA is insufficient.
