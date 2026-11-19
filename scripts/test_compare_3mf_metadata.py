@@ -73,7 +73,7 @@ class Test3MFMetadata(unittest.TestCase):
             a, b = pathlib.Path(d) / 'a.3mf', pathlib.Path(d) / 'b.3mf'
             extra = {"_rels/.rels": b'<Relationships/>',
                      "3D/Textures/paint.png": b'opaque-original',
-                     "Vendor/secret-settings.bin": b'\\x00\\x01\\x02'}
+                     "Vendor/secret-settings.bin": b'\x00\x01\x02'}
             make(a, extra=extra)
             make(b, extra={**extra, "3D/Textures/paint.png": b'opaque-changed'})
             self.assertTrue(compare(a, b, 'metadata')['match'],
