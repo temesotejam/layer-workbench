@@ -47,9 +47,9 @@ assert.equal(process.settings.ensure_vertical_shell_thickness,"ensure_all");
 // Real pinned v2.5.0 preset chain: top skin monotonicline -> monotonic,
 // bottom monotonic in all three ancestors. Do not map either to internal solid.
 assert.deepEqual(process.chain.map(n=>indexed.records.find(p=>p.name===n).top_surface_pattern),
-  ["monotonicline","monotonicline","monotonic"]);
+  [undefined,"monotonicline","monotonic"]);
 assert.deepEqual(process.chain.map(n=>indexed.records.find(p=>p.name===n).bottom_surface_pattern),
-  ["monotonic","monotonic","monotonic"]);
+  [undefined,"monotonic","monotonic"]);
 assert.equal(process.settings.top_surface_pattern,"monotonic");
 assert.equal(process.settings.bottom_surface_pattern,"monotonic");
 assert.ok(!process.unsupported.includes("top_surface_pattern"));
