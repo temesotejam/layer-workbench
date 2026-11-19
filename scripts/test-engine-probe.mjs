@@ -1762,10 +1762,16 @@ try {
     assert.ok(slopeShellAudit.baseline.positive_e_xy_strokes_all_features>100 &&
       slopeShellAudit.candidate.positive_e_xy_strokes_all_features>100,
       'Both sloped geometry modes must generate genuine positive-E planar XY paths');
-    if (slopeShellAudit.result==='observed_internal_solid_stroke_signature_difference')
-      console.log('PASS: vertical shell enum changes tagged internal-solid XY strokes on the sloped sphere (not native parity)');
-    else
-      console.log('KNOWN GAP: sloped sphere vertical shell enum effect not confirmed; '+slopeShellAudit.result);
+    // The pinned candidate produced distinct, explicitly tagged internal
+    // solid deposition in both runs in the first accepted real Chrome job.
+    // Guard against regressions: no inconclusive green for this fixture.
+    assert.equal(slopeShellAudit.result,
+      'observed_internal_solid_stroke_signature_difference',
+      'Changing only vertical-shell mode must alter genuine internal-solid XY deposition: '+
+      JSON.stringify(slopeShellReport));
+    assert.ok(slopeShellAudit.changed_internal_solid_z_count>0,
+      'Expected at least one changed internal-solid Z stratum');
+    console.log('PASS: vertical shell enum changes tagged internal-solid XY strokes on the sloped sphere (not native parity)');
 
     const sphereSupportOff=await sliceRing('sphere-support-off.json',
       {...supportArchSettings,enable_support:'0'});
