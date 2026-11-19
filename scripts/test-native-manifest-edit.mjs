@@ -58,4 +58,41 @@ for (const [bad, error] of [
     ...original.instances[1],transform:{matrix:[0,0,0,175,0,0,0,90,0,0,1,0,0,0,0,1]}
   }]},/Singular/],
 ]) assert.throws(()=>editManifestInstanceTransform(bad,'first',changed),error);
-console.log('PASS: isolated manifest edit preserves legal shared-object/shared-mesh graphs and rejects orphan mesh/object/plate references and invalid sibling transforms');
+// Explicit byte-range validation must cover all meshes, even those not used by
+// the instance being edited. It must never rewrite or compact source ranges.
+const byteLength=684*2;
+const bounded=editManifestInstanceTransform(original,'second',changed,byteLength);
+assert.deepEqual(bounded.meshes,original.meshes);
+const sharedBytes=structuredClone(original);
+sharedBytes.meshes[1].dataRange={offset:0,length:684};
+assert.deepEqual(editManifestInstanceTransform(sharedBytes,'second',changed,byteLength).meshes,
+  sharedBytes.meshes,'valid shared byte ranges must be preserved');
+for (const range of [
+  {offset:-1,length:684},{offset:0.5,length:684},
+  {offset:0,length:0},{offset:0,length:'684'},
+  {offset:Number.MAX_SAFE_INTEGER,length:2},
+  null,
+]) {
+  const invalid=structuredClone(original);
+  invalid.meshes[1].dataRange=range;
+  assert.throws(()=>editManifestInstanceTransform(invalid,'first',changed,byteLength),
+    /mesh data range/,'reject bad ranges even on a different mesh');
+}
+const beyond=structuredClone(original);
+beyond.meshes[1].dataRange={offset:684,length:685};
+assert.throws(()=>editManifestInstanceTransform(beyond,'first',changed,byteLength),
+  /exceeds supplied blob/);
+assert.throws(()=>editManifestInstanceTransform(original,'first',changed,byteLength-1),
+  /exceeds supplied blob/);
+for (const size of [-1,0,1.5,'1368',80*1024*1024+1]) {
+  assert.throws(()=>editManifestInstanceTransform(original,'first',changed,size),
+    /mesh blob length/);
+}
+// Native readback may not expose raw buffer spans for imported objects; this
+// check is intentionally conditional and must not synthesize lost metadata.
+const readback=structuredClone(original);
+delete readback.meshes[1].dataRange;
+assert.equal(editManifestInstanceTransform(readback,'second',changed,byteLength).meshes[1].dataRange,
+  undefined);
+
+console.log('PASS: isolated manifest edit validates explicit bounded mesh ranges, preserves sharing, and rejects orphan graph references and invalid sibling transforms');
