@@ -58,8 +58,15 @@ unit tests also exclude nonplanar, zero-E, malformed and unrelated strokes.
 
 The CI-produced `parity-output/sphere-vertical-shell-mode-deposition.json`
 is diagnostic-only; it contains numeric summaries, no executable G-code
-or upstream profile files. When the two actual outputs do not show distinct
-tagged internal-solid strokes, the check logs an explicit **KNOWN GAP**
-rather than incorrectly asserting effect. A positive result establishes
-only a real WASM deposition change in this one geometry, not native
-v2.5.0 equivalence, full profile compatibility or printer safety.
+or upstream profile files. The first real [isolated Chrome run #44521913152](https://github.com/temesotejam/layer-workbench/actions/runs/44521913152)
+**PASS** observed an internal-solid stroke difference. For `none` vs
+`ensure_all`: tagged positive-E XY strokes were **60 vs 68**, total
+tagged XY length **20.79483 vs 20.75559 mm**, commanded filament E
+**0.86138 vs 0.84723 mm**. Distinct signed path signatures were found
+at Z=**0.45, 0.70, 19.70 mm**. The total *all-feature* deposited XY
+stroke counts were 4035 vs 4019. These data do **not** imply that
+`ensure_all` simply increases total material, because path routing and
+segmentation can change. Subsequent isolated Chrome runs enforce an
+explicit internal-solid stroke signature difference (not a header/hash
+difference) as a mandatory regression gate. No desktop v2.5.0 parity,
+full profile compatibility or printer safety is established.
