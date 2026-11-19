@@ -703,6 +703,76 @@ try {
     await uploadRawOrca();
     console.log('PASS: minimum top shell thickness changes actual isolated Chrome/WASM deposited XY toolpaths');
 
+    // The official CR-10 bottom_shell_thickness=0 means "no minimum floor",
+    // not "remove the bottom". Exercise the independent minimum explicitly
+    // with both solid-layer counts fixed to one and top thickness fixed at 0.
+    // Only deposited, planar, positive-E XY paths in the first 1.6 mm count;
+    // upper-layer differences or configuration/header echoes cannot pass.
+    rawOrca[4].top_shell_layers='1';
+    rawOrca[4].bottom_shell_layers='1';
+    rawOrca[4].top_shell_thickness='0';
+    rawOrca[4].sparse_infill_density='15%';
+    const bottomFloorOff=await sliceWithLineWidth('0','bottom_shell_thickness');
+    const bottomFloorOn=await sliceWithLineWidth('1.6','bottom_shell_thickness');
+    const bottomLayerStrokes=gcode=>{
+      const parsed=parseGcodeToolpaths(gcode);
+      assert.equal(parsed.skippedMalformedMotion,0,
+        'Bottom shell probe cannot ignore malformed motion');
+      assert.equal(parsed.skippedArcs,0,
+        'Bottom shell probe cannot silently ignore arc deposition');
+      const layers=new Map();
+      for(const layer of parsed.layers)for(const s of layer.segments){
+        if(!s.extrusion || !Number.isFinite(s.commandedPositiveEMm) ||
+          s.commandedPositiveEMm<=0 || !Number.isFinite(s.z1) ||
+          !Number.isFinite(s.z2) || Math.abs(s.z1-s.z2)>1e-6 ||
+          s.z2>1.600001 || ![s.x1,s.y1,s.x2,s.y2].every(Number.isFinite) ||
+          Math.hypot(s.x2-s.x1,s.y2-s.y1)<=1e-5)continue;
+        const z=Math.round(s.z2*1000)/1000;
+        const stroke=[s.feature||'(unlabelled)',s.x1,s.y1,s.x2,s.y2]
+          .map(v=>typeof v==='number'?Math.round(v*1000)/1000:v).join(',');
+        if(!layers.has(z))layers.set(z,[]);
+        layers.get(z).push(stroke);
+      }
+      return [...layers.entries()].sort((a,b)=>a[0]-b[0])
+        .map(([z,strokes])=>({z,strokes:strokes.sort()}));
+    };
+    const bottomOffLayers=bottomLayerStrokes(bottomFloorOff);
+    const bottomOnLayers=bottomLayerStrokes(bottomFloorOn);
+    const offCount=bottomOffLayers.reduce((n,l)=>n+l.strokes.length,0);
+    const onCount=bottomOnLayers.reduce((n,l)=>n+l.strokes.length,0);
+    assert.ok(bottomOffLayers.length>=4 && bottomOnLayers.length>=4 &&
+      offCount>100 && onCount>100,
+      'Both bottom shell slices need substantial real XY+E paths near the build plate');
+    const offByZ=new Map(bottomOffLayers.map(l=>[l.z,l.strokes]));
+    const onByZ=new Map(bottomOnLayers.map(l=>[l.z,l.strokes]));
+    const changedBottomZ=[...new Set([...offByZ.keys(),...onByZ.keys()])]
+      .sort((a,b)=>a-b).filter(z=>
+        JSON.stringify(offByZ.get(z)||[])!==JSON.stringify(onByZ.get(z)||[]));
+    const bottomShellReport={
+      fixture:'same two-STL localhost-only scene; generic test PLA',
+      changed_native_key:'bottom_shell_thickness',baseline_mm:0,candidate_mm:1.6,
+      fixed_top_shell_thickness_mm:0,fixed_top_shell_layers:1,
+      fixed_bottom_shell_layers:1,fixed_sparse_infill_density_percent:15,
+      inspected_deposition_z_max_mm:1.6,
+      baseline_inspected_layers:bottomOffLayers.length,
+      candidate_inspected_layers:bottomOnLayers.length,
+      baseline_positive_e_xy_strokes:offCount,
+      candidate_positive_e_xy_strokes:onCount,
+      changed_deposition_z_mm:changedBottomZ,
+      native_desktop_parity:false,print_safe:false,public_pages_enabled:false,
+    };
+    await writeFile(parityDir+'/bottom-shell-thickness-deposition.json',
+      JSON.stringify(bottomShellReport,null,2)+'\n');
+    console.log('BOTTOM_SHELL_THICKNESS_DEPOSITION '+JSON.stringify(bottomShellReport));
+    assert.ok(changedBottomZ.some(z=>z>0.300001 && z<=1.600001),
+      'Bottom thickness 0 -> 1.6 mm must change genuine XY+E paths ABOVE the first layer and near the bed: '+
+      JSON.stringify(bottomShellReport));
+    for(const key of ['bottom_shell_thickness','top_shell_thickness',
+      'top_shell_layers','bottom_shell_layers','sparse_infill_density'])
+      delete rawOrca[4][key];
+    await uploadRawOrca();
+    console.log('PASS: independent minimum bottom shell thickness changes deposited lower-layer XY paths');
+
     // The pinned 0.20mm CR-10 child specifies skirt_loops=2. On the same
     // two-STL isolated scene, compare actual G0/G1 paths with only skirt count
     // changed (0 -> 2). A settings echo, G-code comment or SHA is insufficient.

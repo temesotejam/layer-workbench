@@ -37,3 +37,26 @@ physical printing.
 machine+filament+process effective settings and source geometry between
 desktop native OrcaSlicer 2.5.0 and the browser WASM path, with
 quantitative breakdown by solid shell, sparse infill, skirt and Z layer.
+
+
+## 2026-11-19: bottom minimum thickness isolated-Chrome regression (candidate gate)
+
+The previous pinned-profile check established `bottom_shell_thickness=0`
+as the official CR-10 setting, but the real-browser test exercised only
+`top_shell_thickness`. This new localhost-only integration probe holds
+`top_shell_thickness=0`, both `*_shell_layers=1` and sparse infill
+density at 15% on the same two-STL scene, changing **only**
+`bottom_shell_thickness=0 → 1.6` mm. It parses actual G-code, rejects
+malformed motion and unmodelled arcs, and compares sorted, positive-E
+planar XY deposition strokes by Z within the lowest 1.6 mm.
+At least four deposited low-Z levels and 100 strokes per side are
+required; a genuine difference **above the first layer** must occur.
+Metadata-only changes, unsupported arcs, travel-only changes and changes
+confined to the top cannot qualify. Numeric evidence (no runnable G-code)
+is written to `parity-output/bottom-shell-thickness-deposition.json`.
+
+A **PASS of the isolated-Chrome workflow is required** before treating
+this as a demonstrated bottom-shell effect; editing this test alone is
+not success. This deliberately varies a development-only setting, not the
+pinned production recipe, and cannot establish native-vs-WASM full-profile
+G-code equivalence or printer safety. Public Pages WASM remains disabled.
