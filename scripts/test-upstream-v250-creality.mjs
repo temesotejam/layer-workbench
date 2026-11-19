@@ -132,6 +132,13 @@ assert.equal(process.settings.sparse_infill_pattern,"grid",
   "CR-10 0.20mm child must override inherited crosshatch with grid");
 assert.ok(!process.unsupported.includes("sparse_infill_pattern"),
   "Resolved native pattern must be forwarded rather than silently dropped");
+// Source-pinned 0.20mm CR-10 child explicitly chooses monotonic for the
+// INTERNAL SOLID area. Do not alias its setting to sparse or top surfaces.
+const cr10Child=indexed.records.find(p=>p.name==="0.20mm Standard @Creality CR-10 0.4 nozzle");
+assert.equal(cr10Child.internal_solid_infill_pattern,"monotonic");
+assert.equal(process.settings.internal_solid_infill_pattern,"monotonic");
+assert.equal(process.settings.sparse_infill_pattern,"grid");
+assert.ok(!process.unsupported.includes("internal_solid_infill_pattern"));
 
 assert.equal(indexed.records.find(p=>p.name==="fdm_process_common").initial_layer_speed,"20",
   "Pinned common process first-layer perimeter speed is 20mm/s");

@@ -1634,3 +1634,20 @@ observed-effect result is now an explicit assertion, not an optional
 green diagnostic. These are **commanded E-axis lengths**, not confirmed
 deposited polymer volume; the fixture G-code is not public, print-safe,
 or evidence of native desktop G-code parity.
+
+## 2026-11-19: pinned internal-solid infill monotonic enum (localhost only)
+
+The source-pinned OrcaSlicer v2.5.0 Creality CR-10 0.20mm Standard process
+explicitly sets `internal_solid_infill_pattern: "monotonic"`, independently
+of `sparse_infill_pattern: "grid"`. The limited local profile resolver and
+process override parser now allow **only** this observed internal-solid token;
+other strings, arrays and non-string values fail closed. Pinned upstream
+inheritance and process-override tests verify the distinct value, and an
+isolated Chrome test checks that a real WASM slice accepts the forwarded
+process option and emits motion paths.
+
+An accepted profile and nonempty G-code do **not** show identical internal
+solid infill trajectories or the same effective full profile as native
+OrcaSlicer. No engine binaries, start G-code, real printer integration or
+public Pages WASM enablement are changed. Full native/WASM parity and print
+safety remain unverified.

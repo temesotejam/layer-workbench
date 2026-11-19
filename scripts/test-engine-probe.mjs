@@ -627,6 +627,17 @@ try {
         await(await fetch(link.href)).text());
     };
 
+    // The official CR-10 0.20mm child uses monotonic for INTERNAL SOLID
+    // infill, not sparse grid or a surface pattern. Confirm that this exact
+    // new enum survives the localhost profile bridge and a real WASM slice.
+    // One accepted value is not evidence of an alternate pattern's geometry
+    // or native full-profile G-code parity.
+    const monotonicSolid=await sliceWithLineWidth('monotonic','internal_solid_infill_pattern');
+    assert.ok(motionOnly(monotonicSolid).length>100,
+      'Pinned monotonic internal solid infill profile produced no real motion');
+    delete rawOrca[4].internal_solid_infill_pattern;
+    console.log('PASS: source-pinned internal solid monotonic process option accepted by real WASM slice');
+
     // The pinned 0.20mm CR-10 child specifies skirt_loops=2. On the same
     // two-STL isolated scene, compare actual G0/G1 paths with only skirt count
     // changed (0 -> 2). A settings echo, G-code comment or SHA is insufficient.
