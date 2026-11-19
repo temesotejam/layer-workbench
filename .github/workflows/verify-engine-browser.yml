@@ -44,6 +44,8 @@ on:
       - "scripts/test-support-extrusion-diagnostic.mjs"
       - "scripts/vertical-shell-diagnostic.mjs"
       - "scripts/test-vertical-shell-diagnostic.mjs"
+      - "scripts/surface-skin-diagnostic.mjs"
+      - "scripts/test-surface-skin-diagnostic.mjs"
       - ".github/workflows/verify-engine-browser.yml"
   push:
     branches: [main]
@@ -101,6 +103,8 @@ on:
       - "scripts/test-support-extrusion-diagnostic.mjs"
       - "scripts/vertical-shell-diagnostic.mjs"
       - "scripts/test-vertical-shell-diagnostic.mjs"
+      - "scripts/surface-skin-diagnostic.mjs"
+      - "scripts/test-surface-skin-diagnostic.mjs"
       - "scripts/test-browser-3mf-roundtrip.mjs"
       - "scripts/test-browser-3mf-multiobject.mjs"
       - "scripts/three-mf-viewport-items.mjs"
@@ -166,6 +170,7 @@ jobs:
           node scripts/test-support-feature-diagnostic.mjs
           node scripts/test-support-extrusion-diagnostic.mjs
           node scripts/test-vertical-shell-diagnostic.mjs
+          node scripts/test-surface-skin-diagnostic.mjs
           node scripts/test-3mf-viewport-items.mjs
           node --check scripts/three-mf-viewport-items.mjs
           node --check scripts/gcode-3d-preview.mjs
