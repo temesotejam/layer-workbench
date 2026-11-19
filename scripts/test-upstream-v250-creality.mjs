@@ -37,6 +37,15 @@ console.log("PASS: pinned native CR-10 Z=0.28 prime lines explained; browser sta
 assert.equal(machine.settings.nozzle_diameter,"0.4");
 assert.equal(machine.settings.printable_height,"400");
 assert.equal(process.settings.layer_height,"0.2");
+// Official v2.5.0 CR-10 0.20mm child chooses the most extensive vertical
+// shell infill mode. Without this setting solid/bridge area parity is not
+// a controlled comparison, even if layer counts and thickness are equal.
+const verticalModeChain=process.chain.map(name=>
+  indexed.records.find(p=>p.name===name).ensure_vertical_shell_thickness);
+assert.deepEqual(verticalModeChain,[undefined,undefined,"ensure_all"]);
+assert.equal(process.settings.ensure_vertical_shell_thickness,"ensure_all");
+assert.ok(!process.unsupported.includes("ensure_vertical_shell_thickness"));
+console.log("PASS: pinned CR-10 vertical shell mode ensure_all resolved independently");
 assert.equal(process.settings.wall_loops,"2");
 assert.equal(indexed.records.find(p=>p.name==="fdm_process_creality_common").skirt_loops,"1",
   "Pinned Creality ancestor skirt count");

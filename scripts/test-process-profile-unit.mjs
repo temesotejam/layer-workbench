@@ -289,4 +289,18 @@ for(const key of ['top_shell_thickness','bottom_shell_thickness']) {
     assert.throws(()=>parseTestProcessOverrides({[key]:bad}),
       /Invalid|outside the safe test range/,'Rejected native thickness '+key);
 }
+// Native v2.5.0 maps vertical shell protection to FOUR enum wire tokens.
+for(const value of ['none','ensure_critical_only','ensure_moderate','ensure_all']) {
+  assert.deepEqual(parseTestProcessOverrides({ensure_vertical_shell_thickness:value}),
+    {ensure_vertical_shell_thickness:value});
+}
+assert.deepEqual(parseTestProcessOverrides({
+  ensure_vertical_shell_thickness:'ensure_all',top_shell_layers:'5',bottom_shell_layers:'4'
+}),{ensure_vertical_shell_thickness:'ensure_all',top_shell_layers:'5',bottom_shell_layers:'4'});
+for(const bad of ['All','critical only','1','0','', ['ensure_all'],
+  null,0,true,{},'__proto__']) {
+  assert.throws(()=>parseTestProcessOverrides({ensure_vertical_shell_thickness:bad}),
+    /native enum/,'Native vertical-shell protection must reject '+String(bad));
+}
+console.log('PASS: pinned ensure_vertical_shell_thickness enum tokens and fail-closed invalid modes');
 console.log('PASS: independent top/bottom native shell-thickness mm floats and fail-closed inputs');

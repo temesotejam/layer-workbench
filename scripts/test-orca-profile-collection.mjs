@@ -825,6 +825,31 @@ for(const bad of [-1,'360.01','45%',null,'auto',['30','45']])
 assert.equal(result.process.settings.infill_direction,undefined);
 console.log('PASS: bounded native infill_direction inheritance, angle and bad input rejection');
 
+// Pinned CR-10 child uses ensure_all independently of shell layer counts.
+// The source-pinned native PrintConfig.cpp defines exactly four wire tokens.
+const guardedProcess=profiles.map(p=>p.name==='fdm_process_common'
+  ? {...p,ensure_vertical_shell_thickness:'ensure_moderate'} :
+    p.name==='0.16mm Fine @TestPrinter'
+      ? {...p,ensure_vertical_shell_thickness:'ensure_all'} : p);
+const guardedResolved=resolve(guardedProcess,selection).process;
+assert.equal(guardedResolved.settings.ensure_vertical_shell_thickness,'ensure_all');
+assert.ok(!guardedResolved.unsupported.includes('ensure_vertical_shell_thickness'));
+assert.equal(resolve(guardedProcess.map(p=>{
+  if(p.name!=='0.16mm Fine @TestPrinter')return p;
+  const rec={...p};delete rec.ensure_vertical_shell_thickness;return rec;
+}),selection).process.settings.ensure_vertical_shell_thickness,'ensure_moderate');
+assert.equal(resolve(profiles,selection).process.settings.ensure_vertical_shell_thickness,undefined);
+for(const mode of ['none','ensure_critical_only','ensure_moderate','ensure_all'])
+  assert.equal(resolve(guardedProcess.map(p=>p.name==='0.16mm Fine @TestPrinter'
+    ? {...p,ensure_vertical_shell_thickness:mode}:p),selection)
+    .process.settings.ensure_vertical_shell_thickness,mode);
+for(const bad of ['all','critical only','1','0','',null,true,0,
+  ['ensure_all'],['ensure_all','none'],{}])
+  assert.throws(()=>resolve(guardedProcess.map(p=>p.name==='0.16mm Fine @TestPrinter'
+    ? {...p,ensure_vertical_shell_thickness:bad}:p),selection),
+    /Invalid native process enum/,'Invalid native vertical-shell enum must fail closed');
+console.log('PASS: vertical shell enum native inheritance, wire values and invalid rejection');
+
 // Real Orca schema has separate minimum shell thicknesses (mm), which
 // override zero or absent ancestors independently of shell layer counts.
 const shellThicknessParents=profiles.map(p=>p.name==='fdm_process_common'
