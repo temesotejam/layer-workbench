@@ -68,6 +68,56 @@ def canonical(path):
         commands.append((n, ' '.join(normalized)))
     return commands
 
+
+# Use a finite, source-informed tag vocabulary. A free-text comment or
+# unknown vendor label must never become a raw string in archived diagnostics.
+KNOWN_FEATURE_TAGS = frozenset((
+    'outer wall', 'inner wall', 'overhang wall', 'top surface',
+    'bottom surface', 'internal solid infill', 'solid infill',
+    'sparse infill', 'gap infill', 'bridge', 'external bridge',
+    'internal bridge', 'bridge infill', 'internal bridge infill',
+    'bridge over infill', 'skirt', 'brim', 'support', 'support interface',
+))
+FEATURE_DIRECTIVE = re.compile(r'^;\s*(?:TYPE|FEATURE)\s*:', re.I)
+FEATURE_VALUE = re.compile(r'^;\s*(?:TYPE|FEATURE)\s*:\s*([^;\r\n]{1,80})\s*$', re.I)
+
+
+def gcode_feature_context(path):
+    """Recognized explicit comment label per physical command line.
+
+    Malformed/unknown directives clear the old label rather than incorrectly
+    inheriting it. The comparator still ignores every comment for equality.
+    """
+    active = None
+    context = {}
+    for line_no, line in enumerate(
+            path.read_text(encoding='utf-8-sig', errors='strict').splitlines(), 1):
+        stripped = line.strip()
+        if FEATURE_DIRECTIVE.match(stripped):
+            tag = FEATURE_VALUE.fullmatch(stripped)
+            label = ' '.join(tag[1].lower().split()) if tag else None
+            active = label if label in KNOWN_FEATURE_TAGS else None
+        elif line.split(';', 1)[0].strip():
+            context[line_no] = active
+    return context
+
+
+def feature_deposition_summary(stats):
+    """Numeric planar positive-E G1 footprints; no raw G-code or unknown tags."""
+    return {
+        'known_tagged_moves': sum(v['moves'] for k, v in stats.items()
+                                  if k != 'unclassified'),
+        'unclassified_moves': stats.get('unclassified', {}).get('moves', 0),
+        'by_feature': {
+            key: {
+                'moves': value['moves'],
+                'linear_xy_mm': rounded_mm(value['xy']),
+                'positive_e_mm': format(value['e'].normalize(), 'f'),
+            }
+            for key, value in sorted(stats.items())
+        },
+    }
+
 MOTION = re.compile(r'^G0*[0123](?:\.0+)?$', re.I)
 
 def count_motion(commands):
@@ -109,7 +159,7 @@ def valid_g17_arc(start, end, words, units, absolute_arc_centers):
     return (math.isfinite(r0) and math.isfinite(r1) and r0 > 0
             and abs(r0 - r1) <= max(0.05, r0 * 0.001))
 
-def extrusion_move_metrics(commands):
+def extrusion_move_metrics(commands, feature_context=None, feature_stats=None):
     """Summarize positive E and G1 XY path length for fixture sanity.
 
     A present X/Y word alone does not prove movement: e.g. G1 X0 E1 at the
@@ -138,7 +188,7 @@ def extrusion_move_metrics(commands):
     units = Decimal(1)
     e_position = Decimal(0)
     xy = {'X': Decimal(0), 'Y': Decimal(0)}
-    for _, command in commands:
+    for line_no, command in commands:
         tokens = command.split()
         if tokens and re.fullmatch(r'N\d+', tokens[0], re.I):
             tokens = tokens[1:]
@@ -261,6 +311,13 @@ def extrusion_move_metrics(commands):
                 footprint['linear_moves'] += 1
                 footprint['linear_xy_mm'] += length
                 footprint['linear_positive_e_mm'] += delta
+                if feature_stats is not None:
+                    label = (feature_context or {}).get(line_no) or 'unclassified'
+                    entry = feature_stats.setdefault(
+                        label, {'moves': 0, 'xy': Decimal(0), 'e': Decimal(0)})
+                    entry['moves'] += 1
+                    entry['xy'] += length
+                    entry['e'] += delta
                 bounds = footprint['linear_xy_endpoint_bounds_mm']
                 for point in (start_xy, xy):
                     x, y = point['X'], point['Y']
@@ -374,6 +431,7 @@ def compare(native, wasm, min_extrusion_moves=0):
     if min_extrusion_moves < 0:
         raise ValueError('minimum extrusion moves must not be negative')
     a, b = canonical(native), canonical(wasm)
+    native_features, wasm_features = {}, {}
     differences = []
     mismatch_count = 0
     for i in range(max(len(a), len(b))):
@@ -388,9 +446,11 @@ def compare(native, wasm, min_extrusion_moves=0):
                 differences.append(entry)
     native_motion, wasm_motion = count_motion(a), count_motion(b)
     (native_extrusion, native_e_mm, native_linear_xy_mm, native_linear_moves,
-     native_layers, native_nonplanar, native_footprints) = extrusion_move_metrics(a)
+     native_layers, native_nonplanar, native_footprints) = extrusion_move_metrics(
+         a, gcode_feature_context(native), native_features)
     (wasm_extrusion, wasm_e_mm, wasm_linear_xy_mm, wasm_linear_moves,
-     wasm_layers, wasm_nonplanar, wasm_footprints) = extrusion_move_metrics(b)
+     wasm_layers, wasm_nonplanar, wasm_footprints) = extrusion_move_metrics(
+         b, gcode_feature_context(wasm), wasm_features)
     # Bounded, read-only per-Z differences: do not imply that a Z plane
     # represents a complete OrcaSlicer layer or deposited volume.
     planar_layer_differences = None
@@ -477,6 +537,17 @@ def compare(native, wasm, min_extrusion_moves=0):
             shared_z_footprint_difference_count,
         'first_shared_counted_planar_z_footprint_differences':
             shared_z_footprint_examples,
+        # Fixed-label, comment-attributed planar positive-E G1 footprint
+        # census. Tag discrepancies are diagnostic only, NOT parity gates.
+        'native_feature_tagged_planar_g1': None if native_layers is None
+            else feature_deposition_summary(native_features),
+        'wasm_feature_tagged_planar_g1': None if wasm_layers is None
+            else feature_deposition_summary(wasm_features),
+        'feature_category_differences': None if native_layers is None or wasm_layers is None
+            else sorted(
+                key for key in set(native_features) | set(wasm_features)
+                if native_features.get(key) != wasm_features.get(key)
+            ),
         'minimum_extrusion_moves': min_extrusion_moves,
         'input_issues': issues,
         'native_sha256': hashlib.sha256(native.read_bytes()).hexdigest(),

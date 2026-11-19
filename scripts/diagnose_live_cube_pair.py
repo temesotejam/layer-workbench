@@ -76,6 +76,10 @@ def diagnostic(native, wasm, wasm_summary, source_stl, minimum=100):
         # their positive-E move counts match). Still numeric-only.
         "shared_counted_planar_z_footprint_difference_count",
         "first_shared_counted_planar_z_footprint_differences",
+        # Only fixed known tag labels; metrics are for planar positive-E G1,
+        # not inferred full feature identity or physically extruded material.
+        "native_feature_tagged_planar_g1", "wasm_feature_tagged_planar_g1",
+        "feature_category_differences",
     )
     return {
         "status": "DIAGNOSTIC_ONLY",
