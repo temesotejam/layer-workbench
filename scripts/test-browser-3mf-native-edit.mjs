@@ -60,7 +60,7 @@ export async function checkNativeManifestEditRoundTrip(page, cubeBytes, outputDi
       // on the SECOND instance only. Expected X range: 145..175 mm.
       const edited=editManifestInstanceTransform(initial,'instance-1',[
         0,-1.5,0,175, 1,0,0,90, 0,0,1,0, 0,0,0,1
-      ]);
+      ],blob.byteLength);
       assert.deepEqual(edited.instances[0],initial.instances[0]);
       await session.setObjects(blob,edited);
       const applied=await session.getManifest();

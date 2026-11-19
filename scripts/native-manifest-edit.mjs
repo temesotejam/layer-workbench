@@ -30,10 +30,35 @@ function uniqueRecordIds(records, label) {
   }
   return ids;
 }
-export function editManifestInstanceTransform(manifest, instanceId, matrix) {
+
+// The raw STL bytes are supplied separately to setObjects(). A manifest-only
+// rewrite cannot prove the blob exists or decode it, but it can reject unsafe
+// offsets/lengths before the edit is reported as a valid project. Passing the
+// original blob length also checks that every explicit range fits that blob.
+// Native readback may omit dataRange for an already-imported mesh; do not
+// invent a range or silently pretend that such a mesh was validated.
+function validateMeshRanges(meshes, blobByteLength) {
+  if (blobByteLength !== undefined &&
+      (!Number.isSafeInteger(blobByteLength) || blobByteLength < 1 ||
+       blobByteLength > 80 * 1024 * 1024))
+    throw new Error('Invalid or excessive project mesh blob length');
+  for (const mesh of meshes) {
+    if (!Object.hasOwn(mesh, 'dataRange')) continue;
+    const range = mesh.dataRange;
+    if (!range || !Number.isSafeInteger(range.offset) || range.offset < 0 ||
+        !Number.isSafeInteger(range.length) || range.length < 1 ||
+        !Number.isSafeInteger(range.offset + range.length))
+      throw new Error('Malformed project mesh data range');
+    if (blobByteLength !== undefined && range.offset + range.length > blobByteLength)
+      throw new Error('Project mesh data range exceeds supplied blob');
+  }
+}
+
+export function editManifestInstanceTransform(manifest, instanceId, matrix, meshBlobByteLength) {
   if (!manifest || manifest.schemaVersion !== '0.7.0')
     throw new Error('Invalid v0.7.0 project manifest');
   const meshIds = uniqueRecordIds(manifest.meshes, 'meshes');
+  validateMeshRanges(manifest.meshes, meshBlobByteLength);
   const objectIds = uniqueRecordIds(manifest.objects, 'objects');
   const plateIds = uniqueRecordIds(manifest.plates, 'plates');
   const instanceIds = uniqueRecordIds(manifest.instances, 'instances');
