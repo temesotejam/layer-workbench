@@ -1624,8 +1624,13 @@ An observed effect requires internal-bridge deposition on **both** sides,
 decreased internal E, stable gross XY geometry, plus unchanged conventional
 bridge deposition geometry and E. If the arch does not produce explicitly
 tagged internal-bridge paths, the result is
-`inconclusive_no_tagged_internal_bridge` (not success). A passing
-workflow without an `observed_internal_bridge_flow_effect` result verifies
-**only** that the adapter was accepted and the diagnostic ran; it does not
-prove that this setting changes internal bridge material flow. The fixture
-G-code is not public, print-safe, or evidence of full native Orca parity.
+`inconclusive_no_tagged_internal_bridge` and the **browser CI fails**.
+The first [Chrome PR run #44448090200](https://github.com/temesotejam/layer-workbench/actions/runs/44448090200)
+measured 180 internal and 107 other-bridge G1 XY positive-E moves per run.
+Only `internal_bridge_flow` changed (1 → 0.55): internal positive E fell
+79.52954 → 43.74125 mm, while other-bridge E stayed at 32.85963 mm and
+both feature groups kept their measured XY length and bounds. The strict
+observed-effect result is now an explicit assertion, not an optional
+green diagnostic. These are **commanded E-axis lengths**, not confirmed
+deposited polymer volume; the fixture G-code is not public, print-safe,
+or evidence of native desktop G-code parity.
