@@ -60,6 +60,9 @@ const SPECS={
     // Source-pinned CR-10 v2.5.0 bridge_flow is a dimensionless extrusion
     // multiplier (0.95 in the child). No percent strings or vectors in lab.
     bridge_flow:[0.1,2],
+    // Pinned CR-10 v2.5.0 child explicitly sets internal_bridge_flow=1,
+    // separately from bridge_flow=0.95. Scalar, bounded, localhost only.
+    internal_bridge_flow:[0.1,2],
     // Source-pinned CR-10 v2.5.0 first-layer perimeter speed is 15 mm/s.
     // Percentages, relative expressions and multiple nozzle values fail closed.
     initial_layer_speed:[1,800],
