@@ -10,6 +10,7 @@ import {makeBridgeArchObj} from './bridge-arch-fixture.mjs';
 import {makeSupportSphereObj} from './support-sphere-fixture.mjs';
 import {auditVerticalShellDeposition} from './vertical-shell-diagnostic.mjs';
 import {auditSurfaceSkinPattern} from './surface-skin-diagnostic.mjs';
+import {compareFirstLayerTravelFeedrates} from './initial-layer-travel-diagnostic.mjs';
 import {makeParityCubeStl, PARITY_CUBE_STL_SHA256} from './parity-cube-fixture.mjs';
 import {auditWasmCubeDeposition} from './audit-wasm-cube-deposition.mjs';
 import {auditWasmSkirtDistance} from './audit-wasm-skirt-distance.mjs';
@@ -1195,19 +1196,29 @@ try {
     console.log('PASS: source-pinned initial_layer_speed 5 -> 15 changes real first-layer WASM extrusion feedrates',
       JSON.stringify({slowFirstFeeds,pinnedFirstFeeds}));
 
-    // Pinned Creality first-layer travel is 50% of travel_speed, not 50 mm/s.
-    // This is real isolated WASM acceptance only: generated deposition does
-    // not establish numeric travel-feed parity or printable G-code.
+    // Keep geometry and other process settings fixed; compare actual modal
+    // travel F at identical first-layer planar XY paths (not hash/comments).
+    rawOrca[4].travel_speed='80';
+    rawOrca[4].initial_layer_print_height='0.2';
     const relativeTravelCode=await sliceWithLineWidth('50%','initial_layer_travel_speed');
-    const relativeTravelPaths=parseGcodeToolpaths(relativeTravelCode);
-    assert.equal(relativeTravelPaths.skippedMalformedMotion,0,
-      'First-layer relative travel acceptance must not hide malformed motion');
-    assert.ok(relativeTravelPaths.layers.flatMap(l=>l.segments)
-      .some(s=>s.extrusion&&Math.hypot(s.x2-s.x1,s.y2-s.y1)>0.0001),
-      'Relative travel preset must be accepted while preserving actual deposition');
+    const fullTravelCode=await sliceWithLineWidth('100%','initial_layer_travel_speed');
+    const travelWitness=compareFirstLayerTravelFeedrates(
+      parseGcodeToolpaths(relativeTravelCode),parseGcodeToolpaths(fullTravelCode));
+    console.log('WASM_INITIAL_LAYER_TRAVEL_F '+JSON.stringify(travelWitness));
+    await writeFile(parityDir+'/first-layer-travel-feedrates.json',
+      JSON.stringify({fixture:'same two synthetic STL; travel_speed 80 mm/s',
+        percent_50:'50%',percent_100:'100%',...travelWitness},null,2)+'\n');
+    assert.ok(travelWitness.same_deposition_geometry,
+      'Speed-only A/B must preserve first-layer deposited geometry');
+    assert.ok(travelWitness.matched_travels>=2,
+      'Require paired first-layer XY travel, not metadata differences');
+    assert.ok(travelWitness.faster_at_100_percent>0,
+      '50% -> 100% did not increase actual first-layer travel modal F');
     delete rawOrca[4].initial_layer_travel_speed;
+    delete rawOrca[4].initial_layer_print_height;
+    delete rawOrca[4].travel_speed;
     await uploadRawOrca();
-    console.log('PASS: source-pinned first-layer travel 50% accepted by isolated WASM (travel F parity unproven)');
+    console.log('PASS: first-layer 50% vs 100% changes real isolated WASM commanded travel F (desktop parity unproven)');
 
     // Independent native first-layer infill speed (CR-10 20 mm/s) must
     // affect actual first-layer deposited feedrates while first-layer
