@@ -6,6 +6,7 @@ on:
     paths:
       - "scripts/native-manifest-edit.mjs"
       - "scripts/test-native-manifest-edit.mjs"
+      - "scripts/compare_3mf_metadata.py"
       - "scripts/test-browser-3mf-native-edit.mjs"
       - "scripts/test-candidate-browser-3mf.mjs"
       - "scripts/test-browser-3mf-private-instance-edit.mjs"
@@ -26,6 +27,7 @@ on:
       - "scripts/test-diagnose-in-session-3mf-reslice.mjs"
       - "scripts/native-manifest-edit.mjs"
       - "scripts/test-native-manifest-edit.mjs"
+      - "scripts/compare_3mf_metadata.py"
       - "scripts/test-browser-3mf-native-edit.mjs"
       - "scripts/test-browser-3mf-independent-core-import.mjs"
       - "scripts/make_3mf_two_build_fixture.py"
@@ -91,6 +93,15 @@ jobs:
             sleep 1
           done
           node scripts/test-candidate-browser-3mf.mjs
+          # Audit non-model/opaque ZIP entries independently of the surgical
+          # transform utility, while allowing the edited 3D model XML to differ.
+          for variant in edited-core-build rotated-core-build scaled-core-build; do
+            python3 scripts/compare_3mf_metadata.py \
+              --baseline parity-output/independent-core-two-build.3mf \
+              --candidate "parity-output/${variant}.3mf" \
+              --scope ancillary \
+              --report "parity-output/${variant}-ancillary-preservation.json"
+          done
           # Core input was generated independently of the WASM exporter.
           # The probe records unsupported imports separately from strict
           # accepted-candidate invariants, without claiming desktop parity.

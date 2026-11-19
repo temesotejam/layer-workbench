@@ -60,15 +60,24 @@ def inventory(path):
 
 
 def compare(baseline, candidate, scope="all"):
-    if scope not in ("all", "metadata"):
+    if scope not in ("all", "metadata", "ancillary"):
         raise ValueError("Invalid 3MF comparison scope")
     before, after = inventory(baseline), inventory(candidate)
-    select = lambda name: scope == "all" or name.startswith("Metadata/")
+    # Ancillary covers opaque vendor extensions, relationships and texture
+    # assets outside Metadata/ while excluding editable 3D model XML.
+    select = lambda name: (scope == "all" or
+        (scope == "metadata" and name.startswith("Metadata/")) or
+        (scope == "ancillary" and not
+         (name.startswith("3D/") and name.lower().endswith(".model"))))
     selected_before = {k: v for k, v in before.items() if select(k)}
     selected_after = {k: v for k, v in after.items() if select(k)}
     if not selected_before or not selected_after:
         raise ValueError("No selected 3MF members; refusing vacuous match")
     old, new = set(selected_before), set(selected_after)
+    # Every valid archive includes mandatory [Content_Types].xml. Matching
+    # that one file alone cannot prove ancillary/opaque member preservation.
+    if scope == "ancillary" and not ((old | new) - {"[Content_Types].xml"}):
+        raise ValueError("No ancillary 3MF members to compare")
     missing = sorted(old - new)
     added = sorted(new - old)
     changed = sorted(k for k in old & new if selected_before[k] != selected_after[k])
@@ -80,7 +89,7 @@ def compare(baseline, candidate, scope="all"):
         "changed": [{"path": k, "baseline_sha256": selected_before[k]["sha256"],
                      "candidate_sha256": selected_after[k]["sha256"]} for k in changed],
         "match": not (missing or added or changed),
-        "limitations": "Raw member-byte preservation only; metadata scope excludes model geometry, relationships and textures outside Metadata/. No native round-trip or print-safety certification."
+        "limitations": "Raw member-byte preservation only. Metadata scope checks Metadata/; ancillary scope checks non-model members including relationships, textures and vendor data, but excludes metadata embedded in 3D/*.model. No semantic equivalence, native round-trip or print-safety certification."
     }
 
 
@@ -88,7 +97,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--baseline", type=Path, required=True)
     parser.add_argument("--candidate", type=Path, required=True)
-    parser.add_argument("--scope", choices=("all", "metadata"), default="all")
+    parser.add_argument("--scope", choices=("all", "metadata", "ancillary"), default="all")
     parser.add_argument("--report", type=Path)
     args = parser.parse_args()
     try:
