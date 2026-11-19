@@ -154,6 +154,21 @@ console.log("PASS: selected restricted Orca process auto-applied once, bounded o
     assert.equal(applied.value[key],preset.process.settings[key]);
 }
 console.log('PASS: support width/body/interface settings reach mocked native-json applyProfile');
+// Verify that the separate internal-bridge ratio survives the final
+// restricted process parser and reaches the native-json API transport.
+{
+  const preset={...selected,process:{settings:{
+    ...selected.process.settings,bridge_flow:'0.95',internal_bridge_flow:'1'
+  }}};
+  const {engine,calls}=mockedEngine();
+  await sliceMultiStlWithEngine(engine,items,null,null,preset);
+  const applied=calls.find(c=>c.name==='applyProfile');
+  assert.equal(applied.format,'orca.native-json');
+  assert.equal(applied.value.bridge_flow,'0.95');
+  assert.equal(applied.value.internal_bridge_flow,'1');
+  assert.notEqual(applied.value.bridge_flow,applied.value.internal_bridge_flow);
+}
+console.log('PASS: independent internal bridge ratio reaches mocked native-json profile transport');
 
 // Source-pinned v2.5.0 PrintConfig registers "enable_support" as its native
 // boolean; "support_enable" in the OrcaWasm smoke is an unknown/ignored key.
