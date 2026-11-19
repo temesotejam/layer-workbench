@@ -9,6 +9,7 @@ import {makeGapRingObj} from './gap-ring-fixture.mjs';
 import {makeBridgeArchObj} from './bridge-arch-fixture.mjs';
 import {makeSupportSphereObj} from './support-sphere-fixture.mjs';
 import {auditVerticalShellDeposition} from './vertical-shell-diagnostic.mjs';
+import {auditSurfaceSkinPattern} from './surface-skin-diagnostic.mjs';
 import {makeParityCubeStl, PARITY_CUBE_STL_SHA256} from './parity-cube-fixture.mjs';
 import {auditWasmCubeDeposition} from './audit-wasm-cube-deposition.mjs';
 import {auditWasmSkirtDistance} from './audit-wasm-skirt-distance.mjs';
@@ -710,6 +711,39 @@ try {
       await uploadRawOrca();
     }
     console.log('PASS: native top/bottom surface skin pattern values accepted in real isolated WASM');
+    // Diagnostic follow-up: unlike the source-pinned ingestion test above,
+    // compare real tagged outer-skin positive-E XY paths on an IDENTICAL
+    // two-STL scene, changing exactly one enum at a time. Monotonic is the
+    // official CR-10 child token; rectilinear is another native coEnum token.
+    // Record a missing/no-change effect as inconclusive, never as a parity PASS.
+    for (const [surfaceKey,feature] of [
+      ['top_surface_pattern','top surface'],
+      ['bottom_surface_pattern','bottom surface'],
+    ]) {
+      const monotonic=await sliceWithLineWidth('monotonic',surfaceKey);
+      const rectilinear=await sliceWithLineWidth('rectilinear',surfaceKey);
+      const audit=auditSurfaceSkinPattern(
+        parseGcodeToolpaths(monotonic),parseGcodeToolpaths(rectilinear),feature);
+      assert.ok(audit.baseline.all_feature_positive_e_xy_strokes>100 &&
+        audit.candidate.all_feature_positive_e_xy_strokes>100,
+        surfaceKey+' A/B runs must both contain actual WASM planar positive-E XY motion');
+      const report={
+        fixture:'identical two STL objects, fixed other development-profile keys',
+        engine:'pinned v2.5.0 WASM; isolated localhost opt-in',
+        changed_native_key:surfaceKey,baseline:'monotonic',candidate:'rectilinear',
+        ...audit
+      };
+      await writeFile(parityDir+'/'+surfaceKey.replaceAll('_','-')+'-deposition.json',
+        JSON.stringify(report,null,2)+'\\n');
+      console.log('SURFACE_SKIN_PATTERN_DIAGNOSTIC '+JSON.stringify(report));
+      if(audit.result.startsWith('observed_'))
+        console.log('PASS: '+surfaceKey+' changes exact feature-tagged surface XY deposition: '+audit.result);
+      else
+        console.log('INCONCLUSIVE: '+surfaceKey+' A/B produced no confirmed tagged skin change: '+audit.result);
+      delete rawOrca[4][surfaceKey];
+      await uploadRawOrca();
+    }
+
 
     // Native 2.5.0 thickness settings are a minimum solid depth in mm,
     // independent of top/bottom solid-layer counts. Use one-layer shells
