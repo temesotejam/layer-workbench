@@ -516,3 +516,25 @@ raw tags, licensed profile data or G-code are archived by this helper.
 This report prioritizes settings parity work; it **does not** establish
 matching source format, effective full profiles, ordered G-code, desktop UI
 features or print safety. Public Pages still excludes the WASM candidate.
+
+
+## 2026-11-19: per-feature, exact-Z G1 deposition gap (read-only diagnostic)
+
+The comparator additionally groups **planar positive-E G1** deposition by
+(known feature tag, exact observed Z position) and records moves, signed
+WASM-minus-native XY path length, and commanded positive-E distance. It
+reports the **complete difference count** plus at most 15 examples, ranked
+by absolute XY length difference, then numeric Z, then audited tag label.
+This identifies which deposited heights account for a large category gap
+without inventing a native layer identity.
+
+G17 arcs (their swept length is not estimated), nonplanar extrusion, travel,
+and E-only priming are excluded from these per-Z straight-path counts.
+Malformed stateful commands produce null, never misleading zero differences.
+Unknown/invalid tags become `unclassified`; raw untrusted tag strings,
+G-code commands and proprietary profile content are not emitted in this
+new diagnostic summary. The existing native-vs-WASM cube diagnostic archives
+the same bounded metrics and keeps `parity_pass: false`, since the two
+effective profiles and source import paths remain unequal. Local-only
+verification does not certify full OrcaSlicer UI/3MF/G-code parity, machine
+safety, or authorize WASM activation on public Pages.
