@@ -120,3 +120,68 @@ export function auditBridgeSpeedSegments(baselineSegments,candidateSegments,targ
     printer_safe:false,
   };
 }
+
+// A strictly read-only flow probe for the *independent* native
+// internal_bridge_flow knob. A conventional Bridge/External bridge feature
+// is NOT evidence of internal bridge deposition. The caller must change
+// only internal_bridge_flow between otherwise identical real-engine slices.
+// Diagnostic-only: this is filament-axis E length, not melted volume.
+export function auditInternalBridgeFlowSegments(baselineSegments,candidateSegments) {
+  if(!Array.isArray(baselineSegments)||!Array.isArray(candidateSegments))
+    throw new Error("Invalid internal bridge flow inputs");
+  const INTERNAL=new Set(["internal bridge","internal bridge infill"]);
+  const EXTERNAL=new Set([...BRIDGE_FEATURES].filter(label=>!INTERNAL.has(label)));
+  const extract=(segments,labels)=>{
+    let count=0,e=0,length=0;
+    const b={minX:Infinity,maxX:-Infinity,minY:Infinity,maxY:-Infinity};
+    for(const s of segments){
+      if(!s||s.extrusion!==true||!labels.has(normalizeFeature(s.feature))||
+         !Number.isFinite(s.commandedPositiveEMm)||s.commandedPositiveEMm<=0||
+         ![s.x1,s.y1,s.x2,s.y2].every(Number.isFinite))continue;
+      const xy=Math.hypot(s.x2-s.x1,s.y2-s.y1);
+      if(!Number.isFinite(xy)||xy<=1e-9)continue;
+      count++;e+=s.commandedPositiveEMm;length+=xy;
+      b.minX=Math.min(b.minX,s.x1,s.x2);
+      b.maxX=Math.max(b.maxX,s.x1,s.x2);
+      b.minY=Math.min(b.minY,s.y1,s.y2);
+      b.maxY=Math.max(b.maxY,s.y1,s.y2);
+    }
+    const rounded=n=>Number(n.toFixed(6));
+    return {segments:count,positive_e_mm:rounded(e),xy_length_mm:rounded(length),
+      xy_bounds_mm:count?Object.fromEntries(Object.entries(b).map(([k,v])=>[k,rounded(v)])):null};
+  };
+  const baseline={internal:extract(baselineSegments,INTERNAL),
+    other_bridge:extract(baselineSegments,EXTERNAL)};
+  const candidate={internal:extract(candidateSegments,INTERNAL),
+    other_bridge:extract(candidateSegments,EXTERNAL)};
+  const sameGeometry=(a,b)=>a.segments>0&&b.segments>0&&
+    Math.abs(a.xy_length_mm-b.xy_length_mm)<=0.01&&
+    ["minX","maxX","minY","maxY"].every(axis=>
+      Math.abs(a.xy_bounds_mm[axis]-b.xy_bounds_mm[axis])<=0.01);
+  const internalGeometryStable=sameGeometry(baseline.internal,candidate.internal);
+  const externalGeometryStable=sameGeometry(baseline.other_bridge,candidate.other_bridge);
+  const externalEStable=baseline.other_bridge.positive_e_mm>0&&
+    Math.abs(candidate.other_bridge.positive_e_mm-baseline.other_bridge.positive_e_mm)
+       <=Math.max(0.02,baseline.other_bridge.positive_e_mm*0.025);
+  const internalEDecreased=baseline.internal.positive_e_mm>0&&
+    candidate.internal.positive_e_mm>0&&
+    candidate.internal.positive_e_mm<baseline.internal.positive_e_mm*0.95;
+  const observed=internalGeometryStable&&externalGeometryStable&&
+    externalEStable&&internalEDecreased;
+  const result=observed?"observed_internal_bridge_flow_effect":
+    !baseline.internal.segments||!candidate.internal.segments?
+      "inconclusive_no_tagged_internal_bridge":
+    !baseline.other_bridge.segments||!candidate.other_bridge.segments?
+      "inconclusive_no_external_bridge_control":
+    !internalGeometryStable||!externalGeometryStable?
+      "bridge_geometry_changed_flow_unverified":
+    !externalEStable?"external_bridge_flow_changed_control_failed":
+      "internal_bridge_flow_effect_unverified";
+  return {result,baseline,candidate,
+    internal_geometry_stable:internalGeometryStable,
+    external_bridge_geometry_stable:externalGeometryStable,
+    external_bridge_e_stable:externalEStable,
+    internal_positive_e_decreased:internalEDecreased,
+    measured_subset:"explicit feature-tagged linear positive-E XY G1 preview segments only",
+    native_desktop_parity:false,printer_safe:false,public_pages_enabled:false};
+}
