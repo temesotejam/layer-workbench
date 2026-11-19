@@ -606,5 +606,34 @@ class ComparatorTests(unittest.TestCase):
         self.assertIsNone(report['feature_category_differences'])
 
 
+
+    def test_feature_category_deltas_are_signed_and_ranked_by_xy_gap(self):
+        native = ('M83\\n;TYPE:Outer wall\\nG1 X3 Y4 E1\\n'
+                  ';TYPE:Sparse infill\\nG1 X6 Y8 E2\\n')
+        wasm = ('M83\\n;TYPE:Outer wall\\nG1 X6 Y8 E1.5\\n'
+                ';TYPE:Inner wall\\nG1 X9 Y12 E1\\n')
+        report = self.run_compare(native, wasm, min_extrusion_moves=2)
+        self.assertFalse(report['match'])
+        rows = report['feature_category_deltas']
+        self.assertEqual([r['feature'] for r in rows],
+                         ['outer wall', 'inner wall', 'sparse infill'])
+        by_tag = {r['feature']: r for r in rows}
+        self.assertEqual(by_tag['outer wall']['wasm_minus_native_linear_xy_mm'], '5')
+        self.assertEqual(by_tag['outer wall']['wasm_minus_native_positive_e_mm'], '0.5')
+        self.assertEqual(by_tag['outer wall']['wasm_minus_native_moves'], 0)
+        self.assertEqual(by_tag['inner wall']['native_moves'], 0)
+        self.assertEqual(by_tag['inner wall']['wasm_minus_native_linear_xy_mm'], '5')
+        self.assertEqual(by_tag['sparse infill']['wasm_moves'], 0)
+        self.assertEqual(by_tag['sparse infill']['wasm_minus_native_linear_xy_mm'], '-5')
+        self.assertEqual(by_tag['sparse infill']['wasm_minus_native_positive_e_mm'], '-2')
+        self.assertEqual(self.run_compare(native, native)['feature_category_deltas'], [])
+
+    def test_feature_category_deltas_are_unknown_for_invalid_stateful_gcode(self):
+        bad = 'M83\\n;TYPE:Inner wall\\nG1 X1 X2 E1\\n'
+        report = self.run_compare(bad, bad)
+        self.assertIsNone(report['feature_category_deltas'])
+        self.assertFalse(report['match'])
+
+
 if __name__ == '__main__':
     unittest.main()
