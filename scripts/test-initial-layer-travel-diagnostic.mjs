@@ -12,18 +12,18 @@ const parsed=(a,b,c)=>parseGcodeToolpaths(sample(a,b,c));
 const result=compareFirstLayerTravelFeedrates(parsed(2400,3600,0),parsed(4800,3600,0));
 assert.equal(result.first_deposition_z_mm,0.2);
 assert.equal(result.same_deposition_geometry,true);
-assert.equal(result.matched_travels,2);
+assert.equal(result.matched_travels,3);
 assert.equal(result.changed_travels,2);
 assert.equal(result.near_double_f_strokes,2);
-assert.deepEqual(result.f50_unique_mm_min,[2400]);
-assert.deepEqual(result.f100_unique_mm_min,[4800]);
+assert.deepEqual(result.f50_unique_mm_min,[1200,2400]);
+assert.deepEqual(result.f100_unique_mm_min,[1200,4800]);
 assert.equal(result.printer_ready,false);
 assert.equal(compareFirstLayerTravelFeedrates(
   parsed(2400,3600,0),parsed(2400,7200,0)).changed_travels,0,
   'Changed second-layer F is not first-layer evidence');
 const geometry=compareFirstLayerTravelFeedrates(parsed(2400,3600,0),parsed(4800,3600,0.1));
 assert.equal(geometry.same_deposition_geometry,false);
-assert.equal(geometry.matched_travels,1);
+assert.equal(geometry.matched_travels,2);
 assert.throws(()=>compareFirstLayerTravelFeedrates(
   {...parsed(2400,3600,0),skippedMalformedMotion:1},parsed(4800,3600,0)),/skipped/);
 assert.throws(()=>compareFirstLayerTravelFeedrates(
