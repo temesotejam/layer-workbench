@@ -11,7 +11,7 @@ import {makeSupportSphereObj} from './support-sphere-fixture.mjs';
 import {makeParityCubeStl, PARITY_CUBE_STL_SHA256} from './parity-cube-fixture.mjs';
 import {auditWasmCubeDeposition} from './audit-wasm-cube-deposition.mjs';
 import {auditWasmSkirtDistance} from './audit-wasm-skirt-distance.mjs';
-import {auditBridgeSpeedSegments} from './bridge-feature-diagnostic.mjs';
+import {auditBridgeSpeedSegments,auditInternalBridgeFlowSegments} from './bridge-feature-diagnostic.mjs';
 import {auditSupportDeposition,auditSupportSpeedEffect} from './support-feature-diagnostic.mjs';
 import {auditSupportWidthEffect} from './support-extrusion-diagnostic.mjs';
 import {checkBrowser3mfRoundTrip} from './test-browser-3mf-roundtrip.mjs';
@@ -1481,6 +1481,36 @@ try {
       JSON.stringify({baselineBridgeESum,reducedBridgeESum,
         baselineTaggedSegments:baselineBridgeE.length,
         candidateTaggedSegments:reducedBridgeE.length}));
+
+
+    // Internal bridging is a distinct native flow option. Probe two
+    // identical actual Chrome/WASM arch slices with explicit fixed regular
+    // bridge_flow=0.95 and only internal_bridge_flow changed (1 -> 0.55).
+    // The arch may have *no* internal-bridge deposition: record that as
+    // inconclusive, never as a PASS on conventional Bridge paths.
+    const internalFlowSettings={...bridgeSettings,bridge_flow:0.95};
+    const internalFlowBase=await sliceRing('bridge-arch-internal-flow-100.json',
+      {...internalFlowSettings,internal_bridge_flow:1});
+    const internalFlowReduced=await sliceRing('bridge-arch-internal-flow-055.json',
+      {...internalFlowSettings,internal_bridge_flow:0.55});
+    const internalFlowReport={
+      fixture:'same watertight 40x20x15 mm arch (localhost only)',
+      changed_native_key:'internal_bridge_flow',
+      baseline_multiplier:1,candidate_multiplier:0.55,
+      fixed_bridge_flow:0.95,
+      ...auditInternalBridgeFlowSegments(
+        allSegments(parseGcodeToolpaths(internalFlowBase)),
+        allSegments(parseGcodeToolpaths(internalFlowReduced))),
+    };
+    await writeFile(parityDir+'/bridge-arch-internal-flow-diagnostic.json',
+      JSON.stringify(internalFlowReport,null,2)+'\n');
+    console.log('INTERNAL_BRIDGE_FLOW_DIAGNOSTIC '+JSON.stringify(internalFlowReport));
+    if(internalFlowReport.result==='observed_internal_bridge_flow_effect'){
+      console.log('PASS: actual tagged internal bridge E decreases while external bridge control remains stable');
+    }else{
+      console.log('KNOWN GAP: internal_bridge_flow real effect NOT established: '+
+        internalFlowReport.result);
+    }
 
     // A first REAL positive support-generation gate. This is an explicitly
     // opted-in native enable_support=1 on the isolated localhost fixture,
