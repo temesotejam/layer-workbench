@@ -319,3 +319,14 @@ for(const key of ["top_surface_pattern","bottom_surface_pattern"]){
 }
 assert.equal(parseTestProcessOverrides({top_surface_pattern:"monotonic"}).bottom_surface_pattern,undefined);
 console.log("PASS: independent source-pinned top/bottom surface patterns reject unverified tokens");
+
+// Source-pinned CR-10 v2.5.0 uses relative first-layer travel: 50% of
+// travel_speed. Never coerce percentage input to a 50 mm/s absolute speed.
+assert.deepEqual(parseTestProcessOverrides({travel_speed:'200',initial_layer_travel_speed:'50%'}),
+  {travel_speed:'200',initial_layer_travel_speed:'50%'});
+assert.equal(parseTestProcessOverrides({initial_layer_travel_speed:' 75.0% '}).initial_layer_travel_speed,'75%');
+assert.equal(parseTestProcessOverrides({initial_layer_travel_speed:'120'}).initial_layer_travel_speed,'120');
+for (const bad of ['0%','201%','-20%','50%%','50% G28','auto',[],['50%'],null,0,1501,Infinity])
+  assert.throws(()=>parseTestProcessOverrides({initial_layer_travel_speed:bad}),
+    /Invalid|outside the safe test range/,String(bad));
+console.log('PASS: relative first-layer travel percent is preserved, bounded and independent of absolute speed');

@@ -905,3 +905,22 @@ for(const key of ["top_surface_pattern","bottom_surface_pattern"]){
     ],"process","Bad Skin"),/native process enum/,key+" rejects "+String(bad));
 }
 console.log("PASS: independent top/bottom surface pattern inheritance and fail-closed native enums");
+
+// Pinned v2.5.0 first-layer travel is a native coFloatOrPercent, not mm/s.
+// Validate both child precedence and parent inheritance without changing units.
+const relativeTravelProfiles=profiles.map(rec=>rec.name==='fdm_process_common'
+  ? {...rec,travel_speed:'200',initial_layer_travel_speed:'125%'}
+  :rec.name==='0.16mm Fine @TestPrinter'
+    ? {...rec,initial_layer_travel_speed:['50%']}:rec);
+assert.equal(resolve(relativeTravelProfiles,selection).process.settings.initial_layer_travel_speed,'50%');
+const travelInherited=relativeTravelProfiles.map(rec=>{
+  if(rec.name!=='0.16mm Fine @TestPrinter')return rec;
+  const child={...rec};delete child.initial_layer_travel_speed;return child;
+});
+assert.equal(resolve(travelInherited,selection).process.settings.initial_layer_travel_speed,'125%');
+assert.equal(resolve(relativeTravelProfiles,selection).process.settings.travel_speed,'200');
+for(const bad of ['0%','201%','50%%','auto',null,0,1501,['50%','60%'],{},'50% G28'])
+  assert.throws(()=>resolve(relativeTravelProfiles.map(rec=>rec.name==='0.16mm Fine @TestPrinter'
+    ? {...rec,initial_layer_travel_speed:bad}:rec),selection),
+    /Invalid|Multi-extruder|test limits/,String(bad));
+console.log('PASS: native first-layer travel percent is preserved with single-slot inheritance and invalid values rejected');

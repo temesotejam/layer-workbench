@@ -75,6 +75,9 @@ const SPECS={
     // 20 mm/s, distinct from the first-layer perimeter 15 mm/s.
     // Bounded absolute scalar only; no % or multi-nozzle inference.
     initial_layer_infill_speed:[1,800],
+    // Native coFloatOrPercent: retain exact first-layer travel % relative to
+    // travel_speed rather than turning 50% into 50 mm/s. Localhost only.
+    initial_layer_travel_speed:[1,1500],
     // Source-pinned CR-10 support width and independent body/interface speeds.
     // Localhost diagnostic only: support enablement is NOT permitted.
     support_line_width:[0.1,2],support_speed:[1,800],
@@ -138,6 +141,14 @@ function validateNum(key,raw,limits){
   if(typeof raw!=='number'&&typeof raw!=='string')throw new Error('Invalid value for '+key);
   // OrcaSlicer ships infill density as e.g. "15%", unlike the test bridge's
   // canonical numeric percentage. Strip '%' ONLY for the documented field.
+  if(typeof raw==='string'&&key==='initial_layer_travel_speed'){
+    const percent=/^\s*(\d+(?:\.\d+)?)%\s*$/.exec(raw);
+    if(percent){
+      const n=Number(percent[1]);
+      if(!Number.isFinite(n)||n<1||n>200)throw new Error('Setting out of test limits: '+key);
+      return String(n)+'%';
+    }
+  }
   if(typeof raw==='string'&&key==='sparse_infill_density'&&/^\s*\d+(?:\.\d+)?%\s*$/.test(raw))
     raw=raw.trim().slice(0,-1);
   if(typeof raw==='string'&&!/^\s*\d+(?:\.\d+)?\s*$/.test(raw))throw new Error('Invalid numeric value for '+key);
