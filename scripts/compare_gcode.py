@@ -118,6 +118,31 @@ def feature_deposition_summary(stats):
         },
     }
 
+
+def feature_deposition_deltas(native, wasm):
+    """Signed WASM-minus-native feature differences, largest XY gap first.
+
+    Keys come solely from the bounded, verified comment-tag vocabulary or
+    'unclassified'. Missing tags count as zero *observed tagged moves*, not
+    proof that a physical feature is absent from the model.
+    """
+    zero = {'moves': 0, 'xy': Decimal(0), 'e': Decimal(0)}
+    changed = []
+    for label in sorted(set(native) | set(wasm)):
+        a, b = native.get(label, zero), wasm.get(label, zero)
+        if a != b:
+            changed.append((abs(b['xy'] - a['xy']), label, a, b))
+    changed.sort(key=lambda item: (-item[0], item[1]))
+    return [{
+        'feature': label,
+        'native_moves': a['moves'],
+        'wasm_moves': b['moves'],
+        'wasm_minus_native_moves': b['moves'] - a['moves'],
+        'wasm_minus_native_linear_xy_mm': rounded_mm(b['xy'] - a['xy']),
+        'wasm_minus_native_positive_e_mm':
+            format((b['e'] - a['e']).normalize(), 'f'),
+    } for _, label, a, b in changed]
+
 MOTION = re.compile(r'^G0*[0123](?:\.0+)?$', re.I)
 
 def count_motion(commands):
@@ -548,6 +573,11 @@ def compare(native, wasm, min_extrusion_moves=0):
                 key for key in set(native_features) | set(wasm_features)
                 if native_features.get(key) != wasm_features.get(key)
             ),
+        # Signed category deltas are intentionally diagnostic-only. Ranked
+        # by absolute XY difference to prioritize further profile audits.
+        # No untrusted comment labels or executable G-code are included.
+        'feature_category_deltas': None if native_layers is None or wasm_layers is None
+            else feature_deposition_deltas(native_features, wasm_features),
         'minimum_extrusion_moves': min_extrusion_moves,
         'input_issues': issues,
         'native_sha256': hashlib.sha256(native.read_bytes()).hexdigest(),
