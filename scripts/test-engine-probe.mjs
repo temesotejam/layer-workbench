@@ -8,6 +8,7 @@ import {parseGcodeToolpaths} from './gcode-preview-parser.mjs';
 import {makeGapRingObj} from './gap-ring-fixture.mjs';
 import {makeBridgeArchObj} from './bridge-arch-fixture.mjs';
 import {makeSupportSphereObj} from './support-sphere-fixture.mjs';
+import {auditVerticalShellDeposition} from './vertical-shell-diagnostic.mjs';
 import {makeParityCubeStl, PARITY_CUBE_STL_SHA256} from './parity-cube-fixture.mjs';
 import {auditWasmCubeDeposition} from './audit-wasm-cube-deposition.mjs';
 import {auditWasmSkirtDistance} from './audit-wasm-skirt-distance.mjs';
@@ -1724,6 +1725,54 @@ try {
       buffer:Buffer.from(makeSupportSphereObj()),
     });
     await prepare.locator('#object-count').getByText('1 object').waitFor({timeout:30000});
+    // Previously ensure_all only proved profile acceptance on two cubes.
+    // The sphere has real sloped sidewalls. Hold the same geometry and all
+    // process values fixed, varying ONLY the pinned native vertical-shell
+    // enum. Compare explicit internal-solid tagged positive-E planar XY lines,
+    // never a changed header, total G-code hash or unrelated wall feature.
+    // A lack of an observed path difference is an INCONCLUSIVE measurement,
+    // not an invented pass; the geometry may not trigger this native mode.
+    const slopeShellSettings={
+      ...supportArchSettings,enable_support:'0',
+      top_shell_layers:1,bottom_shell_layers:1,
+      top_shell_thickness:0,bottom_shell_thickness:0,
+      sparse_infill_density:15,
+    };
+    const slopeNoEnsure=await sliceRing('sphere-vertical-shell-none.json',
+      {...slopeShellSettings,ensure_vertical_shell_thickness:'none'});
+    const slopeEnsureAll=await sliceRing('sphere-vertical-shell-all.json',
+      {...slopeShellSettings,ensure_vertical_shell_thickness:'ensure_all'});
+    const slopeShellAudit=auditVerticalShellDeposition(
+      parseGcodeToolpaths(slopeNoEnsure),parseGcodeToolpaths(slopeEnsureAll));
+    const slopeShellReport={
+      fixture:'unchanged watertight sloped 20 mm low-poly sphere OBJ, single plate',
+      engine:'pinned v2.5.0 WASM; isolated localhost opt-in',
+      changed_native_key:'ensure_vertical_shell_thickness',
+      baseline:'none',candidate:'ensure_all',
+      fixed_process:{
+        enable_support:'0',top_shell_layers:1,bottom_shell_layers:1,
+        top_shell_thickness_mm:0,bottom_shell_thickness_mm:0,
+        sparse_infill_density_percent:15,
+      },
+      ...slopeShellAudit,
+    };
+    await writeFile(parityDir+'/sphere-vertical-shell-mode-deposition.json',
+      JSON.stringify(slopeShellReport,null,2)+'\n');
+    console.log('VERTICAL_SHELL_SLOPE_DIAGNOSTIC '+JSON.stringify(slopeShellReport));
+    assert.ok(slopeShellAudit.baseline.positive_e_xy_strokes_all_features>100 &&
+      slopeShellAudit.candidate.positive_e_xy_strokes_all_features>100,
+      'Both sloped geometry modes must generate genuine positive-E planar XY paths');
+    // The pinned candidate produced distinct, explicitly tagged internal
+    // solid deposition in both runs in the first accepted real Chrome job.
+    // Guard against regressions: no inconclusive green for this fixture.
+    assert.equal(slopeShellAudit.result,
+      'observed_internal_solid_stroke_signature_difference',
+      'Changing only vertical-shell mode must alter genuine internal-solid XY deposition: '+
+      JSON.stringify(slopeShellReport));
+    assert.ok(slopeShellAudit.changed_internal_solid_z_count>0,
+      'Expected at least one changed internal-solid Z stratum');
+    console.log('PASS: vertical shell enum changes tagged internal-solid XY strokes on the sloped sphere (not native parity)');
+
     const sphereSupportOff=await sliceRing('sphere-support-off.json',
       {...supportArchSettings,enable_support:'0'});
     const sphereSupportOn=await sliceRing('sphere-support-on.json',

@@ -35,3 +35,38 @@ Public Pages, published engine binaries, real machine settings, printers
 and executable start/end G-code are unchanged. No output is certified for
 physical printing. This is only a source-pinned test bridge, not OrcaSlicer
 v2.5.0 feature or visual parity.
+
+
+## 2026-11-19: real sloped-geometry mode comparison (experimental)
+
+The opt-in isolated Chrome test now uses the already audited low-poly
+sphere OBJ, a true sloped-wall geometry rather than the earlier pair of cubes.
+It slices the **same mesh twice** with identical bounded diagnostic settings
+(layer height 0.25 mm; wall loops 2; density 15%; one top/one bottom shell;
+minimum shell thicknesses 0; support disabled). Only
+`ensure_vertical_shell_thickness` changes from `none` to `ensure_all`.
+
+`scripts/vertical-shell-diagnostic.mjs` inspects only explicit
+`internal solid infill` feature-tagged *positive-E, planar XY deposition*
+from the actual WASM G-code parser. It reports counts, deposited XY length,
+commanded E length and changed Z positions using order/direction-invariant,
+0.001 mm-rounded stroke signatures. This identifies potential changes to
+path geometry **or segmentation**; it is not an equal-extrusion/semantic
+equivalence check. Other features, altered headers, and a changed G-code
+hash cannot be counted as a positive shell-response witness. The synthetic
+unit tests also exclude nonplanar, zero-E, malformed and unrelated strokes.
+
+The CI-produced `parity-output/sphere-vertical-shell-mode-deposition.json`
+is diagnostic-only; it contains numeric summaries, no executable G-code
+or upstream profile files. The first real [isolated Chrome run #44521913152](https://github.com/temesotejam/layer-workbench/actions/runs/44521913152)
+**PASS** observed an internal-solid stroke difference. For `none` vs
+`ensure_all`: tagged positive-E XY strokes were **60 vs 68**, total
+tagged XY length **20.79483 vs 20.75559 mm**, commanded filament E
+**0.86138 vs 0.84723 mm**. Distinct signed path signatures were found
+at Z=**0.45, 0.70, 19.70 mm**. The total *all-feature* deposited XY
+stroke counts were 4035 vs 4019. These data do **not** imply that
+`ensure_all` simply increases total material, because path routing and
+segmentation can change. Subsequent isolated Chrome runs enforce an
+explicit internal-solid stroke signature difference (not a header/hash
+difference) as a mandatory regression gate. No desktop v2.5.0 parity,
+full profile compatibility or printer safety is established.
