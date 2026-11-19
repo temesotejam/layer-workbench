@@ -85,9 +85,10 @@ const ENUMS = Object.freeze({
   // Exact values inspected in the source-pinned Creality v2.5.0 chain.
   // Not an arbitrary native fill-pattern allow-list.
   sparse_infill_pattern: new Set(["grid","crosshatch"]),
-  // The source-pinned CR-10 0.20mm child uses this independent native enum.
-  // Only that observed wire token is permitted in the isolated engine lab.
-  internal_solid_infill_pattern: new Set(["monotonic"]),
+  // Pinned CR-10 child uses monotonic; source-pinned v2.5.0 PrintConfig.cpp
+  // also lists rectilinear in def_top_fill_pattern used for this coEnum.
+  // Only these exact audited tokens enter the isolated localhost lab.
+  internal_solid_infill_pattern: new Set(["monotonic","rectilinear"]),
   // Explicit, bounded opt-in for support-generation evidence on the localhost
   // COOP/COEP diagnostic page only. Native v2.5.0 stores this bool as "0"/"1".
   // Never infer "1" from a manufacturer profile or deploy this test path on Pages.

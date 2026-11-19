@@ -135,11 +135,14 @@ for(const bad of ["Grid","gyroid","rectilinear","",["grid"],null,1,"__proto__"])
 assert.deepEqual(parseTestProcessOverrides({
   sparse_infill_pattern:"grid",internal_solid_infill_pattern:"monotonic"
 }),{sparse_infill_pattern:"grid",internal_solid_infill_pattern:"monotonic"});
-for(const bad of ["Monotonic","grid","rectilinear","",["monotonic"],null,0,"__proto__"]) {
+assert.deepEqual(parseTestProcessOverrides({
+  sparse_infill_pattern:"grid",internal_solid_infill_pattern:"rectilinear"
+}),{sparse_infill_pattern:"grid",internal_solid_infill_pattern:"rectilinear"});
+for(const bad of ["Monotonic","grid","zig-zag","",["monotonic"],null,0,"__proto__"]) {
   assert.throws(()=>parseTestProcessOverrides({internal_solid_infill_pattern:bad}),
     /native enum/,"Unverified internal solid infill pattern must fail closed: "+String(bad));
 }
-console.log("PASS: source-pinned internal solid monotonic is independent of sparse fill");
+console.log("PASS: source-pinned internal solid monotonic/rectilinear are independent of sparse fill");
 console.log("PASS: exact pinned grid/crosshatch infill tokens accepted; unverified pattern values refused");
 console.log("PASS: exact classic/arachne and everywhere/topbottom/nowhere native process enums; malformed values fail closed");
 

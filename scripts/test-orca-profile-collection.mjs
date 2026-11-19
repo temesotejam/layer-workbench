@@ -556,11 +556,18 @@ assert.equal(solidPattern.settings.internal_solid_infill_pattern,"monotonic");
 assert.equal(solidPattern.settings.sparse_infill_pattern,"grid");
 assert.ok(!solidPattern.unsupported.includes("internal_solid_infill_pattern"));
 assert.equal(resolve(fillChild,selection).process.settings.internal_solid_infill_pattern,undefined);
-for(const bad of ["Monotonic","grid","rectilinear","",["monotonic"],null,0]) {
+// PrintConfig.cpp at the pinned native commit explicitly enumerates
+// rectilinear as another valid internal solid pattern, not as sparse fill.
+const solidRectilinear=resolve(solidPatternProfiles.map(p=>
+  p.name==="0.16mm Fine @TestPrinter"
+    ? {...p,internal_solid_infill_pattern:"rectilinear"}:p),selection).process;
+assert.equal(solidRectilinear.settings.internal_solid_infill_pattern,"rectilinear");
+assert.equal(solidRectilinear.settings.sparse_infill_pattern,"grid");
+for(const bad of ["Monotonic","grid","zig-zag","",["monotonic"],null,0]) {
   assert.throws(()=>resolve(fillChild.map(p=>p.name==="0.16mm Fine @TestPrinter"
     ? {...p,internal_solid_infill_pattern:bad}:p),selection),/Invalid native process enum/);
 }
-console.log("PASS: pinned internal solid infill monotonic enum is independent and fail-closed");
+console.log("PASS: source-pinned native monotonic/rectilinear internal solid enums are independent and fail-closed");
 console.log("PASS: source-pinned crosshatch -> grid infill-pattern inheritance and strict enums");
 console.log("PASS: inherited native process wall-generator and gap-fill enums reach restricted adapter; invalid forms rejected");
 
