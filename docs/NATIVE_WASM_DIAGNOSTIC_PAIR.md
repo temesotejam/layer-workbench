@@ -483,3 +483,36 @@ fails. Source tags are untrusted hints; even identical tag distributions
 and aggregate lengths do not prove equal ordered paths, full-profile
 native/WASM parity, physical extrusion or print safety. The strict ordered
 comparison and public WASM-disabled Pages behavior are unchanged.
+
+
+## 2026-11-19: signed feature-path discrepancies ranked for follow-up
+
+With the source-pinned native CLI and isolated historical browser-WASM cube
+G-code, PR #103's explicit-tag census confirmed that native emitted 3,894
+tagged planar positive-E G1 strokes plus 2 unclassified priming strokes,
+while WASM emitted 3,492 tagged strokes and none unclassified. These
+numbers come from [native probe run 44458850305](https://github.com/temesotejam/layer-workbench/actions/runs/44458850305);
+they describe a **different-profile diagnostic pair**, not parity.
+
+For example, internal solid infill's observed straight XY deposition is
+5,179.138603 mm (native) versus 2,563.034102 mm (WASM), a
+WASM-minus-native difference of -2,616.104501 mm. The skirt category is
+380.847662 mm versus 93.626844 mm, a difference of -287.220818 mm.
+These differences motivate investigating effective shell and skirt process
+settings before investigating numerical engine fidelity.
+
+The comparator now emits `feature_category_deltas`: deterministic
+largest-absolute-XY-gap-first entries containing a **known** feature label,
+native/WASM G1 move counts, signed move-count difference, signed
+straight-XY-millimetre difference and signed positive E-axis command
+millimetre difference. The label vocabulary is fixed; unknown tags are
+collapsed into `unclassified`. Missing categories mean zero *attributed*
+moves, not verified absence of a physical feature. Ties sort by label.
+Malformed stateful geometry produces `null` deltas, not zero. All values
+remain diagnostic only; no percentages of physical extrusion or claim
+that specific profile options caused the discrepancy is made. No untrusted
+raw tags, licensed profile data or G-code are archived by this helper.
+
+This report prioritizes settings parity work; it **does not** establish
+matching source format, effective full profiles, ordered G-code, desktop UI
+features or print safety. Public Pages still excludes the WASM candidate.
