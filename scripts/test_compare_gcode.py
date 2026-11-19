@@ -13,6 +13,38 @@ class ComparatorTests(unittest.TestCase):
             return compare(first, second, **kwargs)
 
 
+    def test_unsupported_stateful_words_fail_closed(self):
+        # These lines have plausible XY/E words but contain unsupported axes,
+        # extra arc revolutions, or vendor parameters. A matching G-code pair
+        # cannot be marked valid by silently dropping those words.
+        motions = (
+            'G1 X10 E1 A90', 'G1 X10 E1 U2', 'G1 X10 E1 I5',
+            'G1 X10 E1 R5', 'G1 X10 E1 P2', 'G1 X10 E1 S100',
+            'G92 E0 F100',
+            'G2 X11 Y0 I5 J0 P2 E1',
+            'G2 X11 Y0 I5 J0 K1 E1',
+            'G2 X11 Y0 I5 J0 S10 E1',
+        )
+        for motion in motions:
+            with self.subTest(motion=motion):
+                code = 'M83\nG1 X1 E1\n' + motion + '\nG1 X30 E1\n'
+                report = self.run_compare(code, code, min_extrusion_moves=2)
+                self.assertFalse(report['match'], report)
+                self.assertEqual(report['mismatched_commands'], 0)
+                self.assertIsNone(report['native_counted_linear_xy_mm'])
+                self.assertIsNone(report['native_counted_positive_e_mm'])
+                self.assertIn('malformed stateful geometry',
+                              ' '.join(report['input_issues']))
+
+    def test_supported_motion_words_still_count(self):
+        code = ('G21\nG90\nM83\nG92 X0 Y0 Z0.2 E0\n'
+                'G1 X10 F1800 E1\n'
+                'G2 X20 Y0 I5 J0 F1500 E1\n')
+        report = self.run_compare(code, code, min_extrusion_moves=2)
+        self.assertTrue(report['match'], report)
+        self.assertEqual(report['native_extrusion_moves'], 2)
+        self.assertEqual(report['native_counted_linear_xy_mm'], '10')
+
     def test_invalid_g17_arc_does_not_allow_later_deposition_to_pass(self):
         # Previously an impossible arc was silently skipped but mutated XY,
         # allowing surrounding valid G1 moves to satisfy the minimum gate.
