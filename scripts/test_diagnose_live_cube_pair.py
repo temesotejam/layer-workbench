@@ -60,6 +60,10 @@ class PairTests(unittest.TestCase):
         self.assertIs(result["parity_pass"], False)
         self.assertFalse(result["ordered_commands_equal"])
         self.assertGreater(result["metrics"]["mismatched_commands"], 0)
+        self.assertEqual(result["metrics"]["feature_z_difference_count"], 1)
+        self.assertEqual(
+            result["metrics"]["first_feature_z_differences"][0]["feature"],
+            "unclassified")
         self.assertNotIn("first_differences", json.dumps(result))
         self.assertNotIn("G1 X", json.dumps(result))
 

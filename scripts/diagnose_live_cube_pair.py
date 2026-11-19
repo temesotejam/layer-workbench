@@ -79,7 +79,8 @@ def diagnostic(native, wasm, wasm_summary, source_stl, minimum=100):
         # Only fixed known tag labels; metrics are for planar positive-E G1,
         # not inferred full feature identity or physically extruded material.
         "native_feature_tagged_planar_g1", "wasm_feature_tagged_planar_g1",
-        "feature_category_differences",
+        "feature_category_differences", "feature_category_deltas",
+        "feature_z_difference_count", "first_feature_z_differences",
     )
     return {
         "status": "DIAGNOSTIC_ONLY",

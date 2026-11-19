@@ -143,6 +143,34 @@ def feature_deposition_deltas(native, wasm):
             format((b['e'] - a['e']).normalize(), 'f'),
     } for _, label, a, b in changed]
 
+def feature_z_deposition_deltas(native, wasm):
+    """Rank bounded (tag, exact Z) G1 differences without raw commands.
+
+    Missing labels mean zero *observed* tagged deposition, not proven
+    absence of that physical print feature.
+    """
+    zero = {'moves': 0, 'xy': Decimal(0), 'e': Decimal(0)}
+    changed = []
+    for feature, z in set(native) | set(wasm):
+        a = native.get((feature, z), zero)
+        b = wasm.get((feature, z), zero)
+        if a != b:
+            changed.append((abs(b['xy'] - a['xy']), z, feature, a, b))
+    changed.sort(key=lambda row: (-row[0], row[1], row[2]))
+    examples = []
+    for _, z, feature, a, b in changed[:15]:
+        examples.append({
+            'z_mm': format(z.normalize(), 'f'),
+            'feature': feature,
+            'native_moves': a['moves'],
+            'wasm_moves': b['moves'],
+            'wasm_minus_native_moves': b['moves'] - a['moves'],
+            'wasm_minus_native_linear_xy_mm': rounded_mm(b['xy'] - a['xy']),
+            'wasm_minus_native_positive_e_mm':
+                format((b['e'] - a['e']).normalize(), 'f'),
+        })
+    return len(changed), examples
+
 MOTION = re.compile(r'^G0*[0123](?:\.0+)?$', re.I)
 
 def count_motion(commands):
@@ -184,7 +212,8 @@ def valid_g17_arc(start, end, words, units, absolute_arc_centers):
     return (math.isfinite(r0) and math.isfinite(r1) and r0 > 0
             and abs(r0 - r1) <= max(0.05, r0 * 0.001))
 
-def extrusion_move_metrics(commands, feature_context=None, feature_stats=None):
+def extrusion_move_metrics(commands, feature_context=None, feature_stats=None,
+                           feature_z_stats=None):
     """Summarize positive E and G1 XY path length for fixture sanity.
 
     A present X/Y word alone does not prove movement: e.g. G1 X0 E1 at the
@@ -336,13 +365,22 @@ def extrusion_move_metrics(commands, feature_context=None, feature_stats=None):
                 footprint['linear_moves'] += 1
                 footprint['linear_xy_mm'] += length
                 footprint['linear_positive_e_mm'] += delta
-                if feature_stats is not None:
+                if feature_stats is not None or feature_z_stats is not None:
+                    # Observed deposited Z is not a validated native layer.
                     label = (feature_context or {}).get(line_no) or 'unclassified'
-                    entry = feature_stats.setdefault(
-                        label, {'moves': 0, 'xy': Decimal(0), 'e': Decimal(0)})
-                    entry['moves'] += 1
-                    entry['xy'] += length
-                    entry['e'] += delta
+                    if feature_stats is not None:
+                        entry = feature_stats.setdefault(
+                            label, {'moves': 0, 'xy': Decimal(0), 'e': Decimal(0)})
+                        entry['moves'] += 1
+                        entry['xy'] += length
+                        entry['e'] += delta
+                    if feature_z_stats is not None:
+                        item = feature_z_stats.setdefault(
+                            (label, z_position),
+                            {'moves': 0, 'xy': Decimal(0), 'e': Decimal(0)})
+                        item['moves'] += 1
+                        item['xy'] += length
+                        item['e'] += delta
                 bounds = footprint['linear_xy_endpoint_bounds_mm']
                 for point in (start_xy, xy):
                     x, y = point['X'], point['Y']
@@ -457,6 +495,7 @@ def compare(native, wasm, min_extrusion_moves=0):
         raise ValueError('minimum extrusion moves must not be negative')
     a, b = canonical(native), canonical(wasm)
     native_features, wasm_features = {}, {}
+    native_feature_layers, wasm_feature_layers = {}, {}
     differences = []
     mismatch_count = 0
     for i in range(max(len(a), len(b))):
@@ -472,10 +511,10 @@ def compare(native, wasm, min_extrusion_moves=0):
     native_motion, wasm_motion = count_motion(a), count_motion(b)
     (native_extrusion, native_e_mm, native_linear_xy_mm, native_linear_moves,
      native_layers, native_nonplanar, native_footprints) = extrusion_move_metrics(
-         a, gcode_feature_context(native), native_features)
+         a, gcode_feature_context(native), native_features, native_feature_layers)
     (wasm_extrusion, wasm_e_mm, wasm_linear_xy_mm, wasm_linear_moves,
      wasm_layers, wasm_nonplanar, wasm_footprints) = extrusion_move_metrics(
-         b, gcode_feature_context(wasm), wasm_features)
+         b, gcode_feature_context(wasm), wasm_features, wasm_feature_layers)
     # Bounded, read-only per-Z differences: do not imply that a Z plane
     # represents a complete OrcaSlicer layer or deposited volume.
     planar_layer_differences = None
@@ -496,6 +535,10 @@ def compare(native, wasm, min_extrusion_moves=0):
     (shared_z_footprint_difference_count,
      shared_z_footprint_examples) = shared_z_footprint_differences(
          native_layers, wasm_layers, native_footprints, wasm_footprints)
+    feature_z_count, feature_z_examples = (None, None)
+    if native_layers is not None and wasm_layers is not None:
+        feature_z_count, feature_z_examples = feature_z_deposition_deltas(
+            native_feature_layers, wasm_feature_layers)
     issues = []
     # A malformed stateful command yields unknown deposition metrics, not
     # zero deposited material. Reject even when the optional minimum is 0:
@@ -578,6 +621,9 @@ def compare(native, wasm, min_extrusion_moves=0):
         # No untrusted comment labels or executable G-code are included.
         'feature_category_deltas': None if native_layers is None or wasm_layers is None
             else feature_deposition_deltas(native_features, wasm_features),
+        # Observed height/feature attribution, excluding arcs and sloped moves.
+        'feature_z_difference_count': feature_z_count,
+        'first_feature_z_differences': feature_z_examples,
         'minimum_extrusion_moves': min_extrusion_moves,
         'input_issues': issues,
         'native_sha256': hashlib.sha256(native.read_bytes()).hexdigest(),
