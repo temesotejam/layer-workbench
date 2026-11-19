@@ -273,3 +273,20 @@ for(const bad of [-1,360.01,'45%','auto',['45'],['45','90'],null,NaN,Infinity])
   assert.throws(()=>parseTestProcessOverrides({infill_direction:bad}),
     /Invalid|outside the safe test range/,String(bad));
 console.log('PASS: independent native infill direction 0..360 degrees rejects relative/vector inputs');
+
+// Source-pinned v2.5.0 shell thickness is a FLOAT in millimetres, not an
+// inferred shell-layer count. Zero explicitly disables the thickness floor.
+assert.deepEqual(parseTestProcessOverrides({
+  top_shell_layers: '5',top_shell_thickness: '0.8',
+  bottom_shell_layers: '4',bottom_shell_thickness: '0'
+}),{top_shell_layers:'5',top_shell_thickness:'0.8',
+  bottom_shell_layers:'4',bottom_shell_thickness:'0'});
+for(const key of ['top_shell_thickness','bottom_shell_thickness']) {
+  for(const value of ['0','0.8','1.25','5'])
+    assert.equal(parseTestProcessOverrides({[key]:value})[key],value);
+  for(const bad of ['-1','5.01','0.8%','auto',['0.8'],['0.8','0.6'],
+    null,true,NaN,Infinity])
+    assert.throws(()=>parseTestProcessOverrides({[key]:bad}),
+      /Invalid|outside the safe test range/,'Rejected native thickness '+key);
+}
+console.log('PASS: independent top/bottom native shell-thickness mm floats and fail-closed inputs');
