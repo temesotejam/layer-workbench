@@ -1,0 +1,7 @@
+# OrcaSlicer v2.5.0 relative first-layer travel speed (local WASM diagnostic)
+
+Pinned source: [OrcaSlicer v2.5.0 CR-10 process](https://github.com/OrcaSlicer/OrcaSlicer/tree/40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19/resources/profiles/Creality/process). The selected `0.20mm Standard @Creality CR-10 0.4 nozzle` chain includes `initial_layer_travel_speed: "50%"`. This is a native float-or-percent setting; **50% is relative to `travel_speed`, not 50 mm/s**. See also the [OrcaSlicer initial-layer travel wiki](https://www.orcaslicer.com/wiki/speed_settings_initial_layer_speed/).
+
+The restricted localhost process bridge now preserves a single-slot `initial_layer_travel_speed` as an exact percentage token (1–200%) or an explicitly bounded absolute scalar (1–1500 mm/s). It rejects ambiguous, non-finite, vector, multi-nozzle and malformed values. No assumption is made about device firmware or actual machine speed. Real pinned upstream profile files remain fetched only in CI.
+
+Tests: `scripts/test-process-profile-unit.mjs` checks parsing; `scripts/test-orca-profile-collection.mjs` checks inherited percent semantics; `scripts/test-upstream-v250-creality.mjs` checks the pinned real chain; `scripts/test-engine-probe.mjs` attempts actual isolated Chrome/WASM acceptance. These are **not** native-vs-WASM G-code parity checks; measured first-layer travel feedrates and same-full-profile identity are still open. No new production Pages functionality or print-safety approval is implied.
