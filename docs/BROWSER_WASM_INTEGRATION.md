@@ -1560,3 +1560,31 @@ the pinned-profile and isolated-Chrome checks pass. It does **not**
 prove same-full-profile desktop G-code equivalence, full 3MF/UI parity,
 physical print safety or public GitHub Pages WASM activation. Neither the
 WASM engine binary nor vendor source profiles are changed/published.
+
+
+## 2026-11-19: bounded v2.5.0 external bridge flow witness (localhost only)
+
+The pinned CR-10 0.20 mm Standard process explicitly sets `bridge_flow: "0.95"`, a
+**dimensionless flow multiplier** distinct from its `bridge_speed: "50"` in
+millimetres per second. The restricted local process parser and real-profile
+resolver now accept only scalar numeric `bridge_flow` in the conservative
+0.1–2 range, preserving inherited child precedence. Percent tokens,
+multi-extruder vectors, non-finite or negative input remain rejected.
+This does not enable machine profile execution or declare any print safety.
+
+The read-only G-code preview parser now records `commandedPositiveEMm` for
+**linear XY/Z strokes**. It uses modal E positions and G20/G21 length units,
+and excludes E-only unretraction from rendered strokes. Tessellated G2/G3
+arcs explicitly carry `null` rather than attributing the entire commanded
+E to each chord. This is commanded filament-axis distance, **not extruded
+volume or physical material flow**. Toolpath geometry, strict parity gating,
+and the public site's WASM-disabled behavior are unchanged.
+
+The isolated Chrome/WASM arch test slices the same unsupported-roof model
+twice, varying only `bridge_flow` (the baseline native default versus 0.55).
+Only bridge-tagged, positive-E linear toolpaths contribute to the read-only
+E totals; a changed config header or output hash is insufficient. This
+tests a limited external bridge effect, *not* the internal bridge multiplier,
+full native preset equivalence, or safe machine G-code. The output is an
+opt-in localhost diagnostic and the full-profile native/WASM parity gate
+remains unmet.

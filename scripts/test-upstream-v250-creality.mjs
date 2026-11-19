@@ -66,6 +66,10 @@ assert.deepEqual(process.chain.map(name=>indexed.records.find(p=>p.name===name).
 assert.equal(process.settings.infill_direction,"45",
   "Official infill_direction must reach the isolated WASM process adapter in degrees");
 assert.ok(!process.unsupported.includes("infill_direction"));
+// Directly pin native 0.20mm child bridge extrusion multiplier, not a speed.
+assert.equal(indexed.records.find(p=>p.name==="0.20mm Standard @Creality CR-10 0.4 nozzle").bridge_flow,"0.95");
+assert.equal(process.settings.bridge_flow,"0.95");
+assert.ok(!process.unsupported.includes("bridge_flow"));
 assert.equal(process.settings.line_width,"0.42",
   "Official v2.5.0 CR-10 0.20mm process must provide absolute line width");
 assert.ok(!process.unsupported.includes("line_width"),

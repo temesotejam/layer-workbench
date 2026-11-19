@@ -58,6 +58,9 @@ const LIMITS = {
   // Pinned CR-10 0.20mm Standard sets bridge_speed to absolute 50 mm/s.
   // Only bounded absolute speed is accepted; percentages are rejected.
   bridge_speed: [1,800],
+  // Native bridge_flow is a scalar extrusion multiplier, not a speed or %.
+  // This diagnostic range is deliberately narrower than real printer profiles.
+  bridge_flow: [0.1,2],
   // Pinned v2.5.0 Creality first-layer print speed: 15 mm/s absolute.
   // This is independent of first-layer infill and travel speed.
   initial_layer_speed: [1,800],

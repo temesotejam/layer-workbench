@@ -46,6 +46,15 @@ for (const key of Object.keys(depositionSpeeds)) {
       /Invalid|outside the safe test range/, key + ' must reject ' + String(bad));
   }
 }
+// Bridge flow is a dimensionless ratio, independent of bridge_speed in mm/s.
+assert.deepEqual(parseTestProcessOverrides({bridge_speed:'50',bridge_flow:'0.95'}),
+  {bridge_speed:'50',bridge_flow:'0.95'});
+for(const value of ['0.1','0.55','0.95','1','2'])
+  assert.equal(parseTestProcessOverrides({bridge_flow:value}).bridge_flow,value);
+for(const bad of ['0','2.01','95%','auto',['0.95'],['0.95','1'],null,Infinity,NaN,-1])
+  assert.throws(()=>parseTestProcessOverrides({bridge_flow:bad}),
+    /Invalid|outside the safe test range/,String(bad));
+console.log('PASS: bounded source-pinned bridge flow ratio rejects percentage, vector and malformed input');
 console.log('PASS: pinned process deposition speeds survive bounded override parsing; relative and multi-tool forms fail closed');
 assert.deepEqual(parseTestProcessOverrides({line_width:"0.42"}),{line_width:"0.42"});
 for(const bad of ["105%",0,2.01,["0.42"],"auto",null,-0.1]){

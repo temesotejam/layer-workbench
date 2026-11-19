@@ -57,6 +57,9 @@ const SPECS={
     // The source-pinned CR-10 0.20mm profile uses absolute 50 mm/s.
     // Relative percentages and engine behavior are NOT inferred here.
     bridge_speed:[1,800],
+    // Source-pinned CR-10 v2.5.0 bridge_flow is a dimensionless extrusion
+    // multiplier (0.95 in the child). No percent strings or vectors in lab.
+    bridge_flow:[0.1,2],
     // Source-pinned CR-10 v2.5.0 first-layer perimeter speed is 15 mm/s.
     // Percentages, relative expressions and multiple nozzle values fail closed.
     initial_layer_speed:[1,800],

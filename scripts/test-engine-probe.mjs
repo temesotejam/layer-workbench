@@ -1455,6 +1455,33 @@ try {
       JSON.stringify(bridgeReport));
     console.log('PASS: tagged WASM bridge extrusion changes to F120 on actual arch geometry');
 
+    // Native bridge_flow independently scales extrusion, NOT bridge F.
+    // Use the exact same unsupported-roof arch, speeds and process options.
+    // Evaluate real tagged positive-E XY G1 lines; a changed header, total
+    // unclassified E, or G-code SHA is not a flow witness.
+    const bridgeFlowLow=await sliceRing('bridge-arch-flow-055.json',
+      {...bridgeSettings,bridge_flow:0.55});
+    const bridgeLowPaths=parseGcodeToolpaths(bridgeFlowLow);
+    const bridgeLinearE=paths=>paths.layers.flatMap(layer=>layer.segments)
+      .filter(s=>s.extrusion && String(s.feature||'').includes('bridge') &&
+        Number.isFinite(s.commandedPositiveEMm) && s.commandedPositiveEMm>0)
+      .map(s=>s.commandedPositiveEMm);
+    const baselineBridgeE=bridgeLinearE(bridgeBaselinePaths);
+    const reducedBridgeE=bridgeLinearE(bridgeLowPaths);
+    assert.ok(baselineBridgeE.length>10 && reducedBridgeE.length>10,
+      'Both slices must contain actual bridge-tagged G1 XY+E paths');
+    const sumBridgeE=items=>items.reduce((sum,value)=>sum+value,0);
+    const baselineBridgeESum=sumBridgeE(baselineBridgeE);
+    const reducedBridgeESum=sumBridgeE(reducedBridgeE);
+    assert.ok(reducedBridgeESum>0 &&
+      reducedBridgeESum<baselineBridgeESum*0.95,
+      'bridge_flow=0.55 must reduce actual tagged bridge positive E, not only metadata: '+
+      JSON.stringify({baselineBridgeESum,reducedBridgeESum}));
+    console.log('PASS: isolated WASM bridge_flow=0.55 reduces tagged bridge G1 commanded E; '+
+      JSON.stringify({baselineBridgeESum,reducedBridgeESum,
+        baselineTaggedSegments:baselineBridgeE.length,
+        candidateTaggedSegments:reducedBridgeE.length}));
+
     // A first REAL positive support-generation gate. This is an explicitly
     // opted-in native enable_support=1 on the isolated localhost fixture,
     // NEVER the default public experience or a physical-printer setting.

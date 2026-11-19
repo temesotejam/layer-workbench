@@ -82,6 +82,20 @@ for(const bad of ['105%',0,'2.01',['0.42','0.45'],null,'auto']){
       ? {...rec,outer_wall_line_width:bad}:rec),selection),
     /Invalid|Multi-extruder|test limits/);
 }
+// Native bridge_flow follows process inheritance, with no inferred default.
+const bridgeFlowProfiles=profiles.map(p=>p.name==="fdm_process_common"
+  ? {...p,bridge_flow:'0.95'}:p.name==="0.16mm Fine @TestPrinter"
+    ? {...p,bridge_flow:'0.55'}:p);
+assert.equal(resolve(bridgeFlowProfiles,selection).process.settings.bridge_flow,'0.55');
+assert.equal(resolve(bridgeFlowProfiles.map(p=>{
+  if(p.name!=="0.16mm Fine @TestPrinter")return p;
+  const child={...p};delete child.bridge_flow;return child;
+}),selection).process.settings.bridge_flow,'0.95');
+for(const bad of ['95%',0,'2.01',['0.55','0.95'],null,'auto'])
+  assert.throws(()=>resolve(bridgeFlowProfiles.map(p=>p.name==="0.16mm Fine @TestPrinter"
+    ? {...p,bridge_flow:bad}:p),selection),/Invalid|Multi-extruder|test limits/);
+assert.equal(result.process.settings.bridge_flow,undefined);
+console.log('PASS: native bridge_flow inheritance and safe scalar bounds');
 assert.equal(result.process.settings.outer_wall_line_width,undefined);
 console.log('PASS: independent outer-wall width inheritance and bounds');
 // The child overrides its inherited inner-wall width without changing outer

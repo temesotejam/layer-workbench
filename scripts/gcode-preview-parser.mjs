@@ -63,7 +63,7 @@ export function parseGcodeToolpaths(source, options={}) {
   // mentions such as configuration headers containing 'gap infill'.
   let activeFeature=null;
   let count=0,deposited=0,travels=0,skippedArcs=0,renderedArcs=0,skippedMalformedMotion=0;
-  function append(x1,y1,x2,y2,z1,z2,extrusion,groupZ=z2){
+  function append(x1,y1,x2,y2,z1,z2,extrusion,groupZ=z2,commandedPositiveEMm=null){
     if(![x1,y1,x2,y2,z1,z2].every(Number.isFinite) ||
        Math.max(Math.abs(x1),Math.abs(y1),Math.abs(x2),Math.abs(y2),Math.abs(z1),Math.abs(z2))>100_000)
       throw new Error("Toolpath coordinate exceeds preview limits");
@@ -74,7 +74,11 @@ export function parseGcodeToolpaths(source, options={}) {
     const key=String(layerZ);
     if(!byZ.has(key))byZ.set(key,{z:layerZ,segments:[]});
     byZ.get(key).segments.push({x1,y1,x2,y2,z1,z2,extrusion,toolId:activeTool,
-      feedrateMmMin:state.feedrateMmMin,feature:activeFeature});
+      feedrateMmMin:state.feedrateMmMin,feature:activeFeature,
+      // Positive commanded filament-axis E for this LINEAR stroke only.
+      // Not melted volume, extrusion width, or physical deposition; arcs
+      // deliberately remain null (no invented per-tessellation E split).
+      commandedPositiveEMm});
     if(extrusion){
       deposited++;
       extrusionsByTool.set(activeTool,(extrusionsByTool.get(activeTool)??0)+1);
@@ -163,7 +167,8 @@ export function parseGcodeToolpaths(source, options={}) {
     if(isArc && (unhandledWords||unexpectedCenter)){skippedArcs++;continue;}
     if(!isArc){
       if(Math.abs(state.x-start.x)>EPS||Math.abs(state.y-start.y)>EPS||Math.abs(state.z-start.z)>EPS)
-        append(start.x,start.y,state.x,state.y,start.z,state.z,extrusion);
+        append(start.x,start.y,state.x,state.y,start.z,state.z,extrusion,
+          state.z,extrusion?state.e-start.e:0);
       continue;
     }
     // R is signed: positive selects the minor arc, negative the major arc.
