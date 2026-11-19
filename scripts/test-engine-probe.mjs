@@ -690,6 +690,27 @@ try {
     await uploadRawOrca();
     console.log('PASS: native internal solid monotonic/rectilinear changes real feature-tagged WASM G1 deposition sequence');
 
+    // Independent v2.5.0 top/bottom surface patterns from the pinned CR-10
+    // child. This is a real two-STL localhost engine acceptance witness,
+    // not yet a controlled per-feature pattern-response or native parity test.
+    for (const [surfaceKey,token] of [
+      ['top_surface_pattern','monotonic'],
+      ['bottom_surface_pattern','monotonic']
+    ]) {
+      const surfaceCode=await sliceWithLineWidth(token,surfaceKey);
+      const surfacePaths=parseGcodeToolpaths(surfaceCode);
+      assert.equal(surfacePaths.skippedMalformedMotion,0,
+        'Native surface pattern acceptance must not skip malformed G-code');
+      assert.ok(surfacePaths.layers.flatMap(l=>l.segments)
+        .filter(seg=>seg.extrusion && Number.isFinite(seg.commandedPositiveEMm)
+          && seg.commandedPositiveEMm>0 &&
+          Math.hypot(seg.x2-seg.x1,seg.y2-seg.y1)>0.0001).length>100,
+        surfaceKey+' must generate real deposited XY motion in isolated Chrome');
+      delete rawOrca[4][surfaceKey];
+      await uploadRawOrca();
+    }
+    console.log('PASS: native top/bottom surface skin pattern values accepted in real isolated WASM');
+
     // Native 2.5.0 thickness settings are a minimum solid depth in mm,
     // independent of top/bottom solid-layer counts. Use one-layer shells
     // and contrast 0 mm (off) vs 1.6 mm (on) over the SAME two-STL scene.

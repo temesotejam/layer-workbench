@@ -304,3 +304,18 @@ for(const bad of ['All','critical only','1','0','', ['ensure_all'],
 }
 console.log('PASS: pinned ensure_vertical_shell_thickness enum tokens and fail-closed invalid modes');
 console.log('PASS: independent top/bottom native shell-thickness mm floats and fail-closed inputs');
+
+// Pinned v2.5.0 CR-10 surface skins are distinct from internal solid infill.
+assert.deepEqual(parseTestProcessOverrides({
+  top_surface_pattern:"monotonic",bottom_surface_pattern:"monotonicline",
+  internal_solid_infill_pattern:"rectilinear"
+}),{top_surface_pattern:"monotonic",bottom_surface_pattern:"monotonicline",
+  internal_solid_infill_pattern:"rectilinear"});
+for(const key of ["top_surface_pattern","bottom_surface_pattern"]){
+  for(const good of ["monotonic","monotonicline","rectilinear"])
+    assert.equal(parseTestProcessOverrides({[key]:good})[key],good);
+  for(const bad of ["Monotonic","concentric","",["monotonic"],null,0,"__proto__"])
+    assert.throws(()=>parseTestProcessOverrides({[key]:bad}),/native enum/,key+" rejects "+String(bad));
+}
+assert.equal(parseTestProcessOverrides({top_surface_pattern:"monotonic"}).bottom_surface_pattern,undefined);
+console.log("PASS: independent source-pinned top/bottom surface patterns reject unverified tokens");

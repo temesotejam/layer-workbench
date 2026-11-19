@@ -98,6 +98,11 @@ const PROCESS_ENUMS=Object.freeze({
   // def_top_fill_pattern. Limit this localhost test bridge to these two
   // audited wire values; no invented default or unrelated sparse pattern.
   internal_solid_infill_pattern:new Set(["monotonic","rectilinear"]),
+  // Pinned CR-10 0.20mm child overrides top monotonicline -> monotonic;
+  // bottom stays monotonic. These independent native surface enums affect
+  // OUTERMOST skins, not sparse/internal solid infill. Localhost proof only.
+  top_surface_pattern:new Set(["monotonic","monotonicline","rectilinear"]),
+  bottom_surface_pattern:new Set(["monotonic","monotonicline","rectilinear"]),
 });
 // Pinned OrcaSlicer v2.5.0 PrintConfig.cpp: curr_bed_type enum and
 // six native per-filament steady/first-layer coInts pairs. UI labels are

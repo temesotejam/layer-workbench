@@ -97,6 +97,10 @@ const ENUMS = Object.freeze({
   // also lists rectilinear in def_top_fill_pattern used for this coEnum.
   // Only these exact audited tokens enter the isolated localhost lab.
   internal_solid_infill_pattern: new Set(["monotonic","rectilinear"]),
+  // v2.5.0 source-pinned CR-10 skin patterns; do not confuse with
+  // internal_solid_infill_pattern or unrestricted vendor pattern lists.
+  top_surface_pattern: new Set(["monotonic","monotonicline","rectilinear"]),
+  bottom_surface_pattern: new Set(["monotonic","monotonicline","rectilinear"]),
   // Explicit, bounded opt-in for support-generation evidence on the localhost
   // COOP/COEP diagnostic page only. Native v2.5.0 stores this bool as "0"/"1".
   // Never infer "1" from a manufacturer profile or deploy this test path on Pages.
