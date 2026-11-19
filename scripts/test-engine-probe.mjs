@@ -1195,6 +1195,20 @@ try {
     console.log('PASS: source-pinned initial_layer_speed 5 -> 15 changes real first-layer WASM extrusion feedrates',
       JSON.stringify({slowFirstFeeds,pinnedFirstFeeds}));
 
+    // Pinned Creality first-layer travel is 50% of travel_speed, not 50 mm/s.
+    // This is real isolated WASM acceptance only: generated deposition does
+    // not establish numeric travel-feed parity or printable G-code.
+    const relativeTravelCode=await sliceWithLineWidth('50%','initial_layer_travel_speed');
+    const relativeTravelPaths=parseGcodeToolpaths(relativeTravelCode);
+    assert.equal(relativeTravelPaths.skippedMalformedMotion,0,
+      'First-layer relative travel acceptance must not hide malformed motion');
+    assert.ok(relativeTravelPaths.layers.flatMap(l=>l.segments)
+      .some(s=>s.extrusion&&Math.hypot(s.x2-s.x1,s.y2-s.y1)>0.0001),
+      'Relative travel preset must be accepted while preserving actual deposition');
+    delete rawOrca[4].initial_layer_travel_speed;
+    await uploadRawOrca();
+    console.log('PASS: source-pinned first-layer travel 50% accepted by isolated WASM (travel F parity unproven)');
+
     // Independent native first-layer infill speed (CR-10 20 mm/s) must
     // affect actual first-layer deposited feedrates while first-layer
     // perimeter speed stays fixed at the pinned 15 mm/s. Compare G-code
