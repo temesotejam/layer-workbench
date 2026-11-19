@@ -302,6 +302,21 @@ assert.equal(badFeed.skippedMalformedMotion,2);
 assert.deepEqual(badFeed.layers[0].segments.map(s=>[s.x1,s.x2,s.feedrateMmMin]),
   [[0,20,1200],[20,40,1200]]);
 assert.equal(parseGcodeToolpaths("G1 X1 E1").layers[0].segments[0].feedrateMmMin,null);
+// Read-only positive E witness enables actual feature-specific flow
+// comparison. Travel, retract, unretraction without XY and arcs must not
+// masquerade as physical deposited material or per-chord arc extrusion.
+const eWitness=parseGcodeToolpaths([
+  'G21','G90','M82','G0 X0 Y0 Z0.2',
+  'G1 X10 Y0 E1','G1 E0.8','G1 E1.1','G1 X20 E2.1',
+  'M83','G1 X30 E0.4','G1 X40 E-0.1','G1 X50 E0.3',
+  'G20','G1 X2 E0.1'
+].join('\n'));
+assert.deepEqual(eWitness.layers[0].segments
+  .map(s=>s.commandedPositiveEMm),[0,1,1,0.4,0,0.3,2.54]);
+assert.equal(parseGcodeToolpaths('G90\\nM82\\nG2 X0 Y0 I1 J0 E1')
+  .layers[0].segments[0].commandedPositiveEMm,null,
+  'Arc tessellation must not invent per-chord commanded E');
+console.log('PASS: linear positive-E witness tracks M82/M83, retracts and inch units; arcs unallocated');
 console.log("PASS: modal commanded feedrate in mm/min, inch conversion, missing F and invalid F safety");
 console.log("PASS: full-word lexing rejects malformed/duplicate/unknown motion words without phantom paths; compact numeric G-code supported");
 
