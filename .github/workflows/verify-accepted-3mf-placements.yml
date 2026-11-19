@@ -4,6 +4,9 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
+      - "scripts/native-manifest-edit.mjs"
+      - "scripts/test-native-manifest-edit.mjs"
+      - "scripts/test-browser-3mf-native-edit.mjs"
       - "scripts/test-candidate-browser-3mf.mjs"
       - "scripts/test-browser-3mf-private-instance-edit.mjs"
       - "scripts/diagnose-edited-3mf-toolpaths.mjs"
