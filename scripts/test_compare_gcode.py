@@ -635,5 +635,58 @@ class ComparatorTests(unittest.TestCase):
         self.assertFalse(report['match'])
 
 
+
+    def test_feature_z_deltas_rank_geometry_before_e_only_difference(self):
+        native = ('M83\nG0 Z0.2\n;TYPE:Internal solid infill\n'
+                  'G1 X3 Y4 E1\nG0 Z0.4\n;TYPE:Internal solid infill\n'
+                  'G1 X6 Y8 E1\n')
+        wasm = ('M83\nG0 Z0.2\n;TYPE:Internal solid infill\n'
+                'G1 X6 Y8 E1\nG0 Z0.4\n;TYPE:Internal solid infill\n'
+                'G1 X9 Y12 E2\n')
+        report = self.run_compare(native, wasm)
+        self.assertEqual(report['feature_z_difference_count'], 2)
+        self.assertEqual([x['z_mm'] for x in report['first_feature_z_differences']],
+                         ['0.2', '0.4'])
+        first, second = report['first_feature_z_differences']
+        self.assertEqual(first['feature'], 'internal solid infill')
+        self.assertEqual(first['wasm_minus_native_linear_xy_mm'], '5')
+        self.assertEqual(first['wasm_minus_native_positive_e_mm'], '0')
+        self.assertEqual(second['wasm_minus_native_linear_xy_mm'], '0')
+        self.assertEqual(second['wasm_minus_native_positive_e_mm'], '1')
+        self.assertEqual(self.run_compare(native, native)['feature_z_difference_count'], 0)
+
+    def test_feature_z_deltas_are_bounded_and_count_all_heights(self):
+        native = 'M83\n' + ''.join(
+            f'G0 Z{i / 10}\nG0 X0\n;TYPE:Internal solid infill\nG1 X10 E1\n'
+            for i in range(1, 22))
+        wasm = native.replace('G1 X10 E1', 'G1 X11 E1')
+        report = self.run_compare(native, wasm)
+        self.assertEqual(report['feature_z_difference_count'], 21)
+        samples = report['first_feature_z_differences']
+        self.assertEqual(len(samples), 15)
+        self.assertEqual(samples[0]['z_mm'], '0.1')
+        self.assertEqual(samples[-1]['z_mm'], '1.5')
+        self.assertTrue(all(x['wasm_minus_native_linear_xy_mm'] == '1'
+                            for x in samples))
+
+    def test_feature_z_deltas_never_echo_untrusted_tags_or_count_arcs(self):
+        native = ('M83\nG0 Z0.2\n;TYPE:secret /tmp/unsafe.gcode\n'
+                  'G1 X3 E1\nG2 I1 J0 E1\n')
+        wasm = native.replace('G1 X3 E1', 'G1 X4 E1')
+        report = self.run_compare(native, wasm)
+        self.assertEqual(report['feature_z_difference_count'], 1)
+        self.assertEqual(report['first_feature_z_differences'][0]['feature'],
+                         'unclassified')
+        self.assertNotIn('secret', str(report['first_feature_z_differences']))
+        self.assertNotIn('/tmp/', str(report['first_feature_z_differences']))
+
+    def test_feature_z_deltas_unknown_on_malformed_stateful_input(self):
+        invalid = 'M83\n;TYPE:Internal solid infill\nG1 X1 X2 E1\n'
+        result = self.run_compare(invalid, invalid)
+        self.assertFalse(result['match'])
+        self.assertIsNone(result['feature_z_difference_count'])
+        self.assertIsNone(result['first_feature_z_differences'])
+
+
 if __name__ == '__main__':
     unittest.main()
