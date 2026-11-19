@@ -23,6 +23,8 @@ on:
       - "scripts/test-export-bridge-arch-stl.mjs"
       - "scripts/bridge-arch-fixture.mjs"
       - "scripts/obj-to-stl.mjs"
+      - "scripts/verify-native-initial-layer-travel.mjs"
+      - "scripts/test-verify-native-initial-layer-travel.mjs"
       - "scripts/test_verify_native_outer_wall_speed.py"
       - "scripts/verify_native_gcode_repeatability.py"
       - "scripts/test_verify_native_gcode_repeatability.py"
@@ -59,6 +61,8 @@ on:
       - "scripts/test-export-bridge-arch-stl.mjs"
       - "scripts/bridge-arch-fixture.mjs"
       - "scripts/obj-to-stl.mjs"
+      - "scripts/verify-native-initial-layer-travel.mjs"
+      - "scripts/test-verify-native-initial-layer-travel.mjs"
       - "scripts/test_verify_native_outer_wall_speed.py"
       - "scripts/verify_native_gcode_repeatability.py"
       - "scripts/test_verify_native_gcode_repeatability.py"
@@ -109,6 +113,9 @@ jobs:
 
       - name: Unit-test native outer-wall deposition speed audit offline
         run: python3 -m unittest discover -s scripts -p test_verify_native_outer_wall_speed.py -v
+
+      - name: Unit-test native first-layer travel F diagnostic offline
+        run: node scripts/test-verify-native-initial-layer-travel.mjs
 
       - name: Unit-test native ordered-command repeatability audit offline
         run: python3 -m unittest discover -s scripts -p test_verify_native_gcode_repeatability.py -v
@@ -277,6 +284,46 @@ jobs:
           PY
           sha256sum native-cli-output/native-gcode/*.gcode > native-cli-output/native-gcode.sha256
           # G-code is diagnostic, NOT print-ready, and never deployed or archived.
+
+      - name: Prove native first-layer travel percent affects actual modal G-code F
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The baseline official native G-code is already generated from the
+          # full source-pinned process. Only initial_layer_travel_speed changes.
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          source = Path("native-cli-output/native-profiles/process.json")
+          process = json.loads(source.read_text(encoding="utf-8"))
+          if process.get("initial_layer_travel_speed") != "50%":
+              raise SystemExit("Unexpected official CR-10 initial_layer_travel_speed")
+          if str(process.get("travel_speed")) not in ("80", "130", "150", "180", "200"):
+              print("INFO: native source-pinned travel_speed:", process.get("travel_speed"))
+          process["initial_layer_travel_speed"] = "100%"
+          target = Path("native-cli-output/native-profiles/process-first-travel-100.json")
+          target.write_text(json.dumps(process, indent=2) + "\n", encoding="utf-8")
+          target.chmod(0o600)
+          PY
+          app="${RUNNER_TEMP}/OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.5.0.AppImage"
+          mkdir -p native-cli-output/native-gcode-first-travel-100
+          timeout 240s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
+            native-cli-output/two-build-items.3mf \
+            --load-settings "native-cli-output/native-profiles/process-first-travel-100.json;native-cli-output/native-profiles/machine.json" \
+            --load-filaments native-cli-output/native-profiles/filament.json \
+            --arrange 0 --slice 0 --outputdir native-cli-output/native-gcode-first-travel-100 \
+            > native-cli-output/native-first-travel-slice.log 2>&1 || {
+              tail -n 140 native-cli-output/native-first-travel-slice.log
+              exit 1
+            }
+          test -s native-cli-output/native-gcode-first-travel-100/plate_1.gcode
+          node scripts/verify-native-initial-layer-travel.mjs \
+            --baseline native-cli-output/native-gcode/plate_1.gcode \
+            --altered native-cli-output/native-gcode-first-travel-100/plate_1.gcode \
+            --report native-cli-output/native-first-travel-audit.log
+          sha256sum native-cli-output/native-gcode-first-travel-100/plate_1.gcode \
+            > native-cli-output/native-gcode-first-travel-100.sha256
+          # Raw G-code and licensed profiles remain private to the CI runner.
 
       - name: Slice byte-identical cube geometry at explicitly matched build placement
         shell: bash
