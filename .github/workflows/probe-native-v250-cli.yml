@@ -15,6 +15,8 @@ on:
       - "scripts/test_audit_native_3mf_instance_placement.py"
       - "scripts/verify_native_3mf_edit_effect.py"
       - "scripts/test_verify_native_3mf_edit_effect.py"
+      - "scripts/verify_native_3mf_linear_edit_effect.py"
+      - "scripts/test_verify_native_3mf_linear_edit_effect.py"
       - "scripts/edit_native_3mf_build_transform.py"
       - "scripts/test_edit_native_3mf_build_transform.py"
       - "scripts/test_verify_native_exported_stl.py"
@@ -66,6 +68,8 @@ on:
       - "scripts/test_audit_native_3mf_instance_placement.py"
       - "scripts/verify_native_3mf_edit_effect.py"
       - "scripts/test_verify_native_3mf_edit_effect.py"
+      - "scripts/verify_native_3mf_linear_edit_effect.py"
+      - "scripts/test_verify_native_3mf_linear_edit_effect.py"
       - "scripts/edit_native_3mf_build_transform.py"
       - "scripts/test_edit_native_3mf_build_transform.py"
       - "scripts/test_verify_native_exported_stl.py"
@@ -142,6 +146,9 @@ jobs:
 
       - name: Unit-test expanded native 3MF instance edit effects offline
         run: python3 -m unittest discover -s scripts -p test_verify_native_3mf_edit_effect.py -v
+
+      - name: Unit-test isolated native 3MF Core rotation/scale effects offline
+        run: python3 -m unittest discover -s scripts -p test_verify_native_3mf_linear_edit_effect.py -v
 
       - name: Unit-test lossless native multi-part build edit offline
         run: python3 -m unittest discover -s scripts -p test_edit_native_3mf_build_transform.py -v
@@ -499,6 +506,46 @@ jobs:
             "${stls[@]}" | tee native-cli-output/native-second-moved-stl.log
           echo "PASS: official v2.5.0 native CLI applies second shared-mesh instance move only"
           # Narrow CLI-authored 3MF fixture, not GUI parity or print certification.
+
+      - name: Verify isolated rotation of second shared-mesh instance in official native CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          source="native-cli-output/native-v250-project.3mf"
+          edited="native-cli-output/native-v250-project-second-rotated.3mf"
+          # Unlike the first-build edit, this targets the other instance of
+          # the same referenced mesh. No external mesh or setting is rewritten.
+          python3 scripts/edit_native_3mf_build_transform.py \
+            --input "${source}" --output "${edited}" \
+            --build-index 1 --rotate-z-deg 30 \
+            --report native-cli-output/native-second-rotation-edit.json
+          python3 scripts/verify_native_3mf_linear_edit_effect.py \
+            --baseline "${source}" --candidate "${edited}" \
+            --build-index 1 --rotate-z-deg 30 \
+            --report native-cli-output/native-second-rotation-effect.json
+          app="${RUNNER_TEMP}/OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.5.0.AppImage"
+          mkdir -p native-cli-output/native-second-rotated-stl
+          timeout 180s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
+            "${edited}" --arrange 0 --export-stl \
+            --outputdir native-cli-output/native-second-rotated-stl \
+            > native-cli-output/native-second-rotated-reopen.log 2>&1 || {
+              tail -n 120 native-cli-output/native-second-rotated-reopen.log
+              exit 1
+            }
+          mapfile -d '' stls < <(find native-cli-output/native-second-rotated-stl \
+            -type f -iname '*.stl' -print0)
+          if [ "${#stls[@]}" -lt 1 ] || [ "${#stls[@]}" -gt 2 ]; then
+            echo "Expected 1..2 STL exports after second-instance rotation"
+            exit 1
+          fi
+          # Independent exact Core vertex bounds must agree with the native
+          # CLI exports, not merely with the editor's claimed transform.
+          python3 scripts/audit_native_3mf_instance_placement.py \
+            --input "${edited}" --require-instances 2 \
+            --verify-stls "${stls[@]}" \
+            --report native-cli-output/native-second-rotated-placement.json
+          echo "PASS: official native v2.5.0 reads isolated second-instance rotation"
+          # This is NOT general GUI 3MF compatibility or print certification.
 
       - name: Rotate one native-authored 3MF build item and reimport with the official CLI
         shell: bash
