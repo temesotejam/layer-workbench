@@ -584,22 +584,31 @@ considering the narrow acceptance gate complete.
 
 The two- and three-level native Core Copy-on-Write helpers now refuse to
 clone a root, middle or external mesh carrying per-object Core
-`<metadata>`, foreign-namespace child elements or recognizable
+`<metadata>`, foreign-namespace child elements or *unknown vendor*
 identity-bearing attributes (for example, `uuid`, `guid`,
 `unique_id`, `instance_id`). Copying those declarations verbatim can
-make the detached resource inherit an identifier belonging to the shared
-source. Such archives previously could pass all geometry and ZIP-byte
-preservation checks even though external references might become ambiguous.
+make detached resources reuse opaque identifiers belonging to their source.
 
-This is an **explicit safety refusal, not metadata remapping support**.
-Ordinary Core transforms and Production `p:path` attributes are retained.
-The offline regression checks annotations on each of the three cloned
-resources, an unknown extension element, and a benign Core `name` field.
-The official pinned v2.5.0 CLI test continues to exercise the supported
-geometry-only clone. The native workflow trigger includes the leaf helper
-because root and middle writers import it.
+The **standard 3MF Production Extension `p:UUID`** is a supported,
+well-defined exception: a cloned Core `object` and its cloned
+`component` edge each receive a fresh lowercase RFC 4122 UUIDv4, while
+the original object/component bytes and untouched build item identifiers
+remain unchanged. Its namespace binding and old value must be unambiguous.
+This is required by the 3MF Production Extension Chapter 4; the first
+PR CI run revealed that the official OrcaSlicer v2.5.0 CLI exports
+`p:UUID` on external mesh objects, which made the initial
+blanket-UUID refusal reject an otherwise supported fixture.
+The correction regenerates those known-standard identifiers instead.
+
+The offline regression now checks annotations on each of the three
+cloned resources, an unknown extension element, a benign Core `name`
+field and five distinct original/renewed Production object/component UUIDs.
+The pinned native CLI gate also reimports the real exported project.
+The native workflow trigger includes the shared-leaf helper because
+the root and middle writers import it.
 
 Out-of-object references in `Metadata/model_settings.config`, other
 vendor files, and unrecognized identifier naming schemes remain
-uninterpreted. This guard does **not** prove complete semantic metadata
-integrity, general GUI-authored 3MF support or physical print safety.
+uninterpreted. The Production UUID renewal and opaque-annotation guard do **not**
+prove complete semantic metadata integrity, general GUI-authored 3MF
+support or physical print safety.

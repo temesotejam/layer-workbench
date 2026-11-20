@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 import re
 import sys
+from uuid import uuid4
 from zipfile import ZipFile
 
 from compare_3mf_metadata import inventory
@@ -68,9 +69,12 @@ def _guard_xml(raw, name):
 
 
 
-# Cloning a resource with an opaque per-object ID/annotation would copy that
-# identity verbatim. Geometry equality cannot certify reference integrity.
-# Fail closed until each extension's remapping rules are implemented.
+# Opaque vendor identity fields cannot be cloned without extension-specific
+# rewriting. Standard 3MF Production p:UUID fields ARE supported: every new
+# object/component occurrence receives a fresh RFC 4122 v4 identifier.
+_PROD_URI = "http://schemas.microsoft.com/3dmanufacturing/production/2015/06"
+_PROD_NS = "{" + _PROD_URI + "}"
+_UUID_SHAPE = re.compile(r"[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}\Z")
 _CLONE_IDENTITY_KEYS = {
     "uuid", "guid", "uniqueid", "instanceid", "objectuuid",
     "objectguid", "refuuid", "idref",
@@ -78,21 +82,56 @@ _CLONE_IDENTITY_KEYS = {
 
 
 def _require_clone_safe_annotations(obj, location):
-    """Reject opaque per-object metadata and identity-bearing clone fields.
-
-    Keep known Core mesh/component geometry and Production p:path attributes;
-    this is not a validator for Metadata/*.config cross references.
-    """
+    """Allow known production UUIDs; refuse unhandled identities and metadata."""
     for elem in obj.iter():
         tag = elem.tag
         if not isinstance(tag, str) or not tag.startswith(CORE_NS):
             raise ValueError("Opaque extension element in cloned Core " + location)
         if tag == CORE_NS + "metadata":
             raise ValueError("Unsupported per-object metadata in cloned Core " + location)
-        for key in elem.attrib:
+        for key, value in elem.attrib.items():
+            if key == _PROD_NS + "UUID":
+                if tag not in (CORE_NS + "object", CORE_NS + "component"):
+                    raise ValueError("Unsupported Production UUID location in " + location)
+                if not _UUID_SHAPE.fullmatch(value):
+                    raise ValueError("Malformed Production UUID in " + location)
+                continue
             local = key.rsplit("}", 1)[-1].replace("_", "").lower()
             if local in _CLONE_IDENTITY_KEYS:
                 raise ValueError("Identity attribute in cloned Core " + location)
+
+
+def _renew_production_uuid(opening, original_element, model_raw):
+    """Surgically regenerate a known p:UUID, preserving all other XML bytes.
+
+    Refuse ambiguous prefix bindings or UUID spellings rather than rewriting
+    arbitrary vendor attributes. The original element remains unchanged.
+    """
+    old = original_element.get(_PROD_NS + "UUID")
+    if old is None:
+        return opening
+    if not _UUID_SHAPE.fullmatch(old):
+        raise ValueError("Malformed Production UUID on selected Core element")
+    xmlns_pattern = (rb'xmlns:(?P<prefix>[A-Za-z_][\w.-]*)\s*=\s*'
+                     rb'(?P<quote>["\'])' + re.escape(_PROD_URI.encode("ascii"))
+                     + rb'(?P=quote)')
+    prefixes = {match.group("prefix") for match in
+                re.finditer(xmlns_pattern, model_raw)}
+    matches = []
+    for prefix in prefixes:
+        attribute_pattern = (rb'(?<![\w:.-])' + re.escape(prefix) +
+                             rb':UUID\s*=\s*(?P<quote>["\'])'
+                             rb'(?P<value>[^"\']+)(?P=quote)')
+        matches.extend(match for match in re.finditer(attribute_pattern, opening)
+                       if match.group("value") == old.encode("ascii"))
+    if len(matches) != 1:
+        raise ValueError("Ambiguous Production UUID markup in cloned Core tag")
+    new = str(uuid4()).encode("ascii")
+    while new in model_raw:
+        new = str(uuid4()).encode("ascii")
+    match = matches[0]
+    return opening[:match.start("value")] + new + opening[match.end("value"):]
+
 
 def _clone_mesh_part(raw, original_id):
     root = _guard_xml(raw, "external Core model")
@@ -113,8 +152,9 @@ def _clone_mesh_part(raw, original_id):
         raise ValueError("Core ID space exhausted")
     new_id = str(new_id_int)
     start, opening_end, end = _object_block(raw, original_id)
-    clone = (_replace_attr_in_opening(raw[start:opening_end], "id", original_id, new_id)
-             + raw[opening_end:end])
+    opening = _replace_attr_in_opening(raw[start:opening_end], "id", original_id, new_id)
+    opening = _renew_production_uuid(opening, source[0], raw)
+    clone = opening + raw[opening_end:end]
     endings = list(RESOURCES_END.finditer(raw))
     if len(endings) != 1:
         raise ValueError("Ambiguous external resources insertion point")

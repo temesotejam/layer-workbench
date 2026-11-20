@@ -256,5 +256,61 @@ class ThreeLevelCopyOnWriteTests(unittest.TestCase):
             self.assertIn(b'name="middle"', archive.read(MAIN))
 
 
+    def test_standard_production_uuids_are_unique_after_three_level_clone(self):
+        # Native CLI files emit standard p:UUID on Core object resources.
+        # A clone must renew its object AND component occurrence identifiers.
+        import xml.etree.ElementTree as ET
+        parts = three_level_parts()
+        uuids = [f"00000000-0000-4000-8000-{i:012x}".encode() for i in range(1, 6)]
+        main = parts[MAIN]
+        for opening, fresh in (
+            (b'<object id="1" type="model">', uuids[0]),
+            (b'<object id="3" type="model">', uuids[1]),
+            (b'<component objectid="3"', uuids[2]),
+            (b'<component objectid="101"', uuids[3]),
+        ):
+            self.assertEqual(main.count(opening), 1)
+            if opening.endswith(b'>'):
+                changed = opening[:-1] + b' p:UUID="' + fresh + b'">'
+            else:
+                changed = opening + b' p:UUID="' + fresh + b'"'
+            main = main.replace(opening, changed, 1)
+        parts[MAIN] = main
+        leaf = parts[LEAF]
+        core_model = b'<model xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">'
+        with_prod = core_model[:-1] + (
+            b' xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06">')
+        self.assertEqual(leaf.count(core_model), 1)
+        leaf = leaf.replace(core_model, with_prod, 1)
+        leaf = leaf.replace(
+            b'<object id="101">',
+            b'<object id="101" p:UUID="' + uuids[4] + b'">', 1)
+        parts[LEAF] = leaf
+        self.write(parts)
+        before_bytes = self.source.read_bytes()
+
+        def collect_uuids(archive):
+            result = []
+            for part in (MAIN, LEAF):
+                model = ET.fromstring(archive.read(part))
+                result.extend(element.get(
+                    "{http://schemas.microsoft.com/3dmanufacturing/production/2015/06}UUID")
+                    for element in model.iter() if element.get(
+                    "{http://schemas.microsoft.com/3dmanufacturing/production/2015/06}UUID"))
+            return result
+
+        with ZipFile(self.source) as original:
+            before = collect_uuids(original)
+        self.assertEqual(len(before), 5)
+        report = clone_three_level_chain(self.source, self.output)
+        with ZipFile(self.output) as cloned:
+            after = collect_uuids(cloned)
+        self.assertEqual(len(after), 10)
+        self.assertEqual(len(set(after)), len(after))
+        self.assertTrue(set(before).issubset(after))
+        self.assertEqual(report["private_build_index"], 1)
+        self.assertEqual(self.source.read_bytes(), before_bytes)
+
+
 if __name__ == "__main__":
     unittest.main()

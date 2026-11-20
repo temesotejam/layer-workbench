@@ -18,6 +18,7 @@ from clone_native_3mf_shared_leaf import (
     MAX_CORE_ID, COMPONENT_OPEN, OBJECT_OPEN, RESOURCES_END,
     _attribute, _clone_mesh_part, _guard_xml, _object_block,
     _replace_attr_in_opening, _require_clone_safe_annotations,
+    _renew_production_uuid,
 )
 from compare_3mf_metadata import inventory
 from plan_native_3mf_copy_on_write import plan_copy_on_write
@@ -57,15 +58,17 @@ def _clone_root_and_redirect_build(raw, root_id, old_leaf_id, new_leaf_id,
         raise ValueError("Both build items must reference the same Core root")
     start, opening_end, end = _object_block(raw, root_id)
     original_block = raw[start:end]
-    cloned_block = (_replace_attr_in_opening(
+    clone_opening = _replace_attr_in_opening(
         raw[start:opening_end], "id", root_id, new_id)
-        + raw[opening_end:end])
+    clone_opening = _renew_production_uuid(clone_opening, old[0], raw)
+    cloned_block = clone_opening + raw[opening_end:end]
     edges = list(COMPONENT_OPEN.finditer(cloned_block))
     if len(edges) != 1:
         raise ValueError("Ambiguous raw component markup in cloned root")
     edge = edges[0]
     changed_edge = _replace_attr_in_opening(
         edge.group(), "objectid", old_leaf_id, new_leaf_id)
+    changed_edge = _renew_production_uuid(changed_edge, children[0], raw)
     cloned_block = (cloned_block[:edge.start()] + changed_edge +
                     cloned_block[edge.end():])
     endings = list(RESOURCES_END.finditer(raw))
