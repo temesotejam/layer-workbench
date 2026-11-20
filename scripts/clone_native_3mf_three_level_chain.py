@@ -16,6 +16,7 @@ from audit_native_3mf_instance_placement import inspect_placements
 from clone_native_3mf_shared_leaf import (
     COMPONENT_OPEN, MAX_CORE_ID, RESOURCES_END, _clone_mesh_part,
     _guard_xml, _object_block, _replace_attr_in_opening,
+    _require_clone_safe_annotations,
 )
 from clone_native_3mf_shared_root_chain import _clone_root_and_redirect_build
 from compare_3mf_metadata import inventory
@@ -41,6 +42,7 @@ def _clone_middle(raw, middle_id, old_child_id, new_child_id):
     matches = [obj for obj in objects if obj.get("id") == middle_id]
     if len(matches) != 1:
         raise ValueError("Ambiguous middle Core component")
+    _require_clone_safe_annotations(matches[0], "middle component")
     group = matches[0].find(CORE_NS + "components")
     children = [] if group is None else group.findall(CORE_NS + "component")
     if len(children) != 1 or children[0].get("objectid") != old_child_id:
