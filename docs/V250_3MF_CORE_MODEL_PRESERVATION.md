@@ -36,3 +36,16 @@ G-code parity or physical print safety.
 Related code: scripts/edit_3mf_build_transform.py,
 scripts/compare_3mf_metadata.py,
 docs/V250_3MF_ANCILLARY_PRESERVATION.md.
+
+## 2026-11-20: XML attribute quote compatibility
+
+The offline surgical editor now accepts the XML-permitted single-quoted and
+spaced-equals forms of an explicit Core `<build><item transform='...'>`
+attribute. It preserves the original quote character, spacing and every
+other model XML byte while replacing only the numeric value. Namespace-
+qualified vendor attributes such as `v:transform` are not edit targets.
+An independent exact-byte preservation audit and tests cover these variants.
+DTD/entity expansion, implicit transforms, escaped transform values, multiple
+model parts, and general OrcaSlicer project compatibility remain unsupported.
+The CI archive audit and isolated Core-3MF verification are triggered when
+the surgical editor or its regression tests change on a pull request.
