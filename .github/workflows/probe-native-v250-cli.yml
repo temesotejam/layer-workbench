@@ -1294,21 +1294,47 @@ jobs:
             --report native-cli-output/native-bridge-speed-audit.log
           # No generated print G-code or full licensed upstream profiles archived.
 
-      - name: Reopen isolated shared-root Core fixture with official v2.5.0 CLI
+      - name: Reopen a shared-root variant of official native v2.5.0 project
         shell: bash
         run: |
           set -euo pipefail
+          # Create a bounded test variant of the actual official CLI export;
+          # the earlier purely synthetic package has placeholder OPC content
+          # types and metadata, which native OrcaSlicer cannot reopen.
           python3 - <<'PY'
           import sys
           from pathlib import Path
           from zipfile import ZipFile
           sys.path.insert(0, "scripts")
-          from test_clone_native_3mf_shared_root_chain import shared_root_parts
-          destination = Path("native-cli-output/shared-root-source.3mf")
-          with ZipFile(destination, "w") as archive:
-              for name, data in shared_root_parts().items():
-                  archive.writestr(name, data)
+          from clone_native_3mf_shared_leaf import _guard_xml, _replace_attr_in_opening
+          from clone_native_3mf_shared_root_chain import ITEM_OPEN
+          from verify_native_3mf_package import CORE_NS, MAIN_PART
+          source = Path("native-cli-output/native-v250-project.3mf")
+          output = Path("native-cli-output/shared-root-source.3mf")
+          with ZipFile(source) as archive:
+              raw = archive.read(MAIN_PART)
+              root = _guard_xml(raw, "official native Core model")
+              build = root.find(CORE_NS + "build")
+              items = [] if build is None else build.findall(CORE_NS + "item")
+              tags = list(ITEM_OPEN.finditer(raw))
+              if len(items) != 2 or len(tags) != 2:
+                  raise SystemExit("Expected exactly two self-closing native Core build items")
+              first, second = (item.get("objectid") for item in items)
+              if not first or not second or first == second:
+                  raise SystemExit("Expected independent native Core roots")
+              tag = tags[1]
+              changed = _replace_attr_in_opening(tag.group(), "objectid", second, first)
+              patched = raw[:tag.start()] + changed + raw[tag.end():]
+              with ZipFile(output, "x") as result:
+                  result.comment = archive.comment
+                  for info in archive.infolist():
+                      result.writestr(info, patched if info.filename == MAIN_PART
+                                      else archive.read(info))
           PY
+          python3 scripts/plan_native_3mf_copy_on_write.py \
+            --input native-cli-output/shared-root-source.3mf \
+            --build-index 1 --component-edges 0 --require-copy \
+            --report native-cli-output/shared-root-plan.log
           python3 scripts/clone_native_3mf_shared_root_chain.py \
             --input native-cli-output/shared-root-source.3mf \
             --output native-cli-output/shared-root-private.3mf \
