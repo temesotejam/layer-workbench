@@ -14,6 +14,8 @@ on:
       - "scripts/audit_native_3mf_instance_placement.py"
       - "scripts/audit_native_3mf_edit_ownership.py"
       - "scripts/test_audit_native_3mf_edit_ownership.py"
+      - "scripts/plan_native_3mf_copy_on_write.py"
+      - "scripts/test_plan_native_3mf_copy_on_write.py"
       - "scripts/test_audit_native_3mf_instance_placement.py"
       - "scripts/verify_native_3mf_edit_effect.py"
       - "scripts/test_verify_native_3mf_edit_effect.py"
@@ -69,6 +71,8 @@ on:
       - "scripts/audit_native_3mf_instance_placement.py"
       - "scripts/audit_native_3mf_edit_ownership.py"
       - "scripts/test_audit_native_3mf_edit_ownership.py"
+      - "scripts/plan_native_3mf_copy_on_write.py"
+      - "scripts/test_plan_native_3mf_copy_on_write.py"
       - "scripts/test_audit_native_3mf_instance_placement.py"
       - "scripts/verify_native_3mf_edit_effect.py"
       - "scripts/test_verify_native_3mf_edit_effect.py"
@@ -150,6 +154,9 @@ jobs:
 
       - name: Unit-test native 3MF shared Core ownership preflight offline
         run: python3 -m unittest discover -s scripts -p test_audit_native_3mf_edit_ownership.py -v
+
+      - name: Unit-test occurrence-specific native 3MF clone-chain planner offline
+        run: python3 -m unittest discover -s scripts -p test_plan_native_3mf_copy_on_write.py -v
 
       - name: Unit-test expanded native 3MF instance edit effects offline
         run: python3 -m unittest discover -s scripts -p test_verify_native_3mf_edit_effect.py -v
@@ -406,6 +413,13 @@ jobs:
             --require-independent-roots \
             --report native-cli-output/native-project-edit-ownership.log
           cat native-cli-output/native-project-edit-ownership.log
+          # Select the second real native build instance and its first
+          # component edge. Plan only; never modify a native project here.
+          python3 scripts/plan_native_3mf_copy_on_write.py \
+            --input "${project}" --build-index 1 --component-edges 0 \
+            --require-copy \
+            --report native-cli-output/native-project-cow-plan.log
+          cat native-cli-output/native-project-cow-plan.log
           mkdir -p native-cli-output/native-project-stl
           timeout 180s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
             "${project}" --arrange 0 --export-stl \
