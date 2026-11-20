@@ -135,3 +135,26 @@ The new narrow package audit checks required members, XML syntax, and that
 internal OPC relationships resolve to existing members. Geometry is accepted
 only after an actual native CLI reopen and world-space STL check. This still
 is not a general external-part scene parser or metadata-semantic validator.
+
+## 2026-11-20: native CLI-authored multi-part build edit acceptance experiment
+
+A separate `scripts/edit_native_3mf_build_transform.py` intentionally supports
+**only** the source-pinned OrcaSlicer v2.5.0 two-object CLI-exported project
+layout audited by `verify_native_3mf_package.py`. Unlike the synthetic Core
+editor, this reads the main Core `3D/3dmodel.model` build item while allowing
+external `3D/Objects/*.model` parts. It alters one main build-item transform
+by a requested finite relative millimetre translation, retaining all original
+ZIP member payload bytes except the main model XML's one transform attribute.
+
+The independent comparison checks every external model, relationship, printer
+and process metadata part byte-for-byte after decompression, and masks only a
+single main build-item transform attribute. It refuses unsupported native
+layouts, invalid transforms, multiple changed placements and structural XML
+changes; absent identity attributes are accepted only if insertion is the
+single canonical change. The official CLI regression reopens the edited
+native-authored project with `--arrange 0 --export-stl` and checks that only
+the first cube moves +10 mm X while the other remains in place.
+
+This verifies a narrowly scoped native CLI interchange path, **not** GUI-saved
+3MF compatibility, opaque metadata *semantics*, external-component transform
+editing, full 3MF round-trip, native/WASM G-code parity or printable output.
