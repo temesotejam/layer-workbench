@@ -17,7 +17,7 @@ from audit_native_3mf_instance_placement import inspect_placements
 from clone_native_3mf_shared_leaf import (
     MAX_CORE_ID, COMPONENT_OPEN, OBJECT_OPEN, RESOURCES_END,
     _attribute, _clone_mesh_part, _guard_xml, _object_block,
-    _replace_attr_in_opening,
+    _replace_attr_in_opening, _require_clone_safe_annotations,
 )
 from compare_3mf_metadata import inventory
 from plan_native_3mf_copy_on_write import plan_copy_on_write
@@ -45,6 +45,7 @@ def _clone_root_and_redirect_build(raw, root_id, old_leaf_id, new_leaf_id,
     old = [obj for obj in objects if obj.get("id") == root_id]
     if len(old) != 1:
         raise ValueError("Shared main Core root is ambiguous")
+    _require_clone_safe_annotations(old[0], "shared root")
     components = old[0].find(CORE_NS + "components")
     children = [] if components is None else components.findall(CORE_NS + "component")
     if (len(children) != 1 or edge_index != 0 or
