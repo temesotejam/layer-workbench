@@ -635,8 +635,15 @@ branch's Production UUID would silently create an invalid identity collision.
 
 The lightweight 3MF CI gate covers both component selections, UUID uniqueness,
 preserved non-target resources, invalid indices, unsafe graphs and ambiguous
-identities. **This is offline structural/geometry acceptance only**: it does
-not prove that the native v2.5.0 CLI will reopen the branched project, preserve
-all 3MF metadata, produce equivalent G-code, or support browser GUI editing.
-A separate official-native reimport and per-instance geometry acceptance gate
-is required before promoting this candidate to a supported 3MF operation.
+identities. The [pinned v2.5.0 native CLI acceptance run #44829047039](https://github.com/temesotejam/layer-workbench/actions/runs/44829047039)
+also passed: it adds a second displaced Core edge to a **real official
+CLI-export-derived project**, detaches edge 1 of the second build, reopens the
+archive in the official AppImage with auto-arrangement disabled, and checks
+all **four exported 12-facet mesh occurrences** against independently
+composed XYZ bounds. The repeated source edge is a deliberately synthesized
+fixture; this is not an OrcaSlicer GUI-saved branching project.
+
+The success demonstrates this one geometry-only native reimport, **not**
+complete 3MF vendor-metadata semantics, non-identical child meshes,
+multi-edge DAGs, arbitrary GUI projects, native-vs-WASM G-code parity,
+browser editing, or any assurance that generated output can be printed.
