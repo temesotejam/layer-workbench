@@ -43,7 +43,12 @@ def resolve_opc_target(target, source_part):
     parsed = urllib.parse.urlsplit(target)
     if parsed.scheme or parsed.netloc or parsed.query:
         raise ValueError("External or qualified OPC relationship target")
-    decoded = urllib.parse.unquote(parsed.path, errors="strict")
+    try:
+        decoded = urllib.parse.unquote(parsed.path, errors="strict")
+    except UnicodeError as exc:
+        raise ValueError("Invalid encoded OPC relationship target") from exc
+    if decoded.startswith("/") and ".." in decoded.split("/"):
+        raise ValueError("Absolute OPC relationship traverses parent")
     if not decoded or "\\" in decoded or "\x00" in decoded:
         raise ValueError("Invalid decoded OPC relationship target")
     base = "" if source_part is None else posixpath.dirname(source_part)
