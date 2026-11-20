@@ -553,3 +553,29 @@ native GUI-saved project metadata semantics, filament/process settings,
 browser integration, native/WASM G-code parity or print verification.
 The native gate must pass before merging; until it does this remains a
 candidate capability.
+
+## 2026-11-21: detached three-level Core instance → private Y-vertex edit
+
+A deliberately bounded extension to `scale_native_3mf_private_leaf.py` accepts
+`--component-edges 0,0` **only when** the selected Core mesh actually has
+root → middle → external mesh ancestry, the corresponding second build has
+the same depth, and the occurrence-specific copy-on-write planner confirms
+that the selected path is private. The original `--component-edge 0`
+two-level behavior remains the default. All other multi-edge paths fail
+closed rather than silently editing a different leaf.
+
+The offline regression starts with a shared three-level chain, rejects
+premature edits, detaches root/middle/mesh using the previously audited
+writer, and scales only the selected mesh's local Y vertices by 1.2×.
+It requires unchanged sibling world bounds, exact component identities and
+transforms, identical opaque archive members and no mutation of either
+source archive. The pinned official v2.5.0 CLI workflow then reopens the
+Y-edited, CLI-derived three-level project with `--arrange 0` and compares
+the actual exported STL geometry against independently composed Core bounds.
+Native project and preset payloads stay ephemeral in CI.
+
+**Scope is geometry-only.** This does not validate general GUI-saved 3MF
+metadata interpretation, nonzero component indices, branched graphs,
+additional nesting, official-native vs WASM G-code equivalence, published
+Pages slicing or real-world printing. A green CI run is required before
+considering the narrow acceptance gate complete.
