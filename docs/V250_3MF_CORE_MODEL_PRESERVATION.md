@@ -211,3 +211,36 @@ This is a tightly bounded native CLI export/reimport acceptance case. It
 does **not** establish support for arbitrary GUI-saved multipart hierarchy,
 model-center pivot semantics, complete 3MF project round-trip,
 native-vs-WASM G-code equivalence, or safe physical printing.
+
+
+## 2026-11-20: read-only CLI multipart object/component topology inventory
+
+The official v2.5.0 CLI 3MF acceptance workflow now runs
+`scripts/inspect_native_3mf_hierarchy.py` on the exported project. It
+first applies the existing bounded ZIP and internal OPC package checks,
+then records Core model-part object IDs, main build-item references, mesh
+objects and component edges. Namespace-qualified component `path` hints
+are resolved within the package; missing target objects, missing main build
+resources and unresolved component references are reported explicitly.
+It rejects duplicate/missing resource object IDs and unsafe component paths.
+
+The diagnostic output is textual JSON in CI; the native 3MF archive itself
+is not uploaded. The pinned two-object CLI case requires two main build
+items, but intentionally **does not yet gate on every component edge being
+resolved**. Inspect the resulting topology before accepting a broader editor
+that changes component transforms or flattens multiple instances. The
+report does not compose nested transforms, inspect proprietary metadata
+semantics, prove GUI-authored 3MF compatibility, or certify printing.
+
+Offline tests construct a two-object synthetic multipart graph and cover
+valid external links, dangling build references, dangling external object
+IDs, duplicate object IDs and path traversal. These tests run before the
+native AppImage is downloaded; they do not replace native reimport checks.
+
+The inspector also recognizes Production Extension `p:path` on **root build items**
+(as well as root-model components) and resolves such IDs against their target
+model part. It ignores unrelated vendor attributes named `path`, requires
+absolute package paths, and rejects cross-part `p:path` on non-root model
+components. These restrictions follow the [3MF Production Extension v1.1.2](https://3mf.io/wp-content/uploads/sites/106/2025/02/3MF_Production_Extension_v1_1_2.pdf),
+sections 2 and 3. They are reference-inventory rules, not a guarantee that
+all transform/metadata extension semantics are implemented.
