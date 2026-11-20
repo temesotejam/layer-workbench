@@ -111,6 +111,46 @@ class Core3MFBuildTransformTests(unittest.TestCase):
                 self.assertIn(b'v:transform="leave-this-opaque"', new_xml)
             self.assertTrue(compare_build_preservation(source, dest)['match'])
 
+    def test_implicit_core_identity_edits_preserve_unrelated_xml(self):
+        """Materialize an omitted Core transform without reserializing XML."""
+        from compare_3mf_build_preservation import compare_build_preservation
+        explicit = b'<item objectid="1" transform="1 0 0 0 1 0 0 0 1 150 90 0"/>'
+        identity = '1 0 0 0 1 0 0 0 1 0 0 0'
+        moved = b'1 0 0 0 1 0 0 0 1 5 7 0'
+        for implicit in (
+            b'<item objectid="1"/>',
+            b'<item objectid="1" />',
+            b'<item objectid="1"></item>',
+        ):
+            with self.subTest(implicit=implicit), tempfile.TemporaryDirectory() as folder:
+                source, dest = self.paths(folder)
+                self.rewrite_core_model(source, [(explicit, implicit)])
+                with zipfile.ZipFile(source, 'a') as archive:
+                    archive.writestr('Metadata/opaque.bin', b'vendor\\x00bytes')
+                original_bytes = source.read_bytes()
+                with zipfile.ZipFile(source) as archive:
+                    before_xml = archive.read('3D/3dmodel.model')
+                result = translate_core_build_item(source, dest, 1, (5, 7, 0))
+                self.assertEqual(result['editedBuildIndex'], 1)
+                self.assertEqual(source.read_bytes(), original_bytes)
+                if implicit.endswith(b'/>'):
+                    expected_tag = implicit[:-2] + b' transform="' + moved + b'"/>'
+                else:
+                    expected_tag = implicit.replace(
+                        b'>', b' transform="' + moved + b'">', 1)
+                with zipfile.ZipFile(dest) as archive:
+                    after_xml = archive.read('3D/3dmodel.model')
+                    self.assertEqual(archive.read('Metadata/opaque.bin'), b'vendor\\x00bytes')
+                self.assertEqual(after_xml, before_xml.replace(implicit, expected_tag, 1))
+                self.assertEqual(audit(dest)['scenes'][0]['buildItems'][1]['transform3mf'][9:],
+                                 [5., 7., 0.])
+                self.assertTrue(compare_build_preservation(source, dest)['match'])
+                # An implicit identity-to-identity edit has no geometric effect.
+                noop = Path(folder) / 'noop.3mf'
+                with self.assertRaisesRegex(ValueError, 'No transform change'):
+                    edit_core_build_item(source, noop, 1, identity)
+                self.assertFalse(noop.exists())
+
     def test_relative_move_preserves_rotated_scaled_item_and_opaque_member(self):
         with tempfile.TemporaryDirectory() as folder:
             source, dest = self.paths(folder)
@@ -294,7 +334,7 @@ class Core3MFBuildTransformTests(unittest.TestCase):
                 edit_core_build_item(source, dest, 1, IDENTITY_180)
             self.assertEqual(dest.read_bytes(), b'important file')
 
-    def test_refuses_missing_attribute_or_unexpected_model_part(self):
+    def test_refuses_noop_implicit_attribute_or_unexpected_model_part(self):
         with tempfile.TemporaryDirectory() as folder:
             source, dest = self.paths(folder)
             with zipfile.ZipFile(source) as original:
@@ -305,8 +345,8 @@ class Core3MFBuildTransformTests(unittest.TestCase):
             with zipfile.ZipFile(source, 'w') as archive:
                 for name, content in entries.items():
                     archive.writestr(name, content)
-            with self.assertRaisesRegex(ValueError, 'explicit transform'):
-                edit_core_build_item(source, dest, 1, IDENTITY_180)
+            with self.assertRaisesRegex(ValueError, 'No transform change'):
+                edit_core_build_item(source, dest, 1, '1 0 0 0 1 0 0 0 1 0 0 0')
             self.assertFalse(dest.exists())
             entries['3D/second.model'] = entries[model_name]
             with zipfile.ZipFile(source, 'w') as archive:
