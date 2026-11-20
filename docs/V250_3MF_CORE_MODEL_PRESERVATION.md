@@ -181,3 +181,33 @@ This is only an acceptance gate for the pinned two-object CLI-exported
 fixture. It does NOT establish support for general GUI-saved projects,
 object-center pivots, arbitrary multipart hierarchy, native/WASM G-code
 equivalence, production WASM integration or print safety.
+
+## 2026-11-20: native CLI-authored multi-part XYZ scale acceptance gate
+
+The isolated command-line 3MF editor now supports `--scale-xyz SX SY SZ`
+in addition to translation and Z rotation. Scale factors must be finite,
+positive, within 0.25..4 per axis and not all 1. The operation composes
+world-axis scaling onto the selected main Core build transform, while
+preserving that transform's original translation anchor. This is **not**
+scaling around the mesh center, and it does not edit external
+`3D/Objects/*.model` geometry or printer/project settings.
+
+Regression tests cover nonuniform scaling, a previously rotated/nonuniform
+transform, missing implicit-identity transforms, untouched sibling items,
+opaque metadata byte preservation, and fail-closed invalid, negative,
+nonfinite, out-of-range or no-op factors.
+
+The official v2.5.0 native CLI workflow exports its existing source-pinned
+two-object project, scales only the first build item by
+`(1.5, 0.75, 1.25)`, independently checks all other 3MF ZIP member
+payloads and Core XML bytes, then reimports with `--arrange 0 --export-stl`.
+Expected XYZ bounds come from the first object's already independently
+verified world-space cube bounds and the *actual* main build transform's
+translation, not a presumed origin. The second cube must keep its original
+bounds and triangle count. No proprietary profile payload, exported 3MF or
+generated STL is uploaded from CI.
+
+This is a tightly bounded native CLI export/reimport acceptance case. It
+does **not** establish support for arbitrary GUI-saved multipart hierarchy,
+model-center pivot semantics, complete 3MF project round-trip,
+native-vs-WASM G-code equivalence, or safe physical printing.
