@@ -418,3 +418,35 @@ The next stage is a separately validated bounded edit of the new, private
 mesh, comparing sibling geometry before/after in the native engine. Keep
 all generated project data ephemeral and do not expose this writer in the
 published browser UI.
+
+
+## 2026-11-20: bounded private Core mesh vertex edit after copy-on-write
+
+The offline-only scripts/scale_native_3mf_private_leaf.py now edits a
+previously detached Core leaf, after scripts/clone_native_3mf_shared_leaf.py
+has split the second of two mesh occurrences. X coordinates of the private
+leaf's vertices are scaled around their local X midpoint, not the plate
+origin. No mesh topology, build placement, component transform, printer
+profile, or generated G-code is changed.
+
+It requires a validated two-build native CLI project, independent selected
+Core ownership, millimetre model units, supported literal vertex markup,
+a finite nonidentity scale in 0.5..1.5 and a new output destination.
+Comments, ambiguous XML, shared leaves and unsupported hierarchy fail closed.
+The raw Core XML writer preserves the sibling mesh object byte for byte.
+Postconditions require that exactly one external model ZIP member changed,
+all unrelated decompressed ZIP members are identical, composed instance
+transforms and triangle counts stay fixed, sibling world bounds are unchanged,
+and edited instance bounds differ.
+
+The official v2.5.0 CLI workflow reimports the independently scaled native
+3MF and exports STL with auto-arrangement disabled. An independent Core
+vertex/placement reader compares BOTH world-space bounds against the actual
+native STL triangles. Only textual diagnostics are archived; project files
+and official binaries remain ephemeral CI data.
+
+This is not desktop GUI-authored 3MF compatibility, arbitrary geometry edit
+support, vendor metadata semantic equivalence, native/WASM G-code parity,
+or safe physical printing. It is not enabled in the public browser.
+Next: generalize nested copy-on-write and audit metadata references before
+considering arbitrary native project edits.
