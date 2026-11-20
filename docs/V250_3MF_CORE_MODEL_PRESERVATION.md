@@ -382,3 +382,39 @@ real-world printability, GUI-saved 3MF or WASM toolpath parity. A later
 clone-and-redirect implementation requires independent checks of sibling
 geometry and untouched archive members with the official CLI. Published
 Pages and WASM remain unchanged.
+
+
+## 2026-11-20: experimental external Core mesh leaf copy-on-write (clone only)
+
+`scripts/clone_native_3mf_shared_leaf.py` executes the first bounded,
+non-printing Core copy-on-write edit after the read-only occurrence planner.
+It supports only the already audited **two-build-item, one-mesh-per-build**
+native multipart layout: a shared mesh in an external model part, reached
+through one component edge of an independently owned main-part parent.
+A path requiring cloned parents, additional leaf instances, nested parent
+chains or non-Core XML is rejected.
+
+The writer allocates a fresh decimal Core object ID in the same external
+model part, inserts an *exact raw-byte copy* of the original mesh object
+with only its ID changed, and rewrites the selected parent component's
+`objectid` **in place**. Surgical raw-byte surgery is used instead of
+re-serializing unrelated vendor XML. Ambiguous raw markup, comments,
+CDATA, processing instructions and unsafe or duplicate references fail
+closed. No mesh vertices, plate coordinates, process settings, profiles
+or machine-facing G-code are edited.
+
+Postconditions check the bounded 3MF/OPC package, untouched non-model ZIP
+members byte for byte, exactly two changed model parts, the independently
+composed geometry of *both* build instances, and the absence of further
+sharing along the newly retargeted leaf. The original archive is never
+overwritten. The official OrcaSlicer v2.5.0 CLI CI gate reopens the new
+archive and independently checks its STL output. This acceptance test is
+clone-only: geometry intentionally remains unchanged.
+
+This does **not** prove semantic integrity of vendor metadata embedded
+inside touched model parts, general GUI-saved 3MF compatibility, future
+mesh vertex edits, WASM-native G-code parity or physical printer safety.
+The next stage is a separately validated bounded edit of the new, private
+mesh, comparing sibling geometry before/after in the native engine. Keep
+all generated project data ephemeral and do not expose this writer in the
+published browser UI.
