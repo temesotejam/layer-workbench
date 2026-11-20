@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Bounded two-edge shared-root Core 3MF copy-on-write experiment.
 
-Two build items must share the same main Core root with exactly two component
-edges referring to the same external mesh. Only one edge in build item 1 is
-detached. The other edge in that build and BOTH edges in build item 0 retain
+Two build items must share the same main Core root with exactly two external
+mesh component edges (the same mesh or two different meshes). Only one edge
+in build item 1 is detached. The other edge in that build and BOTH edges in build item 0 retain
 the original mesh. This is an offline native-CLI fixture helper, not a generic
 3MF editor or a browser feature.
 """
@@ -49,10 +49,9 @@ def _clone_branched_root(raw, root_id, old_leaf_id, new_leaf_id,
     container = original_root.find(CORE_NS + "components")
     children = [] if container is None else container.findall(CORE_NS + "component")
     if (len(children) != 2 or
-            any(child.get("objectid") != old_leaf_id or
-                referenced_part(child, MAIN_PART) != leaf_part
-                for child in children)):
-        raise ValueError("Only two edges to the same external leaf are supported")
+            children[edge_index].get("objectid") != old_leaf_id or
+            referenced_part(children[edge_index], MAIN_PART) != leaf_part):
+        raise ValueError("Selected external mesh edge is absent or ambiguous")
     items = build.findall(CORE_NS + "item")
     if len(items) != 2 or any(item.get("objectid") != root_id for item in items):
         raise ValueError("Expected two build items sharing one root")
@@ -99,7 +98,7 @@ def _clone_branched_root(raw, root_id, old_leaf_id, new_leaf_id,
         raise ValueError("Private branched root not found")
     private_children = matches[0].find(CORE_NS + "components").findall(
         CORE_NS + "component")
-    expected = [old_leaf_id, old_leaf_id]
+    expected = [child.get("objectid") for child in children]
     expected[edge_index] = new_leaf_id
     if [child.get("objectid") for child in private_children] != expected:
         raise ValueError("Private branch retarget mismatch")
@@ -129,7 +128,7 @@ def clone_branched_root(source, destination, build_index=1, edge_index=0):
     steps = plan["clone_steps_inner_to_outer"]
     if (len(steps) != 2 or steps[0]["part"] == MAIN_PART or
             steps[1]["part"] != MAIN_PART or
-            steps[0]["total_visits"] != 4 or
+            steps[0]["total_visits"] not in (2, 4) or
             steps[1]["total_visits"] != 2 or
             steps[0]["redirect_occurrence"] != {
                 "kind": "component", "parent_part": MAIN_PART,
@@ -195,7 +194,7 @@ def clone_branched_root(source, destination, build_index=1, edge_index=0):
         "private_leaf_id": new_leaf_id,
         "changed_model_parts": [MAIN_PART, leaf_part],
         "geometry_unchanged": True,
-        "limitations": "One shared root, two identical external leaf references; no GUI 3MF, metadata-semantic, native CLI, G-code or print parity."
+        "limitations": "One shared root with two external mesh edges (identical or distinct); no GUI 3MF, metadata-semantic, native CLI, G-code or print parity."
     }
 
 
