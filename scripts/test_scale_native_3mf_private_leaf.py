@@ -53,6 +53,54 @@ class PrivateCoreMeshScaleTests(unittest.TestCase):
                 if name != LEAF:
                     self.assertEqual(a.read(name), b.read(name))
 
+    def test_y_and_z_axis_scales_are_isolated_and_keep_other_coordinates(self):
+        self.clone()
+        before = inspect_placements(self.private)
+        leaf_id = before["mesh_instances"][1]["mesh_objectid"]
+        from clone_native_3mf_shared_leaf import _object_block, _attribute
+        from scale_native_3mf_private_leaf import VERTEX_TAG
+
+        def vertex_attrs(raw):
+            start, _, end = _object_block(raw, leaf_id)
+            return [
+                {key: _attribute(m.group(), key).group("value")
+                 for key in ("x", "y", "z")}
+                for m in VERTEX_TAG.finditer(raw[start:end])
+            ]
+
+        with ZipFile(self.private) as original:
+            old_vertices = vertex_attrs(original.read(LEAF))
+        for axis in ("y", "z"):
+            output = self.scaled.with_name("scaled-" + axis + ".3mf")
+            report = scale_private_leaf(self.private, output, 1, 0, 1.2, axis)
+            self.assertEqual(report["scale_axis"], axis)
+            self.assertEqual(report["scale_factor"], 1.2)
+            after = inspect_placements(output)
+            self.assertEqual(before["per_build_world_bounds_mm"][0],
+                             after["per_build_world_bounds_mm"][0])
+            self.assertNotEqual(before["per_build_world_bounds_mm"][1],
+                                after["per_build_world_bounds_mm"][1])
+            with ZipFile(self.private) as original, ZipFile(output) as edited:
+                self.assertEqual(original.comment, edited.comment)
+                self.assertEqual(original.read(MAIN), edited.read(MAIN))
+                for member in inventory(self.private):
+                    if member != LEAF:
+                        self.assertEqual(original.read(member), edited.read(member))
+                new_vertices = vertex_attrs(edited.read(LEAF))
+            self.assertEqual(len(old_vertices), len(new_vertices))
+            self.assertTrue(any(old[axis] != new[axis]
+                                for old, new in zip(old_vertices, new_vertices)))
+            for old, new in zip(old_vertices, new_vertices):
+                for other in {"x", "y", "z"} - {axis}:
+                    self.assertEqual(old[other], new[other])
+
+    def test_invalid_axis_rejected_without_output(self):
+        self.clone()
+        for axis in (None, "", "X", "w", 0, True, ("z",)):
+            with self.subTest(axis=axis), self.assertRaises(ValueError):
+                scale_private_leaf(self.private, self.scaled, 1, 0, 1.2, axis)
+            self.assertFalse(self.scaled.exists())
+
     def test_uncloned_shared_leaf_fails_without_creating_output(self):
         with self.assertRaisesRegex(ValueError, "private external clone"):
             scale_private_leaf(self.source, self.scaled)
