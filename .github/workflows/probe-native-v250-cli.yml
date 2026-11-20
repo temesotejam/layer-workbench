@@ -9,6 +9,8 @@ on:
       - "scripts/verify_native_exported_stl.py"
       - "scripts/verify_native_3mf_package.py"
       - "scripts/test_verify_native_3mf_package.py"
+      - "scripts/edit_native_3mf_build_transform.py"
+      - "scripts/test_edit_native_3mf_build_transform.py"
       - "scripts/test_verify_native_exported_stl.py"
       - "scripts/prepare-native-v250-presets.mjs"
       - "scripts/test-prepare-native-v250-presets.mjs"
@@ -52,6 +54,8 @@ on:
       - "scripts/verify_native_exported_stl.py"
       - "scripts/verify_native_3mf_package.py"
       - "scripts/test_verify_native_3mf_package.py"
+      - "scripts/edit_native_3mf_build_transform.py"
+      - "scripts/test_edit_native_3mf_build_transform.py"
       - "scripts/test_verify_native_exported_stl.py"
       - "scripts/prepare-native-v250-presets.mjs"
       - "scripts/test-prepare-native-v250-presets.mjs"
@@ -117,6 +121,9 @@ jobs:
 
       - name: Unit-test native 3MF external-part package validation offline
         run: python3 -m unittest discover -s scripts -p test_verify_native_3mf_package.py -v
+
+      - name: Unit-test lossless native multi-part build edit offline
+        run: python3 -m unittest discover -s scripts -p test_edit_native_3mf_build_transform.py -v
 
       - name: Unit-test native effective layer-height audit offline
         run: python3 -m unittest discover -s scripts -p test_verify_native_layer_height.py -v
@@ -369,6 +376,49 @@ jobs:
           echo "PASS: official native v2.5.0 exported and reopened a 3MF with both synthetic-object placements"
           # This is native CLI-produced, NOT desktop-GUI-saved, and does not
           # establish 3MF metadata round-trip or native-WASM slicing parity.
+
+      - name: Move one official-native-authored 3MF build item without rewriting other parts
+        shell: bash
+        run: |
+          set -euo pipefail
+          source="native-cli-output/native-v250-project.3mf"
+          edited="native-cli-output/native-v250-project-edited.3mf"
+          python3 scripts/edit_native_3mf_build_transform.py \
+            --input "${source}" --output "${edited}" \
+            --build-index 0 --translate-mm 10 0 0 \
+            --report native-cli-output/native-project-surgical-edit.log
+          # Independent invocation of the read-only byte-preservation gate.
+          python3 - <<'PY'
+          import sys
+          sys.path.insert(0, "scripts")
+          from edit_native_3mf_build_transform import compare_native_build_edit
+          report = compare_native_build_edit(
+              "native-cli-output/native-v250-project.3mf",
+              "native-cli-output/native-v250-project-edited.3mf", 0)
+          if not report["match"] or len(report["preserved_external_model_parts"]) != 2:
+              raise SystemExit("Refused: native archive did not preserve all external parts")
+          print("PASS: native-authored multipart 3MF opaque parts and sibling build unchanged")
+          PY
+          app="${RUNNER_TEMP}/OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.5.0.AppImage"
+          mkdir -p native-cli-output/native-project-edited-stl
+          timeout 180s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
+            "${edited}" --arrange 0 --export-stl \
+            --outputdir native-cli-output/native-project-edited-stl \
+            > native-cli-output/native-project-edited-reopen.log 2>&1 || {
+              tail -n 120 native-cli-output/native-project-edited-reopen.log
+              exit 1
+            }
+          mapfile -d '' stls < <(find native-cli-output/native-project-edited-stl \
+            -type f -iname '*.stl' -print0)
+          if [ "${#stls[@]}" -lt 1 ] || [ "${#stls[@]}" -gt 2 ]; then
+            echo "Expected 1..2 STL exports from edited native 3MF"
+            exit 1
+          fi
+          python3 scripts/verify_native_exported_stl.py \
+            --expected-bounds 100 120 90 110 0 20 150 170 90 110 0 20 \
+            "${stls[@]}" | tee native-cli-output/native-project-edited-placement.log
+          echo "PASS: official v2.5.0 CLI applies one native-authored 3MF build placement edit"
+          # Neither real-GUI 3MF, full metadata semantics nor print safety proven.
 
       - name: Attempt real official-native v2.5.0 slicing with source-pinned full presets
         shell: bash
