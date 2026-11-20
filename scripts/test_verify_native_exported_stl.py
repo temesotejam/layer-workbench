@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 from make_3mf_two_build_fixture import TRIANGLES, VERTICES
-from verify_native_exported_stl import audit_export
+from verify_native_exported_stl import EXPECTED, audit_export
 
 
 class NativeStlAuditTests(unittest.TestCase):
@@ -42,6 +42,35 @@ class NativeStlAuditTests(unittest.TestCase):
     def test_placement_shift_fails_even_though_shapes_same(self):
         with self.assertRaisesRegex(ValueError, "outside both"):
             self.audit(self.generate(shift=5.))
+
+    def test_explicit_shifted_bounds_require_both_native_placements(self):
+        shifted = ((95., 115., 90., 110., 0., 20.),
+                   (155., 175., 90., 110., 0., 20.))
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "shifted.stl"
+            path.write_bytes(self.generate(shift=5.))
+            result = audit_export(path, expected=shifted)
+            self.assertEqual([item["bounds"] for item in result], list(shifted))
+            with self.assertRaisesRegex(ValueError, "outside both"):
+                audit_export(path)
+            with self.assertRaisesRegex(ValueError, "outside both"):
+                audit_export(path, expected=(shifted[0],
+                                            (150., 170., 90., 110., 0., 20.)))
+
+    def test_invalid_custom_boxes_are_rejected(self):
+        EXPECTED_BOX = EXPECTED[1]
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "fixture.stl"
+            path.write_bytes(self.generate())
+            for boxes in (
+                (EXPECTED_BOX,),
+                ((90., 90., 90., 110., 0., 20.), EXPECTED_BOX),
+                ((float('nan'), 110., 90., 110., 0., 20.), EXPECTED_BOX),
+                ((90., 110., 90., 110., 0.), EXPECTED_BOX),
+            ):
+                with self.subTest(boxes=boxes):
+                    with self.assertRaisesRegex(ValueError, "Expected two finite"):
+                        audit_export(path, expected=boxes)
 
     def test_missing_second_item_fails(self):
         with self.assertRaisesRegex(ValueError, "24 cube facets"):
