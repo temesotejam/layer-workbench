@@ -164,6 +164,56 @@ def rotate_native_build_item_z(source, destination, index, angle_degrees):
     return report
 
 
+def scale_native_build_item_xyz(source, destination, index, factors):
+    """Scale one main build item about its existing build translation anchor.
+
+    Positive factors act along world X/Y/Z axes after the original affine
+    transform. Do not alter the build translation, external parts, or meshes.
+    This is NOT a mesh-centred scale or a general 3MF project editor.
+    """
+    source, destination = Path(source), Path(destination)
+    if source.resolve() == destination.resolve() or destination.exists():
+        raise ValueError("Destination must be a new, different archive")
+    if isinstance(index, bool) or not isinstance(index, int) or index < 0:
+        raise ValueError("Build item index must be nonnegative")
+    if (not isinstance(factors, (tuple, list)) or len(factors) != 3 or
+        any(isinstance(v, bool) or not isinstance(v, (int, float)) or
+            not math.isfinite(v) or not 0.25 <= v <= 4 for v in factors) or
+        all(v == 1 for v in factors)):
+        raise ValueError("Expected non-identity finite XYZ scale factors in 0.25..4")
+    audit_native_package(source)
+    with zipfile.ZipFile(source) as archive:
+        original = archive.read(MAIN_PART)
+        _, transforms = mask_build_transforms(original)
+        if index >= len(transforms):
+            raise ValueError("Selected main Core build item does not exist")
+        matrix = list(transforms[index] if transforms[index] is not None else IDENTITY)
+        sx, sy, sz = factors
+        scaled = compose_3mf(matrix, [sx, 0, 0, 0, sy, 0, 0, 0, sz, 0, 0, 0])
+        scaled[9:12] = matrix[9:12]
+        validated_matrix(" ".join(format(value, ".17g") for value in scaled))
+        edited_xml = _replace_one_build_transform(original, index, scaled)
+        try:
+            with zipfile.ZipFile(destination, "x") as output:
+                output.comment = archive.comment
+                for info in archive.infolist():
+                    output.writestr(info, edited_xml if info.filename == MAIN_PART
+                                    else archive.read(info))
+        except BaseException:
+            destination.unlink(missing_ok=True)
+            raise
+    try:
+        report = compare_native_build_edit(source, destination, index)
+        if not report["match"]:
+            raise ValueError("Native multi-part 3MF byte-preservation audit failed")
+    except BaseException:
+        destination.unlink(missing_ok=True)
+        raise
+    report["scale_xyz"] = list(factors)
+    report["pivot"] = "existing build translation (not mesh center)"
+    return report
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", required=True, type=Path)
@@ -172,15 +222,19 @@ def main():
     edits = parser.add_mutually_exclusive_group(required=True)
     edits.add_argument("--translate-mm", nargs=3, type=float)
     edits.add_argument("--rotate-z-deg", type=float)
+    edits.add_argument("--scale-xyz", nargs=3, type=float)
     parser.add_argument("--report", type=Path)
     args = parser.parse_args()
     try:
         if args.translate_mm is not None:
             report = translate_native_build_item(
                 args.input, args.output, args.build_index, args.translate_mm)
-        else:
+        elif args.rotate_z_deg is not None:
             report = rotate_native_build_item_z(
                 args.input, args.output, args.build_index, args.rotate_z_deg)
+        else:
+            report = scale_native_build_item_xyz(
+                args.input, args.output, args.build_index, args.scale_xyz)
         text = json.dumps(report, sort_keys=True, indent=2) + "\n"
         if args.report:
             args.report.write_text(text, encoding="utf-8")
