@@ -357,3 +357,28 @@ individual component chain (copy-on-write), general GUI-saved 3MF support,
 vendor metadata coherence, native/WASM G-code parity, or print safety.
 The next editor must clone and retarget precisely one path, then
 independently compare sibling geometry and opaque package members.
+
+## 2026-11-20: occurrence-specific Core copy-on-write plan (read-only)
+
+`scripts/plan_native_3mf_copy_on_write.py` turns per-build Core ownership
+counts into a specific clone-chain plan. Given a main build index and
+zero-based component-edge path (e.g. `--build-index 1 --component-edges 0`),
+it selects **one occurrence**, even when identical child IDs appear twice
+under the same component parent. Object IDs alone cannot distinguish them.
+
+The plan lists shared objects to clone **leaf first**, and the exact
+component edge or build item reference to redirect at each step.
+A shared leaf with a unique parent needs one clone; a shared root requires
+both the leaf and the root to be cloned. Invalid paths and malformed Core
+packages fail closed through the validated ownership/placement audit.
+
+The official native CLI CI tests a shared-mesh occurrence in its generated
+two-object v2.5.0 project. Offline regressions exercise repeated edges,
+shared roots, unique leaves, invalid indices, and read-only preservation.
+
+**Nothing is rewritten.** The planner allocates no object IDs, changes no
+model parts or OPC relationships, and cannot certify native project metadata,
+real-world printability, GUI-saved 3MF or WASM toolpath parity. A later
+clone-and-redirect implementation requires independent checks of sibling
+geometry and untouched archive members with the official CLI. Published
+Pages and WASM remain unchanged.
