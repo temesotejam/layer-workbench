@@ -58,7 +58,15 @@ def read_triangles(path: Path):
     return faces
 
 
-def audit_export(*paths: Path):
+def audit_export(*paths: Path, expected=EXPECTED):
+    """Verify two nondegenerate 12-facet boxes at independently declared bounds."""
+    if (len(expected) != 2 or any(
+        len(box) != 6 or
+        any(type(v) not in (int, float) or not math.isfinite(v) for v in box) or
+        any(box[i] >= box[i + 1] for i in (0, 2, 4))
+        for box in expected
+    )):
+        raise ValueError("Expected two finite six-value XYZ min/max bounds")
     if not 1 <= len(paths) <= 2:
         raise ValueError('expected one combined or two independent exported STLs')
     faces = [face for path in paths for face in read_triangles(path)]
@@ -79,7 +87,7 @@ def audit_export(*paths: Path):
         if sum(k*k for k in cross) <= EPS * EPS:
             raise ValueError("degenerate STL triangle")
         matches = []
-        for i, (xmin, xmax, ymin, ymax, zmin, zmax) in enumerate(EXPECTED):
+        for i, (xmin, xmax, ymin, ymax, zmin, zmax) in enumerate(expected):
             if all(xmin-EPS <= p[0] <= xmax+EPS and
                    ymin-EPS <= p[1] <= ymax+EPS and
                    zmin-EPS <= p[2] <= zmax+EPS for p in face):
@@ -88,7 +96,7 @@ def audit_export(*paths: Path):
             raise ValueError("triangle outside both expected placed cubes")
         groups[matches[0]].append(face)
     report = []
-    for idx, (faces_in_group, expected) in enumerate(zip(groups, EXPECTED)):
+    for idx, (faces_in_group, expected) in enumerate(zip(groups, expected)):
         if len(faces_in_group) != 12:
             raise ValueError(f"build item {idx + 1}: expected 12 facets, got {len(faces_in_group)}")
         vertices = [point for face in faces_in_group for point in face]
@@ -103,6 +111,8 @@ def audit_export(*paths: Path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--expected-bounds", type=float, nargs=12, metavar="MM",
+                        help="Two boxes in order: xmin xmax ymin ymax zmin zmax, in mm")
     parser.add_argument("stl", type=Path, nargs="+")
     args = parser.parse_args()
     for path in args.stl:
@@ -112,7 +122,9 @@ def main():
                        for axis in range(3) for fn in (min, max))
         print('Native STL diagnostic:', path.name,
               'facets=', len(faces), 'XYZ min/max pairs=', bounds, flush=True)
-    for entry in audit_export(*args.stl):
+    expected = EXPECTED if args.expected_bounds is None else (
+        tuple(args.expected_bounds[:6]), tuple(args.expected_bounds[6:]))
+    for entry in audit_export(*args.stl, expected=expected):
         print("PASS: official native exported Core 3MF build item",
               entry["item"], "facets=", entry["facets"], "XYZ bounds=", entry["bounds"])
 
