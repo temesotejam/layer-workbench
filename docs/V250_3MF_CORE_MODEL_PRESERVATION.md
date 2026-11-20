@@ -525,3 +525,31 @@ Arbitrary-depth component graphs, mixed model parts, opaque Orca metadata
 semantics, user-facing browser editing, full-profile native/WASM G-code
 parity and real printer validation remain unverified. Test project
 files remain ephemeral in CI; do not publish generated G-code.
+
+
+## 2026-11-21: bounded three-level occurrence Copy-on-Write (candidate)
+
+The new `scripts/clone_native_3mf_three_level_chain.py` extends the
+native-CLI-only Core ownership experiment to a single
+**build item → shared root → shared middle → external shared mesh**
+reference path. Two builds must share all three resources, each with exactly
+one mesh occurrence. It first copies the mesh, then the same-part middle,
+then the root, and redirects **only build item 1**; the original path remains
+byte-identical. All unknown ZIP members, printer/profile data and relationships
+are copied without interpretation. The writer refuses extra edges, ambiguous
+XML, ID overflow, unsupported paths and destination overwrite.
+
+`test_clone_native_3mf_three_level_chain.py` covers a nested nontrivial
+transform, exact sibling preservation, invalid selection, missing/extra
+edges, pre-existing output and comment-based ambiguous XML. A new official
+v2.5.0 native CLI gate constructs the nested variant from the prior
+native-CLI-exported project (retaining its real OPC and opaque metadata),
+requires the independent Core placement audit to show identical pre-clone
+bounds, performs three-level COW, reimports with `--arrange 0 --export-stl`,
+and compares native STL bounds to the independently expanded model.
+
+**This does not cover** arbitrary depth, multi-edge DAG, unit conversions,
+native GUI-saved project metadata semantics, filament/process settings,
+browser integration, native/WASM G-code parity or print verification.
+The native gate must pass before merging; until it does this remains a
+candidate capability.

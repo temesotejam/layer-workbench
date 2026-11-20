@@ -18,6 +18,8 @@ on:
       - "scripts/test_plan_native_3mf_copy_on_write.py"
       - "scripts/clone_native_3mf_shared_root_chain.py"
       - "scripts/test_clone_native_3mf_shared_root_chain.py"
+      - "scripts/clone_native_3mf_three_level_chain.py"
+      - "scripts/test_clone_native_3mf_three_level_chain.py"
       - "scripts/scale_native_3mf_private_leaf.py"
       - "scripts/test_scale_native_3mf_private_leaf.py"
       - "scripts/test_audit_native_3mf_instance_placement.py"
@@ -79,6 +81,8 @@ on:
       - "scripts/test_plan_native_3mf_copy_on_write.py"
       - "scripts/clone_native_3mf_shared_root_chain.py"
       - "scripts/test_clone_native_3mf_shared_root_chain.py"
+      - "scripts/clone_native_3mf_three_level_chain.py"
+      - "scripts/test_clone_native_3mf_three_level_chain.py"
       - "scripts/scale_native_3mf_private_leaf.py"
       - "scripts/test_scale_native_3mf_private_leaf.py"
       - "scripts/test_audit_native_3mf_instance_placement.py"
@@ -171,6 +175,9 @@ jobs:
 
       - name: Unit-test two-level shared-root Core copy-on-write offline
         run: python3 -m unittest discover -s scripts -p test_clone_native_3mf_shared_root_chain.py -v
+
+      - name: Unit-test three-level shared Core path copy-on-write offline
+        run: python3 -m unittest discover -s scripts -p test_clone_native_3mf_three_level_chain.py -v
 
       - name: Unit-test one private Core mesh vertex edit offline
         run: python3 -m unittest discover -s scripts -p test_scale_native_3mf_private_leaf.py -v
@@ -1391,6 +1398,92 @@ jobs:
             --require-instances 2 --verify-stls "${stls[@]}" \
             --report native-cli-output/shared-root-scaled-y-native-stl-audit.log
           echo "PASS: native CLI reopened private Y-scaled shared-root 3MF; sibling preserved"
+
+      - name: Exercise native v2.5.0 on an independently nested three-level Core 3MF
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Start with official CLI-exported bytes, not the synthetic test
+          # archive, so unchanged native opaque config and OPC parts survive.
+          python3 - <<'PY'
+          import sys
+          from pathlib import Path
+          from zipfile import ZipFile
+          sys.path.insert(0, "scripts")
+          from clone_native_3mf_shared_leaf import (
+              COMPONENT_OPEN, RESOURCES_END, _guard_xml, _object_block)
+          from plan_native_3mf_copy_on_write import plan_copy_on_write
+          from audit_native_3mf_instance_placement import inspect_placements
+          from verify_native_3mf_package import CORE_NS, MAIN_PART
+          source = Path("native-cli-output/shared-root-source.3mf")
+          output = Path("native-cli-output/three-level-source.3mf")
+          with ZipFile(source) as archive:
+              raw = archive.read(MAIN_PART)
+              tree = _guard_xml(raw, "official native three-level source")
+              resources = tree.find(CORE_NS + "resources")
+              items = tree.find(CORE_NS + "build").findall(CORE_NS + "item")
+              if len(items) != 2 or items[0].get("objectid") != items[1].get("objectid"):
+                  raise SystemExit("Shared native Core root is required")
+              rid = items[0].get("objectid")
+              ids = [int(o.get("id")) for o in resources.findall(CORE_NS + "object")]
+              middle_id = str(max(ids) + 1)
+              root_start, _, root_end = _object_block(raw, rid)
+              block = raw[root_start:root_end]
+              edges = list(COMPONENT_OPEN.finditer(block))
+              if len(edges) != 1:
+                  raise SystemExit("Exactly one native Core root edge is required")
+              old_edge = edges[0].group()
+              # Production Extension location belongs to the INNER edge only.
+              # The new outer edge has identity transform and same-part target.
+              if b"p:path=" not in old_edge or not old_edge.endswith(b"/>"):
+                  raise SystemExit("Unsupported native external component markup")
+              new_edge = b'<component objectid="' + middle_id.encode() + b'"/>'
+              replacement = block[:edges[0].start()] + new_edge + block[edges[0].end():]
+              changed_root = raw[:root_start] + replacement + raw[root_end:]
+              new_middle = (b'<object id="' + middle_id.encode() +
+                            b'" type="model"><components>' + old_edge +
+                            b'</components></object>')
+              endings = list(RESOURCES_END.finditer(changed_root))
+              if len(endings) != 1:
+                  raise SystemExit("Invalid Core resources boundary")
+              at = endings[0].start()
+              changed = changed_root[:at] + b"\n" + new_middle + b"\n" + changed_root[at:]
+              with ZipFile(output, "x") as result:
+                  result.comment = archive.comment
+                  for info in archive.infolist():
+                      result.writestr(info, changed if info.filename == MAIN_PART
+                                      else archive.read(info))
+          if len(plan_copy_on_write(output, 1, [0, 0])["clone_steps_inner_to_outer"]) != 3:
+              raise SystemExit("Nested official project does not need exactly three clones")
+          if (inspect_placements(source)["per_build_world_bounds_mm"] !=
+                  inspect_placements(output)["per_build_world_bounds_mm"]):
+              raise SystemExit("Inserting identity middle changed source geometry")
+          print("PASS: real native 3MF metadata retained while inserting one middle Core level")
+          PY
+          python3 scripts/clone_native_3mf_three_level_chain.py \
+            --input native-cli-output/three-level-source.3mf \
+            --output native-cli-output/three-level-private.3mf \
+            --report native-cli-output/three-level-cow-audit.log
+          app="${RUNNER_TEMP}/OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.5.0.AppImage"
+          mkdir -p native-cli-output/three-level-private-stl
+          timeout 180s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
+            native-cli-output/three-level-private.3mf --arrange 0 --export-stl \
+            --outputdir native-cli-output/three-level-private-stl \
+            > native-cli-output/three-level-native-reopen.log 2>&1 || {
+              tail -n 120 native-cli-output/three-level-native-reopen.log
+              exit 1
+            }
+          mapfile -d '' stls < <(find native-cli-output/three-level-private-stl \
+            -type f -iname '*.stl' -print0)
+          if [ "${#stls[@]}" -lt 1 ] || [ "${#stls[@]}" -gt 2 ]; then
+            echo "Unexpected native STL count after three-level COW: ${#stls[@]}"
+            exit 1
+          fi
+          python3 scripts/audit_native_3mf_instance_placement.py \
+            --input native-cli-output/three-level-private.3mf \
+            --require-instances 2 --verify-stls "${stls[@]}" \
+            --report native-cli-output/three-level-native-stl-audit.log
+          echo "PASS: official native v2.5.0 reopened isolated three-level Core geometry"
 
       - name: Archive text diagnostics without redistributing the AppImage
         if: always()
