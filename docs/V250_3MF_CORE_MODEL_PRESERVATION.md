@@ -300,3 +300,28 @@ placement isolation for the *specific CLI-authored two-cube archive* only.
 
 This is not desktop-GUI-created 3MF compatibility, full metadata semantics,
 a WebAssembly G-code comparison, or approval for a physical print.
+
+
+## 2026-11-20: Isolated linear edits of shared-mesh native build instances
+
+`scripts/verify_native_3mf_linear_edit_effect.py` independently checks a
+requested Z rotation or bounded XYZ scale of **one** main Core build item, without
+trusting the editing script's success report. It first applies the existing
+byte-preservation gate: no external mesh, OPC relationships, settings, unknown
+metadata or other build transforms may change. It then expands all Core mesh
+instances before and after the edit, validates unchanged identities and sibling
+world matrices/bounds, and verifies each selected leaf's complete composed
+12-component affine matrix against the declared operation.
+
+Rotation and scale are around the **original build translation**, not world
+zero or mesh center; child component offsets are transformed relative to that
+anchor. Shared meshes and nested/multiple component leaves are covered by
+offline regression tests. The official-native v2.5.0 acceptance workflow
+additionally rotates **build item 1** by 30° in the pinned two-object archive,
+reimports with the actual CLI, and compares resulting STL bounds to
+independently composed exact Core mesh vertex bounds.
+
+These tests address one shared-mesh sibling-isolation hazard but do not mutate
+component definitions, split shared resources, establish GUI-created 3MF
+compatibility, guarantee opaque metadata semantics, establish full native/WASM
+G-code parity, or certify printable output. The public website is unchanged.
