@@ -158,6 +158,9 @@ jobs:
       - name: Unit-test occurrence-specific native 3MF clone-chain planner offline
         run: python3 -m unittest discover -s scripts -p test_plan_native_3mf_copy_on_write.py -v
 
+      - name: Unit-test native 3MF shared Core leaf clone writer offline
+        run: python3 -m unittest discover -s scripts -p test_clone_native_3mf_shared_leaf.py -v
+
       - name: Unit-test expanded native 3MF instance edit effects offline
         run: python3 -m unittest discover -s scripts -p test_verify_native_3mf_edit_effect.py -v
 
@@ -420,6 +423,31 @@ jobs:
             --require-copy \
             --report native-cli-output/native-project-cow-plan.log
           cat native-cli-output/native-project-cow-plan.log
+          # One conservative edit: clone the second occurrence's shared
+          # external Core mesh and retarget only its independent parent edge.
+          # No mesh vertex changes, no profiles edited, no print commands.
+          python3 scripts/clone_native_3mf_shared_leaf.py \
+            --input "${project}" --output native-cli-output/native-cow-private.3mf \
+            --build-index 1 --component-edge 0 \
+            --report native-cli-output/native-cow-private-audit.log
+          cat native-cli-output/native-cow-private-audit.log
+          mkdir -p native-cli-output/native-cow-private-stl
+          timeout 180s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
+            native-cli-output/native-cow-private.3mf --arrange 0 --export-stl \
+            --outputdir native-cli-output/native-cow-private-stl \
+            > native-cli-output/native-cow-private-reopen.log 2>&1 || {
+              tail -n 120 native-cli-output/native-cow-private-reopen.log
+              exit 1
+            }
+          mapfile -d '' private_stls < <(find native-cli-output/native-cow-private-stl \
+            -type f -iname '*.stl' -print0)
+          if [ "${#private_stls[@]}" -lt 1 ] || [ "${#private_stls[@]}" -gt 2 ]; then
+            echo "Native cloned 3MF reimport exported unexpected STL count: ${#private_stls[@]}"
+            exit 1
+          fi
+          python3 scripts/verify_native_exported_stl.py "${private_stls[@]}" \
+            | tee native-cli-output/native-cow-private-stl-audit.log
+          echo "PASS: official v2.5.0 reopened clone-only Core 3MF with unchanged two-box geometry"
           mkdir -p native-cli-output/native-project-stl
           timeout 180s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
             "${project}" --arrange 0 --export-stl \
