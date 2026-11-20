@@ -52,6 +52,48 @@ class TestCoreBuildPreservation(unittest.TestCase):
         self.assertTrue(compare_build_preservation(self.a, self.b)['match'])
         self.assertFalse(compare_build_preservation(self.a, self.a)['match'])
 
+    def test_implicit_identity_to_explicit_move_is_exactly_one_added_attribute(self):
+        with ZipFile(self.a) as z:
+            parts = {name: z.read(name) for name in z.namelist()}
+        implicit = b'<item objectid="1"/>'
+        parts[MODEL] = parts[MODEL].replace(
+            b'<item objectid="1" transform="' + FIRST + b'"/>', implicit, 1)
+        with ZipFile(self.a, 'w') as z:
+            for name, data in parts.items():
+                z.writestr(name, data)
+        translate_core_build_item(self.a, self.b, 0, [10, 0, 0])
+        result = compare_build_preservation(self.a, self.b)
+        self.assertTrue(result['match'], result)
+        self.assertEqual(result['changed_build_items'][0]['before'], None)
+        self.assertEqual(result['changed_build_items'][0]['after'][9:12],
+                         [10., 0., 0.])
+        with ZipFile(self.b) as z:
+            edited = {name: z.read(name) for name in z.namelist()}
+        # Subtly changed attribute formatting must not be accepted as an
+        # exact insertion even if an XML parser considers it equivalent.
+        good = b' transform="1 0 0 0 1 0 0 0 1 10 0 0"'
+        self.assertIn(good, edited[MODEL])
+        for bad in (
+            b'  transform="1 0 0 0 1 0 0 0 1 10 0 0"',
+            b' transform = "1 0 0 0 1 0 0 0 1 10 0 0"',
+        ):
+            with self.subTest(bad=bad):
+                edited[MODEL] = edited[MODEL].replace(good, bad, 1)
+                with ZipFile(self.b, 'w') as z:
+                    for name, data in edited.items():
+                        z.writestr(name, data)
+                self.assertFalse(compare_build_preservation(self.a, self.b)['match'])
+                edited[MODEL] = edited[MODEL].replace(bad, good, 1)
+        # Changing geometry in the same archive can never be hidden by a
+        # legitimate added transform attribute.
+        self.assertIn(b'<vertex x="0"', edited[MODEL])
+        edited[MODEL] = edited[MODEL].replace(b'<vertex x="0"',
+                                              b'<vertex x="9"', 1)
+        with ZipFile(self.b, 'w') as z:
+            for name, data in edited.items():
+                z.writestr(name, data)
+        self.assertFalse(compare_build_preservation(self.a, self.b)['match'])
+
     def test_unmodified_sibling_or_multiple_edited_items(self):
         rewrite(self.a, self.b, (FIRST, FIRST_EDIT))
         with ZipFile(self.b) as z:

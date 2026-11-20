@@ -23,6 +23,8 @@ TRANSFORM_ATTRIBUTE = re.compile(
     rb'\s+transform\s*=\s*(?P<q>["\x27])(?P<value>[^"\x27]*)(?P=q)'
 )
 MASK = b"__CORE_3MF_BUILD_TRANSFORM_VALUE__"
+IDENTITY = (1.0, 0.0, 0.0, 0.0, 1.0, 0.0,
+            0.0, 0.0, 1.0, 0.0, 0.0, 0.0)
 
 
 def valid_transform(raw):
@@ -115,6 +117,61 @@ def mask_build_transforms(data):
     return b"".join(chunks), placements
 
 
+def strip_single_appended_implicit_transform(data, item_index):
+    """Independently undo ONLY a canonical appended Core transform attribute.
+
+    This proves an implicit identity acquired exactly one attribute, with
+    every other model XML byte retained. Other attribute edits fail closed.
+    """
+    parser = expat.ParserCreate(namespace_separator="}")
+    path, found = [], None
+    seen = 0
+
+    def begin(tag, attrs):
+        nonlocal found, seen
+        path.append(tag)
+        if path != [CORE + "}model", CORE + "}build", CORE + "}item"]:
+            return
+        if seen == item_index:
+            if "transform" not in attrs:
+                raise ValueError("Expected an added explicit build transform")
+            start = parser.CurrentByteIndex
+            end = start_tag_end(data, start)
+            raw = data[start:end]
+            matches = list(TRANSFORM_ATTRIBUTE.finditer(raw))
+            if len(matches) != 1:
+                raise ValueError("Ambiguous added Core build transform")
+            match = matches[0]
+            # The surgical editor appends exactly one ASCII double-quoted
+            # attribute directly before > or />, never reserializes the tag.
+            expected = b' transform="' + match.group("value") + b'"'
+            closing = len(raw) - (2 if raw.endswith(b'/>') else 1)
+            # Existing XML whitespace before /> must survive untouched.
+            # The regex consumes it together with the newly inserted space:
+            # delete only the FINAL space + attribute, never the old spaces.
+            if not match.group(0).endswith(expected) or match.end() != closing:
+                raise ValueError("Noncanonical added Core build attribute")
+            if found is not None:
+                raise ValueError("Ambiguous selected Core build item")
+            found = (start + match.end() - len(expected), start + match.end())
+        seen += 1
+
+    def end(tag):
+        if not path or path[-1] != tag:
+            raise ValueError("Unexpected 3MF XML nesting")
+        path.pop()
+
+    parser.StartElementHandler = begin
+    parser.EndElementHandler = end
+    try:
+        parser.Parse(data, True)
+    except expat.ExpatError as exc:
+        raise ValueError("Invalid Core 3MF model XML") from exc
+    if found is None:
+        raise ValueError("Selected build item is missing")
+    return data[:found[0]] + data[found[1]:]
+
+
 def compare_build_preservation(baseline, candidate):
     # The existing bounded streaming inventory checks paths, ZIP duplicates,
     # symlinks, compressed input integrity and decompressed-size limits.
@@ -140,8 +197,25 @@ def compare_build_preservation(baseline, candidate):
         for i, (left, right) in enumerate(zip(old, new))
         if left != right
     ]
-    # Exactly one edited placement is required, not a no-op or a multi-edit.
-    match = ancillary["match"] and same_structure and len(changes) == 1
+    # A missing transform denotes identity in Core 3MF. Permit precisely one
+    # implicit-to-explicit edit if independently removing the added attribute
+    # recreates ALL original model bytes, without weakening explicit edits.
+    if not same_structure and len(changes) == 1:
+        index = changes[0]["build_index"]
+        if old[index] is None and new[index] is not None and new[index] != IDENTITY:
+            try:
+                same_structure = (
+                    strip_single_appended_implicit_transform(edited_xml, index)
+                    == original_xml
+                )
+            except ValueError:
+                same_structure = False
+    # Exactly one semantic placement change is required, not a no-op.
+    semantic_change = len(changes) == 1 and not (
+        old[changes[0]["build_index"]] is None and
+        new[changes[0]["build_index"]] == IDENTITY
+    )
+    match = ancillary["match"] and same_structure and semantic_change
     return {
         "baseline": str(baseline), "candidate": str(candidate),
         "scope": "one-core-build-transform",
@@ -153,7 +227,8 @@ def compare_build_preservation(baseline, candidate):
         "ancillary_changed": ancillary["changed"],
         "limitations": (
             "Exact decompressed XML byte preservation excluding one explicit "
-            "Core build-item transform value, plus ancillary ZIP members. "
+            "Core build-item transform value or exactly one appended implicit-"
+            "identity transform attribute, plus ancillary ZIP members. "
             "Only one model part is supported. This does not establish semantic "
             "3MF equivalence, OrcaSlicer desktop round-trip or printer safety."
         ),

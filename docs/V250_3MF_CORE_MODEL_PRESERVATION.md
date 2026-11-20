@@ -49,3 +49,28 @@ DTD/entity expansion, implicit transforms, escaped transform values, multiple
 model parts, and general OrcaSlicer project compatibility remain unsupported.
 The CI archive audit and isolated Core-3MF verification are triggered when
 the surgical editor or its regression tests change on a pull request.
+
+## 2026-11-20: implicit Core build identity support (isolated diagnostic)
+
+Core 3MF permits an absent `<build><item transform>` attribute, meaning
+the identity transform. The offline surgical editor now supports **one
+selected implicit-identity item** in addition to explicit 12-number matrices.
+For an actual non-identity translation, rotation or scaling, it inserts
+exactly one ` transform="..."` immediately before the selected item's
+`>` or `/>` without rewriting any other model XML bytes or ZIP member
+payloads. An identity-to-identity request fails instead of creating a
+spurious change.
+
+The independent preservation comparator accepts this path **only** when
+removing the one canonical inserted Core attribute recreates the complete
+original model XML byte sequence. Any additional change (geometry, XML
+spacing, vendor data, another build item or ancillary member) fails. The
+existing explicit-transform path still requires exact bytes outside the
+numeric value. Self-closing and paired item tags, malformed/no-op edits,
+and adversarial preservation cases are covered by regression tests.
+
+This does **not** imply OrcaSlicer desktop-created 3MF or arbitrary implicit
+transform compatibility. Multi-model-part projects, nested native settings,
+paint data, source-to-WASM conversions and round-trip opening in the desktop
+application remain unverified. No production UI, WASM engine, vendor
+profiles, or printable G-code are changed.
