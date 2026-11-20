@@ -294,6 +294,71 @@ jobs:
           # Preserve only the provenance and digest manifest in CI artifacts.
           cp native-cli-output/native-profiles/manifest.json native-cli-output/native-profiles-manifest.log
 
+      - name: Reopen an official-native-exported v2.5.0 3MF and verify geometry
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="${RUNNER_TEMP}/OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.5.0.AppImage"
+          project="${PWD}/native-cli-output/native-v250-project.3mf"
+          # Unlike the hand-authored Core input, this output is serialized
+          # by the official v2.5.0 CLI with the exact pinned full presets.
+          # The file stays inside the disposable CI runner.
+          timeout 180s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
+            native-cli-output/two-build-items.3mf \
+            --load-settings "native-cli-output/native-profiles/process.json;native-cli-output/native-profiles/machine.json" \
+            --load-filaments native-cli-output/native-profiles/filament.json \
+            --arrange 0 --export-3mf "${project}" \
+            > native-cli-output/native-project-export.log 2>&1 || {
+              tail -n 120 native-cli-output/native-project-export.log
+              exit 1
+            }
+          test -s "${project}" || {
+            tail -n 120 native-cli-output/native-project-export.log
+            echo "Official CLI produced no native 3MF project"
+            exit 1
+          }
+          # Inventory is bounded against unsafe members. Record only paths,
+          # sizes and hashes; do not upload native project or preset payloads.
+          python3 - <<'PY' | tee native-cli-output/native-project-members.log
+          import json
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, "scripts")
+          from compare_3mf_metadata import inventory
+          members = inventory(Path("native-cli-output/native-v250-project.3mf"))
+          models = [name for name in members if name.startswith("3D/") and name.lower().endswith(".model")]
+          summary = {
+              "native_export": True,
+              "archive_member_count": len(members),
+              "model_parts": models,
+              "paths": sorted(members),
+              "note": "Archive inventory only; profiles and project semantics are not certified."
+          }
+          print(json.dumps(summary, indent=2, sort_keys=True))
+          PY
+          python3 scripts/audit_3mf_scene.py \
+            --input "${project}" --expected-build-items 2 --min-triangles 24 \
+            --report native-cli-output/native-project-scene.json
+          mkdir -p native-cli-output/native-project-stl
+          timeout 180s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
+            "${project}" --arrange 0 --export-stl \
+            --outputdir native-cli-output/native-project-stl \
+            > native-cli-output/native-project-reopen.log 2>&1 || {
+              tail -n 120 native-cli-output/native-project-reopen.log
+              exit 1
+            }
+          mapfile -d '' exported < <(find native-cli-output/native-project-stl \
+            -type f -iname '*.stl' -print0)
+          if [ "${#exported[@]}" -lt 1 ] || [ "${#exported[@]}" -gt 2 ]; then
+            echo "Native 3MF reopen exported ${#exported[@]} STLs instead of 1..2"
+            exit 1
+          fi
+          python3 scripts/verify_native_exported_stl.py "${exported[@]}" \
+            | tee native-cli-output/native-project-readback-geometry.log
+          echo "PASS: official native v2.5.0 exported and reopened a 3MF with both synthetic-object placements"
+          # This is native CLI-produced, NOT desktop-GUI-saved, and does not
+          # establish 3MF metadata round-trip or native-WASM slicing parity.
+
       - name: Attempt real official-native v2.5.0 slicing with source-pinned full presets
         shell: bash
         run: |
