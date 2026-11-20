@@ -10,6 +10,8 @@ on:
       - "scripts/test_compare_3mf_build_preservation.py"
       - "scripts/test_compare_3mf_metadata.py"
       - "scripts/three_mf_instance_expansion.py"
+      - "scripts/clone_native_3mf_branched_root.py"
+      - "scripts/test_clone_native_3mf_branched_root.py"
       - "scripts/test_three_mf_instance_expansion.py"
       - "scripts/audit_3mf_scene.py"
       - "scripts/test_audit_3mf_scene.py"
@@ -31,6 +33,8 @@ on:
       - "scripts/edit_3mf_build_transform.py"
       - "scripts/test_edit_3mf_build_transform.py"
       - "docs/V250_3MF_CORE_MODEL_PRESERVATION.md"
+      - "scripts/clone_native_3mf_branched_root.py"
+      - "scripts/test_clone_native_3mf_branched_root.py"
       - "scripts/compare_3mf_metadata.py"
       - "scripts/test_compare_3mf_metadata.py"
       - "docs/V250_3MF_ANCILLARY_PRESERVATION.md"
@@ -65,3 +69,4 @@ jobs:
           python3 -m unittest discover -s scripts -p test_patch_orcawasm_private_instance_edit.py -v
           python3 -m py_compile scripts/patch-orcawasm-support-smoke.py
           python3 -m unittest discover -s scripts -p test_patch_orcawasm_support_smoke.py -v
+          python3 -m unittest discover -s scripts -p test_clone_native_3mf_branched_root.py -v
