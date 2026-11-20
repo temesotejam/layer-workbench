@@ -158,3 +158,26 @@ the first cube moves +10 mm X while the other remains in place.
 This verifies a narrowly scoped native CLI interchange path, **not** GUI-saved
 3MF compatibility, opaque metadata *semantics*, external-component transform
 editing, full 3MF round-trip, native/WASM G-code parity or printable output.
+
+## 2026-11-20: native CLI-authored multipart Z-axis placement rotation gate
+
+The narrow native multipart editor now has a separate `--rotate-z-deg`
+operation in addition to the existing `--translate-mm` command. It rotates
+the **selected main Core build item** around its existing build translation
+anchor (not the geometric mesh center), following the Core 3MF row-vector
+convention. The previous 3-by-3 linear transform is composed with world-Z
+rotation; translation and all opaque 3MF members are retained byte-for-byte
+after decompression. Only finite nonzero angles in -360..360 degrees are
+accepted. The destination must be new; a rejected edit is not left behind.
+
+Offline tests cover a translated first item with an unchanged sibling,
+implicit identity transforms, pre-existing rotation/nonuniform scale and
+invalid/no-op angles. The native CLI workflow also reopens a surgically
+rotated, **official-CLI-exported** 3MF with `--arrange 0` and checks the
+native STL coordinates of both cubes, in addition to the independent exact
+archive-member preservation comparator. All 3MF files stay in ephemeral CI.
+
+This is only an acceptance gate for the pinned two-object CLI-exported
+fixture. It does NOT establish support for general GUI-saved projects,
+object-center pivots, arbitrary multipart hierarchy, native/WASM G-code
+equivalence, production WASM integration or print safety.
