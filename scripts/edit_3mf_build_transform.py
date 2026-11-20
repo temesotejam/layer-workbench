@@ -19,7 +19,11 @@ from three_mf_instance_expansion import compose_3mf
 
 MODEL_PART = '3D/3dmodel.model'
 CORE_NS = CORE[1:-1]
-TRANSFORM_ATTR = re.compile(rb'\s+transform\s*=\s*"([0-9eE+\.\- \t\r\n]+)"')
+# XML allows either quote style and whitespace around '='. Match only the
+# unprefixed Core attribute (not vendor:transform) and keep its original quotes.
+TRANSFORM_ATTR = re.compile(
+    rb"""\s+transform\s*=\s*(?P<quote>["'])(?P<value>[0-9eE+\.\- \t\r\n]+)(?P=quote)"""
+)
 MAX_TAG_BYTES = 8192
 
 
@@ -74,7 +78,7 @@ def _replace_one_build_transform(data, item_index, matrix):
                 matches = list(TRANSFORM_ATTR.finditer(tag_bytes))
                 if len(matches) != 1:
                     raise ValueError('Unsupported or ambiguous transform attribute syntax')
-                old_value = matches[0].group(1).decode('ascii')
+                old_value = matches[0].group('value').decode('ascii')
                 if old_value != attributes['transform']:
                     raise ValueError('Escaped transform attribute is unsupported')
                 validated_matrix(old_value)
@@ -97,7 +101,7 @@ def _replace_one_build_transform(data, item_index, matrix):
     start, end, found = hit
     encoded = ' '.join(format(value, '.17g') for value in matrix).encode('ascii')
     raw_tag = data[start:end]
-    changed_tag = raw_tag[:found.start(1)] + encoded + raw_tag[found.end(1):]
+    changed_tag = raw_tag[:found.start('value')] + encoded + raw_tag[found.end('value'):]
     output = data[:start] + changed_tag + data[end:]
     if output == data:
         raise ValueError('No transform change requested')
