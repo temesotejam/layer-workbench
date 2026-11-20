@@ -7,6 +7,8 @@ on:
       - ".github/workflows/probe-native-v250-cli.yml"
       - "scripts/make_3mf_two_build_fixture.py"
       - "scripts/verify_native_exported_stl.py"
+      - "scripts/verify_native_3mf_package.py"
+      - "scripts/test_verify_native_3mf_package.py"
       - "scripts/test_verify_native_exported_stl.py"
       - "scripts/prepare-native-v250-presets.mjs"
       - "scripts/test-prepare-native-v250-presets.mjs"
@@ -48,6 +50,8 @@ on:
       - ".github/workflows/probe-native-v250-cli.yml"
       - "scripts/make_3mf_two_build_fixture.py"
       - "scripts/verify_native_exported_stl.py"
+      - "scripts/verify_native_3mf_package.py"
+      - "scripts/test_verify_native_3mf_package.py"
       - "scripts/test_verify_native_exported_stl.py"
       - "scripts/prepare-native-v250-presets.mjs"
       - "scripts/test-prepare-native-v250-presets.mjs"
@@ -110,6 +114,9 @@ jobs:
 
       - name: Unit-test the STL placement audit offline
         run: python3 -m unittest discover -s scripts -p test_verify_native_exported_stl.py -v
+
+      - name: Unit-test native 3MF external-part package validation offline
+        run: python3 -m unittest discover -s scripts -p test_verify_native_3mf_package.py -v
 
       - name: Unit-test native effective layer-height audit offline
         run: python3 -m unittest discover -s scripts -p test_verify_native_layer_height.py -v
@@ -336,9 +343,13 @@ jobs:
           }
           print(json.dumps(summary, indent=2, sort_keys=True))
           PY
-          python3 scripts/audit_3mf_scene.py \
-            --input "${project}" --expected-build-items 2 --min-triangles 24 \
-            --report native-cli-output/native-project-scene.json
+          # Native Orca projects use cross-part object references, which the
+          # restricted synthetic Core scene parser deliberately rejects.
+          # Verify this pinned layout's OPC member references separately,
+          # then rely on the real native STL reimport for placed geometry.
+          python3 scripts/verify_native_3mf_package.py \
+            --input "${project}" \
+            --report native-cli-output/native-project-package.log
           mkdir -p native-cli-output/native-project-stl
           timeout 180s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
             "${project}" --arrange 0 --export-stl \
