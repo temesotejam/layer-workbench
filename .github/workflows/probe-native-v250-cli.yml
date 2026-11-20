@@ -16,6 +16,8 @@ on:
       - "scripts/test_audit_native_3mf_edit_ownership.py"
       - "scripts/plan_native_3mf_copy_on_write.py"
       - "scripts/test_plan_native_3mf_copy_on_write.py"
+      - "scripts/clone_native_3mf_shared_root_chain.py"
+      - "scripts/test_clone_native_3mf_shared_root_chain.py"
       - "scripts/scale_native_3mf_private_leaf.py"
       - "scripts/test_scale_native_3mf_private_leaf.py"
       - "scripts/test_audit_native_3mf_instance_placement.py"
@@ -75,6 +77,8 @@ on:
       - "scripts/test_audit_native_3mf_edit_ownership.py"
       - "scripts/plan_native_3mf_copy_on_write.py"
       - "scripts/test_plan_native_3mf_copy_on_write.py"
+      - "scripts/clone_native_3mf_shared_root_chain.py"
+      - "scripts/test_clone_native_3mf_shared_root_chain.py"
       - "scripts/scale_native_3mf_private_leaf.py"
       - "scripts/test_scale_native_3mf_private_leaf.py"
       - "scripts/test_audit_native_3mf_instance_placement.py"
@@ -164,6 +168,9 @@ jobs:
 
       - name: Unit-test native 3MF shared Core leaf clone writer offline
         run: python3 -m unittest discover -s scripts -p test_clone_native_3mf_shared_leaf.py -v
+
+      - name: Unit-test two-level shared-root Core copy-on-write offline
+        run: python3 -m unittest discover -s scripts -p test_clone_native_3mf_shared_root_chain.py -v
 
       - name: Unit-test one private Core mesh vertex edit offline
         run: python3 -m unittest discover -s scripts -p test_scale_native_3mf_private_leaf.py -v
@@ -1286,6 +1293,46 @@ jobs:
             --altered native-cli-output/native-bridge-2/plate_1.gcode \
             --report native-cli-output/native-bridge-speed-audit.log
           # No generated print G-code or full licensed upstream profiles archived.
+
+      - name: Reopen isolated shared-root Core fixture with official v2.5.0 CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import sys
+          from pathlib import Path
+          from zipfile import ZipFile
+          sys.path.insert(0, "scripts")
+          from test_clone_native_3mf_shared_root_chain import shared_root_parts
+          destination = Path("native-cli-output/shared-root-source.3mf")
+          with ZipFile(destination, "w") as archive:
+              for name, data in shared_root_parts().items():
+                  archive.writestr(name, data)
+          PY
+          python3 scripts/clone_native_3mf_shared_root_chain.py \
+            --input native-cli-output/shared-root-source.3mf \
+            --output native-cli-output/shared-root-private.3mf \
+            --report native-cli-output/shared-root-clone-audit.log
+          app="${RUNNER_TEMP}/OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.5.0.AppImage"
+          mkdir -p native-cli-output/shared-root-private-stl
+          timeout 180s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
+            native-cli-output/shared-root-private.3mf --arrange 0 --export-stl \
+            --outputdir native-cli-output/shared-root-private-stl \
+            > native-cli-output/shared-root-native-reopen.log 2>&1 || {
+              tail -n 120 native-cli-output/shared-root-native-reopen.log
+              exit 1
+            }
+          mapfile -d '' stls < <(find native-cli-output/shared-root-private-stl \
+            -type f -iname '*.stl' -print0)
+          if [ "${#stls[@]}" -lt 1 ] || [ "${#stls[@]}" -gt 2 ]; then
+            echo "Unexpected official native STL count: ${#stls[@]}"
+            exit 1
+          fi
+          python3 scripts/audit_native_3mf_instance_placement.py \
+            --input native-cli-output/shared-root-private.3mf \
+            --require-instances 2 --verify-stls "${stls[@]}" \
+            --report native-cli-output/shared-root-native-stl-audit.log
+          echo "PASS: official native CLI reloaded two-level isolated Core fixture"
 
       - name: Archive text diagnostics without redistributing the AppImage
         if: always()
