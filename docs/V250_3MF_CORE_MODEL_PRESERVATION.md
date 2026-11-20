@@ -647,3 +647,28 @@ The success demonstrates this one geometry-only native reimport, **not**
 complete 3MF vendor-metadata semantics, non-identical child meshes,
 multi-edge DAGs, arbitrary GUI projects, native-vs-WASM G-code parity,
 browser editing, or any assurance that generated output can be printed.
+
+
+## 2026-11-21: bounded COW for two distinct external mesh branches
+
+The offline `clone_native_3mf_branched_root.py` writer now also accepts a
+two-edge shared main Core root whose edges refer to **different external mesh
+parts and object IDs**. Previously it required both edges to instantiate the
+same leaf. The selected build item (index 1) and one selected edge (0 or 1)
+are isolated by cloning that external leaf and the shared main root; the
+unselected sibling edge keeps its original part and ID. The read-only planner
+must report exactly two visits to each selected leaf/root in the distinct
+case, or four leaf visits/two root visits in the original repeated-leaf case.
+
+Offline regressions exercise both edge indices with distinguishable mesh
+geometries. They verify all four pre/post world-space occurrences, unchanged
+sibling identifiers and bytes, original source preservation, ZIP metadata
+preservation, and refusal to edit still-shared sibling meshes. Existing
+identical-leaf and official v2.5.0 CLI acceptance checks remain in place.
+
+This extension does **not** prove that a native desktop GUI-saved project
+with disparate child meshes can be round-tripped; the distinct-child fixture
+is synthetic, and native CLI acceptance for that particular branch shape
+remains to be added. Opaque metadata identity references, arbitrary DAG
+graphs, full project fidelity, WASM/native G-code parity and print safety
+are still unsupported.
