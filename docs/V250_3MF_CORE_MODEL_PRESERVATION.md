@@ -107,8 +107,9 @@ Core 3MF with the fully inherited, source-pinned Creality CR-10 machine,
 process and Generic PLA files, with `--arrange 0`. The official v2.5.0
 AppImage then exports a new 3MF project using `--export-3mf`.
 This output is *authored by the native CLI*, rather than by our Core fixture
-writer. Its archive is scanned using the existing bounded ZIP inventory and
-Core scene audit, then reopened by the same native CLI and exported to STL.
+writer. Its archive is scanned using the existing bounded ZIP inventory and a
+new **native external-part OPC package audit**, then reopened by the same
+native CLI and exported to STL.
 The existing geometry gate checks that both independent world-space boxes
 remain in their original positions and retain their 12 triangles each.
 
@@ -123,3 +124,14 @@ Next, inspect the native-authored member hierarchy and evaluate whether
 the existing surgical Core build editor can preserve its metadata without
 rewriting project data. Only expand support with a tested fixture and
 explicit failure for unsupported native project structures.
+
+The initial PR run [#44674738227](https://github.com/temesotejam/layer-workbench/actions/runs/44674738227)
+exposed a genuine format gap: the native exporter writes one main Core model
+plus two `3D/Objects/*.model` parts, linked by `3D/_rels/3dmodel.model.rels`,
+and includes project/model settings under `Metadata/`. The earlier synthetic
+Core scene auditor **correctly refused** these cross-part component references.
+It was not relaxed to misinterpret a native project as a single-part model.
+The new narrow package audit checks required members, XML syntax, and that
+internal OPC relationships resolve to existing members. Geometry is accepted
+only after an actual native CLI reopen and world-space STL check. This still
+is not a general external-part scene parser or metadata-semantic validator.
