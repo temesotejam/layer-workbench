@@ -274,3 +274,29 @@ mesh references, cycles, dangling links, mixed units and malformed
 vertices/triangles. It remains a narrowly scoped two-cube acceptance
 test, **not** GUI-created 3MF compatibility, general unit conversion,
 full project metadata parity, native/WASM G-code identity, or print safety.
+
+## 2026-11-20: Second shared-mesh instance edit acceptance gate
+
+The first native-authored multipart edit tests moved build item 0 while
+leaving item 1 unchanged. The new gate instead moves **build item 1**
+by -10 mm on X, preserving the original shared external mesh and its sibling.
+
+`scripts/verify_native_3mf_edit_effect.py` independently expands the
+multipart Core component graph in both archives. It checks the full mesh
+instance identity paths, unchanged linear transforms, XYZ bounds translated
+only for the requested build, and exact sibling world placement. It also
+requires the existing byte-preservation comparator to reject changed opaque
+settings, OPC relationships, external mesh bytes and extra build edits.
+Offline tests exercise nested component transforms, two builds sharing one
+external mesh, multiple leaves under one build, an incorrect claimed move,
+a wrong build index, and accidental edits of both builds.
+
+The official v2.5.0 CLI acceptance step exports STL from the edited 3MF,
+then compares both independently composed per-build bounds with the native
+triangles. The test additionally requires the expected fixture boxes
+**[90,110]** mm and **[140,160]** mm on X respectively (original second
+box [150,170] mm), with unchanged Y/Z limits. This demonstrates per-instance
+placement isolation for the *specific CLI-authored two-cube archive* only.
+
+This is not desktop-GUI-created 3MF compatibility, full metadata semantics,
+a WebAssembly G-code comparison, or approval for a physical print.
