@@ -325,3 +325,35 @@ These tests address one shared-mesh sibling-isolation hazard but do not mutate
 component definitions, split shared resources, establish GUI-created 3MF
 compatibility, guarantee opaque metadata semantics, establish full native/WASM
 G-code parity, or certify printable output. The public website is unchanged.
+
+
+## 2026-11-20: Core resource ownership / copy-on-write preflight
+
+The bounded, **read-only** `scripts/audit_native_3mf_edit_ownership.py`
+now counts every reachable Core object *occurrence* per build item in a
+native CLI-authored multipart 3MF. Each instance follows the actual
+component-reference graph; duplicate edges to the same child object are
+counted independently instead of being collapsed by object ID or mesh
+path. The audit first invokes the strict composed-placement gate, including
+its cycle, mixed-unit, malformed-mesh, and expansion-budget checks.
+
+A Core object instantiated multiple times is marked
+`requires_copy_on_write_for_one_instance`: modifying that shared object
+in place would affect more than one placement. This differs from the
+already-tested main **build-transform** edits, which do not rewrite the
+shared mesh resource. A root component object instantiated only once
+may be a *candidate* for a future isolated component edit, but this
+preflight does **not** authorize changing opaque OrcaSlicer metadata.
+
+The official pinned v2.5.0 native CLI acceptance workflow now requires
+its two build roots to be independently instantiated and at least one
+external mesh to be shared across builds. Offline regression tests cover
+shared leaves, duplicate edges within a build, shared parent roots,
+dangling references, and non-mutation of archive bytes. All native files
+remain in the CI runner.
+
+**Not yet implemented:** cloning shared Core resources and retargeting an
+individual component chain (copy-on-write), general GUI-saved 3MF support,
+vendor metadata coherence, native/WASM G-code parity, or print safety.
+The next editor must clone and retarget precisely one path, then
+independently compare sibling geometry and opaque package members.
