@@ -70,19 +70,25 @@ def _replace_one_build_transform(data, item_index, matrix):
             if seen == item_index:
                 if hit is not None:
                     raise ValueError('Ambiguous selected build item')
-                if 'transform' not in attributes:
-                    raise ValueError('Selected build item lacks explicit transform')
                 start = parser.CurrentByteIndex
                 end = _start_tag_end(data, start)
                 tag_bytes = data[start:end]
                 matches = list(TRANSFORM_ATTR.finditer(tag_bytes))
-                if len(matches) != 1:
-                    raise ValueError('Unsupported or ambiguous transform attribute syntax')
-                old_value = matches[0].group('value').decode('ascii')
-                if old_value != attributes['transform']:
-                    raise ValueError('Escaped transform attribute is unsupported')
-                validated_matrix(old_value)
-                hit = (start, end, matches[0])
+                if 'transform' not in attributes:
+                    # Core 3MF defaults a missing build transform to identity.
+                    # Materialize only the requested item; never rewrite the
+                    # complete XML document or its opaque vendor attributes.
+                    if matches:
+                        raise ValueError('Ambiguous implicit build transform')
+                    hit = (start, end, None)
+                else:
+                    if len(matches) != 1:
+                        raise ValueError('Unsupported or ambiguous transform attribute syntax')
+                    old_value = matches[0].group('value').decode('ascii')
+                    if old_value != attributes['transform']:
+                        raise ValueError('Escaped transform attribute is unsupported')
+                    validated_matrix(old_value)
+                    hit = (start, end, matches[0])
             seen += 1
 
     def end(tag):
@@ -101,7 +107,16 @@ def _replace_one_build_transform(data, item_index, matrix):
     start, end, found = hit
     encoded = ' '.join(format(value, '.17g') for value in matrix).encode('ascii')
     raw_tag = data[start:end]
-    changed_tag = raw_tag[:found.start('value')] + encoded + raw_tag[found.end('value'):]
+    if found is None:
+        if matrix == parse_transform(None):
+            raise ValueError('No transform change requested for implicit identity')
+        # Insert immediately before the closing > or />. Its other bytes,
+        # including vendor XML, quote styles and whitespace, remain unchanged.
+        insertion = len(raw_tag) - (2 if raw_tag.endswith(b'/>') else 1)
+        changed_tag = (raw_tag[:insertion] + b' transform="' + encoded +
+                       b'"' + raw_tag[insertion:])
+    else:
+        changed_tag = raw_tag[:found.start('value')] + encoded + raw_tag[found.end('value'):]
     output = data[:start] + changed_tag + data[end:]
     if output == data:
         raise ValueError('No transform change requested')
