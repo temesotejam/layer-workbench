@@ -244,3 +244,33 @@ absolute package paths, and rejects cross-part `p:path` on non-root model
 components. These restrictions follow the [3MF Production Extension v1.1.2](https://3mf.io/wp-content/uploads/sites/106/2025/02/3MF_Production_Extension_v1_1_2.pdf),
 sections 2 and 3. They are reference-inventory rules, not a guarantee that
 all transform/metadata extension semantics are implemented.
+
+
+## 2026-11-20: read-only cross-part Core transform composition and STL agreement gate
+
+The new `scripts/audit_native_3mf_instance_placement.py` extends the
+existing read-only multipart reference inventory without editing any 3MF
+member. After strict ZIP/OPC/reference validation, it follows each main
+build item through its Core component graph to concrete mesh leaves.
+Per-instance Core matrices are composed with the existing **row-vector**
+convention (leaf component first, containing component next, build item
+last). It computes *exact transformed vertex* XYZ bounds in millimetres
+from vertices referenced by mesh triangles, not merely an enclosing
+rotated local AABB. Repeated references to the same mesh produce
+distinct instances. Cycles, unresolved references, invalid mesh indices,
+nonfinite coordinates, excessive graph expansion and mixed model units
+fail closed. This initial gate intentionally requires equal model units
+across parts and a bounded graph; broader unit-conversion rules are not
+inferred from unsupported metadata.
+
+The pinned native CLI workflow separately reopens the official-v2.5.0
+CLI-authored two-cube multipart archive as STL. The new gate now compares
+the two independently composed Core world bounds against real native STL
+triangles using the existing exact two-box geometry auditor. This can
+detect wrong transform order, dropped component placements and duplicate
+mesh instance misunderstandings without interpreting printer metadata.
+Offline regression cases include nested rotation/translation, shared
+mesh references, cycles, dangling links, mixed units and malformed
+vertices/triangles. It remains a narrowly scoped two-cube acceptance
+test, **not** GUI-created 3MF compatibility, general unit conversion,
+full project metadata parity, native/WASM G-code identity, or print safety.
