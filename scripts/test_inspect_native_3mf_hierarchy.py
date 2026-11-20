@@ -59,6 +59,39 @@ class NativeHierarchyTests(unittest.TestCase):
         self.assertEqual(
             sum(edge["has_transform"] for edge in report["component_edges"]), 1)
 
+    def test_root_build_item_may_target_external_production_object(self):
+        parts = component_fixture()
+        parts["3D/3dmodel.model"] = parts["3D/3dmodel.model"].replace(
+            b'<item objectid="2"/>',
+            b'<item objectid="102" p:path="/3D/Objects/second.model"/>')
+        self.write(parts)
+        report = inspect_native_hierarchy(self.path)
+        self.assertTrue(report["all_core_references_resolved"])
+        self.assertTrue(report["build_targets"][1]["external"])
+        self.assertEqual(report["build_targets"][1]["to_part"],
+                         "3D/Objects/second.model")
+
+    def test_rejects_production_path_on_child_component(self):
+        parts = component_fixture()
+        parts["3D/Objects/first.model"] = (
+            f'<model xmlns="{CORE}" xmlns:p="{PROD}"><resources>'
+            '<object id="101"><components>'
+            '<component objectid="102" p:path="/3D/Objects/second.model"/>'
+            '</components></object></resources><build/></model>'
+        ).encode("utf-8")
+        self.write(parts)
+        with self.assertRaisesRegex(ValueError, "non-root model component"):
+            inspect_native_hierarchy(self.path)
+
+    def test_rejects_relative_production_path(self):
+        parts = component_fixture()
+        parts["3D/3dmodel.model"] = parts["3D/3dmodel.model"].replace(
+            b'p:path="/3D/Objects/first.model"',
+            b'p:path="Objects/first.model"')
+        self.write(parts)
+        with self.assertRaisesRegex(ValueError, "package-root absolute"):
+            inspect_native_hierarchy(self.path)
+
     def test_reports_missing_external_object_without_claiming_resolution(self):
         parts = component_fixture()
         parts["3D/Objects/second.model"] = parts["3D/Objects/second.model"].replace(
