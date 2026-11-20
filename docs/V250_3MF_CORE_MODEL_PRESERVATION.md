@@ -579,3 +579,27 @@ metadata interpretation, nonzero component indices, branched graphs,
 additional nesting, official-native vs WASM G-code equivalence, published
 Pages slicing or real-world printing. A green CI run is required before
 considering the narrow acceptance gate complete.
+
+## 2026-11-21: fail-closed cloned Core object identity annotations
+
+The two- and three-level native Core Copy-on-Write helpers now refuse to
+clone a root, middle or external mesh carrying per-object Core
+`<metadata>`, foreign-namespace child elements or recognizable
+identity-bearing attributes (for example, `uuid`, `guid`,
+`unique_id`, `instance_id`). Copying those declarations verbatim can
+make the detached resource inherit an identifier belonging to the shared
+source. Such archives previously could pass all geometry and ZIP-byte
+preservation checks even though external references might become ambiguous.
+
+This is an **explicit safety refusal, not metadata remapping support**.
+Ordinary Core transforms and Production `p:path` attributes are retained.
+The offline regression checks annotations on each of the three cloned
+resources, an unknown extension element, and a benign Core `name` field.
+The official pinned v2.5.0 CLI test continues to exercise the supported
+geometry-only clone. The native workflow trigger includes the leaf helper
+because root and middle writers import it.
+
+Out-of-object references in `Metadata/model_settings.config`, other
+vendor files, and unrecognized identifier naming schemes remain
+uninterpreted. This guard does **not** prove complete semantic metadata
+integrity, general GUI-authored 3MF support or physical print safety.
