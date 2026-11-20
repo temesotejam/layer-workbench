@@ -67,6 +67,33 @@ def _guard_xml(raw, name):
     return safe_xml(raw, name)
 
 
+
+# Cloning a resource with an opaque per-object ID/annotation would copy that
+# identity verbatim. Geometry equality cannot certify reference integrity.
+# Fail closed until each extension's remapping rules are implemented.
+_CLONE_IDENTITY_KEYS = {
+    "uuid", "guid", "uniqueid", "instanceid", "objectuuid",
+    "objectguid", "refuuid", "idref",
+}
+
+
+def _require_clone_safe_annotations(obj, location):
+    """Reject opaque per-object metadata and identity-bearing clone fields.
+
+    Keep known Core mesh/component geometry and Production p:path attributes;
+    this is not a validator for Metadata/*.config cross references.
+    """
+    for elem in obj.iter():
+        tag = elem.tag
+        if not isinstance(tag, str) or not tag.startswith(CORE_NS):
+            raise ValueError("Opaque extension element in cloned Core " + location)
+        if tag == CORE_NS + "metadata":
+            raise ValueError("Unsupported per-object metadata in cloned Core " + location)
+        for key in elem.attrib:
+            local = key.rsplit("}", 1)[-1].replace("_", "").lower()
+            if local in _CLONE_IDENTITY_KEYS:
+                raise ValueError("Identity attribute in cloned Core " + location)
+
 def _clone_mesh_part(raw, original_id):
     root = _guard_xml(raw, "external Core model")
     resources = root.find(CORE_NS + "resources")
@@ -80,6 +107,7 @@ def _clone_mesh_part(raw, original_id):
     source = [obj for obj in objects if obj.get("id") == original_id]
     if len(source) != 1 or source[0].find(CORE_NS + "mesh") is None:
         raise ValueError("Selected external object is not a single Core mesh")
+    _require_clone_safe_annotations(source[0], "external mesh")
     new_id_int = max(map(int, ids)) + 1
     if new_id_int > MAX_CORE_ID:
         raise ValueError("Core ID space exhausted")
