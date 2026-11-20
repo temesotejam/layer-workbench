@@ -8,6 +8,7 @@ from audit_native_3mf_instance_placement import inspect_placements
 from clone_native_3mf_shared_root_chain import clone_shared_root_chain
 from compare_3mf_metadata import inventory
 from plan_native_3mf_copy_on_write import plan_copy_on_write
+from scale_native_3mf_private_leaf import scale_private_leaf
 from test_verify_native_3mf_edit_effect import shared_nested_parts
 
 MAIN = "3D/3dmodel.model"
@@ -66,6 +67,48 @@ class NativeRootChainCloneTests(unittest.TestCase):
                              dst.read("3D/Objects/second.model"))
             self.assertIn(b'<object id="1"', dst.read(MAIN))
             self.assertIn(b'<item objectid="1"/>', dst.read(MAIN))
+
+    def test_shared_root_detach_then_private_y_scale_preserves_sibling(self):
+        self.write(shared_root_parts())
+        source_bytes = self.source.read_bytes()
+        initial = inspect_placements(self.source)
+        # A shared leaf is never editable before its entire parent path is private.
+        scaled = self.output.with_name("scaled.3mf")
+        with self.assertRaises(ValueError):
+            scale_private_leaf(self.source, scaled, 1, 0, 1.2, "y")
+        self.assertFalse(scaled.exists())
+
+        clone_shared_root_chain(self.source, self.output)
+        clone_bytes = self.output.read_bytes()
+        detached = inspect_placements(self.output)
+        report = scale_private_leaf(self.output, scaled, 1, 0, 1.2, "y")
+        edited = inspect_placements(scaled)
+        self.assertEqual(report["scale_axis"], "y")
+        self.assertTrue(report["sibling_unchanged"])
+        self.assertEqual(initial["per_build_world_bounds_mm"],
+                         detached["per_build_world_bounds_mm"])
+        self.assertEqual(detached["per_build_world_bounds_mm"][0],
+                         edited["per_build_world_bounds_mm"][0])
+        self.assertNotEqual(detached["per_build_world_bounds_mm"][1],
+                            edited["per_build_world_bounds_mm"][1])
+        self.assertEqual(self.source.read_bytes(), source_bytes)
+        self.assertEqual(self.output.read_bytes(), clone_bytes)
+        self.assertFalse(plan_copy_on_write(scaled, 1, [0])["copy_on_write_required"])
+
+        baseline_members, changed_members = inventory(self.output), inventory(scaled)
+        self.assertEqual(set(baseline_members), set(changed_members))
+        self.assertEqual(
+            {name for name in baseline_members if baseline_members[name] != changed_members[name]},
+            {LEAF})
+        with ZipFile(self.output) as detached_zip, ZipFile(scaled) as edited_zip:
+            self.assertEqual(detached_zip.comment, edited_zip.comment)
+            self.assertEqual(detached_zip.read(MAIN), edited_zip.read(MAIN))
+            self.assertEqual(detached_zip.read("3D/Objects/second.model"),
+                             edited_zip.read("3D/Objects/second.model"))
+        for old, new in zip(detached["mesh_instances"], edited["mesh_instances"]):
+            for key in ("build_index", "mesh_part", "mesh_objectid",
+                        "world_transform3mf", "triangle_count", "component_path"):
+                self.assertEqual(old[key], new[key])
 
     def test_independent_roots_do_not_meet_shared_root_requirement(self):
         self.write(shared_nested_parts())
