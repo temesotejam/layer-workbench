@@ -16,6 +16,8 @@ on:
       - "scripts/test_audit_native_3mf_edit_ownership.py"
       - "scripts/plan_native_3mf_copy_on_write.py"
       - "scripts/test_plan_native_3mf_copy_on_write.py"
+      - "scripts/scale_native_3mf_private_leaf.py"
+      - "scripts/test_scale_native_3mf_private_leaf.py"
       - "scripts/test_audit_native_3mf_instance_placement.py"
       - "scripts/verify_native_3mf_edit_effect.py"
       - "scripts/test_verify_native_3mf_edit_effect.py"
@@ -73,6 +75,8 @@ on:
       - "scripts/test_audit_native_3mf_edit_ownership.py"
       - "scripts/plan_native_3mf_copy_on_write.py"
       - "scripts/test_plan_native_3mf_copy_on_write.py"
+      - "scripts/scale_native_3mf_private_leaf.py"
+      - "scripts/test_scale_native_3mf_private_leaf.py"
       - "scripts/test_audit_native_3mf_instance_placement.py"
       - "scripts/verify_native_3mf_edit_effect.py"
       - "scripts/test_verify_native_3mf_edit_effect.py"
@@ -160,6 +164,9 @@ jobs:
 
       - name: Unit-test native 3MF shared Core leaf clone writer offline
         run: python3 -m unittest discover -s scripts -p test_clone_native_3mf_shared_leaf.py -v
+
+      - name: Unit-test one private Core mesh vertex edit offline
+        run: python3 -m unittest discover -s scripts -p test_scale_native_3mf_private_leaf.py -v
 
       - name: Unit-test expanded native 3MF instance edit effects offline
         run: python3 -m unittest discover -s scripts -p test_verify_native_3mf_edit_effect.py -v
@@ -448,6 +455,48 @@ jobs:
           python3 scripts/verify_native_exported_stl.py "${private_stls[@]}" \
             | tee native-cli-output/native-cow-private-stl-audit.log
           echo "PASS: official v2.5.0 reopened clone-only Core 3MF with unchanged two-box geometry"
+
+          # Separately edit only the copied mesh's X vertices. Never touch a
+          # shared leaf, original mesh, metadata, or production Pages.
+          python3 scripts/scale_native_3mf_private_leaf.py \
+            --input native-cli-output/native-cow-private.3mf \
+            --output native-cli-output/native-cow-scaled.3mf \
+            --build-index 1 --component-edge 0 --scale-x 1.2 \
+            --report native-cli-output/native-cow-scaled-audit.log
+          cat native-cli-output/native-cow-scaled-audit.log
+          mkdir -p native-cli-output/native-cow-scaled-stl
+          timeout 180s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
+            native-cli-output/native-cow-scaled.3mf --arrange 0 --export-stl \
+            --outputdir native-cli-output/native-cow-scaled-stl \
+            > native-cli-output/native-cow-scaled-reopen.log 2>&1 || {
+              tail -n 120 native-cli-output/native-cow-scaled-reopen.log
+              exit 1
+            }
+          mapfile -d '' scaled_stls < <(find native-cli-output/native-cow-scaled-stl \
+            -type f -iname '*.stl' -print0)
+          if [ "${#scaled_stls[@]}" -lt 1 ] || [ "${#scaled_stls[@]}" -gt 2 ]; then
+            echo "Native private-mesh edit exported unexpected STL count: ${#scaled_stls[@]}"
+            exit 1
+          fi
+          # An independent Core hierarchy/vertex reader derives the expected
+          # two world-space STL bounds, and the real official CLI must match.
+          python3 scripts/audit_native_3mf_instance_placement.py \
+            --input native-cli-output/native-cow-scaled.3mf \
+            --require-instances 2 --verify-stls "${scaled_stls[@]}" \
+            --report native-cli-output/native-cow-scaled-stl-audit.log
+          python3 - <<'PY'
+          import sys
+          sys.path.insert(0, "scripts")
+          from audit_native_3mf_instance_placement import inspect_placements
+          before = inspect_placements("native-cli-output/native-cow-private.3mf")
+          after = inspect_placements("native-cli-output/native-cow-scaled.3mf")
+          original, changed = before["per_build_world_bounds_mm"], after["per_build_world_bounds_mm"]
+          if original[0] != changed[0]:
+              raise SystemExit("Private mesh edit unexpectedly changed sibling bounds")
+          if all(abs(a-b) < 1e-6 for a,b in zip(original[1], changed[1])):
+              raise SystemExit("Private mesh edit had no geometrical effect")
+          print("PASS: independent native STL proves private vertex shape change, sibling unchanged")
+          PY
           mkdir -p native-cli-output/native-project-stl
           timeout 180s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
             "${project}" --arrange 0 --export-stl \
