@@ -4,6 +4,8 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
+      - "scripts/edit_3mf_build_transform.py"
+      - "scripts/test_edit_3mf_build_transform.py"
       - "scripts/native-manifest-edit.mjs"
       - "scripts/test-native-manifest-edit.mjs"
       - "scripts/compare_3mf_metadata.py"
