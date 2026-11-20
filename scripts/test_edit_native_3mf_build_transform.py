@@ -7,6 +7,7 @@ from zipfile import ZipFile
 from test_verify_native_3mf_package import archive_parts
 from edit_native_3mf_build_transform import (
     compare_native_build_edit, translate_native_build_item, rotate_native_build_item_z,
+    scale_native_build_item_xyz,
 )
 from compare_3mf_build_preservation import mask_build_transforms
 
@@ -114,6 +115,67 @@ class NativeBuildEditTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "rotation"):
                     rotate_native_build_item_z(self.base, self.output, 0, angle)
                 self.assertFalse(self.output.exists())
+
+    def test_native_scale_preserves_external_parts_and_sibling_build(self):
+        self.write(self.base, contents())
+        report = scale_native_build_item_xyz(
+            self.base, self.output, 0, [1.5, 0.75, 1.25])
+        self.assertTrue(report["match"])
+        self.assertEqual(report["scale_xyz"], [1.5, 0.75, 1.25])
+        self.assertEqual(report["changed_build_indices"], [0])
+        self.assertEqual(len(report["preserved_external_model_parts"]), 2)
+        with ZipFile(self.base) as before, ZipFile(self.output) as after:
+            for member in before.namelist():
+                if member != MAIN:
+                    self.assertEqual(before.read(member), after.read(member))
+            old_mask, old = mask_build_transforms(before.read(MAIN))
+            new_mask, new = mask_build_transforms(after.read(MAIN))
+        self.assertEqual(old_mask, new_mask)
+        self.assertEqual(new[0], (1.5, 0, 0, 0, 0.75, 0, 0, 0, 1.25, 90, 90, 0))
+        self.assertEqual(new[1], old[1])
+
+    def test_native_scale_implicit_identity_and_prior_rotated_nonuniform_matrix(self):
+        self.write(self.base, contents(implicit=True))
+        self.assertTrue(scale_native_build_item_xyz(
+            self.base, self.output, 0, [1.5, 0.75, 1.25])["match"])
+        with ZipFile(self.output) as archive:
+            _, transforms = mask_build_transforms(archive.read(MAIN))
+        self.assertEqual(transforms[0], (1.5, 0, 0, 0, 0.75, 0,
+                                         0, 0, 1.25, 0, 0, 0))
+        self.output.unlink()
+        self.base.unlink()
+        parts = contents()
+        parts[MAIN] = parts[MAIN].replace(
+            ONE.encode(), b"0 2 0 -1 0 0 0 0 1 90 90 0")
+        self.write(self.base, parts)
+        self.assertTrue(scale_native_build_item_xyz(
+            self.base, self.output, 0, [1.5, 0.75, 1.25])["match"])
+        with ZipFile(self.output) as archive:
+            _, transforms = mask_build_transforms(archive.read(MAIN))
+        self.assertEqual(transforms[0], (0, 1.5, 0, -1.5, 0, 0,
+                                         0, 0, 1.25, 90, 90, 0))
+
+    def test_native_scale_rejects_noop_negative_nonfinite_and_out_of_range(self):
+        self.write(self.base, contents())
+        for factors in ([1, 1, 1], [0, 1, 1], [-1, 1, 1],
+                        [0.249, 1, 1], [4.001, 1, 1],
+                        [float("nan"), 1, 1], [float("inf"), 1, 1],
+                        [True, 1, 1], [1, 1], "1 2 3"):
+            with self.subTest(factors=factors):
+                with self.assertRaisesRegex(ValueError, "scale factors"):
+                    scale_native_build_item_xyz(
+                        self.base, self.output, 0, factors)
+                self.assertFalse(self.output.exists())
+
+    def test_native_scale_rejects_existing_destination_or_missing_index(self):
+        self.write(self.base, contents())
+        with self.assertRaisesRegex(ValueError, "Destination"):
+            scale_native_build_item_xyz(
+                self.base, self.base, 0, [1.5, 1, 1])
+        with self.assertRaisesRegex(ValueError, "does not exist"):
+            scale_native_build_item_xyz(
+                self.base, self.output, 2, [1.5, 1, 1])
+        self.assertFalse(self.output.exists())
 
     def test_audit_rejects_changes_to_external_model_or_opaque_metadata(self):
         self.write(self.base, contents())
