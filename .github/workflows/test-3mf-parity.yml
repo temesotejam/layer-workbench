@@ -26,6 +26,11 @@ on:
 
   pull_request:
     paths:
+      - "scripts/compare_3mf_build_preservation.py"
+      - "scripts/test_compare_3mf_build_preservation.py"
+      - "scripts/edit_3mf_build_transform.py"
+      - "scripts/test_edit_3mf_build_transform.py"
+      - "docs/V250_3MF_CORE_MODEL_PRESERVATION.md"
       - "scripts/compare_3mf_metadata.py"
       - "scripts/test_compare_3mf_metadata.py"
       - "docs/V250_3MF_ANCILLARY_PRESERVATION.md"

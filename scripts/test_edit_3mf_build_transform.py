@@ -64,6 +64,53 @@ class Core3MFBuildTransformTests(unittest.TestCase):
                         payload = payload.replace(old, new, 1)
                 archive.writestr(entry, payload)
 
+    def test_single_quoted_transform_and_spacing_preserve_xml_bytes(self):
+        """XML-standard single quotes and optional '=' spacing edit surgically."""
+        from compare_3mf_build_preservation import compare_build_preservation
+        original = b' transform="1 0 0 0 1 0 0 0 1 150 90 0"'
+        for attribute in (
+            b" transform='1 0 0 0 1 0 0 0 1 150 90 0'",
+            b"  transform = '1 0 0 0 1 0 0 0 1 150 90 0'",
+            b'  transform = "1 0 0 0 1 0 0 0 1 150 90 0"',
+        ):
+            with self.subTest(attribute=attribute), tempfile.TemporaryDirectory() as folder:
+                source, dest = self.paths(folder)
+                self.rewrite_core_model(source, [(original, attribute)])
+                before_bytes = source.read_bytes()
+                with zipfile.ZipFile(source) as archive:
+                    before_xml = archive.read('3D/3dmodel.model')
+                report = translate_core_build_item(source, dest, 1, (10, 0, 0))
+                self.assertEqual(report['editedBuildIndex'], 1)
+                self.assertEqual(source.read_bytes(), before_bytes)
+                with zipfile.ZipFile(dest) as archive:
+                    after_xml = archive.read('3D/3dmodel.model')
+                self.assertEqual(
+                    after_xml, before_xml.replace(b'150 90 0', b'160 90 0', 1)
+                )
+                self.assertTrue(compare_build_preservation(source, dest)['match'])
+                self.assertEqual(
+                    audit(dest)['scenes'][0]['buildItems'][1]['transform3mf'][9:],
+                    [160., 90., 0.],
+                )
+
+    def test_prefixed_vendor_transform_is_not_edited(self):
+        """Do not select vendor:transform when the Core attribute is nearby."""
+        from compare_3mf_build_preservation import compare_build_preservation
+        with tempfile.TemporaryDirectory() as folder:
+            source, dest = self.paths(folder)
+            self.rewrite_core_model(source, [
+                (b'<model unit=', b'<model xmlns:v="urn:vendor" unit='),
+                (b' transform="1 0 0 0 1 0 0 0 1 150 90 0"',
+                 b' v:transform="leave-this-opaque" transform = \'1 0 0 0 1 0 0 0 1 150 90 0\''),
+            ])
+            translate_core_build_item(source, dest, 1, (10, 0, 0))
+            with zipfile.ZipFile(source) as old_zip, zipfile.ZipFile(dest) as new_zip:
+                old_xml = old_zip.read('3D/3dmodel.model')
+                new_xml = new_zip.read('3D/3dmodel.model')
+                self.assertEqual(new_xml, old_xml.replace(b'150 90 0', b'160 90 0', 1))
+                self.assertIn(b'v:transform="leave-this-opaque"', new_xml)
+            self.assertTrue(compare_build_preservation(source, dest)['match'])
+
     def test_relative_move_preserves_rotated_scaled_item_and_opaque_member(self):
         with tempfile.TemporaryDirectory() as folder:
             source, dest = self.paths(folder)
