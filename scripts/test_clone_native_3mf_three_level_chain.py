@@ -267,7 +267,6 @@ class ThreeLevelCopyOnWriteTests(unittest.TestCase):
             (b'<object id="1" type="model">', uuids[0]),
             (b'<object id="3" type="model">', uuids[1]),
             (b'<component objectid="3"', uuids[2]),
-            (b'<component objectid="101"', uuids[3]),
         ):
             self.assertEqual(main.count(opening), 1)
             if opening.endswith(b'>'):
@@ -275,6 +274,15 @@ class ThreeLevelCopyOnWriteTests(unittest.TestCase):
             else:
                 changed = opening + b' p:UUID="' + fresh + b'"'
             main = main.replace(opening, changed, 1)
+        # Another unselected resource also references the same leaf: select
+        # the actual middle edge by its distinctive transform, not by ID.
+        middle_edge = (
+            b'<component objectid="101" p:path="/3D/Objects/first.model" '
+            b'transform="1 0 0 0 1 0 0 0 1 2 3 4"/>')
+        self.assertEqual(main.count(middle_edge), 1)
+        main = main.replace(
+            middle_edge, b'<component p:UUID="' + uuids[3] +
+            b'" ' + middle_edge[len(b'<component '):], 1)
         parts[MAIN] = main
         leaf = parts[LEAF]
         core_model = b'<model xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">'
