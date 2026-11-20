@@ -1360,6 +1360,38 @@ jobs:
             --report native-cli-output/shared-root-native-stl-audit.log
           echo "PASS: official native CLI reloaded two-level isolated Core fixture"
 
+      - name: Verify private Y mesh edit after shared-root COW with native CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Same official CLI-authored project used by the preceding COW gate.
+          # Scaling is permitted only AFTER both shared ancestors are detached.
+          python3 scripts/scale_native_3mf_private_leaf.py \
+            --input native-cli-output/shared-root-private.3mf \
+            --output native-cli-output/shared-root-scaled-y.3mf \
+            --build-index 1 --component-edge 0 --scale-y 1.2 \
+            --report native-cli-output/shared-root-private-y-scale-audit.log
+          app="${RUNNER_TEMP}/OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.5.0.AppImage"
+          mkdir -p native-cli-output/shared-root-scaled-y-stl
+          timeout 180s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
+            native-cli-output/shared-root-scaled-y.3mf --arrange 0 --export-stl \
+            --outputdir native-cli-output/shared-root-scaled-y-stl \
+            > native-cli-output/shared-root-scaled-y-reopen.log 2>&1 || {
+              tail -n 120 native-cli-output/shared-root-scaled-y-reopen.log
+              exit 1
+            }
+          mapfile -d '' stls < <(find native-cli-output/shared-root-scaled-y-stl \
+            -type f -iname '*.stl' -print0)
+          if [ "${#stls[@]}" -lt 1 ] || [ "${#stls[@]}" -gt 2 ]; then
+            echo "Unexpected official native STL count after Y edit: ${#stls[@]}"
+            exit 1
+          fi
+          python3 scripts/audit_native_3mf_instance_placement.py \
+            --input native-cli-output/shared-root-scaled-y.3mf \
+            --require-instances 2 --verify-stls "${stls[@]}" \
+            --report native-cli-output/shared-root-scaled-y-native-stl-audit.log
+          echo "PASS: native CLI reopened private Y-scaled shared-root 3MF; sibling preserved"
+
       - name: Archive text diagnostics without redistributing the AppImage
         if: always()
         uses: actions/upload-artifact@v4
