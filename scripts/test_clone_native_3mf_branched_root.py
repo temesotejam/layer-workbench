@@ -32,6 +32,27 @@ def branched_parts():
     return parts
 
 
+SECOND = "3D/Objects/second.model"
+
+
+def distinct_branched_parts():
+    """Two shared build roots, each with two DIFFERENT external mesh leaves."""
+    parts = branched_parts()
+    original = (b'<component objectid="101" '
+                b'p:path="/3D/Objects/first.model" '
+                b'transform="1 0 0 0 1 0 0 0 1 34 0 0"/>')
+    replacement = (b'<component objectid="102" '
+                   b'p:path="/3D/Objects/second.model" '
+                   b'transform="1 0 0 0 1 0 0 0 1 34 0 0"/>')
+    if parts[MAIN].count(original) != 1:
+        raise AssertionError("Missing unique second branch")
+    parts[MAIN] = parts[MAIN].replace(original, replacement, 1)
+    if parts[SECOND].count(b'x="10"') != 1:
+        raise AssertionError("Missing distinguishable second mesh")
+    parts[SECOND] = parts[SECOND].replace(b'x="10"', b'x="17"', 1)
+    return parts
+
+
 class BranchRootIsolationTests(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
@@ -85,6 +106,59 @@ class BranchRootIsolationTests(unittest.TestCase):
                     for item in ("Metadata/project_settings.config",
                                  "3D/Objects/second.model"):
                         self.assertEqual(src.read(item), dst.read(item))
+                self.result.unlink()
+                self.base.unlink()
+
+    def test_distinct_external_leaves_detach_only_selected_branch(self):
+        # Unlike the original identical-leaf fixture, each component edge
+        # references a different mesh part and a different Core object ID.
+        # Both builds still share the main root and both external leaves.
+        for edge in (0, 1):
+            with self.subTest(edge=edge):
+                self.write(distinct_branched_parts())
+                original_bytes = self.base.read_bytes()
+                prior = inspect_placements(self.base)
+                self.assertEqual([m["mesh_part"] for m in prior["mesh_instances"]],
+                                 [LEAF, SECOND, LEAF, SECOND])
+                plan = plan_copy_on_write(self.base, 1, [edge])
+                self.assertEqual([s["total_visits"] for s in
+                                  plan["clone_steps_inner_to_outer"]], [2, 2])
+                target = [LEAF, SECOND][edge]
+                other = [SECOND, LEAF][edge]
+                result = clone_branched_root(
+                    self.base, self.result, edge_index=edge)
+                self.assertEqual(result["changed_model_parts"], [MAIN, target])
+                self.assertEqual(self.base.read_bytes(), original_bytes)
+                after = inspect_placements(self.result)
+                self.assertEqual(prior["per_build_world_bounds_mm"],
+                                 after["per_build_world_bounds_mm"])
+                self.assertEqual(len(after["mesh_instances"]), 4)
+                for i, (old, new) in enumerate(zip(
+                        prior["mesh_instances"], after["mesh_instances"])):
+                    for key in ("mesh_part", "world_bounds_mm",
+                                "world_transform3mf", "triangle_count",
+                                "build_index"):
+                        self.assertEqual(old[key], new[key])
+                    if i == 2 + edge:
+                        self.assertNotEqual(old["mesh_objectid"],
+                                            new["mesh_objectid"])
+                    else:
+                        self.assertEqual(old["mesh_objectid"],
+                                         new["mesh_objectid"])
+                self.assertFalse(plan_copy_on_write(self.result, 1, [edge])
+                                 ["copy_on_write_required"])
+                self.assertTrue(plan_copy_on_write(self.result, 1, [1 - edge])
+                                ["copy_on_write_required"])
+                with ZipFile(self.base) as src, ZipFile(self.result) as dst:
+                    self.assertEqual(src.comment, dst.comment)
+                    self.assertEqual(src.read(other), dst.read(other))
+                    self.assertEqual(
+                        src.read("Metadata/project_settings.config"),
+                        dst.read("Metadata/project_settings.config"))
+                baseline, changed = inventory(self.base), inventory(self.result)
+                self.assertEqual(set(baseline), set(changed))
+                self.assertEqual({p for p in baseline if baseline[p] != changed[p]},
+                                 {MAIN, target})
                 self.result.unlink()
                 self.base.unlink()
 
