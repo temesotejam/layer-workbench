@@ -196,5 +196,65 @@ class ThreeLevelCopyOnWriteTests(unittest.TestCase):
         self.assertFalse(self.output.exists())
 
 
+    def test_opaque_metadata_on_any_cloned_level_fails_closed(self):
+        # A copied identity annotation could make two objects claim the
+        # same vendor identity even while all Core geometry remains valid.
+        for part, opening in (
+            (MAIN, b'<object id="1" type="model">'),
+            (MAIN, b'<object id="3" type="model">'),
+            (LEAF, b'<object id="101">'),
+        ):
+            with self.subTest(part=part, opening=opening):
+                parts = three_level_parts()
+                self.assertEqual(parts[part].count(opening), 1)
+                parts[part] = parts[part].replace(
+                    opening, opening + b'<metadata name="uuid">opaque</metadata>', 1)
+                self.write(parts)
+                with self.assertRaisesRegex(ValueError, "metadata"):
+                    clone_three_level_chain(self.source, self.output)
+                self.assertFalse(self.output.exists())
+
+    def test_identity_attributes_on_all_cloned_levels_fail_closed(self):
+        for part, opening in (
+            (MAIN, b'<object id="1" type="model">'),
+            (MAIN, b'<object id="3" type="model">'),
+            (LEAF, b'<object id="101">'),
+        ):
+            with self.subTest(part=part, opening=opening):
+                parts = three_level_parts()
+                self.assertEqual(parts[part].count(opening), 1)
+                changed = opening[:-1] + b' xmlns:vendor="urn:test" vendor:uuid="same-id">'
+                parts[part] = parts[part].replace(opening, changed, 1)
+                self.write(parts)
+                with self.assertRaisesRegex(ValueError, "Identity attribute"):
+                    clone_three_level_chain(self.source, self.output)
+                self.assertFalse(self.output.exists())
+
+    def test_unknown_element_on_cloned_root_is_refused(self):
+        parts = three_level_parts()
+        opening = b'<object id="1" type="model">'
+        self.assertEqual(parts[MAIN].count(opening), 1)
+        parts[MAIN] = parts[MAIN].replace(
+            opening,
+            opening + b'<vendor:identity xmlns:vendor="urn:test">x</vendor:identity>',
+            1)
+        self.write(parts)
+        with self.assertRaisesRegex(ValueError, "Opaque extension element"):
+            clone_three_level_chain(self.source, self.output)
+        self.assertFalse(self.output.exists())
+
+    def test_plain_core_names_can_still_be_copied(self):
+        parts = three_level_parts()
+        opening = b'<object id="3" type="model">'
+        self.assertEqual(parts[MAIN].count(opening), 1)
+        parts[MAIN] = parts[MAIN].replace(
+            opening, b'<object id="3" type="model" name="middle">', 1)
+        self.write(parts)
+        result = clone_three_level_chain(self.source, self.output)
+        self.assertTrue(result["geometry_unchanged"])
+        with ZipFile(self.output) as archive:
+            self.assertIn(b'name="middle"', archive.read(MAIN))
+
+
 if __name__ == "__main__":
     unittest.main()
