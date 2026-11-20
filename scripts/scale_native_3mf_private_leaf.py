@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Scale the X coordinates of ONE already-private Core 3MF mesh leaf.
+"""Scale one coordinate axis of ONE already-private Core 3MF mesh leaf.
 
 Experimental offline native CLI fixture only. The caller must first run
 clone_native_3mf_shared_leaf.py; this writer never edits a shared mesh.
-Only the selected external Core mesh's numeric vertex X attributes change.
+Only the selected external Core mesh's numeric vertex attributes on the chosen axis change.
 No real printer files, G-code or public browser features are produced.
 """
 import argparse
@@ -25,7 +25,9 @@ VERTEX_TAG = re.compile(rb'<(?:(?:[A-Za-z_][\w.-]*):)?vertex(?=\s)[^<>]*/>')
 MIN_SCALE, MAX_SCALE = 0.5, 1.5
 
 
-def _scaled_mesh_xml(raw, mesh_id, factor):
+def _scaled_mesh_xml(raw, mesh_id, factor, axis="x"):
+    if type(axis) is not str or axis not in ("x", "y", "z"):
+        raise ValueError("Scale axis must be x, y or z")
     root = _guard_xml(raw, "private external Core model")
     _, mm_per_unit = parse_model_unit(root.get("unit"))
     if mm_per_unit != 1:
@@ -45,30 +47,30 @@ def _scaled_mesh_xml(raw, mesh_id, factor):
     tags = list(VERTEX_TAG.finditer(block))
     if not tags or len(tags) != len(expected_vertices):
         raise ValueError("Unsupported private Core vertex markup")
-    x_values = []
+    coordinates = []
     for tag in tags:
-        match = _attribute(tag.group(), "x")
+        match = _attribute(tag.group(), axis)
         try:
             value = float(match.group("value").decode("ascii"))
         except (UnicodeError, ValueError) as exc:
-            raise ValueError("Invalid private Core vertex X value") from exc
+            raise ValueError(f"Invalid private Core vertex {axis.upper()} value") from exc
         if not math.isfinite(value) or abs(value) > MAX_COORD:
             raise ValueError("Out-of-range private Core vertex")
-        x_values.append(value)
-    low, high = min(x_values), max(x_values)
+        coordinates.append(value)
+    low, high = min(coordinates), max(coordinates)
     if high - low <= 1e-8:
-        raise ValueError("Cannot scale a zero-width private Core mesh")
+        raise ValueError("Cannot scale a zero-width private Core mesh on the selected axis")
     center = (low + high) / 2
     changed = block
-    for tag, original in reversed(list(zip(tags, x_values))):
+    for tag, original in reversed(list(zip(tags, coordinates))):
         opening = tag.group()
-        x_attr = _attribute(opening, "x")
+        coordinate_attr = _attribute(opening, axis)
         new = center + (original - center) * factor
         if not math.isfinite(new) or abs(new) > MAX_COORD:
             raise ValueError("Scaled Core vertex exceeds coordinate budget")
-        updated = (opening[:x_attr.start("value")] +
+        updated = (opening[:coordinate_attr.start("value")] +
                    format(new, ".12g").encode("ascii") +
-                   opening[x_attr.end("value"):])
+                   opening[coordinate_attr.end("value"):])
         changed = changed[:tag.start()] + updated + changed[tag.end():]
     if changed == block:
         raise ValueError("Private Core mesh edit was a no-op")
@@ -82,13 +84,15 @@ def _scaled_mesh_xml(raw, mesh_id, factor):
     return result
 
 
-def scale_private_leaf(source, destination, build_index=1, edge_index=0, scale_x=1.1):
+def scale_private_leaf(source, destination, build_index=1, edge_index=0, scale_x=1.1, axis="x"):
     """Edit exactly one private leaf in a bounded two-build native 3MF."""
     source, destination = Path(source), Path(destination)
     if source.resolve() == destination.resolve() or destination.exists():
         raise ValueError("Output must be a distinct, nonexistent path")
     if type(build_index) is not int or type(edge_index) is not int:
         raise ValueError("Core occurrence indices must be integers")
+    if type(axis) is not str or axis not in ("x", "y", "z"):
+        raise ValueError("Scale axis must be x, y or z")
     if type(scale_x) not in (float, int) or not math.isfinite(scale_x):
         raise ValueError("Scale factor must be finite and numeric")
     if not MIN_SCALE <= scale_x <= MAX_SCALE or scale_x == 1:
@@ -111,7 +115,7 @@ def scale_private_leaf(source, destination, build_index=1, edge_index=0, scale_x
     leaf_part, leaf_id = selected["mesh_part"], selected["mesh_objectid"]
     with ZipFile(source) as original:
         source_leaf = original.read(leaf_part)
-        changed_leaf = _scaled_mesh_xml(source_leaf, leaf_id, scale_x)
+        changed_leaf = _scaled_mesh_xml(source_leaf, leaf_id, scale_x, axis)
         # The other object block must remain completely untouched, including
         # its attributes and vertex bytes.
         old_start, _, old_end = _object_block(source_leaf, sibling["mesh_objectid"])
@@ -157,10 +161,12 @@ def scale_private_leaf(source, destination, build_index=1, edge_index=0, scale_x
         destination.unlink(missing_ok=True)
         raise
     return {
-        "source": "bounded native Core private mesh X vertex scaling",
+        "source": "bounded native Core private mesh single-axis vertex scaling",
         "edited_build_index": build_index,
         "private_mesh": {"part": leaf_part, "objectid": leaf_id},
-        "scale_x": scale_x,
+        "scale_axis": axis,
+        "scale_factor": scale_x,
+        **({"scale_x": scale_x} if axis == "x" else {}),
         "changed_model_parts": [leaf_part],
         "sibling_unchanged": True,
         "opaque_zip_members_preserved": True,
@@ -176,12 +182,19 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--build-index", type=int, default=1)
     parser.add_argument("--component-edge", type=int, default=0)
-    parser.add_argument("--scale-x", type=float, default=1.1)
+    axis_group = parser.add_mutually_exclusive_group()
+    axis_group.add_argument("--scale-x", type=float, help="Scale private X vertices")
+    axis_group.add_argument("--scale-y", type=float, help="Scale private Y vertices")
+    axis_group.add_argument("--scale-z", type=float, help="Scale private Z vertices")
     parser.add_argument("--report", type=Path)
     args = parser.parse_args()
     try:
+        chosen = [(axis, value) for axis, value in (
+            ("x", args.scale_x), ("y", args.scale_y), ("z", args.scale_z)
+        ) if value is not None]
+        axis, factor = chosen[0] if chosen else ("x", 1.1)
         result = scale_private_leaf(args.input, args.output, args.build_index,
-                                    args.component_edge, args.scale_x)
+                                    args.component_edge, factor, axis)
         report = json.dumps(result, sort_keys=True, indent=2) + "\n"
         if args.report:
             args.report.write_text(report, encoding="utf-8")

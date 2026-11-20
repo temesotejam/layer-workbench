@@ -497,6 +497,47 @@ jobs:
               raise SystemExit("Private mesh edit had no geometrical effect")
           print("PASS: independent native STL proves private vertex shape change, sibling unchanged")
           PY
+          # Verify both newly supported private Y and Z vertex edits with
+          # real pinned v2.5.0 CLI reopen/STL export. No source mesh, sibling,
+          # printer settings, public assets or G-code are changed.
+          for axis in y z; do
+            variant="native-cow-scaled-${axis}"
+            python3 scripts/scale_native_3mf_private_leaf.py \
+              --input native-cli-output/native-cow-private.3mf \
+              --output "native-cli-output/${variant}.3mf" \
+              --build-index 1 --component-edge 0 "--scale-${axis}" 1.2 \
+              --report "native-cli-output/${variant}-audit.log"
+            mkdir -p "native-cli-output/${variant}-stl"
+            timeout 180s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
+              "native-cli-output/${variant}.3mf" --arrange 0 --export-stl \
+              --outputdir "native-cli-output/${variant}-stl" \
+              > "native-cli-output/${variant}-reopen.log" 2>&1 || {
+                tail -n 120 "native-cli-output/${variant}-reopen.log"
+                exit 1
+              }
+            mapfile -d '' axis_stls < <(find "native-cli-output/${variant}-stl" \
+              -type f -iname '*.stl' -print0)
+            if [ "${#axis_stls[@]}" -lt 1 ] || [ "${#axis_stls[@]}" -gt 2 ]; then
+              echo "Native ${axis}-scaled 3MF exported unexpected STL count"
+              exit 1
+            fi
+            python3 scripts/audit_native_3mf_instance_placement.py \
+              --input "native-cli-output/${variant}.3mf" \
+              --require-instances 2 --verify-stls "${axis_stls[@]}" \
+              --report "native-cli-output/${variant}-stl-audit.log"
+            python3 - "${axis}" <<'PY'
+          import sys
+          sys.path.insert(0, "scripts")
+          from audit_native_3mf_instance_placement import inspect_placements
+          axis = sys.argv[1]
+          before = inspect_placements("native-cli-output/native-cow-private.3mf")
+          after = inspect_placements(f"native-cli-output/native-cow-scaled-{axis}.3mf")
+          a, b = before["per_build_world_bounds_mm"], after["per_build_world_bounds_mm"]
+          if a[0] != b[0] or all(abs(x-y) < 1e-6 for x,y in zip(a[1], b[1])):
+              raise SystemExit(f"Core private {axis} edit did not isolate a real geometry change")
+          print(f"PASS: native CLI independent private {axis} scale, sibling unchanged")
+          PY
+          done
           mkdir -p native-cli-output/native-project-stl
           timeout 180s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
             "${project}" --arrange 0 --export-stl \

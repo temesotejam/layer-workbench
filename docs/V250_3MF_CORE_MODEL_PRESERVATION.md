@@ -450,3 +450,24 @@ support, vendor metadata semantic equivalence, native/WASM G-code parity,
 or safe physical printing. It is not enabled in the public browser.
 Next: generalize nested copy-on-write and audit metadata references before
 considering arbitrary native project edits.
+
+## 2026-11-21: bounded Y/Z private leaf vertex scaling
+
+The isolated offline `scale_native_3mf_private_leaf.py` writer now supports
+`--scale-y` and `--scale-z` in addition to the existing `--scale-x`.
+These flags are mutually exclusive: one detached Core mesh and one local axis
+at a time, scaling about that axis's local bounding-box midpoint. The Python
+API retains its prior X-default positional factor and adds an explicit axis.
+For any chosen axis it requires the preexisting one-private-leaf ownership
+gate, millimetre Core model units, finite factor within 0.5..1.5, no
+zero-width target dimension, immutable source, and a new output pathname.
+Only the selected axis's literal vertex numeric attributes may change.
+
+Offline regression tests check X compatibility, Y/Z isolated edits,
+byte-preserved sibling/opaque ZIP members, and invalid axis rejection.
+The pinned official v2.5.0 native CLI acceptance additionally reopens the
+two separately edited Y/Z archives and matches re-exported STL world
+bounds against independently composed Core vertex placements, ensuring
+the other build's geometry remains unchanged. Only CI-ephemeral generated
+projects are used. This does not implement nested copy-on-write, arbitrary
+GUI-authored 3MF compatibility, print safety, or WASM G-code equality.
