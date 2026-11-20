@@ -49,7 +49,6 @@ def inspect_native_hierarchy(path):
 
     main_build = roots[MAIN_PART].find(CORE_NS + "build")
     items = [] if main_build is None else main_build.findall(CORE_NS + "item")
-    main_ids = objects_by_part[MAIN_PART]
     build_refs = [item.get("objectid") for item in items]
     build_targets = [
         {"build_index": i, "to_part": referenced_part(item, MAIN_PART),
