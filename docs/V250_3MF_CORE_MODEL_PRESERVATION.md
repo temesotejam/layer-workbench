@@ -236,3 +236,11 @@ Offline tests construct a two-object synthetic multipart graph and cover
 valid external links, dangling build references, dangling external object
 IDs, duplicate object IDs and path traversal. These tests run before the
 native AppImage is downloaded; they do not replace native reimport checks.
+
+The inspector also recognizes Production Extension `p:path` on **root build items**
+(as well as root-model components) and resolves such IDs against their target
+model part. It ignores unrelated vendor attributes named `path`, requires
+absolute package paths, and rejects cross-part `p:path` on non-root model
+components. These restrictions follow the [3MF Production Extension v1.1.2](https://3mf.io/wp-content/uploads/sites/106/2025/02/3MF_Production_Extension_v1_1_2.pdf),
+sections 2 and 3. They are reference-inventory rules, not a guarantee that
+all transform/metadata extension semantics are implemented.
