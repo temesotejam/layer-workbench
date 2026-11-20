@@ -13,6 +13,8 @@ on:
       - "scripts/test_inspect_native_3mf_hierarchy.py"
       - "scripts/audit_native_3mf_instance_placement.py"
       - "scripts/test_audit_native_3mf_instance_placement.py"
+      - "scripts/verify_native_3mf_edit_effect.py"
+      - "scripts/test_verify_native_3mf_edit_effect.py"
       - "scripts/edit_native_3mf_build_transform.py"
       - "scripts/test_edit_native_3mf_build_transform.py"
       - "scripts/test_verify_native_exported_stl.py"
@@ -62,6 +64,8 @@ on:
       - "scripts/test_inspect_native_3mf_hierarchy.py"
       - "scripts/audit_native_3mf_instance_placement.py"
       - "scripts/test_audit_native_3mf_instance_placement.py"
+      - "scripts/verify_native_3mf_edit_effect.py"
+      - "scripts/test_verify_native_3mf_edit_effect.py"
       - "scripts/edit_native_3mf_build_transform.py"
       - "scripts/test_edit_native_3mf_build_transform.py"
       - "scripts/test_verify_native_exported_stl.py"
@@ -135,6 +139,9 @@ jobs:
 
       - name: Unit-test native 3MF multipart world placement composition offline
         run: python3 -m unittest discover -s scripts -p test_audit_native_3mf_instance_placement.py -v
+
+      - name: Unit-test expanded native 3MF instance edit effects offline
+        run: python3 -m unittest discover -s scripts -p test_verify_native_3mf_edit_effect.py -v
 
       - name: Unit-test lossless native multi-part build edit offline
         run: python3 -m unittest discover -s scripts -p test_edit_native_3mf_build_transform.py -v
@@ -447,6 +454,51 @@ jobs:
             "${stls[@]}" | tee native-cli-output/native-project-edited-placement.log
           echo "PASS: official v2.5.0 CLI applies one native-authored 3MF build placement edit"
           # Neither real-GUI 3MF, full metadata semantics nor print safety proven.
+
+      - name: Reopen second shared-mesh build-instance translation with official native CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          source="native-cli-output/native-v250-project.3mf"
+          edited="native-cli-output/native-v250-project-second-moved.3mf"
+          # Build index 1 references the same external mesh as index 0.
+          # The earlier acceptance case moved index 0. Prove the independent
+          # instance can move without changing its sibling or shared geometry.
+          python3 scripts/edit_native_3mf_build_transform.py \
+            --input "${source}" --output "${edited}" \
+            --build-index 1 --translate-mm -10 0 0 \
+            --report native-cli-output/native-second-edit.json
+          python3 scripts/verify_native_3mf_edit_effect.py \
+            --baseline "${source}" --candidate "${edited}" \
+            --build-index 1 --translate-mm -10 0 0 \
+            --report native-cli-output/native-second-instance-effect.json
+          app="${RUNNER_TEMP}/OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.5.0.AppImage"
+          mkdir -p native-cli-output/native-second-moved-stl
+          timeout 180s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
+            "${edited}" --arrange 0 --export-stl \
+            --outputdir native-cli-output/native-second-moved-stl \
+            > native-cli-output/native-second-moved-reopen.log 2>&1 || {
+              tail -n 120 native-cli-output/native-second-moved-reopen.log
+              exit 1
+            }
+          mapfile -d '' stls < <(find native-cli-output/native-second-moved-stl \
+            -type f -iname '*.stl' -print0)
+          if [ "${#stls[@]}" -lt 1 ] || [ "${#stls[@]}" -gt 2 ]; then
+            echo "Expected 1..2 native STL exports after editing second instance"
+            exit 1
+          fi
+          # Independent exact Core component expansion versus the native
+          # engine's actual STL output. Neither auditor trusts the file name
+          # or assumes each external mesh is a distinct build instance.
+          python3 scripts/audit_native_3mf_instance_placement.py \
+            --input "${edited}" --require-instances 2 \
+            --verify-stls "${stls[@]}" \
+            --report native-cli-output/native-second-moved-placements.json
+          python3 scripts/verify_native_exported_stl.py \
+            --expected-bounds 90 110 90 110 0 20 140 160 90 110 0 20 \
+            "${stls[@]}" | tee native-cli-output/native-second-moved-stl.log
+          echo "PASS: official v2.5.0 native CLI applies second shared-mesh instance move only"
+          # Narrow CLI-authored 3MF fixture, not GUI parity or print certification.
 
       - name: Rotate one native-authored 3MF build item and reimport with the official CLI
         shell: bash
