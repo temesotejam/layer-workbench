@@ -146,11 +146,14 @@ def strip_single_appended_implicit_transform(data, item_index):
             # attribute directly before > or />, never reserializes the tag.
             expected = b' transform="' + match.group("value") + b'"'
             closing = len(raw) - (2 if raw.endswith(b'/>') else 1)
-            if match.group(0) != expected or match.end() != closing:
+            # Existing XML whitespace before /> must survive untouched.
+            # The regex consumes it together with the newly inserted space:
+            # delete only the FINAL space + attribute, never the old spaces.
+            if not match.group(0).endswith(expected) or match.end() != closing:
                 raise ValueError("Noncanonical added Core build attribute")
             if found is not None:
                 raise ValueError("Ambiguous selected Core build item")
-            found = (start + match.start(), start + match.end())
+            found = (start + match.end() - len(expected), start + match.end())
         seen += 1
 
     def end(tag):
