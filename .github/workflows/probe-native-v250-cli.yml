@@ -1516,10 +1516,13 @@ jobs:
                   if old[key] != new[key]:
                       raise SystemExit("Three-level edit altered an occurrence transform or identity")
           old, new = inventory(before_path), inventory(after_path)
+          # The official CLI chooses external part names itself. Never
+          # assume "first.model": identify the exact edited leaf occurrence.
+          selected_part = before["mesh_instances"][1]["mesh_part"]
           if set(old) != set(new) or {
               k for k in old if old[k] != new[k]
-          } != {"3D/Objects/first.model"}:
-              raise SystemExit("Three-level edit changed unrelated ZIP members")
+          } != {selected_part}:
+              raise SystemExit("Three-level edit changed ZIP members other than the selected leaf")
           if plan_copy_on_write(after_path, 1, [0, 0])["copy_on_write_required"]:
               raise SystemExit("Three-level edited leaf is still shared")
           print("PASS: three-level Y edit changed only detached mesh and selected world bounds")
