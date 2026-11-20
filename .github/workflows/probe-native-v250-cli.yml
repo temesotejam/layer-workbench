@@ -241,6 +241,45 @@ jobs:
           sha256sum "${stls[@]}" | tee native-cli-output/native-stl.sha256
           echo "PASS: official native v2.5.0 preserved both synthetic Core 3MF build placements"
 
+      - name: Verify a surgically translated Core 3MF in the official native v2.5.0 CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Use the same original source from the baseline native export.
+          # Move ONLY the first build item +10 mm X; never rewrite the mesh.
+          python3 scripts/edit_3mf_build_transform.py \
+            --input native-cli-output/two-build-items.3mf \
+            --output native-cli-output/two-build-items-edited.3mf \
+            --build-index 0 --translate-mm 10 0 0
+          python3 scripts/compare_3mf_build_preservation.py \
+            --baseline native-cli-output/two-build-items.3mf \
+            --candidate native-cli-output/two-build-items-edited.3mf \
+            --report native-cli-output/edited-core-preservation.json
+          # A passing byte-preservation audit alone says nothing about whether
+          # OrcaSlicer actually applied the edited placement. Export real STL
+          # from the official pinned native AppImage and audit both boxes.
+          app="${RUNNER_TEMP}/OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.5.0.AppImage"
+          mkdir -p native-cli-output/edited-stl-export
+          timeout 120s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
+            native-cli-output/two-build-items-edited.3mf \
+            --arrange 0 --export-stl --outputdir native-cli-output/edited-stl-export \
+            > native-cli-output/native-edited-export-stl.log 2>&1 || {
+              tail -n 100 native-cli-output/native-edited-export-stl.log
+              exit 1
+            }
+          mapfile -d '' edited_stls < <(find native-cli-output/edited-stl-export \
+            -type f -iname '*.stl' -print0)
+          if [ "${#edited_stls[@]}" -lt 1 ] || [ "${#edited_stls[@]}" -gt 2 ]; then
+            echo "Expected 1..2 edited native STL exports, got ${#edited_stls[@]}"
+            exit 1
+          fi
+          python3 scripts/verify_native_exported_stl.py \
+            --expected-bounds 100 120 90 110 0 20 150 170 90 110 0 20 \
+            "${edited_stls[@]}" | tee native-cli-output/native-edited-placement-audit.log
+          echo "PASS: official native v2.5.0 applied the edited first-item Core placement"
+          # Synthetic Core 3MF interoperability only. No native-generated
+          # Orca project metadata, source preservation or print safety proven.
+
       - name: Prepare pinned full native v2.5.0 machine, process and filament presets
         shell: bash
         run: |
