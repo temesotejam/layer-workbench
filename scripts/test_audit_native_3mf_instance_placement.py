@@ -129,7 +129,7 @@ class NativeWorldPlacementTests(unittest.TestCase):
         parts["3D/Objects/first.model"] = parts["3D/Objects/first.model"].replace(
             b'x="10"', b'x="nan"')
         self.write(parts)
-        with self.assertRaisesRegex(ValueError, "Non-finite"):
+        with self.assertRaisesRegex(ValueError, "non-finite"):
             inspect_placements(self.path)
 
     def test_rejects_insufficient_instance_budget(self):
