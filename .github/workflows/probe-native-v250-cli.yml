@@ -500,6 +500,80 @@ jobs:
           echo "PASS: official v2.5.0 CLI applies the native-authored 3MF Z rotation"
           # This does not certify GUI projects, G-code parity or print safety.
 
+      - name: Scale one native-authored multipart 3MF item and reopen in official v2.5.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          source="native-cli-output/native-v250-project.3mf"
+          scaled="native-cli-output/native-v250-project-scaled.3mf"
+          python3 scripts/edit_native_3mf_build_transform.py \
+            --input "${source}" --output "${scaled}" \
+            --build-index 0 --scale-xyz 1.5 0.75 1.25 \
+            --report native-cli-output/native-project-scale-edit.log
+          # This must independently reject changes to external meshes, opaque
+          # printer settings, OPC relationships or the untouched second item.
+          python3 - <<'PY'
+          import sys
+          sys.path.insert(0, "scripts")
+          from edit_native_3mf_build_transform import compare_native_build_edit
+          report = compare_native_build_edit(
+              "native-cli-output/native-v250-project.3mf",
+              "native-cli-output/native-v250-project-scaled.3mf", 0)
+          if not report["match"] or len(report["preserved_external_model_parts"]) != 2:
+              raise SystemExit("Scaled native 3MF lost opaque or external model members")
+          print("PASS: native multipart scale changes only one main Core build transform")
+          PY
+          app="${RUNNER_TEMP}/OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.5.0.AppImage"
+          mkdir -p native-cli-output/native-project-scaled-stl
+          timeout 180s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
+            "${scaled}" --arrange 0 --export-stl \
+            --outputdir native-cli-output/native-project-scaled-stl \
+            > native-cli-output/native-project-scaled-reopen.log 2>&1 || {
+              tail -n 120 native-cli-output/native-project-scaled-reopen.log
+              exit 1
+            }
+          mapfile -d '' stls < <(find native-cli-output/native-project-scaled-stl \
+            -type f -iname '*.stl' -print0)
+          if [ "${#stls[@]}" -lt 1 ] || [ "${#stls[@]}" -gt 2 ]; then
+            echo "Expected 1..2 STL exports from scaled native 3MF"
+            exit 1
+          fi
+          # The original CLI-generated project may have a centered external
+          # model, so derive the build-translation pivot from its actual XML.
+          # The unscaled first cube's world AABB is known from the baseline
+          # *native* STL readback: [90,110] x [90,110] x [0,20] mm.
+          mapfile -t scaled_bounds < <(python3 - <<'PY'
+          import sys
+          from zipfile import ZipFile
+          sys.path.insert(0, "scripts")
+          from compare_3mf_build_preservation import IDENTITY, mask_build_transforms
+          from audit_3mf_scene import parse_model_unit
+          from verify_native_3mf_package import safe_xml, MAIN_PART
+          with ZipFile("native-cli-output/native-v250-project.3mf") as archive:
+              raw = archive.read(MAIN_PART)
+          _, matrices = mask_build_transforms(raw)
+          _, mm_per_unit = parse_model_unit(safe_xml(raw, MAIN_PART).get("unit"))
+          matrix = matrices[0] if matrices[0] is not None else IDENTITY
+          pivots = [v * mm_per_unit for v in matrix[9:12]]
+          axes = [(90,110,1.5), (90,110,0.75), (0,20,1.25)]
+          for pivot, (low, high, scale) in zip(pivots, axes):
+              print(f"{pivot + (low - pivot) * scale:.6f}")
+              print(f"{pivot + (high - pivot) * scale:.6f}")
+          for value in (150,170,90,110,0,20):
+              print(value)
+          print(f"Native build scale pivot in mm: {pivots}", file=sys.stderr)
+          PY
+          )
+          if [ "${#scaled_bounds[@]}" -ne 12 ]; then
+            echo "Expected 12 XYZ bounds for two native STL objects"
+            exit 1
+          fi
+          python3 scripts/verify_native_exported_stl.py \
+            --expected-bounds "${scaled_bounds[@]}" \
+            "${stls[@]}" | tee native-cli-output/native-project-scaled-placement.log
+          echo "PASS: official native v2.5.0 CLI applies a bounded one-item XYZ scale"
+          # Desktop GUI 3MF semantics and physical print safety are not tested.
+
       - name: Attempt real official-native v2.5.0 slicing with source-pinned full presets
         shell: bash
         run: |
