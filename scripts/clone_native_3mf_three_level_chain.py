@@ -16,6 +16,7 @@ from audit_native_3mf_instance_placement import inspect_placements
 from clone_native_3mf_shared_leaf import (
     COMPONENT_OPEN, MAX_CORE_ID, RESOURCES_END, _clone_mesh_part,
     _guard_xml, _object_block, _replace_attr_in_opening,
+    _require_clone_safe_annotations, _renew_production_uuid,
 )
 from clone_native_3mf_shared_root_chain import _clone_root_and_redirect_build
 from compare_3mf_metadata import inventory
@@ -41,20 +42,24 @@ def _clone_middle(raw, middle_id, old_child_id, new_child_id):
     matches = [obj for obj in objects if obj.get("id") == middle_id]
     if len(matches) != 1:
         raise ValueError("Ambiguous middle Core component")
+    _require_clone_safe_annotations(matches[0], "middle component")
     group = matches[0].find(CORE_NS + "components")
     children = [] if group is None else group.findall(CORE_NS + "component")
     if len(children) != 1 or children[0].get("objectid") != old_child_id:
         raise ValueError("Middle Core component must have one selected child")
     start, opening_end, end = _object_block(raw, middle_id)
     original = raw[start:end]
-    clone = (_replace_attr_in_opening(
-        raw[start:opening_end], "id", middle_id, new_id) + raw[opening_end:end])
+    clone_opening = _replace_attr_in_opening(
+        raw[start:opening_end], "id", middle_id, new_id)
+    clone_opening = _renew_production_uuid(clone_opening, matches[0], raw)
+    clone = clone_opening + raw[opening_end:end]
     edges = list(COMPONENT_OPEN.finditer(clone))
     if len(edges) != 1:
         raise ValueError("Ambiguous raw middle component markup")
     edge = edges[0]
     edited = _replace_attr_in_opening(
         edge.group(), "objectid", old_child_id, new_child_id)
+    edited = _renew_production_uuid(edited, children[0], raw)
     clone = clone[:edge.start()] + edited + clone[edge.end():]
     endings = list(RESOURCES_END.finditer(raw))
     if len(endings) != 1 or end > endings[0].start():
