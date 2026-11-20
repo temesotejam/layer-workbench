@@ -122,9 +122,9 @@ class NativeHierarchyTests(unittest.TestCase):
     def test_rejects_unsafe_external_component_path(self):
         parts = component_fixture()
         parts["3D/3dmodel.model"] = parts["3D/3dmodel.model"].replace(
-            b"/3D/Objects/first.model", b"../../../outside.model")
+            b"/3D/Objects/first.model", b"/../outside.model")
         self.write(parts)
-        with self.assertRaisesRegex(ValueError, "escapes package root"):
+        with self.assertRaisesRegex(ValueError, "traverses parent"):
             inspect_native_hierarchy(self.path)
 
 
