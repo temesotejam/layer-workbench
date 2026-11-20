@@ -499,3 +499,29 @@ semantics. It does not change vertex positions or certify G-code, and the
 writer remains outside the production browser UI. Next: generalize
 occurrence-path cloning to nested same-part and cross-part components with
 explicit metadata preservation and test per-instance private mesh editing.
+
+## 2026-11-21: shared-root detachment → private Y-mesh edit acceptance
+
+The independently audited two-level shared-root writer can now be chained,
+**without broadening its accepted input structure**, to the existing private
+Core mesh vertex scaler. An additional regression starts with two build
+items sharing a main component root and external mesh. It proves direct
+scaling is rejected while the mesh is shared, clones the main root and
+leaf for build item 1, and then applies a bounded 1.2× local Y-vertex
+scale to that detached leaf only.
+
+The regression preserves the original archive and detached source bytes,
+all non-target ZIP member payloads and the shared sibling's coordinates.
+The original and edited instance transform/identity chains are compared,
+as are independently composed per-build mesh bounds. In the official
+v2.5.0 native CLI workflow, the post-edit archive is reopened with
+auto-arrangement disabled and the exported STL is numerically compared
+with the Core hierarchy reader. This is a combined **geometry-only**
+gate, not a desktop GUI project or lossless Orca metadata edit.
+
+The accepted structure is still precisely two build items with one
+shared main root, one external leaf and a single component edge.
+Arbitrary-depth component graphs, mixed model parts, opaque Orca metadata
+semantics, user-facing browser editing, full-profile native/WASM G-code
+parity and real printer validation remain unverified. Test project
+files remain ephemeral in CI; do not publish generated G-code.
