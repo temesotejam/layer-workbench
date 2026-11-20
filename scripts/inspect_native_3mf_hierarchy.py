@@ -16,6 +16,21 @@ from verify_native_3mf_package import (
 )
 
 
+PROD_PATH = "{http://schemas.microsoft.com/3dmanufacturing/production/2015/06}path"
+
+
+def referenced_part(element, source_part):
+    """Resolve only the Production Extension p:path, never vendor path hints."""
+    target = element.get(PROD_PATH)
+    if target is None:
+        return source_part
+    if source_part != MAIN_PART and element.tag == CORE_NS + "component":
+        raise ValueError("Production p:path on non-root model component is forbidden")
+    if not target.startswith("/"):
+        raise ValueError("Production p:path must be package-root absolute")
+    return resolve_opc_target(target, source_part)
+
+
 def inspect_native_hierarchy(path):
     package = audit_native_package(path)  # constrained ZIP inventory and OPC links
     parts = package["model_parts"]
@@ -36,9 +51,14 @@ def inspect_native_hierarchy(path):
     items = [] if main_build is None else main_build.findall(CORE_NS + "item")
     main_ids = objects_by_part[MAIN_PART]
     build_refs = [item.get("objectid") for item in items]
+    build_targets = [
+        {"build_index": i, "to_part": referenced_part(item, MAIN_PART),
+         "to_objectid": ref, "external": referenced_part(item, MAIN_PART) != MAIN_PART}
+        for i, (item, ref) in enumerate(zip(items, build_refs))
+    ]
     missing_build = [
-        {"build_index": i, "objectid": ref}
-        for i, ref in enumerate(build_refs) if ref not in main_ids
+        target for target in build_targets
+        if target["to_objectid"] not in objects_by_part.get(target["to_part"], {})
     ]
 
     # Core component links are distinct from the OPC relationships already
@@ -59,15 +79,7 @@ def inspect_native_hierarchy(path):
                 continue
             for comp in parent.findall(CORE_NS + "component"):
                 components += 1
-                path_hints = [
-                    value for attr, value in comp.attrib.items()
-                    if attr.rsplit("}", 1)[-1] == "path"
-                ]
-                if len(path_hints) > 1:
-                    raise ValueError("Ambiguous component part path")
-                target_part = (
-                    resolve_opc_target(path_hints[0], part) if path_hints else part
-                )
+                target_part = referenced_part(comp, part)
                 target_id = comp.get("objectid")
                 edge = {
                     "from_part": part,
@@ -91,6 +103,7 @@ def inspect_native_hierarchy(path):
         "source": "bounded CLI-authored native 3MF inspection",
         "main_build_items": len(items),
         "build_objectids": build_refs,
+        "build_targets": build_targets,
         "parts": summaries,
         "component_edges": edges,
         "dangling_main_build_refs": missing_build,
