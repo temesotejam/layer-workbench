@@ -471,3 +471,31 @@ bounds against independently composed Core vertex placements, ensuring
 the other build's geometry remains unchanged. Only CI-ephemeral generated
 projects are used. This does not implement nested copy-on-write, arbitrary
 GUI-authored 3MF compatibility, print safety, or WASM G-code equality.
+
+
+## 2026-11-21: bounded two-level shared-root Copy-on-Write
+
+The existing leaf-only writer refuses to change an external mesh when the
+parent **main Core object itself** is shared by two build items. The new
+offline script scripts/clone_native_3mf_shared_root_chain.py implements
+one additional, narrowly-scoped case: two build items each instantiate
+the same main Core root, which contains a single cross-part component edge
+to a shared external mesh. The second occurrence is isolated by cloning
+the external mesh, cloning the shared main root with its component redirected
+to the new mesh ID, then retargeting only the second build item. This is
+**not** a general arbitrary-depth instance editor.
+
+The operation checks the occurrence-specific ownership planner both before
+and after editing. It compares per-build world bounds and transforms, preserves
+all other ZIP members and the original Core object bytes, and refuses
+ambiguous XML, extra component edges, unsafe indices and existing output
+paths. A dedicated five-case Python regression suite runs in the official
+native CLI workflow. That workflow also constructs a bounded shared-root
+Core fixture, opens the rewritten project using official OrcaSlicer v2.5.0,
+and compares exported STL geometry to the independent Core hierarchy reader.
+
+This test does not exercise Orca GUI metadata or 3MF paint/material/texture
+semantics. It does not change vertex positions or certify G-code, and the
+writer remains outside the production browser UI. Next: generalize
+occurrence-path cloning to nested same-part and cross-part components with
+explicit metadata preservation and test per-instance private mesh editing.
