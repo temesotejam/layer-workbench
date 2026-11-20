@@ -8,6 +8,7 @@ from audit_native_3mf_instance_placement import inspect_placements
 from clone_native_3mf_three_level_chain import clone_three_level_chain
 from compare_3mf_metadata import inventory
 from plan_native_3mf_copy_on_write import plan_copy_on_write
+from scale_native_3mf_private_leaf import scale_private_leaf
 from test_clone_native_3mf_shared_root_chain import shared_root_parts
 
 MAIN = "3D/3dmodel.model"
@@ -85,6 +86,65 @@ class ThreeLevelCopyOnWriteTests(unittest.TestCase):
                              private.read("Metadata/project_settings.config"))
             self.assertEqual(original.read("3D/Objects/second.model"),
                              private.read("3D/Objects/second.model"))
+
+    def test_three_level_detach_then_private_y_scale_isolates_sibling(self):
+        self.write(three_level_parts())
+        original_bytes = self.source.read_bytes()
+        before = inspect_placements(self.source)
+        scaled = self.output.with_name("private-scaled-y.3mf")
+        # Editing a still-shared leaf must fail even with a valid deep path.
+        with self.assertRaises(ValueError):
+            scale_private_leaf(self.source, scaled, component_edges=[0, 0],
+                               scale_x=1.2, axis="y")
+        self.assertFalse(scaled.exists())
+
+        clone_three_level_chain(self.source, self.output)
+        detached_bytes = self.output.read_bytes()
+        detached = inspect_placements(self.output)
+        with self.assertRaisesRegex(ValueError, "depth"):
+            scale_private_leaf(self.output, scaled, component_edges=[0],
+                               scale_x=1.2, axis="y")
+        self.assertFalse(scaled.exists())
+
+        report = scale_private_leaf(self.output, scaled, component_edges=[0, 0],
+                                    scale_x=1.2, axis="y")
+        after = inspect_placements(scaled)
+        self.assertEqual(report["component_edge_path"], [0, 0])
+        self.assertEqual(report["scale_axis"], "y")
+        self.assertEqual(before["per_build_world_bounds_mm"],
+                         detached["per_build_world_bounds_mm"])
+        self.assertEqual(detached["per_build_world_bounds_mm"][0],
+                         after["per_build_world_bounds_mm"][0])
+        self.assertNotEqual(detached["per_build_world_bounds_mm"][1],
+                            after["per_build_world_bounds_mm"][1])
+        self.assertEqual(self.source.read_bytes(), original_bytes)
+        self.assertEqual(self.output.read_bytes(), detached_bytes)
+        self.assertFalse(plan_copy_on_write(scaled, 1, [0, 0])
+                         ["copy_on_write_required"])
+        for old, new in zip(detached["mesh_instances"], after["mesh_instances"]):
+            for key in ("build_index", "mesh_part", "mesh_objectid",
+                        "world_transform3mf", "triangle_count", "component_path"):
+                self.assertEqual(old[key], new[key])
+        old_members, new_members = inventory(self.output), inventory(scaled)
+        self.assertEqual(set(old_members), set(new_members))
+        self.assertEqual({key for key in old_members
+                          if old_members[key] != new_members[key]}, {LEAF})
+        with ZipFile(self.output) as prior, ZipFile(scaled) as edited:
+            self.assertEqual(prior.comment, edited.comment)
+            for member in (MAIN, "3D/Objects/second.model",
+                           "Metadata/project_settings.config"):
+                self.assertEqual(prior.read(member), edited.read(member))
+
+    def test_three_level_private_scale_rejects_invalid_component_path(self):
+        self.write(three_level_parts())
+        clone_three_level_chain(self.source, self.output)
+        scaled = self.output.with_name("reject-scaled.3mf")
+        for path in ([], [0], [0, True], [1, 0], [0, 0, 0], "0,0"):
+            with self.subTest(path=path):
+                with self.assertRaises(ValueError):
+                    scale_private_leaf(self.output, scaled, component_edges=path,
+                                       scale_x=1.2, axis="y")
+                self.assertFalse(scaled.exists())
 
     def test_independent_roots_fail_closed(self):
         parts = three_level_parts()

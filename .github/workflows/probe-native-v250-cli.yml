@@ -1485,6 +1485,69 @@ jobs:
             --report native-cli-output/three-level-native-stl-audit.log
           echo "PASS: official native v2.5.0 reopened isolated three-level Core geometry"
 
+      - name: Reopen three-level detached and Y-scaled Core mesh with official native v2.5.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Separate, bounded proof: the preceding native CLI COW fixture has
+          # root -> middle -> mesh. Edit ONLY the now-private selected leaf.
+          python3 scripts/scale_native_3mf_private_leaf.py \
+            --input native-cli-output/three-level-private.3mf \
+            --output native-cli-output/three-level-scaled-y.3mf \
+            --build-index 1 --component-edges 0,0 --scale-y 1.2 \
+            --report native-cli-output/three-level-scaled-y-audit.log
+          python3 - <<'PY'
+          import sys
+          sys.path.insert(0, "scripts")
+          from audit_native_3mf_instance_placement import inspect_placements
+          from compare_3mf_metadata import inventory
+          from plan_native_3mf_copy_on_write import plan_copy_on_write
+          before_path = "native-cli-output/three-level-private.3mf"
+          after_path = "native-cli-output/three-level-scaled-y.3mf"
+          before = inspect_placements(before_path)
+          after = inspect_placements(after_path)
+          if before["per_build_world_bounds_mm"][0] != after["per_build_world_bounds_mm"][0]:
+              raise SystemExit("Three-level private Y edit altered original sibling")
+          if before["per_build_world_bounds_mm"][1] == after["per_build_world_bounds_mm"][1]:
+              raise SystemExit("Three-level private Y edit had no measurable effect")
+          for old, new in zip(before["mesh_instances"], after["mesh_instances"]):
+              for key in ("build_index", "mesh_part", "mesh_objectid",
+                          "world_transform3mf", "triangle_count", "component_path"):
+                  if old[key] != new[key]:
+                      raise SystemExit("Three-level edit altered an occurrence transform or identity")
+          old, new = inventory(before_path), inventory(after_path)
+          # The official CLI chooses external part names itself. Never
+          # assume "first.model": identify the exact edited leaf occurrence.
+          selected_part = before["mesh_instances"][1]["mesh_part"]
+          if set(old) != set(new) or {
+              k for k in old if old[k] != new[k]
+          } != {selected_part}:
+              raise SystemExit("Three-level edit changed ZIP members other than the selected leaf")
+          if plan_copy_on_write(after_path, 1, [0, 0])["copy_on_write_required"]:
+              raise SystemExit("Three-level edited leaf is still shared")
+          print("PASS: three-level Y edit changed only detached mesh and selected world bounds")
+          PY
+          app="${RUNNER_TEMP}/OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.5.0.AppImage"
+          mkdir -p native-cli-output/three-level-scaled-y-stl
+          timeout 180s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
+            native-cli-output/three-level-scaled-y.3mf --arrange 0 --export-stl \
+            --outputdir native-cli-output/three-level-scaled-y-stl \
+            > native-cli-output/three-level-scaled-y-native-reopen.log 2>&1 || {
+              tail -n 120 native-cli-output/three-level-scaled-y-native-reopen.log
+              exit 1
+            }
+          mapfile -d '' stls < <(find native-cli-output/three-level-scaled-y-stl \
+            -type f -iname '*.stl' -print0)
+          if [ "${#stls[@]}" -lt 1 ] || [ "${#stls[@]}" -gt 2 ]; then
+            echo "Unexpected native STL count for three-level private Y edit: ${#stls[@]}"
+            exit 1
+          fi
+          python3 scripts/audit_native_3mf_instance_placement.py \
+            --input native-cli-output/three-level-scaled-y.3mf \
+            --require-instances 2 --verify-stls "${stls[@]}" \
+            --report native-cli-output/three-level-scaled-y-native-stl-audit.log
+          echo "PASS: official native v2.5.0 reopened Y-edited three-level Core geometry"
+
       - name: Archive text diagnostics without redistributing the AppImage
         if: always()
         uses: actions/upload-artifact@v4

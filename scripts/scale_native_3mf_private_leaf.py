@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Scale one coordinate axis of ONE already-private Core 3MF mesh leaf.
 
-Experimental offline native CLI fixture only. The caller must first run
-clone_native_3mf_shared_leaf.py; this writer never edits a shared mesh.
+Experimental offline native CLI fixture only. The caller must first detach
+the full selected component path; this writer never edits a shared mesh.
 Only the selected external Core mesh's numeric vertex attributes on the chosen axis change.
 No real printer files, G-code or public browser features are produced.
 """
@@ -84,13 +84,24 @@ def _scaled_mesh_xml(raw, mesh_id, factor, axis="x"):
     return result
 
 
-def scale_private_leaf(source, destination, build_index=1, edge_index=0, scale_x=1.1, axis="x"):
+def scale_private_leaf(source, destination, build_index=1, edge_index=0, scale_x=1.1,
+                       axis="x", component_edges=None):
     """Edit exactly one private leaf in a bounded two-build native 3MF."""
     source, destination = Path(source), Path(destination)
     if source.resolve() == destination.resolve() or destination.exists():
         raise ValueError("Output must be a distinct, nonexistent path")
     if type(build_index) is not int or type(edge_index) is not int:
         raise ValueError("Core occurrence indices must be integers")
+    if component_edges is None:
+        selected_edges = [edge_index]
+    elif (isinstance(component_edges, (tuple, list)) and
+          all(type(edge) is int for edge in component_edges) and
+          edge_index == 0):
+        selected_edges = list(component_edges)
+    else:
+        raise ValueError("Invalid or conflicting component-edge path")
+    if selected_edges not in ([0], [0, 0]):
+        raise ValueError("Only bounded Core component paths 0 and 0,0 are supported")
     if type(axis) is not str or axis not in ("x", "y", "z"):
         raise ValueError("Scale axis must be x, y or z")
     if type(scale_x) not in (float, int) or not math.isfinite(scale_x):
@@ -106,11 +117,14 @@ def scale_private_leaf(source, destination, build_index=1, edge_index=0, scale_x
         raise ValueError("Only the second independent private mesh of two builds is supported")
     selected = instances[build_index]
     sibling = instances[1 - build_index]
+    if (len(selected["component_path"]) != len(selected_edges) + 1 or
+            len(sibling["component_path"]) != len(selected_edges) + 1):
+        raise ValueError("Selected Core component depth does not match explicit path")
     if (selected["mesh_part"] == MAIN_PART or
             selected["mesh_part"] != sibling["mesh_part"] or
             selected["mesh_objectid"] == sibling["mesh_objectid"]):
         raise ValueError("Selected Core mesh is not a private external clone")
-    if plan_copy_on_write(source, build_index, [edge_index])["copy_on_write_required"]:
+    if plan_copy_on_write(source, build_index, selected_edges)["copy_on_write_required"]:
         raise ValueError("Selected Core leaf still has shared ownership")
     leaf_part, leaf_id = selected["mesh_part"], selected["mesh_objectid"]
     with ZipFile(source) as original:
@@ -155,7 +169,7 @@ def scale_private_leaf(source, destination, build_index=1, edge_index=0, scale_x
                 before["per_build_world_bounds_mm"][1],
                 after["per_build_world_bounds_mm"][1])):
             raise ValueError("Selected private mesh geometry did not change")
-        if plan_copy_on_write(destination, build_index, [edge_index])["copy_on_write_required"]:
+        if plan_copy_on_write(destination, build_index, selected_edges)["copy_on_write_required"]:
             raise ValueError("Edited private mesh became shared")
     except BaseException:
         destination.unlink(missing_ok=True)
@@ -163,6 +177,7 @@ def scale_private_leaf(source, destination, build_index=1, edge_index=0, scale_x
     return {
         "source": "bounded native Core private mesh single-axis vertex scaling",
         "edited_build_index": build_index,
+        "component_edge_path": selected_edges,
         "private_mesh": {"part": leaf_part, "objectid": leaf_id},
         "scale_axis": axis,
         "scale_factor": scale_x,
@@ -182,6 +197,8 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--build-index", type=int, default=1)
     parser.add_argument("--component-edge", type=int, default=0)
+    parser.add_argument("--component-edges", choices=("0", "0,0"),
+                        help="Explicit bounded Core path (0 or 0,0); default is 0")
     axis_group = parser.add_mutually_exclusive_group()
     axis_group.add_argument("--scale-x", type=float, help="Scale private X vertices")
     axis_group.add_argument("--scale-y", type=float, help="Scale private Y vertices")
@@ -193,8 +210,10 @@ def main():
             ("x", args.scale_x), ("y", args.scale_y), ("z", args.scale_z)
         ) if value is not None]
         axis, factor = chosen[0] if chosen else ("x", 1.1)
+        edges = (None if args.component_edges is None else
+                 [int(edge) for edge in args.component_edges.split(",")])
         result = scale_private_leaf(args.input, args.output, args.build_index,
-                                    args.component_edge, factor, axis)
+                                    args.component_edge, factor, axis, edges)
         report = json.dumps(result, sort_keys=True, indent=2) + "\n"
         if args.report:
             args.report.write_text(report, encoding="utf-8")
