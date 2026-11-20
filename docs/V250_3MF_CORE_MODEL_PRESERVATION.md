@@ -612,3 +612,38 @@ vendor files, and unrecognized identifier naming schemes remain
 uninterpreted. The Production UUID renewal and opaque-annotation guard do **not**
 prove complete semantic metadata integrity, general GUI-authored 3MF
 support or physical print safety.
+
+## 2026-11-21: bounded two-edge shared-root COW candidate (offline)
+
+An additional, **experimental and unpublished** Core writer,
+`scripts/clone_native_3mf_branched_root.py`, handles precisely two build
+items that share a **single main-part root with two component edges referencing
+the same external mesh**. The user-selected edge (0 or 1) in build item 1 is
+isolated by copying the external mesh and root, redirecting only that cloned
+edge, and redirecting only build item 1. The other three mesh occurrences
+continue to reference the original external mesh. Any other topology is
+rejected; this does not generalize to multiple distinct meshes or 3MF DAGs.
+
+The writer preserves the original archive, original root bytes and all
+non-target ZIP payloads. It validates the independently composed world-space
+bounds of all four mesh occurrences before/after and requires that the
+selected occurrence has no remaining shared Core object on its ancestry.
+Any standard Production `p:UUID` on the **cloned root and BOTH cloned
+component occurrences**, including the unretargeted branch, is regenerated;
+opaque object identities are rejected. Otherwise, duplicating the untouched
+branch's Production UUID would silently create an invalid identity collision.
+
+The lightweight 3MF CI gate covers both component selections, UUID uniqueness,
+preserved non-target resources, invalid indices, unsafe graphs and ambiguous
+identities. The [pinned v2.5.0 native CLI acceptance run #44829047039](https://github.com/temesotejam/layer-workbench/actions/runs/44829047039)
+also passed: it adds a second displaced Core edge to a **real official
+CLI-export-derived project**, detaches edge 1 of the second build, reopens the
+archive in the official AppImage with auto-arrangement disabled, and checks
+all **four exported 12-facet mesh occurrences** against independently
+composed XYZ bounds. The repeated source edge is a deliberately synthesized
+fixture; this is not an OrcaSlicer GUI-saved branching project.
+
+The success demonstrates this one geometry-only native reimport, **not**
+complete 3MF vendor-metadata semantics, non-identical child meshes,
+multi-edge DAGs, arbitrary GUI projects, native-vs-WASM G-code parity,
+browser editing, or any assurance that generated output can be printed.

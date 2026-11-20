@@ -21,6 +21,8 @@ on:
       - "scripts/test_clone_native_3mf_shared_root_chain.py"
       - "scripts/clone_native_3mf_three_level_chain.py"
       - "scripts/test_clone_native_3mf_three_level_chain.py"
+      - "scripts/clone_native_3mf_branched_root.py"
+      - "scripts/test_clone_native_3mf_branched_root.py"
       - "scripts/scale_native_3mf_private_leaf.py"
       - "scripts/test_scale_native_3mf_private_leaf.py"
       - "scripts/test_audit_native_3mf_instance_placement.py"
@@ -85,6 +87,8 @@ on:
       - "scripts/test_clone_native_3mf_shared_root_chain.py"
       - "scripts/clone_native_3mf_three_level_chain.py"
       - "scripts/test_clone_native_3mf_three_level_chain.py"
+      - "scripts/clone_native_3mf_branched_root.py"
+      - "scripts/test_clone_native_3mf_branched_root.py"
       - "scripts/scale_native_3mf_private_leaf.py"
       - "scripts/test_scale_native_3mf_private_leaf.py"
       - "scripts/test_audit_native_3mf_instance_placement.py"
@@ -1549,6 +1553,122 @@ jobs:
             --require-instances 2 --verify-stls "${stls[@]}" \
             --report native-cli-output/three-level-scaled-y-native-stl-audit.log
           echo "PASS: official native v2.5.0 reopened Y-edited three-level Core geometry"
+
+      - name: Reopen one detached branch of a native-authored two-edge Core root
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The source is the earlier official-CLI-export-derived shared-root
+          # project, not a claim of arbitrary desktop GUI 3MF compatibility.
+          python3 -m unittest discover -s scripts -p test_clone_native_3mf_branched_root.py -v
+          python3 - <<'PY'
+          import sys
+          from pathlib import Path
+          from uuid import uuid4
+          from zipfile import ZipFile
+          sys.path.insert(0, "scripts")
+          from audit_3mf_scene import parse_transform
+          from clone_native_3mf_shared_leaf import (
+              COMPONENT_OPEN, _guard_xml, _object_block, _replace_attr_in_opening,
+              _renew_production_uuid,
+          )
+          from verify_native_3mf_package import CORE_NS, MAIN_PART
+          source = Path("native-cli-output/shared-root-source.3mf")
+          target = Path("native-cli-output/shared-root-branched-source.3mf")
+          with ZipFile(source) as original:
+              raw = original.read(MAIN_PART)
+              model = _guard_xml(raw, "official derived shared-root source")
+              items = model.find(CORE_NS + "build").findall(CORE_NS + "item")
+              if len(items) != 2 or items[0].get("objectid") != items[1].get("objectid"):
+                  raise SystemExit("Expected shared build root in official derived source")
+              root_id = items[0].get("objectid")
+              start, _, end = _object_block(raw, root_id)
+              block = raw[start:end]
+              root_obj = next(o for o in model.find(CORE_NS + "resources")
+                              .findall(CORE_NS + "object") if o.get("id") == root_id)
+              container = root_obj.find(CORE_NS + "components")
+              children = [] if container is None else container.findall(CORE_NS + "component")
+              tags = list(COMPONENT_OPEN.finditer(block))
+              if len(children) != 1 or len(tags) != 1:
+                  raise SystemExit("Official shared root did not contain one component")
+              edge = tags[0]
+              original_matrix = list(parse_transform(children[0].get("transform")))
+              original_matrix[9] += 34.0
+              # Shift the duplicated branch away from the first mesh. This
+              # is a synthetic Core branching fixture over a genuine package.
+              new_matrix = " ".join(format(v, ".10g") for v in original_matrix)
+              copied = _renew_production_uuid(edge.group(), children[0], raw)
+              old_matrix = children[0].get("transform")
+              if old_matrix is None:
+                  if not copied.endswith(b"/>"):
+                      raise SystemExit("Expected self-closing official component")
+                  copied = copied[:-2] + b' transform="' + new_matrix.encode() + b'"/>'
+              else:
+                  copied = _replace_attr_in_opening(copied, "transform", old_matrix,
+                                                    new_matrix)
+              new_block = block[:edge.end()] + b"\n" + copied + block[edge.end():]
+              changed = raw[:start] + new_block + raw[end:]
+              _guard_xml(changed, "two-edge official-derived Core model")
+              with ZipFile(target, "x") as out:
+                  out.comment = original.comment
+                  for info in original.infolist():
+                      out.writestr(info, changed if info.filename == MAIN_PART
+                                   else original.read(info))
+          PY
+          python3 scripts/audit_native_3mf_instance_placement.py \
+            --input native-cli-output/shared-root-branched-source.3mf \
+            --require-instances 4 \
+            --report native-cli-output/branched-source-geometry.log
+          python3 scripts/clone_native_3mf_branched_root.py \
+            --input native-cli-output/shared-root-branched-source.3mf \
+            --output native-cli-output/shared-root-branched-private.3mf \
+            --edge-index 1 --report native-cli-output/branched-cow-report.log
+          app="${RUNNER_TEMP}/OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.5.0.AppImage"
+          mkdir -p native-cli-output/branched-native-stl
+          timeout 180s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
+            native-cli-output/shared-root-branched-private.3mf \
+            --arrange 0 --export-stl --outputdir native-cli-output/branched-native-stl \
+            > native-cli-output/branched-native-reopen.log 2>&1 || {
+              tail -n 120 native-cli-output/branched-native-reopen.log
+              exit 1
+            }
+          python3 - <<'PY' | tee native-cli-output/branched-native-bounds.log
+          import math
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, "scripts")
+          from audit_native_3mf_instance_placement import inspect_placements
+          from verify_native_exported_stl import read_triangles
+          path = Path("native-cli-output/shared-root-branched-private.3mf")
+          shapes = inspect_placements(path)["mesh_instances"]
+          if len(shapes) != 4 or any(s["triangle_count"] != 12 for s in shapes):
+              raise SystemExit("Expected four 12-facet Core mesh occurrences")
+          bounds = [s["world_bounds_mm"] for s in shapes]
+          stls = list(Path("native-cli-output/branched-native-stl").rglob("*.stl"))
+          if not 1 <= len(stls) <= 4:
+              raise SystemExit(f"Unexpected official native STL count: {len(stls)}")
+          faces = [face for stl in stls for face in read_triangles(stl)]
+          if len(faces) != 48:
+              raise SystemExit(f"Native exported {len(faces)} facets; expected 48")
+          matched = [[] for _ in bounds]
+          eps = 0.0005
+          for face in faces:
+              hits = [i for i, box in enumerate(bounds) if all(
+                  box[2*a] - eps <= pt[a] <= box[2*a+1] + eps
+                  for pt in face for a in range(3))]
+              if len(hits) != 1:
+                  raise SystemExit("Native facet does not identify exactly one Core branch")
+              matched[hits[0]].append(face)
+          for index, (box, group) in enumerate(zip(bounds, matched)):
+              if len(group) != 12:
+                  raise SystemExit(f"Native branch {index} facet count: {len(group)}")
+              xyz = [v for face in group for v in face]
+              actual = [f(v[a] for v in xyz) for a in range(3) for f in (min, max)]
+              if any(not math.isfinite(v) or abs(v-w) > eps
+                     for v, w in zip(actual, box)):
+                  raise SystemExit(f"Native branch {index} bounds mismatch: {actual} vs {box}")
+          print("PASS: official native v2.5.0 exported all four isolated Core branch bounds")
+          PY
 
       - name: Archive text diagnostics without redistributing the AppImage
         if: always()
