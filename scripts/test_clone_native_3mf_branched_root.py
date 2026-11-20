@@ -7,6 +7,7 @@ from xml.etree import ElementTree as ET
 
 from audit_native_3mf_instance_placement import inspect_placements
 from clone_native_3mf_branched_root import clone_branched_root
+from clone_native_3mf_shared_leaf import _object_block
 from compare_3mf_metadata import inventory
 from plan_native_3mf_copy_on_write import plan_copy_on_write
 from test_clone_native_3mf_shared_root_chain import shared_root_parts
@@ -92,16 +93,21 @@ class BranchRootIsolationTests(unittest.TestCase):
         main = parts[MAIN]
         uuids = [f"00000000-0000-4000-8000-{v:012x}".encode()
                  for v in range(1, 5)]
+        # The main part also has an unrelated original root; target ONLY
+        # the two edges under shared root 1, never an incidental third edge.
+        start, _, end = _object_block(main, "1")
+        block = main[start:end]
         root = b'<object id="1" type="model">'
-        main = main.replace(
+        self.assertEqual(block.count(root), 1)
+        block = block.replace(
             root, root[:-1] + b' p:UUID="' + uuids[0] + b'">', 1)
         edge_a = b'<component objectid="101"'
-        self.assertEqual(main.count(edge_a), 2)
-        main = main.replace(
+        self.assertEqual(block.count(edge_a), 2)
+        block = block.replace(
             edge_a, b'<component p:UUID="' + uuids[1] + b'" objectid="101"', 1)
-        main = main.replace(
+        block = block.replace(
             edge_a, b'<component p:UUID="' + uuids[2] + b'" objectid="101"', 1)
-        parts[MAIN] = main
+        parts[MAIN] = main[:start] + block + main[end:]
         leaf = parts[LEAF]
         leaf = leaf.replace(
             b'<model xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">',
