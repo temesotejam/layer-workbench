@@ -8,6 +8,7 @@ from audit_native_3mf_instance_placement import inspect_placements
 from clone_native_3mf_branched_root import clone_branched_root
 from compare_native_3mf_world_facets import (
     _cyclic_canonical, _facets_close, _oriented_facets_close,
+    _index_topology_summary,
     compare_world_facets,
 )
 from reconcile_native_3mf_cloned_root_settings import copy_bounded_root_settings
@@ -61,10 +62,33 @@ class NativeWorldFacetComparisonTests(unittest.TestCase):
             [_cyclic_canonical(shifted)],
         ))
 
+
+    def test_index_topology_detects_split_weld_with_identical_triangles(self):
+        # Vertex 4 is coincident with vertex 0. Reassigning just one face
+        # changes indexed mesh connectivity but not world-space triangles.
+        vertices = ((0, 0, 0), (1, 0, 0), (0, 1, 0),
+                    (1, 1, 0), (0, 0, 0))
+        before = ((0, 1, 2), (0, 2, 3))
+        after = ((0, 1, 2), (4, 2, 3))
+        def world(faces):
+            return sorted(_cyclic_canonical(tuple(vertices[i] for i in face))
+                          for face in faces)
+        self.assertEqual(world(before), world(after))
+        self.assertNotEqual(_index_topology_summary(len(vertices), before),
+                            _index_topology_summary(len(vertices), after))
+
+    def test_index_topology_ignores_renumbering_and_face_order(self):
+        before = ((0, 1, 2), (0, 2, 3))
+        # Relabel every vertex, rotate the first face, reorder the faces.
+        after = ((3, 1, 2), (0, 3, 2))
+        self.assertEqual(_index_topology_summary(4, before),
+                         _index_topology_summary(4, after))
+
     def test_private_core_id_cloning_keeps_world_triangles(self):
         report = compare_world_facets(self.source, self.restored)
         self.assertTrue(report["world_triangle_positions_equal_within_tolerance"])
         self.assertTrue(report["world_triangle_winding_equal_within_tolerance"])
+        self.assertTrue(report["world_mesh_index_topology_summaries_equal"])
         self.assertEqual(len(report["build_comparisons"]), 2)
         self.assertEqual([b["before_triangle_count"]
                           for b in report["build_comparisons"]], [2, 2])
@@ -100,6 +124,7 @@ class NativeWorldFacetComparisonTests(unittest.TestCase):
         self.assertTrue(report["world_triangle_positions_equal_within_tolerance"])
         self.assertTrue(report["world_triangle_winding_equal_within_tolerance"])
         self.assertFalse(report["complete_native_3mf_parity_proven"])
+        self.assertTrue(report["world_mesh_index_topology_summaries_equal"])
         self.assertNotIn("17 0 1", str(report))
 
     def test_changed_vertex_detected_even_when_part_settings_unchanged(self):
