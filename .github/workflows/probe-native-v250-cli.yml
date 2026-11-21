@@ -18,6 +18,8 @@ on:
       - "scripts/test_audit_native_3mf_part_mesh_context.py"
       - "scripts/compare_native_3mf_part_mesh_candidates.py"
       - "scripts/test_compare_native_3mf_part_mesh_candidates.py"
+      - "scripts/reconcile_native_3mf_cloned_root_settings.py"
+      - "scripts/test_reconcile_native_3mf_cloned_root_settings.py"
       - "scripts/audit_native_3mf_edit_ownership.py"
       - "scripts/test_audit_native_3mf_edit_ownership.py"
       - "scripts/plan_native_3mf_copy_on_write.py"
@@ -96,6 +98,8 @@ on:
       - "scripts/test_audit_native_3mf_part_mesh_context.py"
       - "scripts/compare_native_3mf_part_mesh_candidates.py"
       - "scripts/test_compare_native_3mf_part_mesh_candidates.py"
+      - "scripts/reconcile_native_3mf_cloned_root_settings.py"
+      - "scripts/test_reconcile_native_3mf_cloned_root_settings.py"
       - "scripts/audit_native_3mf_edit_ownership.py"
       - "scripts/test_audit_native_3mf_edit_ownership.py"
       - "scripts/plan_native_3mf_copy_on_write.py"
@@ -1820,6 +1824,139 @@ jobs:
                      for v, w in zip(actual, box)):
                   raise SystemExit(f"Native distinct branch {i} mismatch: {actual} vs {box}")
           print("PASS: native v2.5.0 reopened post-COW private Y-edited branch with four valid occurrences")
+          PY
+
+      - name: Import and re-export bounded cloned-root Part settings in pinned native v2.5.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s scripts \
+            -p test_reconcile_native_3mf_cloned_root_settings.py -v
+          # Fixture derived from real v2.5.0 CLI Part metadata, with one
+          # SYNTHETIC second Part attached to the shared Core root. No
+          # unmodified user/vendor 3MF compatibility is claimed.
+          python3 - <<'PY' | tee native-cli-output/part-remap-preflight.log
+          import copy
+          import sys
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          from zipfile import ZipFile
+          sys.path.insert(0, "scripts")
+          from audit_native_3mf_instance_placement import inspect_placements
+          from audit_native_3mf_metadata_object_refs import inspect_metadata_refs, SETTINGS
+          from audit_native_3mf_part_mesh_context import audit_part_mesh_context
+          from clone_native_3mf_branched_root import clone_branched_root
+          from reconcile_native_3mf_cloned_root_settings import copy_bounded_root_settings
+          from verify_native_3mf_package import audit_native_package
+
+          original = Path("native-cli-output/branched-distinct-shape-source.3mf")
+          source = Path("native-cli-output/part-remap-two-part-source.3mf")
+          candidate = Path("native-cli-output/part-remap-core-cow.3mf")
+          mapped = Path("native-cli-output/part-remap-native-input.3mf")
+          rows = inspect_placements(original)["mesh_instances"]
+          refs = inspect_metadata_refs(original)
+          if (len(rows) != 4 or len(refs["build_object_ids"]) != 2 or
+                  refs["build_object_ids"][0] != refs["build_object_ids"][1]):
+              raise SystemExit("Expected official-derived two-build shared root")
+          first_id, second_id = rows[0]["mesh_objectid"], rows[1]["mesh_objectid"]
+          if (first_id == second_id or [r["mesh_objectid"] for r in rows] !=
+                  [first_id, second_id, first_id, second_id]):
+              raise SystemExit("Expected two distinct external mesh IDs")
+          root_id = refs["build_object_ids"][0]
+          with ZipFile(original) as archive:
+              native_config = ET.fromstring(archive.read(SETTINGS))
+              objects = native_config.findall("object")
+              root = [o for o in objects if o.get("id") == root_id]
+              others = [o for o in objects if o.get("id") != root_id]
+              if len(root) != 1 or len(others) != 1:
+                  raise SystemExit("Need two real v2.5.0 object-setting records")
+              existing, donor = root[0].findall("part"), others[0].findall("part")
+              if (len(existing) != 1 or len(donor) != 1 or
+                      existing[0].get("id") != first_id or
+                      existing[0].get("subtype") != "normal_part" or
+                      donor[0].get("subtype") != "normal_part"):
+                  raise SystemExit("Real native Part descriptors differ from fixture")
+              # Keep ONLY the real native Part descriptors in a new synthetic
+              # object. The experimental remapper expressly refuses unknown
+              # object-level identity attributes or config-root plate records.
+              # Removing them here is for acceptance-fixture construction,
+              # never an allowed transformation of user/vendor projects.
+              config = ET.Element("config")
+              target_obj = ET.SubElement(config, "object", {"id": root_id})
+              first = copy.deepcopy(existing[0])
+              second = copy.deepcopy(donor[0])
+              second.set("id", second_id)
+              # Real CLI Parts also contain non-metadata vendor children.
+              # This fixture models ONLY the bounded metadata vocabulary;
+              # never mutate/drop these nodes in a real imported project.
+              # Refuse nested metadata while preserving accepted values.
+              for part in (first, second):
+                  for child in list(part):
+                      if child.tag != "metadata":
+                          part.remove(child)
+                      elif list(child):
+                          raise SystemExit("Nested native Part metadata unsupported")
+              target_obj.extend((first, second))
+              content = ET.tostring(config, encoding="utf-8")
+              with ZipFile(source, "x") as out:
+                  out.comment = archive.comment
+                  for info in archive.infolist():
+                      out.writestr(info, content if info.filename == SETTINGS
+                                   else archive.read(info))
+          audit_native_package(source)
+          contexts = audit_part_mesh_context(source)["build_contexts"]
+          if not all(row["one_to_one_numeric_id_candidates"] is True for row in contexts):
+              raise SystemExit("Synthetic Part IDs do not match both mesh labels")
+          clone_branched_root(source, candidate, edge_index=1)
+          result = copy_bounded_root_settings(source, candidate, mapped)
+          final = inspect_metadata_refs(mapped)
+          if (final["local_build_roots_without_object_settings"] or
+                  len(final["settings_part_inventory"][result["new_root"]]) != 2):
+              raise SystemExit("New root has incomplete Part settings")
+          print("PASS: bounded remap prepared using real native CLI provenance metadata")
+          PY
+          app="${RUNNER_TEMP}/OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.5.0.AppImage"
+          target="native-cli-output/part-remap-v250-reexport.3mf"
+          timeout 180s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
+            native-cli-output/part-remap-native-input.3mf \
+            --arrange 0 --export-3mf "${target}" \
+            > native-cli-output/part-remap-v250-reexport.log 2>&1 || {
+              tail -n 100 native-cli-output/part-remap-v250-reexport.log
+              exit 1
+            }
+          if [ ! -s "${target}" ]; then
+            echo "Official CLI did not produce a 3MF"
+            tail -n 100 native-cli-output/part-remap-v250-reexport.log
+            exit 1
+          fi
+          python3 - <<'PY' | tee native-cli-output/part-remap-v250-roundtrip-audit.log
+          import math
+          import sys
+          sys.path.insert(0, "scripts")
+          from audit_native_3mf_instance_placement import inspect_placements
+          from audit_native_3mf_metadata_object_refs import inspect_metadata_refs
+          from verify_native_3mf_package import audit_native_package
+          source = "native-cli-output/part-remap-native-input.3mf"
+          saved = "native-cli-output/part-remap-v250-reexport.3mf"
+          audit_native_package(saved)
+          old, new = inspect_placements(source), inspect_placements(saved)
+          a, b = inspect_metadata_refs(source), inspect_metadata_refs(saved)
+          if old["build_items"] != 2 or new["build_items"] != 2:
+              raise SystemExit("Official CLI changed the two-build count")
+          if len(old["mesh_instances"]) != 4 or len(new["mesh_instances"]) != 4:
+              raise SystemExit("Official CLI changed the four mesh occurrences")
+          for prior, actual in zip(old["per_build_world_bounds_mm"],
+                                   new["per_build_world_bounds_mm"]):
+              if len(prior) != len(actual) or any(
+                      not math.isfinite(x) or abs(x-y) > 0.005
+                      for x, y in zip(prior, actual)):
+                  raise SystemExit("Native CLI changed expected per-build world bounds")
+          if b["local_build_roots_without_object_settings"]:
+              raise SystemExit("Native CLI re-export omitted a build root's settings")
+          if sorted(b["settings_part_counts"].values()) != [2, 2]:
+              raise SystemExit("Native CLI re-export changed two-Part cardinality")
+          print("PASS: official v2.5.0 imported and re-exported two-build, two-Part remap")
+          print("Core mesh occurrences: 4; Part counts: 2 + 2")
           PY
 
       - name: Archive text diagnostics without redistributing the AppImage

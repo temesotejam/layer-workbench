@@ -1013,3 +1013,35 @@ object-level settings, full-profile G-code parity, and print safety are not
 established by the bounded tests. Until an independent official v2.5.0 CLI
 import/export confirms the rewritten fixture, do not enable this writer on
 published Pages, arbitrary user projects or machine-ready slicing.
+
+## 2026-11-22: pinned native CLI re-export acceptance gate (synthetic two-Part source)
+
+The bounded settings copier now recognizes `source_file` as one additional
+**opaque provenance string**, following the pinned official v2.5.0
+`src/libslic3r/Format/bbs_3mf.cpp` serialization:
+`SOURCE_FILE_KEY` is loaded into `volume->source.input_file`.
+The value is copied verbatim, never dereferenced and never printed in reports;
+all other unknown metadata keys continue to fail closed.
+
+The official-native CLI workflow creates a deliberately synthetic two-Part
+shared-root fixture from the **two separately stored Part descriptors** in
+the pinned v2.5.0 CLI-generated package. It omits unrelated config-root
+records (e.g. plate/vendor settings), object-level identity attributes,
+and non-metadata Part children, which the bounded writer intentionally
+refuses, while retaining the supported actual CLI-derived Part metadata
+values only. This trimming is strictly for an isolated synthetic
+acceptance fixture and is never applied to real project edits. It assigns
+the second descriptor to
+the distinct second Core mesh ID, performs the already-bounded Core COW and
+Part settings copy, and then invokes the pinned official AppImage with
+`--arrange 0 --export-3mf`. A structural post-reexport gate checks that
+both build items and all four mesh occurrences remain, that composed world
+bounds stay within 0.005 mm, and that the exported settings contain two Parts
+per build root. Only sanitized text diagnostics are archived.
+
+This is an experiment on a **CLI-derived but synthesized** two-Part source,
+not proof of correct per-volume settings for a real user's 3MF. The native CLI
+may normalize/reassign IDs, configuration values, UUIDs and XML. The gate
+cannot establish value-level metadata fidelity, GUI-created 3MF semantics,
+texture/paint/plate compatibility, native-vs-WASM G-code parity, or physical
+printer safety. No public browser feature or WASM artifact is changed.
