@@ -494,6 +494,7 @@ jobs:
             --baseline "${project}" \
             --candidate native-cli-output/native-cow-private.3mf \
             --fail-on-unmapped-root \
+            --fail-on-settings-change \
             --report native-cli-output/native-cow-private-direct-object-refs.json
           cat native-cli-output/native-cow-private-direct-object-refs.json
           mkdir -p native-cli-output/native-cow-private-stl

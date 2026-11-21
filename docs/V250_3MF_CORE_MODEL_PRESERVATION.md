@@ -811,3 +811,27 @@ build root. This narrow check therefore cannot establish preservation of
 external mesh-specific metadata, native-vs-WASM G-code parity or GUI-saved
 project semantics. Any *root* remap with source object settings but no
 candidate mapping must still be refused.
+
+
+## 2026-11-21: fail-closed model-settings byte-integrity gate
+
+A direct object-ID inventory can remain unchanged while `Metadata/model_settings.config`
+is silently modified (e.g. a `part` subtype or vendor-specific value changes).
+The read-only native metadata auditor now reports a SHA-256 digest of this
+decompressed XML part and, for baseline/candidate comparisons, an explicit
+`model_settings_bytes_unchanged` boolean. If IDs are stable but the payload
+differs, it reports `model_settings_bytes_changed` instead of implying
+a clean direct-ID comparison. The new opt-in `--fail-on-settings-change`
+gate rejects any byte difference or a comparison without `--candidate`.
+
+Four additional synthetic regressions cover preserved payloads, modified
+part attributes with identical object IDs, opt-in CLI refusal, and required
+comparison inputs. The pinned native CLI probe also requires unchanged
+model-settings bytes for the **leaf-only** Copy-on-Write fixture; neither
+official CLI inputs nor opaque vendor metadata are edited by this audit.
+
+Byte identity is intentionally conservative: formatting-only XML changes are
+also flagged; byte identity does not prove per-instance metadata mapping,
+Part-ID/Production UUID semantics, GUI-saved 3MF parity, native/WASM G-code
+matching or physical printer safety. Root remapping still needs a separate
+vendor-aware mapping proof; no automatic metadata rewrite is permitted.
