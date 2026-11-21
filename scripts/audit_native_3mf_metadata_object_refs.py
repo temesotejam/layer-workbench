@@ -138,6 +138,16 @@ def compare_metadata_refs(baseline, candidate):
     risks = [row for row in redirected
              if row["original_had_settings"] and not row["new_has_settings"]]
     settings_unchanged = a["model_settings_sha256"] == b["model_settings_sha256"]
+    # Compare ordered vendor Part *descriptors* by their containing object ID.
+    # These are opaque labels, not proven Core resource, volume or instance IDs.
+    # Report structure drift without exposing metadata values or rewriting parts.
+    part_structure_changes = [
+        {"object_id": obj_id,
+         "baseline_parts": a["settings_part_inventory"][obj_id],
+         "candidate_parts": b["settings_part_inventory"][obj_id]}
+        for obj_id in a["settings_object_ids"]
+        if a["settings_part_inventory"][obj_id] != b["settings_part_inventory"][obj_id]
+    ]
     return {
         "redirected_build_items": redirected,
         "possible_unmapped_object_settings": risks,
@@ -151,6 +161,7 @@ def compare_metadata_refs(baseline, candidate):
             for row in redirected
         ],
         "model_settings_bytes_unchanged": settings_unchanged,
+        "part_structure_changes": part_structure_changes,
         "semantic_object_settings_parity_proven": False,
         "status": ("needs_vendor_metadata_mapping" if risks else
                    "model_settings_bytes_changed" if not settings_unchanged else
@@ -158,7 +169,8 @@ def compare_metadata_refs(baseline, candidate):
         "limitations": "A missing direct object ID mapping is a possible loss of settings, "
                        "not proof. Byte identity is stronger than ID inventory alone, "
                        "but neither result proves Orca GUI compatibility or Part-ID semantics. "
-                       "The Part inventory is descriptive and is not a mapping.",
+                       "The Part inventory/diff is descriptive and is not a mapping. "
+                       "An empty diff cannot prove that vendor setting values agree.",
     }
 
 
