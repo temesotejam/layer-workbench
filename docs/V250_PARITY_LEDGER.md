@@ -1046,3 +1046,25 @@ Relative moves alone cannot restore a known origin. The diagnostic exposes
 and arcs. This does **not** implement firmware-specific home offsets, actual
 homing motion, printer state, or physical G-code compatibility. Existing
 production/public engine integration remains unchanged.
+
+
+## 2026-11-21: G53 machine-space and G54–G59.3 workspace Preview discontinuities
+
+The bounded, read-only `scripts/gcode-preview-parser.mjs` cannot know the
+firmware's native-to-work-coordinate offset. It now treats standalone and
+same-line machine-workspace `G53` commands, and work-coordinate selection
+`G54`–`G59.3`, as unknown XYZ discontinuities rather than rendering a
+phantom straight segment connecting positions from incompatible coordinate
+systems. The first subsequent full absolute XYZ move re-establishes an
+endpoint but is not drawn; an explicit `G92` can re-anchor selected axes.
+The additional `skippedWorkspaceCommands` counter distinguishes these
+omitted commands from invalid syntax or absent arc support.
+
+For `G53 G0/G1` with an opaque or explicit E change, the E origin is also
+considered unknown until an explicit `G92 E` or absolute E re-anchor. The
+re-anchor stroke is omitted instead of fabricating a travel/deposition label.
+These guards are conservative across firmware variants: a workspace switch
+may be a no-op on a particular printer, and the diagnostic may hide valid
+paths. The implementation does not reconstruct offsets, execute G53 motion,
+interpret CNC machine state, certify generated G-code, or enable public
+Pages WASM features. Regression coverage uses synthetic source lines only.
