@@ -1091,3 +1091,30 @@ duplicate entries, and an end-to-end report/privacy case.
 full Core component/build transforms agree, that Part labels retain semantic
 identity, or that the native CLI has preserved GUI-authored data. The diagnostic
 never authorizes user-facing 3MF editing, machine slicing, or printability.
+
+
+## 2026-11-22: world-space Core facet comparison after official v2.5.0 re-export
+
+The previous Part-value round-trip audit found two numerically different
+16-element \`matrix\` metadata fields in the source-pinned CLI fixture, each
+larger than the 1e-6 coefficient threshold. Such changes do **not** by
+themselves establish that the real Core placement moved or remained fixed.
+
+\`scripts/compare_native_3mf_world_facets.py\` independently expands the
+existing narrow native multipart Core layout (two build items, three model
+parts), composes external-component and build transforms, converts the model
+units to millimetres, and compares *world-space triangle vertex positions*
+across exports. Face order, mesh object IDs and numeric Part labels do not
+enter the comparison. Duplicate triangle occurrences count; a 0.005 mm
+absolute vertex-position threshold applies. A mismatch can be enforced by
+\`--require-equal\`, and the native CLI workflow runs the gate on the actual
+input and official re-export. All reports contain counts and booleans only,
+never geometry coordinates, private file paths, or vendor metadata values.
+
+This check is deliberately independent of the Part \`matrix\` field. Even
+matching world-space triangles cannot prove vendor Part-local transform
+semantics, winding, full topology or hidden metadata preservation. The local
+regression includes unchanged geometry with altered Part metadata,
+independently altered Core geometry and transform, and a non-finite geometry
+rejection. The official v2.5.0 acceptance result must come from the linked
+CI run; unit-test success alone is not native 3MF round-trip proof.

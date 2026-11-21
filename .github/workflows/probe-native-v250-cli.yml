@@ -22,6 +22,8 @@ on:
       - "scripts/test_reconcile_native_3mf_cloned_root_settings.py"
       - "scripts/audit_native_3mf_part_value_roundtrip.py"
       - "scripts/test_audit_native_3mf_part_value_roundtrip.py"
+      - "scripts/compare_native_3mf_world_facets.py"
+      - "scripts/test_compare_native_3mf_world_facets.py"
       - "scripts/audit_native_3mf_edit_ownership.py"
       - "scripts/test_audit_native_3mf_edit_ownership.py"
       - "scripts/plan_native_3mf_copy_on_write.py"
@@ -104,6 +106,8 @@ on:
       - "scripts/test_reconcile_native_3mf_cloned_root_settings.py"
       - "scripts/audit_native_3mf_part_value_roundtrip.py"
       - "scripts/test_audit_native_3mf_part_value_roundtrip.py"
+      - "scripts/compare_native_3mf_world_facets.py"
+      - "scripts/test_compare_native_3mf_world_facets.py"
       - "scripts/audit_native_3mf_edit_ownership.py"
       - "scripts/test_audit_native_3mf_edit_ownership.py"
       - "scripts/plan_native_3mf_copy_on_write.py"
@@ -1974,6 +1978,21 @@ jobs:
           cat native-cli-output/part-remap-value-drift.log
           # This is a read-only observation; never gate on positional identity
           # before independent native Part remapping semantics are proved.
+
+      - name: Compare native v2.5.0 re-export Core world triangles (fail on drift)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s scripts \
+            -p test_compare_native_3mf_world_facets.py -v
+          python3 scripts/compare_native_3mf_world_facets.py \
+            --before native-cli-output/part-remap-native-input.3mf \
+            --after native-cli-output/part-remap-v250-reexport.3mf \
+            --report native-cli-output/part-remap-world-facets.log \
+            --require-equal
+          cat native-cli-output/part-remap-world-facets.log
+          # This proves only a bounded Core triangle-position observation.
+          # Part-local matrix metadata is still semantically unverified.
 
       - name: Archive text diagnostics without redistributing the AppImage
         if: always()
