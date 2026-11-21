@@ -1118,3 +1118,27 @@ regression includes unchanged geometry with altered Part metadata,
 independently altered Core geometry and transform, and a non-finite geometry
 rejection. The official v2.5.0 acceptance result must come from the linked
 CI run; unit-test success alone is not native 3MF round-trip proof.
+
+## 2026-11-22: Core triangle winding preservation gate
+
+The bounded read-only `compare_native_3mf_world_facets.py` now compares
+**orientation-sensitive world-space triangles** as well as its pre-existing
+orientation-insensitive vertex positions. Each triangle's three vertices
+are cyclically canonicalized, so `(v1,v2,v3)` and `(v2,v3,v1)` agree,
+but reversed winding `(v1,v3,v2)` is reported independently even when
+the unordered vertex coordinates match exactly. Triangle occurrences are
+retained, and the order of faces in the ZIP member does not matter.
+
+The new `world_triangle_winding_equal_within_tolerance` diagnostic uses
+the same 0.005 mm positional tolerance and rejects orientation proof for
+degenerate triangles (double area at most 1e-12 mm²). The official
+v2.5.0 CLI re-export workflow already invokes `--require-equal`, which
+now requires both position and winding agreement. Reversed-triangle and
+cyclic-renumbering regression cases distinguish the two conditions.
+
+This is strictly a Core surface **winding observation** on the existing
+two-build synthetic CLI-derived fixture, not a complete topological
+comparison or proof of valid closed manifold, normal orientation relative to
+material, vendor Part metadata semantics, native-vs-WASM G-code equivalence,
+or physical print safety. Reports contain only counts and booleans, not
+private coordinates or metadata values.
