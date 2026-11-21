@@ -57,6 +57,9 @@ export function parseGcodeToolpaths(source, options={}) {
   // home offsets are unknown to this renderer. Re-anchor only through G92
   // or a subsequent absolute command that names the affected axis.
   const knownXYZ={x:true,y:true,z:true};
+  // An unsupported machine-space move can also change E; do not infer
+  // extrusion until G92 E or the first absolute-E command re-anchors it.
+  let knownE=true;
   // Tool selectors in G-code label paths, NOT physical extruder IDs or filament colors.
   // Reserved/vendor tool commands (e.g. T1000) do not set a label.
   // Bambu X1E emits T255 while unloading AMS filament: clear the label.
@@ -66,7 +69,7 @@ export function parseGcodeToolpaths(source, options={}) {
   // Feature attribution uses only explicit slicer comment tags, never free-text
   // mentions such as configuration headers containing 'gap infill'.
   let activeFeature=null;
-  let count=0,deposited=0,travels=0,skippedArcs=0,renderedArcs=0,skippedMalformedMotion=0,skippedUnlocatedMotions=0;
+  let count=0,deposited=0,travels=0,skippedArcs=0,renderedArcs=0,skippedMalformedMotion=0,skippedUnlocatedMotions=0,skippedWorkspaceCommands=0;
   function append(x1,y1,x2,y2,z1,z2,extrusion,groupZ=z2,commandedPositiveEMm=null,sourceMotion="G1"){
     if(![x1,y1,x2,y2,z1,z2].every(Number.isFinite) ||
        Math.max(Math.abs(x1),Math.abs(y1),Math.abs(x2),Math.abs(y2),Math.abs(z1),Math.abs(z2))>100_000)
@@ -132,6 +135,28 @@ export function parseGcodeToolpaths(source, options={}) {
       for(const axis of affected)knownXYZ[axis]=false;
       continue;
     }
+    if(cmd==="G53" || /^G(?:5[4-9]|59\.[123])$/.test(cmd)){
+      // Machine (G53) and work coordinate systems (G54..G59.3) may have
+      // firmware-defined offsets. A G53 G0/G1 machine-space move must never
+      // be silently ignored while the next workspace path bridges its old
+      // position. Treat both the move and a workspace switch as an unknown
+      // XYZ discontinuity, not as printable/simulated machine motion.
+      if(cmd==="G53"){
+        const tail=line.slice(m[0].length);
+        const machineMove=/^\s*G0?[01](?=[A-Z\s]|$)/.exec(tail);
+        if(tail.trim()){
+          const machineWords=machineMove
+            ?parseMovementWords(tail.slice(machineMove[0].length),state.units)
+            :null;
+          // Rare machine-space moves can include an E change. Do not
+          // accidentally label the next absolute E as deposition.
+          if(machineWords===null || "E" in machineWords)knownE=false;
+        }
+      }
+      for(const axis of ["x","y","z"])knownXYZ[axis]=false;
+      skippedWorkspaceCommands++;
+      continue;
+    }
     if(cmd==="G90"){state.absoluteXYZ=true;continue;}
     if(cmd==="G91"){state.absoluteXYZ=false;continue;}
     if(cmd==="G90.1"){state.absoluteArcCenters=true;continue;}
@@ -160,30 +185,40 @@ export function parseGcodeToolpaths(source, options={}) {
     if(cmd==="G92"){
       for(const axis of ["X","Y","Z","E"])if(axis in words){
         state[axis.toLowerCase()]=words[axis];
-        if(axis!=="E")knownXYZ[axis.toLowerCase()]=true;
+        if(axis==="E")knownE=true;
+        else knownXYZ[axis.toLowerCase()]=true;
       }
       continue;
     }
     if("F" in words)state.feedrateMmMin=words.F;
     const start={...state};
     const wasLocated=knownXYZ.x&&knownXYZ.y&&knownXYZ.z;
+    const wasEKnown=knownE;
     for(const axis of ["X","Y","Z","E"]){
       if(!(axis in words))continue;
       const lower=axis.toLowerCase();
       const absolute=axis==="E"?state.absoluteE:state.absoluteXYZ;
       state[lower]=absolute?words[axis]:state[lower]+words[axis];
+      if(axis==="E" && absolute)knownE=true;
       if(axis!=="E" && absolute)knownXYZ[lower]=true;
     }
     if(![state.x,state.y,state.z,state.e].every(Number.isFinite) ||
        Math.max(Math.abs(state.x),Math.abs(state.y),Math.abs(state.z))>100_000)
       throw new Error("Toolpath coordinate exceeds preview limits");
-    const extrusion=state.e>start.e+1e-7;
+    const extrusion=wasEKnown && state.e>start.e+1e-7;
     // After homing, even a numerically finite prior coordinate is stale.
     // The first absolute re-anchor has an unknown starting point: do not
     // invent travel/deposition geometry across that discontinuity.
     if(!wasLocated || !knownXYZ.x || !knownXYZ.y || !knownXYZ.z){
       if(isArc)skippedArcs++;
       else if(["X","Y","Z"].some(axis=>axis in words))skippedUnlocatedMotions++;
+      continue;
+    }
+    // The first absolute-E command after an opaque machine-space extrusion
+    // re-establishes the value, but its signed delta is unknowable. Do not
+    // misclassify that stroke as travel or extrusion.
+    if("E" in words && !wasEKnown){
+      skippedUnlocatedMotions++;
       continue;
     }
     // Plane axes follow a right-handed basis: XY (+Z), ZX (+Y), YZ (+X).
@@ -265,7 +300,7 @@ export function parseGcodeToolpaths(source, options={}) {
     renderedArcs++;
   }
   const layers=[...byZ.values()].sort((a,b)=>a.z-b.z);
-  return {layers,segments:count,extrusions:deposited,travels,renderedArcs,skippedArcs,skippedMalformedMotion,skippedUnlocatedMotions,
+  return {layers,segments:count,extrusions:deposited,travels,renderedArcs,skippedArcs,skippedMalformedMotion,skippedUnlocatedMotions,skippedWorkspaceCommands,
     selectedToolIds:[...selectedTools].sort((a,b)=>a-b),
     extrusionSegmentsByTool:Object.fromEntries([...extrusionsByTool].map(([id,n])=>[id===null?"unselected":String(id),n])),
     extrusionSegmentsByFeature:Object.fromEntries([...extrusionsByFeature].map(([name,n])=>[name===null?"unclassified":name,n]))};
