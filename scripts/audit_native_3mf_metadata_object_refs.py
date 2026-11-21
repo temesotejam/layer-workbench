@@ -7,6 +7,7 @@ without settings are a possible semantic hazard, not proof of data loss.
 Never modify or extract the archive; never authorize G-code for printing.
 """
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -88,6 +89,8 @@ def inspect_metadata_refs(path):
         "external_build_indices": external_indices,
         "settings_object_ids": config_ids,
         "settings_part_counts": part_counts,
+        # Byte fidelity is observable without interpreting vendor-specific parts.
+        "model_settings_sha256": hashlib.sha256(metadata_raw).hexdigest(),
         "local_build_roots_without_object_settings": sorted(
             set(obj_id for i, obj_id in enumerate(build_ids)
                 if i not in external_indices) - set(config_ids), key=int),
@@ -116,13 +119,18 @@ def compare_metadata_refs(baseline, candidate):
     ]
     risks = [row for row in redirected
              if row["original_had_settings"] and not row["new_has_settings"]]
+    settings_unchanged = a["model_settings_sha256"] == b["model_settings_sha256"]
     return {
         "redirected_build_items": redirected,
         "possible_unmapped_object_settings": risks,
+        "model_settings_bytes_unchanged": settings_unchanged,
         "semantic_object_settings_parity_proven": False,
-        "status": "needs_vendor_metadata_mapping" if risks else "no_direct_id_gap_detected",
+        "status": ("needs_vendor_metadata_mapping" if risks else
+                   "model_settings_bytes_changed" if not settings_unchanged else
+                   "no_direct_id_gap_detected"),
         "limitations": "A missing direct object ID mapping is a possible loss of settings, "
-                       "not proof; neither result proves Orca GUI compatibility.",
+                       "not proof. Byte identity is stronger than ID inventory alone, "
+                       "but neither result proves Orca GUI compatibility or Part-ID semantics.",
     }
 
 
@@ -131,15 +139,20 @@ def main():
     parser.add_argument("--baseline", type=Path, required=True)
     parser.add_argument("--candidate", type=Path)
     parser.add_argument("--fail-on-unmapped-root", action="store_true")
+    parser.add_argument("--fail-on-settings-change", action="store_true")
     parser.add_argument("--report", type=Path)
     args = parser.parse_args()
     if args.fail_on_unmapped_root and not args.candidate:
         parser.error("--fail-on-unmapped-root requires --candidate")
+    if args.fail_on_settings_change and not args.candidate:
+        parser.error("--fail-on-settings-change requires --candidate")
     try:
         report = (compare_metadata_refs(args.baseline, args.candidate)
                   if args.candidate else inspect_metadata_refs(args.baseline))
         if args.fail_on_unmapped_root and report["possible_unmapped_object_settings"]:
             raise ValueError("Cloned build root has no matching native object-settings entry")
+        if args.fail_on_settings_change and not report["model_settings_bytes_unchanged"]:
+            raise ValueError("Native model-settings bytes changed; semantic remapping not audited")
         result = json.dumps(report, sort_keys=True, indent=2) + "\n"
         if args.report:
             args.report.write_text(result, encoding="utf-8")
