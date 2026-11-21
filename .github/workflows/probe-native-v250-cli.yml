@@ -12,6 +12,8 @@ on:
       - "scripts/inspect_native_3mf_hierarchy.py"
       - "scripts/test_inspect_native_3mf_hierarchy.py"
       - "scripts/audit_native_3mf_instance_placement.py"
+      - "scripts/audit_native_3mf_metadata_object_refs.py"
+      - "scripts/test_audit_native_3mf_metadata_object_refs.py"
       - "scripts/audit_native_3mf_edit_ownership.py"
       - "scripts/test_audit_native_3mf_edit_ownership.py"
       - "scripts/plan_native_3mf_copy_on_write.py"
@@ -84,6 +86,8 @@ on:
       - "scripts/inspect_native_3mf_hierarchy.py"
       - "scripts/test_inspect_native_3mf_hierarchy.py"
       - "scripts/audit_native_3mf_instance_placement.py"
+      - "scripts/audit_native_3mf_metadata_object_refs.py"
+      - "scripts/test_audit_native_3mf_metadata_object_refs.py"
       - "scripts/audit_native_3mf_edit_ownership.py"
       - "scripts/test_audit_native_3mf_edit_ownership.py"
       - "scripts/plan_native_3mf_copy_on_write.py"
@@ -178,6 +182,9 @@ jobs:
 
       - name: Unit-test native 3MF component and build reference inventory offline
         run: python3 -m unittest discover -s scripts -p test_inspect_native_3mf_hierarchy.py -v
+
+      - name: Unit-test direct native model-settings object ID references offline
+        run: python3 -m unittest discover -s scripts -p test_audit_native_3mf_metadata_object_refs.py -v
 
       - name: Unit-test native 3MF multipart world placement composition offline
         run: python3 -m unittest discover -s scripts -p test_audit_native_3mf_instance_placement.py -v
@@ -450,6 +457,13 @@ jobs:
             --input "${project}" --require-build-items 2 \
             --report native-cli-output/native-project-hierarchy.log
           cat native-cli-output/native-project-hierarchy.log
+          # The official CLI project (not a synthetic Core-only fixture)
+          # supplies real model_settings.config for a read-only ID inventory.
+          # This is NOT proof of per-part, UUID or instance settings parity.
+          python3 scripts/audit_native_3mf_metadata_object_refs.py \
+            --baseline "${project}" \
+            --report native-cli-output/native-project-direct-object-refs.json
+          cat native-cli-output/native-project-direct-object-refs.json
           # Distinguish independently placed Core roots from a shared leaf
           # resource; editing the leaf in place would affect both instances.
           # No project contents are modified by this preflight.
@@ -473,6 +487,15 @@ jobs:
             --build-index 1 --component-edge 0 \
             --report native-cli-output/native-cow-private-audit.log
           cat native-cli-output/native-cow-private-audit.log
+          # Compare a real CLI-exported project with the bounded leaf COW.
+          # There is no main build-root remap in this leaf-only operation;
+          # direct-ID continuity does not validate metadata on the new leaf.
+          python3 scripts/audit_native_3mf_metadata_object_refs.py \
+            --baseline "${project}" \
+            --candidate native-cli-output/native-cow-private.3mf \
+            --fail-on-unmapped-root \
+            --report native-cli-output/native-cow-private-direct-object-refs.json
+          cat native-cli-output/native-cow-private-direct-object-refs.json
           mkdir -p native-cli-output/native-cow-private-stl
           timeout 180s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
             native-cli-output/native-cow-private.3mf --arrange 0 --export-stl \
