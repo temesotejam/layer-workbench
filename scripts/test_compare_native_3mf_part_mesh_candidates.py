@@ -121,7 +121,7 @@ class NativePartCandidateDriftTests(unittest.TestCase):
         parts = self.distinct_parts()
         self.write(self.original, parts)
         modified = dict(parts)
-        modified[SETTINGS] = parts[SETTINGS] + b"\\n"
+        modified[SETTINGS] = parts[SETTINGS] + b"\n"
         self.write(self.changed, modified)
         report = compare_candidate_contexts(self.original, self.changed)
         self.assertFalse(report["model_settings_bytes_unchanged"])
