@@ -65,10 +65,10 @@ class NativePartCandidateDriftTests(unittest.TestCase):
         self.write(self.original, parts)
         # Valid Core-only relabel; the vendor Part's old numeric label remains.
         changed = dict(parts)
-        self.assertEqual(changed[MAIN].count(b'objectid="101"'), 1)
+        self.assertEqual(changed[MAIN].count(b'objectid="101"'), 2)
         self.assertEqual(changed[LEAF].count(b'<object id="101"'), 1)
         changed[MAIN] = changed[MAIN].replace(
-            b'objectid="101"', b'objectid="103"', 1)
+            b'objectid="101"', b'objectid="103"')
         changed[LEAF] = changed[LEAF].replace(
             b'<object id="101"', b'<object id="103"', 1)
         self.write(self.changed, changed)
