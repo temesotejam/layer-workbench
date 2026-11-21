@@ -49,6 +49,38 @@ def _facets_close(a, b):
     )
 
 
+def _oriented_facets_close(a, b):
+    """Require matching positions AND normal directions for each paired face.
+
+    A vertex tolerance alone can accept reversed winding on a tiny, but
+    nondegenerate, triangle: all three swapped vertices may lie within
+    TOLERANCE_MM even when their cross products point in opposite directions.
+    """
+    if not _facets_close(a, b):
+        return False
+    for old_face, new_face in zip(a, b):
+        old_a, old_b, old_c = old_face
+        new_a, new_b, new_c = new_face
+        u = tuple(old_b[i] - old_a[i] for i in range(3))
+        v = tuple(old_c[i] - old_a[i] for i in range(3))
+        x = tuple(new_b[i] - new_a[i] for i in range(3))
+        y = tuple(new_c[i] - new_a[i] for i in range(3))
+        old_normal = (u[1] * v[2] - u[2] * v[1],
+                      u[2] * v[0] - u[0] * v[2],
+                      u[0] * v[1] - u[1] * v[0])
+        new_normal = (x[1] * y[2] - x[2] * y[1],
+                      x[2] * y[0] - x[0] * y[2],
+                      x[0] * y[1] - x[1] * y[0])
+        old_length = math.hypot(*old_normal)
+        new_length = math.hypot(*new_normal)
+        if old_length <= MIN_DOUBLE_AREA_MM2 or new_length <= MIN_DOUBLE_AREA_MM2:
+            return False
+        if sum((p / old_length) * (q / new_length)
+               for p, q in zip(old_normal, new_normal)) <= 0:
+            return False
+    return True
+
+
 def _world_facets(path):
     audit_native_package(path)
     placement = inspect_placements(path, max_instances=MAX_MESH_OCCURRENCES)
@@ -149,8 +181,8 @@ def compare_world_facets(before_path, after_path):
         # Degenerate faces have no meaningful winding and must fail closed.
         winding_match = (positions_match and old["degenerate_facets"] == 0
                          and new["degenerate_facets"] == 0
-                         and _facets_close(old["oriented_facets"],
-                                           new["oriented_facets"]))
+                         and _oriented_facets_close(old["oriented_facets"],
+                                                    new["oriented_facets"]))
         comparisons.append({
             "build_index": index,
             "before_triangle_count": old["triangle_count"],
@@ -178,7 +210,8 @@ def compare_world_facets(before_path, after_path):
         "limitations": (
             "Build indices are only positional comparison candidates. "
             "Core triangle vertex positions and separately cyclic-invariant "
-            "oriented triangles are compared after external-part and "
+            "oriented triangles and paired face-normal directions are compared "
+            "after external-part and "
             "nested-component 3MF affine transforms and millimetre conversion. "
             "Degenerate triangles cannot establish winding agreement. "
             "The comparison does not prove manifold topology, internal "

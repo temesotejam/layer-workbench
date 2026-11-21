@@ -1142,3 +1142,27 @@ comparison or proof of valid closed manifold, normal orientation relative to
 material, vendor Part metadata semantics, native-vs-WASM G-code equivalence,
 or physical print safety. Reports contain only counts and booleans, not
 private coordinates or metadata values.
+
+## 2026-11-22: reject tolerance-scale reversed world-triangle winding
+
+The bounded read-only world-space Core facet auditor now compares the signs
+of paired **face normal dot products** in addition to the cyclic-invariant
+ordered vertex triples. Previously, two reversed but nondegenerate faces
+smaller than the 0.005 mm coordinate tolerance could pass an ordinary
+per-coordinate winding comparison despite pointing in opposite directions.
+The numerical normal check refuses zero/near-zero normals and any paired
+face-normal dot product that is not strictly positive.
+
+Regression tests cover a 0.001 mm reversed face that the old
+vertex-tolerance check would accept, plus a cyclically reordered tiny face
+with a small non-reversing displacement. This is a tighter **diagnostic
+fail-closed gate** for the existing synthetic CLI-derived two-build fixture;
+it is not a manifold validation or a guarantee that nearly coincident
+triangles have been matched to their uniquely corresponding source faces.
+Face pairing still uses a sorted vertex signature and retains the existing
+0.005 mm position threshold. Official 3MF Core defines triangle orientation
+from the cross product of edge vectors:
+https://github.com/3MFConsortium/spec_core/blob/master/3MF%20Core%20Specification.md
+
+No G-code output, public Pages behavior, WASM engine, or original 3MF
+archive is modified.

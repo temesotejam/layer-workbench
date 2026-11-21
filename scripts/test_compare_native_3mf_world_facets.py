@@ -6,7 +6,10 @@ from zipfile import ZipFile
 
 from audit_native_3mf_instance_placement import inspect_placements
 from clone_native_3mf_branched_root import clone_branched_root
-from compare_native_3mf_world_facets import compare_world_facets
+from compare_native_3mf_world_facets import (
+    _cyclic_canonical, _facets_close, _oriented_facets_close,
+    compare_world_facets,
+)
 from reconcile_native_3mf_cloned_root_settings import copy_bounded_root_settings
 from test_reconcile_native_3mf_cloned_root_settings import native_fixture
 
@@ -38,6 +41,25 @@ class NativeWorldFacetComparisonTests(unittest.TestCase):
                     self.assertIn(old, raw)
                     raw = raw.replace(old, new, 1)
                 target.writestr(info, raw)
+
+    def test_tiny_reversed_triangle_rejected_even_inside_vertex_tolerance(self):
+        # A 0.001 mm triangle is nondegenerate yet all swapped vertices are
+        # within the 0.005 mm positional allowance. Positions alone pass.
+        face = ((0.0, 0.0, 0.0), (0.001, 0.0, 0.0),
+                (0.0, 0.001, 0.0))
+        original = [_cyclic_canonical(face)]
+        reversed_face = [_cyclic_canonical((face[0], face[2], face[1]))]
+        self.assertTrue(_facets_close(original, reversed_face))
+        self.assertFalse(_oriented_facets_close(original, reversed_face))
+
+    def test_tiny_triangle_cyclic_and_small_displacement_keeps_orientation(self):
+        face = ((0.0, 0.0, 0.0), (0.001, 0.0, 0.0),
+                (0.0, 0.001, 0.0))
+        shifted = (face[1], (0.0, 0.001, 0.00001), face[0])
+        self.assertTrue(_oriented_facets_close(
+            [_cyclic_canonical(face)],
+            [_cyclic_canonical(shifted)],
+        ))
 
     def test_private_core_id_cloning_keeps_world_triangles(self):
         report = compare_world_facets(self.source, self.restored)
