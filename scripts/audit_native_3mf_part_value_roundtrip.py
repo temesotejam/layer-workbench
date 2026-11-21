@@ -7,6 +7,7 @@ attributes and subtype are inspected. Other vendor settings are deliberately
 outside the audit. No G-code or printer commands are produced.
 """
 import argparse
+import math
 import json
 from pathlib import Path
 import sys
@@ -17,6 +18,41 @@ from verify_native_3mf_package import audit_native_package
 
 MAX_PARTS_PER_BUILD = 64
 MAX_METADATA_FIELDS_PER_PART = 128
+
+
+
+MATRIX_COEFFICIENT_TOLERANCE = 1e-6
+
+
+def _matrix_coefficient_status(before_values, after_values):
+    """Compare pinned v2.5.0 row-major 4x4 matrix coefficients, not geometry.
+
+    This is a diagnostic only: a numeric match cannot establish equivalent
+    Core placements, Part identity, or native GUI project semantics.
+    """
+    if len(before_values) != 1 or len(after_values) != 1:
+        return "not_comparable_missing_or_duplicate"
+
+    def parse(raw):
+        if len(raw) > 2048:
+            return None
+        words = raw.split()
+        if len(words) != 16:
+            return None
+        try:
+            values = tuple(float(word) for word in words)
+        except (ValueError, OverflowError):
+            return None
+        return values if all(math.isfinite(value) for value in values) else None
+
+    old, new = parse(before_values[0]), parse(after_values[0])
+    if old is None or new is None:
+        return "not_comparable_invalid_4x4"
+    if old == new:
+        return "numeric_coefficients_equal"
+    if all(abs(a - b) <= MATRIX_COEFFICIENT_TOLERANCE for a, b in zip(old, new)):
+        return "coefficient_delta_within_1e-6"
+    return "coefficient_delta_exceeds_1e-6"
 
 
 def _part_snapshot(path):
@@ -100,6 +136,12 @@ def compare_part_values(before_path, after_path):
                 "removed_metadata_keys": removed,
                 "added_metadata_keys": added,
                 "changed_metadata_value_keys": changed,
+                "matrix_4x4_coefficient_diagnostic": (
+                    _matrix_coefficient_status(
+                        a["fields"].get("matrix", []),
+                        b["fields"].get("matrix", []))
+                    if "matrix" in changed else None
+                ),
             })
         builds.append({
             "build_index": build_index,
@@ -125,6 +167,9 @@ def compare_part_values(before_path, after_path):
         "limitations": "Build/Part indices are positional comparison candidates; no "
                        "cross-export semantic identity or Part-to-mesh mapping is "
                        "proved. Direct Part metadata key/value and subtype only. "
+                       "The optional matrix diagnostic compares 16 finite row-major "
+                       "coefficients at absolute tolerance 1e-6 without revealing "
+                       "values; it never proves equal world geometry or settings. "
                        "No object/plate settings, hidden vendor child nodes, UUID "
                        "interpretation, native/WASM G-code equality, or print safety "
                        "is assessed. Reports never include metadata values.",
