@@ -1,11 +1,15 @@
 """Synthetic metadata-ID audit tests; no native project editing or G-code."""
+import contextlib
+import io
+import json
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 from zipfile import ZipFile
 
 from audit_native_3mf_metadata_object_refs import (inspect_metadata_refs,
-                                                   compare_metadata_refs)
+                                                   compare_metadata_refs, main)
 
 MODEL = b'''<?xml version="1.0"?>
 <model xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
@@ -107,6 +111,54 @@ class MetadataObjectReferencesTests(unittest.TestCase):
         self.put(self.b, config=b'<config><object id="2"/></config>')
         with self.assertRaisesRegex(ValueError, 'inventory changed'):
             compare_metadata_refs(self.a, self.b)
+
+    def test_settings_byte_identity_on_unchanged_vendor_metadata(self):
+        self.put(self.a)
+        candidate = MODEL.replace(b'<object id="2"/>',
+                                  b'<object id="2"/><object id="3"/>')
+        self.put(self.b, model=candidate)
+        result = compare_metadata_refs(self.a, self.b)
+        self.assertTrue(result['model_settings_bytes_unchanged'])
+        self.assertEqual(result['status'], 'no_direct_id_gap_detected')
+        self.assertEqual(inspect_metadata_refs(self.a)['model_settings_sha256'],
+                         inspect_metadata_refs(self.b)['model_settings_sha256'])
+
+    def test_same_object_ids_changed_vendor_payload_is_detected(self):
+        self.put(self.a)
+        modified = CONFIG.replace(b'subtype="normal_part"',
+                                  b'subtype="modifier"')
+        self.put(self.b, config=modified)
+        result = compare_metadata_refs(self.a, self.b)
+        self.assertEqual(result['redirected_build_items'], [])
+        self.assertFalse(result['model_settings_bytes_unchanged'])
+        self.assertEqual(result['status'], 'model_settings_bytes_changed')
+        self.assertFalse(result['semantic_object_settings_parity_proven'])
+
+    def test_fail_on_settings_change_is_opt_in_and_fails_closed(self):
+        self.put(self.a)
+        self.put(self.b, config=CONFIG.replace(b'normal_part', b'modifier'))
+        argv = ['audit', '--baseline', str(self.a), '--candidate', str(self.b)]
+        with patch('sys.argv', argv), contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(main(), 0)
+        self.assertFalse(json.loads(output.getvalue())['model_settings_bytes_unchanged'])
+        with patch('sys.argv', argv + ['--fail-on-settings-change']), \
+                contextlib.redirect_stderr(io.StringIO()) as errors:
+            self.assertEqual(main(), 2)
+        self.assertIn('model-settings bytes changed', errors.getvalue())
+        self.b.unlink()
+        self.put(self.b)
+        with patch('sys.argv', argv + ['--fail-on-settings-change']), \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(main(), 0)
+
+    def test_settings_change_gate_requires_comparison(self):
+        self.put(self.a)
+        with patch('sys.argv', ['audit', '--baseline', str(self.a),
+                                '--fail-on-settings-change']), \
+                contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit) as ctx:
+                main()
+        self.assertEqual(ctx.exception.code, 2)
 
 
 if __name__ == '__main__':
