@@ -21,10 +21,12 @@ from compare_3mf_metadata import inventory
 from verify_native_3mf_package import audit_native_package
 
 # Only names whose fields are known not to be arbitrary Core/UUID references.
-# source_object_id / source_volume_id are source provenance indices (NOT
-# Core object/volume IDs), so they must stay untouched in this experiment.
+# The pinned v2.5.0 bbs_3mf.cpp maps source_file to volume->source.input_file
+# and source_object_id/source_volume_id to source provenance indices (NOT
+# Core object/volume IDs). Keep all these values byte-for-byte: a source path
+# may be private, and is never interpreted, logged, or dereferenced here.
 SAFE_KEYS = frozenset({
-    "name", "matrix", "source_object_id", "source_volume_id",
+    "name", "matrix", "source_file", "source_object_id", "source_volume_id",
     "source_offset_x", "source_offset_y", "source_offset_z",
 })
 OPEN_OBJECT = re.compile(rb'<object(?=\s)[^<>]*>')
