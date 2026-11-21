@@ -360,3 +360,40 @@ assert.deepEqual(invalidFeatureTags.extrusionSegmentsByFeature,
   {"gap infill":1,unclassified:4,"outer wall":1});
 console.log("PASS: invalid explicit TYPE/FEATURE comments clear stale classification");
 console.log("PASS: explicit type/feature tag attribution, modal F and comment-only false-positive guard");
+
+
+// Homing coordinates depend on firmware and machine configuration. Drawing
+// from the pre-home numeric position invents a long phantom toolpath. Omit
+// the first absolute re-anchor, then resume from its explicitly set position.
+const fullHome=parseGcodeToolpaths([
+  "G90","M82","G1 X100 Y100 Z0.2 E1","G28",
+  "G1 X10 Y10 Z0.2 E2","G1 X20 Y10 E3"
+].join("\n"));
+assert.equal(fullHome.skippedUnlocatedMotions,1);
+assert.equal(fullHome.extrusions,2);
+assert.deepEqual(fullHome.layers[0].segments.map(s=>[s.x1,s.x2]),[[0,100],[10,20]]);
+assert.ok(!fullHome.layers[0].segments.some(s=>s.x1===100&&s.x2===10));
+
+const partialHome=parseGcodeToolpaths([
+  "G90","M82","G1 X100 Y5 Z0.2 E1","G28 X","G91",
+  "G1 X5 E1.5","G90","G1 X30 E2","G1 X40 E3"
+].join("\n"));
+assert.equal(partialHome.skippedUnlocatedMotions,2);
+assert.deepEqual(partialHome.layers[0].segments.map(s=>[s.x1,s.x2]),[[0,100],[30,40]]);
+
+// G92 is an explicit origin declaration, so a selective home can be
+// re-anchored without inventing the intervening homing movement.
+const g92Home=parseGcodeToolpaths(
+  "G90\nM82\nG1 X30 Y10 Z0.2 E1\nG28 X0 Y0\nG92 X0 Y0\nG1 X10 Y10 E2");
+assert.equal(g92Home.skippedUnlocatedMotions,0);
+assert.deepEqual(g92Home.layers[0].segments.map(s=>[s.x1,s.x2]),[[0,30],[0,10]]);
+
+// Unrecognised vendor flags are fail-closed: don't guess which axes moved.
+const vendorHome=parseGcodeToolpaths("G90\nG1 X50 Y10 Z0.2\nG28 W\nG1 X10 Y10 Z0.2\nG1 X20");
+assert.equal(vendorHome.skippedUnlocatedMotions,1);
+assert.deepEqual(vendorHome.layers[0].segments.map(s=>[s.x1,s.x2]),[[0,50],[10,20]]);
+const arcAfterHome=parseGcodeToolpaths("G90\nG28\nG3 X10 Y0 Z0.2 I5 J0 E1\nG1 X20 Y0 E2");
+assert.equal(arcAfterHome.renderedArcs,0);
+assert.equal(arcAfterHome.skippedArcs,1);
+assert.deepEqual(arcAfterHome.layers[0].segments.map(s=>[s.x1,s.x2]),[[10,20]]);
+console.log("PASS: G28 origin uncertainty avoids phantom paths until absolute XYZ/G92 re-anchoring");
