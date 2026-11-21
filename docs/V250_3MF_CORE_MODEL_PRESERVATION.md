@@ -676,23 +676,36 @@ are still unsupported.
 ## 2026-11-21: native-derived distinct-leaf 3MF reimport acceptance gate
 
 The previous distinct-leaf COW proof covered offline synthetic archives only.
-`scripts/make_native_3mf_distinct_branch_fixture.py` now constructs a bounded
-**native CLI-export-derived** two-branch candidate: it takes the second external
-mesh Core ID and Production `p:path` from the separate second root of the
-pinned official v2.5.0 CLI export, applies those exact references to the
-second component of an existing official-derived shared-root fixture, and
-preserves all other archive members byte-for-byte after decompression.
-The source must have exactly two original build roots, one external edge under
-the second root, and a two-build shared candidate with two identical external
-edges. Any ambiguous topology or target collision is rejected.
+The first native acceptance attempt (PR #148, run
+[#44842478620](https://github.com/temesotejam/layer-workbench/actions/runs/44842478620))
+failed for a useful reason: the pinned v2.5.0 native CLI export's **two main
+roots both referenced the same external mesh**. Its second OPC-related
+`3D/Objects/*.model` member contained no Core resources or mesh, so it
+was incorrect to assume the second root supplied a separate mesh.
 
-Four offline regression tests exercise successful distinct-leaf cloning of
-either branch, preservation of the original bytes and unrelated metadata,
-missing edges, nondistinct targets and refusal to overwrite an existing file.
-The native acceptance workflow now attempts to reopen the independently cloned
-second branch in official OrcaSlicer v2.5.0 with `--arrange 0 --export-stl`,
-then checks four separate 12-facet mesh occurrences against the Core world
-bounds. **Treat this native gate as pending until its new GitHub Actions run
-passes.** The tested source is a synthetic branch added to native CLI bytes;
-this is not a GUI-saved 3MF, a metadata semantic round-trip, native/WASM
-G-code parity or print-safety validation.
+`scripts/make_native_3mf_distinct_branch_fixture.py` now retains the
+official-exported 3MF and uses the **existing empty, OPC-related model part**
+as an explicit *synthetic* second mesh slot, populated from a cloned mesh
+resource with a renewed standard Production UUID (when present). It changes
+the second edge's Core `objectid` and `p:path` in the existing
+official-derived shared-root test fixture. It refuses nonempty alternative
+model parts, unrecognized resource structures, ambiguous relationships
+and existing output destinations. All original upstream bytes remain
+untouched; the test-derived 3MF has two intentionally modified ZIP members
+(main Core model and the formerly empty external model). Other ZIP payloads
+remain unchanged after decompression. A separately valid original export
+with already-distinct external resources is also supported.
+
+The regression suite covers standard distinct leaves, the actual shared-leaf
+plus empty-slot scenario, negative shapes, archive/member preservation and
+safe output refusal. The GitHub workflow then clones only the second branch,
+reopens the result in the pinned official OrcaSlicer v2.5.0 CLI, exports
+native STL without auto-arrangement, and verifies four nonoverlapping
+12-facet occurrence bounds from an independent Core graph.
+
+**The native reimport gate must PASS before this is considered accepted.**
+This tests distinct resource identity and cross-part references, but both
+mesh shapes may initially be geometrically identical. It is neither a
+native GUI-exported distinct-shape fixture nor full metadata semantic
+preservation, native/WASM G-code parity, public WASM deployment or
+physical printing validation.
