@@ -126,8 +126,7 @@ export function parseGcodeToolpaths(source, options={}) {
       // conservatively invalidate all XYZ axes.
       const args=line.slice(m[0].length).replace(/\s+/g,"");
       const axes=args.match(/[XYZ]/g);
-      const simple=args==="" || /^(?:[XYZ](?:0(?:\.0*)?)+?)+$/.test(args) ||
-        /^(?:[XYZ](?:0(?:\.0*)?)?)+$/.test(args);
+      const simple=args==="" || /^(?:[XYZ](?:0(?:\.0*)?)?)+$/.test(args);
       const affected=!simple || !axes?.length ? ["x","y","z"] :
         [...new Set(axes.map(axis=>axis.toLowerCase()))];
       for(const axis of affected)knownXYZ[axis]=false;
