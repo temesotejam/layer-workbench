@@ -14,6 +14,7 @@ from zipfile import ZipFile
 from audit_native_3mf_instance_placement import inspect_placements
 from clone_native_3mf_shared_leaf import (
     COMPONENT_OPEN, _guard_xml, _object_block, _replace_attr_in_opening,
+    _renew_production_uuid,
 )
 from compare_3mf_metadata import inventory
 from inspect_native_3mf_hierarchy import PROD_PATH, referenced_part
@@ -64,14 +65,50 @@ def make_distinct_branch_fixture(official_path, shared_path, output_path):
         first_part = referenced_part(new_edges[0], MAIN_PART)
         target_part = referenced_part(old_edges[0], MAIN_PART)
         if (first_part == MAIN_PART or target_part == MAIN_PART or
-                first_part == target_part or
                 referenced_part(new_edges[1], MAIN_PART) != first_part or
                 new_edges[0].get("objectid") != new_edges[1].get("objectid")):
-            raise ValueError("Expected identical candidate edges and distinct target part")
+            raise ValueError("Expected two matching candidate external edges")
         target_id = old_edges[0].get("objectid")
+        replacement_part = None
+        if target_part == first_part:
+            # Official v2.5.0 may reuse ONE mesh for two Core roots and
+            # emit a second *empty* model part. In this case, manufacture a
+            # new mesh PART in the existing, already-related empty member.
+            # This is explicitly a synthetic test fixture, NOT an original
+            # second native mesh or a GUI-save parity assertion.
+            options = sorted(set(audit_native_package(official_path)["model_parts"])
+                             - {MAIN_PART, first_part})
+            if len(options) != 1:
+                raise ValueError("No unique native empty model-part slot")
+            target_part = options[0]
+            if official.read(target_part) != shared.read(target_part):
+                raise ValueError("Candidate changes native empty model slot")
+            empty = _guard_xml(official.read(target_part), "native unused model part")
+            empty_resources = empty.find(CORE_NS + "resources")
+            empty_build = empty.find(CORE_NS + "build")
+            if (empty_resources is None or len(empty_resources) or
+                    (empty_build is not None and len(empty_build))):
+                raise ValueError("Alternate model part is not empty; do not overwrite")
+            first_raw = official.read(first_part)
+            first_model = _guard_xml(first_raw, "native source mesh")
+            first_resources = first_model.find(CORE_NS + "resources")
+            objects = [] if first_resources is None else first_resources.findall(CORE_NS + "object")
+            if (len(objects) != 1 or len(first_resources) != 1 or
+                    objects[0].find(CORE_NS + "mesh") is None or
+                    objects[0].find(CORE_NS + "components") is not None):
+                raise ValueError("Native source is not one independent mesh")
+            target_id = objects[0].get("id")
+            if not target_id:
+                raise ValueError("Native source mesh has no ID")
+            start_mesh, opening_end_mesh, _ = _object_block(first_raw, target_id)
+            refreshed = _renew_production_uuid(
+                first_raw[start_mesh:opening_end_mesh], objects[0], first_raw)
+            replacement_part = (first_raw[:start_mesh] + refreshed +
+                                first_raw[opening_end_mesh:])
+            _guard_xml(replacement_part, "synthetic second external mesh")
         old_id = new_edges[1].get("objectid")
         old_path = new_edges[1].get(PROD_PATH)
-        new_path = old_edges[0].get(PROD_PATH)
+        new_path = "/" + target_part
         if not all((target_id, old_id, old_path, new_path)):
             raise ValueError("Explicit Production p:path and Core object IDs required")
         start, _, end = _object_block(candidate_bytes, shared_id)
@@ -89,16 +126,20 @@ def make_distinct_branch_fixture(official_path, shared_path, output_path):
             with ZipFile(output_path, "x") as output:
                 output.comment = shared.comment
                 for info in shared.infolist():
-                    output.writestr(info, edited if info.filename == MAIN_PART
-                                    else shared.read(info))
+                    payload = (edited if info.filename == MAIN_PART else
+                               replacement_part if info.filename == target_part and
+                               replacement_part is not None else shared.read(info))
+                    output.writestr(info, payload)
         except BaseException:
             output_path.unlink(missing_ok=True)
             raise
     try:
         audit_native_package(output_path)
         a, b = inventory(shared_path), inventory(output_path)
-        if set(a) != set(b) or {k for k in a if a[k] != b[k]} != {MAIN_PART}:
-            raise ValueError("Only the selected main Core edge may change")
+        expected_changes = ({MAIN_PART, target_part} if replacement_part is not None
+                            else {MAIN_PART})
+        if set(a) != set(b) or {k for k in a if a[k] != b[k]} != expected_changes:
+            raise ValueError("Unexpected 3MF members modified while constructing fixture")
         observed = inspect_placements(output_path)["mesh_instances"]
         if (len(observed) != 4 or
                 [o["mesh_part"] for o in observed] !=
@@ -109,7 +150,8 @@ def make_distinct_branch_fixture(official_path, shared_path, output_path):
         output_path.unlink(missing_ok=True)
         raise
     return {"first_part": first_part, "second_part": target_part,
-            "changed_member": MAIN_PART, "instances": 4}
+            "changed_members": sorted(expected_changes), "instances": 4,
+            "synthetic_second_mesh": replacement_part is not None}
 
 
 def main():
