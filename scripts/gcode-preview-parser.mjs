@@ -53,6 +53,10 @@ export function parseGcodeToolpaths(source, options={}) {
     throw new Error("Invalid preview segment budget");
   const byZ=new Map();
   const state={x:0,y:0,z:0,e:0,absoluteXYZ:true,absoluteE:true,units:1,plane:"G17",absoluteArcCenters:false,feedrateMmMin:null};
+  // Homing does not establish a portable XYZ coordinate: firmware-specific
+  // home offsets are unknown to this renderer. Re-anchor only through G92
+  // or a subsequent absolute command that names the affected axis.
+  const knownXYZ={x:true,y:true,z:true};
   // Tool selectors in G-code label paths, NOT physical extruder IDs or filament colors.
   // Reserved/vendor tool commands (e.g. T1000) do not set a label.
   // Bambu X1E emits T255 while unloading AMS filament: clear the label.
@@ -62,7 +66,7 @@ export function parseGcodeToolpaths(source, options={}) {
   // Feature attribution uses only explicit slicer comment tags, never free-text
   // mentions such as configuration headers containing 'gap infill'.
   let activeFeature=null;
-  let count=0,deposited=0,travels=0,skippedArcs=0,renderedArcs=0,skippedMalformedMotion=0;
+  let count=0,deposited=0,travels=0,skippedArcs=0,renderedArcs=0,skippedMalformedMotion=0,skippedUnlocatedMotions=0;
   function append(x1,y1,x2,y2,z1,z2,extrusion,groupZ=z2,commandedPositiveEMm=null,sourceMotion="G1"){
     if(![x1,y1,x2,y2,z1,z2].every(Number.isFinite) ||
        Math.max(Math.abs(x1),Math.abs(y1),Math.abs(x2),Math.abs(y2),Math.abs(z1),Math.abs(z2))>100_000)
@@ -115,6 +119,20 @@ export function parseGcodeToolpaths(source, options={}) {
     let cmd=m[1];
     // Accept leading-zero G-codes, e.g. G02/G03, without rewriting G90.1.
     if(/^G\d+$/.test(cmd))cmd="G"+String(Number(cmd.slice(1)));
+    if(cmd==="G28"){
+      // G28 can home one or all axes. Do not invent a home coordinate or
+      // draw a fictitious move from the pre-home position. Common "G28 X Y"
+      // and "G28 X0 Y0" forms are recognized; unfamiliar flags (e.g. W)
+      // conservatively invalidate all XYZ axes.
+      const args=line.slice(m[0].length).replace(/\s+/g,"");
+      const axes=args.match(/[XYZ]/g);
+      const simple=args==="" || /^(?:[XYZ](?:0(?:\.0*)?)+?)+$/.test(args) ||
+        /^(?:[XYZ](?:0(?:\.0*)?)?)+$/.test(args);
+      const affected=!simple || !axes?.length ? ["x","y","z"] :
+        [...new Set(axes.map(axis=>axis.toLowerCase()))];
+      for(const axis of affected)knownXYZ[axis]=false;
+      continue;
+    }
     if(cmd==="G90"){state.absoluteXYZ=true;continue;}
     if(cmd==="G91"){state.absoluteXYZ=false;continue;}
     if(cmd==="G90.1"){state.absoluteArcCenters=true;continue;}
@@ -141,21 +159,34 @@ export function parseGcodeToolpaths(source, options={}) {
     const unhandledWords=Object.keys(words).some(key=>!allowedWords.includes(key));
     if(unhandledWords && !isArc){skippedMalformedMotion++;continue;}
     if(cmd==="G92"){
-      for(const axis of ["X","Y","Z","E"])if(axis in words)state[axis.toLowerCase()]=words[axis];
+      for(const axis of ["X","Y","Z","E"])if(axis in words){
+        state[axis.toLowerCase()]=words[axis];
+        if(axis!=="E")knownXYZ[axis.toLowerCase()]=true;
+      }
       continue;
     }
     if("F" in words)state.feedrateMmMin=words.F;
     const start={...state};
+    const wasLocated=knownXYZ.x&&knownXYZ.y&&knownXYZ.z;
     for(const axis of ["X","Y","Z","E"]){
       if(!(axis in words))continue;
       const lower=axis.toLowerCase();
       const absolute=axis==="E"?state.absoluteE:state.absoluteXYZ;
       state[lower]=absolute?words[axis]:state[lower]+words[axis];
+      if(axis!=="E" && absolute)knownXYZ[lower]=true;
     }
     if(![state.x,state.y,state.z,state.e].every(Number.isFinite) ||
        Math.max(Math.abs(state.x),Math.abs(state.y),Math.abs(state.z))>100_000)
       throw new Error("Toolpath coordinate exceeds preview limits");
     const extrusion=state.e>start.e+1e-7;
+    // After homing, even a numerically finite prior coordinate is stale.
+    // The first absolute re-anchor has an unknown starting point: do not
+    // invent travel/deposition geometry across that discontinuity.
+    if(!wasLocated || !knownXYZ.x || !knownXYZ.y || !knownXYZ.z){
+      if(isArc)skippedArcs++;
+      else if(["X","Y","Z"].some(axis=>axis in words))skippedUnlocatedMotions++;
+      continue;
+    }
     // Plane axes follow a right-handed basis: XY (+Z), ZX (+Y), YZ (+X).
     // This preserves G2/G3 handedness when looking along each plane normal.
     // Unrelated center words fail closed rather than producing a false arc.
@@ -235,7 +266,7 @@ export function parseGcodeToolpaths(source, options={}) {
     renderedArcs++;
   }
   const layers=[...byZ.values()].sort((a,b)=>a.z-b.z);
-  return {layers,segments:count,extrusions:deposited,travels,renderedArcs,skippedArcs,skippedMalformedMotion,
+  return {layers,segments:count,extrusions:deposited,travels,renderedArcs,skippedArcs,skippedMalformedMotion,skippedUnlocatedMotions,
     selectedToolIds:[...selectedTools].sort((a,b)=>a-b),
     extrusionSegmentsByTool:Object.fromEntries([...extrusionsByTool].map(([id,n])=>[id===null?"unselected":String(id),n])),
     extrusionSegmentsByFeature:Object.fromEntries([...extrusionsByFeature].map(([name,n])=>[name===null?"unclassified":name,n]))};
