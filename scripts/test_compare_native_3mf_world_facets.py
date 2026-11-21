@@ -55,10 +55,11 @@ class NativeWorldFacetComparisonTests(unittest.TestCase):
         report = compare_world_facets(self.restored, self.changed)
         self.assertTrue(report["world_triangle_positions_equal_within_tolerance"])
         self.assertFalse(report["world_triangle_winding_equal_within_tolerance"])
-        self.assertFalse(report["build_comparisons"][0][
-            "world_triangle_winding_match_within_0p005_mm"])
-        self.assertFalse(report["build_comparisons"][1][
-            "world_triangle_winding_match_within_0p005_mm"])
+        # The COW fixture can isolate one external Core leaf: changing its
+        # triangles need not change *both* build occurrences.
+        self.assertGreaterEqual(sum(
+            not row["world_triangle_winding_match_within_0p005_mm"]
+            for row in report["build_comparisons"]), 1)
 
     def test_cyclic_face_vertex_renumbering_keeps_winding(self):
         self.replace_member(
