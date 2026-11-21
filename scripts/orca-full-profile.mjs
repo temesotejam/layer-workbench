@@ -49,7 +49,10 @@ function checkedRecord(rec) {
   // values, while preserving arrays, scripts, metadata and unknown options.
   const copy = cloneJson(rec);
   const encoded = JSON.stringify(copy);
-  if (encoded.length > MAX_JSON_BYTES) throw new Error("Orca profile record exceeds size limit");
+  // UTF-16 JavaScript string length is not the UTF-8 JSON size. A source JSON
+  // with multibyte characters must not evade the 1 MiB per-record input cap.
+  if (new TextEncoder().encode(encoded).byteLength > MAX_JSON_BYTES)
+    throw new Error("Orca profile record exceeds size limit");
   return copy;
 }
 

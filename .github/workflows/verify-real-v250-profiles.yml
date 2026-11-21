@@ -21,6 +21,20 @@ on:
       - "scripts/test-upstream-v250-creality.mjs"
       - "scripts/test-hot-plate-bridge.mjs"
       - ".github/workflows/verify-real-v250-profiles.yml"
+      - "scripts/orca-full-profile.mjs"
+      - "scripts/orca-config-array-semantics.mjs"
+      - "scripts/orca-filament-routing.mjs"
+      - "scripts/orca-filament-material-inspection.mjs"
+      - "scripts/orca-variant-input-inspection.mjs"
+      - "scripts/orca-variant-slot-resolver.mjs"
+      - "scripts/test-orca-variant-slot-resolver.mjs"
+      - "scripts/test-orca-variant-input-inspection.mjs"
+      - "scripts/test-orca-filament-material-inspection.mjs"
+      - "scripts/test-orca-filament-routing.mjs"
+      - "scripts/test-orca-config-array-semantics.mjs"
+      - "scripts/test-orca-full-profile.mjs"
+      - "scripts/test-orca-vendor-index.mjs"
+      - "scripts/fetch-upstream-v250-multi-vendor-fixture.py"
   push:
     branches: [main]
     paths:
