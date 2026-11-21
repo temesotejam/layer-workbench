@@ -74,6 +74,22 @@ def inspect_metadata_refs(path):
     # reference semantics cannot be inferred from the numeric value alone.
     part_counts = {obj_id: len(obj.findall("part")) for obj_id, obj
                    in zip(config_ids, config_objects)}
+    # Report direct vendor Part layout without assigning Core/object/volume
+    # semantics to the Part IDs. Preserve lexical spelling (e.g. "01").
+    # Values, transforms and executable profile data are never exposed.
+    part_inventory = {}
+    for obj_id, obj in zip(config_ids, config_objects):
+        parts = []
+        for part in obj.findall("part"):
+            part_id, subtype = part.get("id"), part.get("subtype")
+            if any(v is not None and len(v) > 128 for v in (part_id, subtype)):
+                raise ValueError("Oversized native Part attribute")
+            keys = [node.get("key") for node in part.findall("metadata")]
+            if any(key is not None and len(key) > 128 for key in keys):
+                raise ValueError("Oversized native Part metadata key")
+            parts.append({"id": part_id, "subtype": subtype,
+                          "metadata_keys": keys})
+        part_inventory[obj_id] = parts
     build_ids = []
     external_indices = []
     for i, item in enumerate(build.findall(CORE + "item")):
@@ -89,6 +105,7 @@ def inspect_metadata_refs(path):
         "external_build_indices": external_indices,
         "settings_object_ids": config_ids,
         "settings_part_counts": part_counts,
+        "settings_part_inventory": part_inventory,
         # Byte fidelity is observable without interpreting vendor-specific parts.
         "model_settings_sha256": hashlib.sha256(metadata_raw).hexdigest(),
         "local_build_roots_without_object_settings": sorted(
@@ -96,7 +113,8 @@ def inspect_metadata_refs(path):
                 if i not in external_indices) - set(config_ids), key=int),
         "settings_ids_without_main_resource": sorted(set(config_ids) - set(ids), key=int),
         "limitations": "Only direct config/object numeric IDs; no part-ID, UUID, "
-                       "plate, per-instance, vendor-extension or printer semantics.",
+                       "plate, per-instance, vendor-extension or printer semantics. "
+                       "Part IDs are opaque labels, not proven Core references.",
     }
 
 
@@ -123,6 +141,15 @@ def compare_metadata_refs(baseline, candidate):
     return {
         "redirected_build_items": redirected,
         "possible_unmapped_object_settings": risks,
+        # Observational context only: matching Part labels does not prove that
+        # source volume/instance settings should be copied to a cloned root.
+        "redirected_part_context": [
+            {"build_index": row["build_index"],
+             "from_id": row["from_id"], "to_id": row["to_id"],
+             "source_parts": a["settings_part_inventory"].get(row["from_id"], []),
+             "destination_parts": b["settings_part_inventory"].get(row["to_id"], [])}
+            for row in redirected
+        ],
         "model_settings_bytes_unchanged": settings_unchanged,
         "semantic_object_settings_parity_proven": False,
         "status": ("needs_vendor_metadata_mapping" if risks else
@@ -130,7 +157,8 @@ def compare_metadata_refs(baseline, candidate):
                    "no_direct_id_gap_detected"),
         "limitations": "A missing direct object ID mapping is a possible loss of settings, "
                        "not proof. Byte identity is stronger than ID inventory alone, "
-                       "but neither result proves Orca GUI compatibility or Part-ID semantics.",
+                       "but neither result proves Orca GUI compatibility or Part-ID semantics. "
+                       "The Part inventory is descriptive and is not a mapping.",
     }
 
 

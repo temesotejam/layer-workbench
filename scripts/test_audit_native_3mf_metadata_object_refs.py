@@ -59,6 +59,47 @@ class MetadataObjectReferencesTests(unittest.TestCase):
         self.assertEqual(info['build_object_ids'], ['1', '1'])
         self.assertFalse(info['local_build_roots_without_object_settings'])
 
+    def test_part_inventory_exposes_structure_not_values_or_core_mapping(self):
+        config = b'''<config><object id="1">
+<part id="0007" subtype="normal_part">
+<metadata key="name" value="Private model name"/>
+<metadata key="matrix" value="1 0 0 0"/>
+</part><part id="7" subtype="modifier"/></object><object id="2"/></config>'''
+        self.put(self.a, config=config)
+        info = inspect_metadata_refs(self.a)
+        self.assertEqual(info['settings_part_counts'], {'1': 2, '2': 0})
+        self.assertEqual(info['settings_part_inventory']['1'], [
+            {'id': '0007', 'subtype': 'normal_part',
+             'metadata_keys': ['name', 'matrix']},
+            {'id': '7', 'subtype': 'modifier', 'metadata_keys': []},
+        ])
+        self.assertEqual(info['settings_part_inventory']['2'], [])
+        self.assertNotIn('Private model name', json.dumps(info))
+
+    def test_redirected_root_reports_part_context_without_inventing_mapping(self):
+        self.put(self.a)
+        candidate = MODEL.replace(b'<object id="2"/>',
+                                  b'<object id="2"/><object id="3"/>')
+        candidate = candidate.replace(b'<item objectid="1"/>',
+                                      b'<item objectid="3"/>', 1)
+        self.put(self.b, model=candidate)
+        result = compare_metadata_refs(self.a, self.b)
+        self.assertEqual(result['status'], 'needs_vendor_metadata_mapping')
+        self.assertEqual(result['redirected_part_context'], [
+            {'build_index': 0, 'from_id': '1', 'to_id': '3',
+             'source_parts': [{'id': '11', 'subtype': 'normal_part',
+                               'metadata_keys': []}],
+             'destination_parts': []},
+        ])
+        self.assertFalse(result['semantic_object_settings_parity_proven'])
+
+    def test_part_id_is_not_assumed_to_match_core_resource_id(self):
+        config = CONFIG.replace(b'part id="11"', b'part id="00101"')
+        self.put(self.a, config=config)
+        info = inspect_metadata_refs(self.a)
+        self.assertEqual(info['settings_part_inventory']['1'][0]['id'], '00101')
+        self.assertNotIn('101', info['main_object_ids'])
+
     def test_duplicate_ids_and_dtd_are_rejected(self):
         for config in (b'<config><object id="1"/><object id="1"/></config>',
                        b'<!DOCTYPE config [<!ENTITY x "hi">]><config/>',
