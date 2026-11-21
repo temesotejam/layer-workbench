@@ -93,6 +93,50 @@ class MetadataObjectReferencesTests(unittest.TestCase):
         ])
         self.assertFalse(result['semantic_object_settings_parity_proven'])
 
+    def test_part_structure_diff_preserves_opaque_ids_without_values(self):
+        original = b'''<config><object id="1"><part id="0007" subtype="normal_part">
+<metadata key="name" value="Private model name"/></part></object>
+<object id="2"/></config>'''
+        changed = original.replace(b'id="0007"', b'id="7"').replace(
+            b'subtype="normal_part"', b'subtype="modifier"').replace(
+            b'key="name"', b'key="texture"')
+        self.put(self.a, config=original)
+        self.put(self.b, config=changed)
+        result = compare_metadata_refs(self.a, self.b)
+        self.assertEqual(result['status'], 'model_settings_bytes_changed')
+        self.assertEqual(result['part_structure_changes'], [{
+            'object_id': '1',
+            'baseline_parts': [{'id': '0007', 'subtype': 'normal_part',
+                                'metadata_keys': ['name']}],
+            'candidate_parts': [{'id': '7', 'subtype': 'modifier',
+                                 'metadata_keys': ['texture']}],
+        }])
+        self.assertNotIn('Private model name', json.dumps(result))
+        self.assertFalse(result['semantic_object_settings_parity_proven'])
+
+    def test_value_only_change_does_not_claim_part_structure_change(self):
+        original = b'''<config><object id="1"><part id="12" subtype="normal_part">
+<metadata key="speed" value="30"/></part></object><object id="2"/></config>'''
+        self.put(self.a, config=original)
+        self.put(self.b, config=original.replace(b'value="30"', b'value="45"'))
+        result = compare_metadata_refs(self.a, self.b)
+        self.assertFalse(result['model_settings_bytes_unchanged'])
+        self.assertEqual(result['part_structure_changes'], [])
+        self.assertEqual(result['status'], 'model_settings_bytes_changed')
+        self.assertNotIn('45', json.dumps(result))
+
+    def test_unmodified_part_layout_has_empty_diff_on_root_redirect(self):
+        self.put(self.a)
+        redirected = MODEL.replace(b'<object id="2"/>',
+                                   b'<object id="2"/><object id="3"/>')
+        redirected = redirected.replace(b'<item objectid="1"/>',
+                                        b'<item objectid="3"/>', 1)
+        self.put(self.b, model=redirected)
+        result = compare_metadata_refs(self.a, self.b)
+        self.assertEqual(result['status'], 'needs_vendor_metadata_mapping')
+        self.assertEqual(result['part_structure_changes'], [])
+        self.assertTrue(result['model_settings_bytes_unchanged'])
+
     def test_part_id_is_not_assumed_to_match_core_resource_id(self):
         config = CONFIG.replace(b'part id="11"', b'part id="00101"')
         self.put(self.a, config=config)
