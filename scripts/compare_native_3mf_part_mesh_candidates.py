@@ -72,6 +72,11 @@ def compare_candidate_contexts(baseline, candidate):
                 current["one_to_one_numeric_id_candidates"],
         })
 
+    # An unchanged object/Part ID inventory can mask silent changes to
+    # subtype values, vendor metadata values, or even XML formatting.
+    # Hash the *decompressed* native settings member, without reporting values.
+    settings_bytes_unchanged = (
+        before["model_settings_sha256"] == after["model_settings_sha256"])
     gaps = sum(r["object_settings_entry_missing_after_edit"] for r in rows)
     lost = sum(len(r["lost_unique_numeric_part_id_candidates"]) for r in rows)
     changed = sum(r["vendor_part_descriptors_changed"] is True for r in rows)
@@ -81,12 +86,16 @@ def compare_candidate_contexts(baseline, candidate):
         "new_direct_object_settings_gaps": gaps,
         "lost_unique_numeric_candidates": lost,
         "changed_vendor_part_inventories": changed,
-        "status": ("review_numeric_or_settings_drift" if (gaps or lost or changed)
+        "model_settings_bytes_unchanged": settings_bytes_unchanged,
+        "status": ("review_numeric_or_settings_drift" if
+                   (gaps or lost or changed or not settings_bytes_unchanged)
                    else "no_observed_numeric_candidate_drift"),
         "semantic_part_to_volume_identity_proven": False,
         "limitations": "Part/Core ID equality is numeric evidence only, not semantic "
                        "identity. A missing settings entry or lost numeric candidate "
                        "is a review signal, not proof of vendor settings loss. "
+                       "Unchanged numeric candidates can mask vendor setting value or "
+                       "format changes; exact settings-byte identity is checked. "
                        "Unchanged candidates do not prove Part/volume mapping, "
                        "Production UUID or transform parity, desktop GUI 3MF "
                        "compatibility, G-code equivalence or print safety.",

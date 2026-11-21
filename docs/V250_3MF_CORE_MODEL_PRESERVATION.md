@@ -962,3 +962,25 @@ an unresolved mapping. `--fail-on-observed-drift` is an explicit optional
 fail-closed gate for callers that require a clean report. Unchanged numeric
 candidates still do **not** demonstrate native GUI metadata compatibility,
 Production UUID correctness, full 3MF fidelity, or printable G-code.
+
+## 2026-11-21: close the value-only drift blind spot in Part/Core comparisons
+
+The before/after `scripts/compare_native_3mf_part_mesh_candidates.py` report
+previously compared direct object-settings presence, numeric Part/Core
+candidates, and Part descriptor structure. Those can all stay unchanged when
+an opaque vendor metadata *value* inside `Metadata/model_settings.config`
+silently changes. The comparator now consumes the existing bounded native
+settings member SHA-256 (via `audit_native_3mf_part_mesh_context.py`), adds
+`model_settings_bytes_unchanged`, and marks even value-only or whitespace-only
+settings changes as `review_numeric_or_settings_drift`. The existing
+`--fail-on-observed-drift` gate rejects such candidates. No metadata values
+are ever emitted or rewritten. Two new negative regressions exercise value-only
+drift (including command-line refusal) and formatting-only drift; existing
+unchanged/COW cases assert byte identity.
+
+The current native CLI Copy-on-Write diagnostic stays **observational**:
+synthetic root redirection without a direct settings entry is intentionally
+reported, but not promoted into a failed CLI acceptance gate. This strict
+byte criterion detects otherwise invisible modifications but does not prove
+semantic Part-to-volume correspondence, valid settings inheritance, GUI project
+round-trip, native/WASM G-code equality, or real-world print safety.

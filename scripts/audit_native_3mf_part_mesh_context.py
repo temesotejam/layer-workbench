@@ -105,6 +105,9 @@ def audit_part_mesh_context(path):
     return {
         "source": "read-only native Part/Core mesh occurrence cardinality observation",
         "build_contexts": entries,
+        # Expose only a digest, never opaque vendor setting values. The drift
+        # comparator uses this to distinguish stable IDs from stable bytes.
+        "model_settings_sha256": metadata["model_settings_sha256"],
         "matching_count_builds": sum(row["part_count_equals_core_mesh_occurrences"] is True
                                      for row in entries),
         "one_to_one_numeric_id_candidate_builds": sum(
