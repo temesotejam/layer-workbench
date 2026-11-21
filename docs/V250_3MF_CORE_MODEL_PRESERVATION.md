@@ -1166,3 +1166,21 @@ https://github.com/3MFConsortium/spec_core/blob/master/3MF%20Core%20Specificatio
 
 No G-code output, public Pages behavior, WASM engine, or original 3MF
 archive is modified.
+
+## 2026-11-22: bounded Core index-connectivity audit
+
+The read-only `compare_native_3mf_world_facets.py` now compares, per build and
+per mesh occurrence, a vertex/edge incidence signature in addition to world
+triangle positions and face winding. The signature includes declared and
+referenced vertex counts, incident-face and edge-multiplicity histograms, and
+connected-component vertex-count distributions. It is invariant to consistent
+Core vertex-ID renumbering, triangle reorder, and cyclic corner reorder. It
+can flag index-level splits/welds when coincident vertices leave the same
+world triangle geometry and winding. Synthetic split/weld and renumbering
+regressions run in the existing lightweight CI; the official CLI round-trip
+uses the stricter `--require-equal` gate. No vertex coordinates or vendor
+metadata values are emitted by this diagnostic.
+
+**Scope limit:** matching histograms do not prove graph isomorphism,
+vertex-manifoldness, a watertight surface, or full native 3MF semantics.
+The previous Core-only geometric gates and private-data handling remain.
