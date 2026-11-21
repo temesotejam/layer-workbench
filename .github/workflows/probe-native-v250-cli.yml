@@ -16,6 +16,8 @@ on:
       - "scripts/test_audit_native_3mf_metadata_object_refs.py"
       - "scripts/audit_native_3mf_part_mesh_context.py"
       - "scripts/test_audit_native_3mf_part_mesh_context.py"
+      - "scripts/compare_native_3mf_part_mesh_candidates.py"
+      - "scripts/test_compare_native_3mf_part_mesh_candidates.py"
       - "scripts/audit_native_3mf_edit_ownership.py"
       - "scripts/test_audit_native_3mf_edit_ownership.py"
       - "scripts/plan_native_3mf_copy_on_write.py"
@@ -92,6 +94,8 @@ on:
       - "scripts/test_audit_native_3mf_metadata_object_refs.py"
       - "scripts/audit_native_3mf_part_mesh_context.py"
       - "scripts/test_audit_native_3mf_part_mesh_context.py"
+      - "scripts/compare_native_3mf_part_mesh_candidates.py"
+      - "scripts/test_compare_native_3mf_part_mesh_candidates.py"
       - "scripts/audit_native_3mf_edit_ownership.py"
       - "scripts/test_audit_native_3mf_edit_ownership.py"
       - "scripts/plan_native_3mf_copy_on_write.py"
@@ -192,6 +196,9 @@ jobs:
 
       - name: Unit-test native Part/Core mesh cardinality without assuming identity
         run: python3 -m unittest discover -s scripts -p test_audit_native_3mf_part_mesh_context.py -v
+
+      - name: Unit-test before/after native Part/Core numeric candidate drift
+        run: python3 -m unittest discover -s scripts -p test_compare_native_3mf_part_mesh_candidates.py -v
 
       - name: Unit-test native 3MF multipart world placement composition offline
         run: python3 -m unittest discover -s scripts -p test_audit_native_3mf_instance_placement.py -v
@@ -1746,6 +1753,13 @@ jobs:
             --input native-cli-output/branched-distinct-shape-source.3mf \
             --output native-cli-output/branched-distinct-shape-private.3mf \
             --edge-index 1 --report native-cli-output/distinct-branch-cow.log
+          # Compare pre/post-detach vendor Part label evidence without
+          # claiming that any candidate ID is a confirmed volume mapping.
+          python3 scripts/compare_native_3mf_part_mesh_candidates.py \
+            --baseline native-cli-output/branched-distinct-shape-source.3mf \
+            --candidate native-cli-output/branched-distinct-shape-private.3mf \
+            --report native-cli-output/branched-distinct-part-candidate-drift.json
+          cat native-cli-output/branched-distinct-part-candidate-drift.json
           # After Copy-on-Write, edit only build item 1's newly private
           # second leaf; all other three occurrences and metadata must remain.
           python3 scripts/scale_native_3mf_branched_private_leaf.py \
