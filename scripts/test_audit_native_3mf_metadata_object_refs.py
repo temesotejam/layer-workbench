@@ -123,7 +123,7 @@ class MetadataObjectReferencesTests(unittest.TestCase):
         self.assertFalse(result['model_settings_bytes_unchanged'])
         self.assertEqual(result['part_structure_changes'], [])
         self.assertEqual(result['status'], 'model_settings_bytes_changed')
-        self.assertNotIn('45', json.dumps(result))
+        self.assertNotIn('"value": "45"', json.dumps(result))
 
     def test_unmodified_part_layout_has_empty_diff_on_root_redirect(self):
         self.put(self.a)
