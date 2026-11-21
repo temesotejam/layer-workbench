@@ -20,6 +20,8 @@ on:
       - "scripts/test_compare_native_3mf_part_mesh_candidates.py"
       - "scripts/reconcile_native_3mf_cloned_root_settings.py"
       - "scripts/test_reconcile_native_3mf_cloned_root_settings.py"
+      - "scripts/audit_native_3mf_part_value_roundtrip.py"
+      - "scripts/test_audit_native_3mf_part_value_roundtrip.py"
       - "scripts/audit_native_3mf_edit_ownership.py"
       - "scripts/test_audit_native_3mf_edit_ownership.py"
       - "scripts/plan_native_3mf_copy_on_write.py"
@@ -100,6 +102,8 @@ on:
       - "scripts/test_compare_native_3mf_part_mesh_candidates.py"
       - "scripts/reconcile_native_3mf_cloned_root_settings.py"
       - "scripts/test_reconcile_native_3mf_cloned_root_settings.py"
+      - "scripts/audit_native_3mf_part_value_roundtrip.py"
+      - "scripts/test_audit_native_3mf_part_value_roundtrip.py"
       - "scripts/audit_native_3mf_edit_ownership.py"
       - "scripts/test_audit_native_3mf_edit_ownership.py"
       - "scripts/plan_native_3mf_copy_on_write.py"
@@ -1958,6 +1962,18 @@ jobs:
           print("PASS: official v2.5.0 imported and re-exported two-build, two-Part remap")
           print("Core mesh occurrences: 4; Part counts: 2 + 2")
           PY
+
+      - name: Compare native v2.5.0 re-export Part metadata values (diagnostic)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/audit_native_3mf_part_value_roundtrip.py \
+            --before native-cli-output/part-remap-native-input.3mf \
+            --after native-cli-output/part-remap-v250-reexport.3mf \
+            --report native-cli-output/part-remap-value-drift.log
+          cat native-cli-output/part-remap-value-drift.log
+          # This is a read-only observation; never gate on positional identity
+          # before independent native Part remapping semantics are proved.
 
       - name: Archive text diagnostics without redistributing the AppImage
         if: always()
