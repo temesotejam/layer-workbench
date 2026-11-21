@@ -42,10 +42,32 @@ class NativeWorldFacetComparisonTests(unittest.TestCase):
     def test_private_core_id_cloning_keeps_world_triangles(self):
         report = compare_world_facets(self.source, self.restored)
         self.assertTrue(report["world_triangle_positions_equal_within_tolerance"])
+        self.assertTrue(report["world_triangle_winding_equal_within_tolerance"])
         self.assertEqual(len(report["build_comparisons"]), 2)
         self.assertEqual([b["before_triangle_count"]
                           for b in report["build_comparisons"]], [2, 2])
         self.assertFalse(report["part_matrix_semantics_proven"])
+
+    def test_reversed_face_winding_detected_despite_same_positions(self):
+        self.replace_member(
+            SECOND, b'<triangle v1="0" v2="1" v3="2"/>',
+            b'<triangle v1="0" v2="2" v3="1"/>')
+        report = compare_world_facets(self.restored, self.changed)
+        self.assertTrue(report["world_triangle_positions_equal_within_tolerance"])
+        self.assertFalse(report["world_triangle_winding_equal_within_tolerance"])
+        # The COW fixture can isolate one external Core leaf: changing its
+        # triangles need not change *both* build occurrences.
+        self.assertGreaterEqual(sum(
+            not row["world_triangle_winding_match_within_0p005_mm"]
+            for row in report["build_comparisons"]), 1)
+
+    def test_cyclic_face_vertex_renumbering_keeps_winding(self):
+        self.replace_member(
+            SECOND, b'<triangle v1="0" v2="1" v3="2"/>',
+            b'<triangle v1="1" v2="2" v3="0"/>')
+        report = compare_world_facets(self.restored, self.changed)
+        self.assertTrue(report["world_triangle_positions_equal_within_tolerance"])
+        self.assertTrue(report["world_triangle_winding_equal_within_tolerance"])
 
     def test_vendor_part_matrix_changes_do_not_fake_core_geometry_change(self):
         old = b'<metadata key="source_offset_x" value="2"/>'
@@ -54,6 +76,7 @@ class NativeWorldFacetComparisonTests(unittest.TestCase):
         self.replace_member(SETTINGS, old, new)
         report = compare_world_facets(self.restored, self.changed)
         self.assertTrue(report["world_triangle_positions_equal_within_tolerance"])
+        self.assertTrue(report["world_triangle_winding_equal_within_tolerance"])
         self.assertFalse(report["complete_native_3mf_parity_proven"])
         self.assertNotIn("17 0 1", str(report))
 
