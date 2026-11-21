@@ -240,8 +240,8 @@ console.log('PASS: G-code linear extrusion, travel, layers, relative moves, safe
 // T1000 (reserved vendor command) must not be reported as a material label.
 const multiToolGcode=[
   "G90","M82","G0 X0 Y0 Z0.2","T0","G1 X10 Y0 E1",
-  "T3","G1 X20 Y0 E2","T1000","G1 X30 Y0 E3",
-  "N15 T2","G1 X40 Y0 E4"
+  "T3","G92 E0","G1 X20 Y0 E2","T1000","G1 X30 Y0 E3",
+  "N15 T2","G92 E0","G1 X40 Y0 E4"
 ].join("\n");
 const labeled=parseGcodeToolpaths(multiToolGcode);
 assert.deepEqual(labeled.selectedToolIds,[0,2,3]);
@@ -263,6 +263,46 @@ assert.deepEqual(afterUnload.selectedToolIds,[0]);
 assert.deepEqual(afterUnload.layers[0].segments.map(s=>s.toolId),[0,null,null]);
 assert.deepEqual(afterUnload.extrusionSegmentsByTool,{"0":1,unselected:2});
 console.log("PASS: tool-aware G-code toolpaths, vendor T1000 guard, 2D/3D palette mapping");
+
+// Absolute E is not portable across a real T-selector change. In Marlin,
+// tool-change may reset E to zero; other firmwares may restore per-tool E.
+// The first post-switch absolute E move re-anchors but must not be plotted.
+for(const [previousE,firstNewE,secondNewE] of [[5,100,101],[100,0,1]]){
+  const changed=parseGcodeToolpaths([
+    "G90","M82","G0 X0 Y0 Z0.2","T0",`G1 X10 E${previousE}`,
+    "T1",`G1 X20 E${firstNewE}`,`G1 X30 E${secondNewE}`
+  ].join("\n"));
+  assert.equal(changed.skippedUnlocatedMotions,1);
+  assert.equal(changed.extrusions,2);
+  assert.deepEqual(changed.layers[0].segments.map(s=>[s.x1,s.x2,s.toolId]),
+    [[0,10,0],[20,30,1]]);
+}
+const reanchoredTool=parseGcodeToolpaths(
+  "G90\nM82\nT0\nG1 X10 E5\nT1\nG92 E0\nG1 X20 E1");
+assert.equal(reanchoredTool.skippedUnlocatedMotions,0);
+assert.deepEqual(reanchoredTool.extrusionSegmentsByTool,{"0":1,"1":1});
+
+// Same-tool reselection and reserved T255/T1000 labels cannot create an
+// artificial E discontinuity. A real T after T255 still compares with the
+// last explicit material selector instead of treating T255 as a new tool.
+const repeatedTool=parseGcodeToolpaths(
+  "G90\nM82\nT0\nG1 X10 E1\nT0\nG1 X20 E2\nT255\nT1000\nT0\nG1 X30 E3");
+assert.equal(repeatedTool.skippedUnlocatedMotions,0);
+assert.equal(repeatedTool.extrusions,3);
+const afterSentinelSwitch=parseGcodeToolpaths(
+  "G90\nM82\nT0\nG1 X10 E1\nT255\nT1\nG1 X20 E2\nG1 X30 E3");
+assert.equal(afterSentinelSwitch.skippedUnlocatedMotions,1);
+assert.deepEqual(afterSentinelSwitch.layers[0].segments.map(s=>[s.x1,s.x2]),[[0,10],[20,30]]);
+
+// Relative E can be classified from its signed word without knowing the
+// absolute E origin. Returning to M82 must still obtain a fresh anchor.
+const relativeAfterTool=parseGcodeToolpaths(
+  "G90\nM82\nT0\nG1 X10 E10\nT1\nM83\nG1 X20 E0.4\nM82\nG1 X30 E12\nG1 X40 E13");
+assert.equal(relativeAfterTool.skippedUnlocatedMotions,1);
+assert.deepEqual(relativeAfterTool.layers[0].segments.map(s=>[s.x1,s.x2,s.extrusion]),
+  [[0,10,true],[10,20,true],[30,40,true]]);
+console.log("PASS: tool-change absolute E discontinuity, G92 recovery, relative E, vendor selectors");
+
 
 // A malformed word must not be silently shortened and plotted. Preserve
 // the last valid modal position when rejecting the whole movement.
