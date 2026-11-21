@@ -59,6 +59,30 @@ class NativeDistinctBranchFixtureTests(unittest.TestCase):
                 inspect_placements(destination)["per_build_world_bounds_mm"],
                 inspect_placements(self.output)["per_build_world_bounds_mm"])
 
+    def test_reuse_empty_native_model_slot_when_both_roots_share_first_mesh(self):
+        # Mirrors the real pinned v2.5.0 CLI export: both roots point at
+        # the first external model, while an existing second part is empty.
+        empty = (b'<model xmlns="http://schemas.microsoft.com/3dmanufacturing/'
+                 b'core/2015/02"><resources/></model>')
+        official_parts = shared_root_parts()
+        shared_parts = branched_parts()
+        official_parts["3D/Objects/second.model"] = empty
+        shared_parts["3D/Objects/second.model"] = empty
+        self.write(self.official, official_parts)
+        self.write(self.shared, shared_parts)
+        report = make_distinct_branch_fixture(
+            self.official, self.shared, self.output)
+        self.assertTrue(report["synthetic_second_mesh"])
+        self.assertEqual(report["changed_members"],
+                         [MAIN, "3D/Objects/second.model"])
+        self.assertEqual(
+            [row["mesh_part"] for row in inspect_placements(self.output)["mesh_instances"]],
+            ["3D/Objects/first.model", "3D/Objects/second.model"] * 2)
+        with ZipFile(self.official) as original:
+            self.assertEqual(original.read("3D/Objects/second.model"), empty)
+        clone_branched_root(self.output, self.clone, edge_index=1)
+        self.assertEqual(len(inspect_placements(self.clone)["mesh_instances"]), 4)
+
     def test_absent_second_edge_rejected_without_output(self):
         self.write(self.official, geometry_parts())
         self.write(self.shared, shared_root_parts())
