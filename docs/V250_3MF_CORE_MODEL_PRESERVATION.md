@@ -1065,3 +1065,29 @@ records. Equal field values do **not** establish semantic Part-to-volume
 mapping, object or plate settings retention, opaque child-node fidelity,
 desktop GUI 3MF compatibility, native/WASM G-code equality, or print safety.
 The public Pages deployment and WASM engine remain unchanged.
+
+## 2026-11-22: read-only numeric matrix drift classification for Part re-export
+
+The existing native v2.5.0 Part value round-trip auditor now adds an optional
+`matrix_4x4_coefficient_diagnostic` for a changed direct Part metadata key
+`matrix`. The pinned v2.5.0 exporter in
+[`bbs_3mf.cpp`](https://github.com/OrcaSlicer/OrcaSlicer/blob/40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19/src/libslic3r/Format/bbs_3mf.cpp)
+serializes a **row-major 4×4** volume-local matrix from
+`volume->get_matrix() * volume->source.transform.get_matrix()`.
+The checker parses exactly 16 finite coefficients, rejects malformed or
+ambiguous duplicate values, and distinguishes equal numbers, differences
+within absolute 1e-6 per coefficient, and larger numeric drift.
+
+The normal observed metadata-value drift remains reported, including when a
+matrix difference fits the tolerance. No matrix coefficients, file paths, or
+private metadata values are printed, hashed into diagnostics, or changed.
+The official native CLI workflow already invokes this same auditor on the
+synthetic re-export fixture; its next run is needed to observe the classification
+of the two previously observed `matrix` differences. The offline regression
+suite includes tolerance, formatting-only numeric equality, invalid inputs,
+duplicate entries, and an end-to-end report/privacy case.
+
+**Limitations:** two 4×4 matrices agreeing numerically do not imply that the
+full Core component/build transforms agree, that Part labels retain semantic
+identity, or that the native CLI has preserved GUI-authored data. The diagnostic
+never authorizes user-facing 3MF editing, machine slicing, or printability.
