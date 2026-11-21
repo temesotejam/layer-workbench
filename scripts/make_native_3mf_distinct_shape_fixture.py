@@ -33,8 +33,10 @@ def make_distinct_shape_fixture(source, destination):
             rows[0]["mesh_part"] in (MAIN_PART, rows[1]["mesh_part"]) or
             rows[1]["mesh_part"] == MAIN_PART or
             rows[1]["mesh_objectid"] != rows[3]["mesh_objectid"] or
-            any(r["triangle_count"] != 12 for r in rows)):
-        raise ValueError("Expected two shared builds, each with distinct 12-face external leaves")
+            any(r["triangle_count"] < 1 for r in rows) or
+            rows[0]["triangle_count"] != rows[2]["triangle_count"] or
+            rows[1]["triangle_count"] != rows[3]["triangle_count"]):
+        raise ValueError("Expected two shared builds, each with distinct nonempty external leaves")
 
     second_part = rows[1]["mesh_part"]
     second_id = rows[1]["mesh_objectid"]
