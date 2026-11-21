@@ -1866,14 +1866,6 @@ jobs:
           with ZipFile(original) as archive:
               native_config = ET.fromstring(archive.read(SETTINGS))
               objects = native_config.findall("object")
-              # This bounded serializer explicitly rejects non-object
-              # config-root records. Keep ONLY the two actual native Part
-              # descriptors in a fresh synthetic config; plate/vendor root
-              # records are not inferred, rewritten, or claimed preserved.
-              config = ET.Element("config")
-              for original_object in objects:
-                  config.append(copy.deepcopy(original_object))
-              objects = config.findall("object")
               root = [o for o in objects if o.get("id") == root_id]
               others = [o for o in objects if o.get("id") != root_id]
               if len(root) != 1 or len(others) != 1:
@@ -1884,9 +1876,17 @@ jobs:
                       existing[0].get("subtype") != "normal_part" or
                       donor[0].get("subtype") != "normal_part"):
                   raise SystemExit("Real native Part descriptors differ from fixture")
+              # Keep ONLY the real native Part descriptors in a new synthetic
+              # object. The experimental remapper expressly refuses unknown
+              # object-level identity attributes or config-root plate records.
+              # Removing them here is for acceptance-fixture construction,
+              # never an allowed transformation of user/vendor projects.
+              config = ET.Element("config")
+              target_obj = ET.SubElement(config, "object", {"id": root_id})
+              target_obj.append(copy.deepcopy(existing[0]))
               second = copy.deepcopy(donor[0])
               second.set("id", second_id)
-              root[0].append(second)
+              target_obj.append(second)
               content = ET.tostring(config, encoding="utf-8")
               with ZipFile(source, "x") as out:
                   out.comment = archive.comment
