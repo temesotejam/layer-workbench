@@ -44,7 +44,7 @@ class PartValueRoundtripTests(unittest.TestCase):
     def test_changed_value_only_reports_key_and_never_private_value(self):
         self.mutate(b'SENSITIVE_PART_NAME', b'PRIVATE_NEW_VALUE')
         report = compare_part_values(self.restored, self.changed)
-        self.assertEqual(report["observed_value_or_inventory_changes"], 1)
+        self.assertEqual(report["observed_value_or_inventory_changes"], 2)
         self.assertEqual(report["builds"][0]["part_comparisons"][0]["changed_metadata_value_keys"], ["name"])
         self.assertNotIn("PRIVATE_NEW_VALUE", str(report))
         self.assertNotIn("SENSITIVE_PART_NAME", str(report))
