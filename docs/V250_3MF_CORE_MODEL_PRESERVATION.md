@@ -1045,3 +1045,23 @@ may normalize/reassign IDs, configuration values, UUIDs and XML. The gate
 cannot establish value-level metadata fidelity, GUI-created 3MF semantics,
 texture/paint/plate compatibility, native-vs-WASM G-code parity, or physical
 printer safety. No public browser feature or WASM artifact is changed.
+
+## 2026-11-22: native CLI Part metadata value round-trip audit (diagnostic only)
+
+The isolated native CLI fixture now records a read-only comparison of direct
+`<part><metadata key/value>` attributes and `subtype` before and after
+the exact v2.5.0 native CLI re-export. The auditor compares per-build and
+per-Part *positions* and records added, removed or changed metadata **key
+names**, without printing raw values or their hashes; opaque source paths
+and user project names are never placed in CI logs. Changed numeric Part
+labels are tracked separately from metadata value changes. Tests exercise
+one private leaf ID remap, metadata value changes, removed keys, duplicate
+keys, missing settings and changed Part cardinality.
+
+The official CLI step intentionally runs in diagnostic mode. A changed
+field is evidence requiring review, not proof of data corruption: re-export
+may legitimately regenerate provenance data, or reorder/reidentify Part
+records. Equal field values do **not** establish semantic Part-to-volume
+mapping, object or plate settings retention, opaque child-node fidelity,
+desktop GUI 3MF compatibility, native/WASM G-code equality, or print safety.
+The public Pages deployment and WASM engine remain unchanged.
