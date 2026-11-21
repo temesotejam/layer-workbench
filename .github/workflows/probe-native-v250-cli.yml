@@ -1883,10 +1883,20 @@ jobs:
               # never an allowed transformation of user/vendor projects.
               config = ET.Element("config")
               target_obj = ET.SubElement(config, "object", {"id": root_id})
-              target_obj.append(copy.deepcopy(existing[0]))
+              first = copy.deepcopy(existing[0])
               second = copy.deepcopy(donor[0])
               second.set("id", second_id)
-              target_obj.append(second)
+              # Real CLI Parts also contain non-metadata vendor children.
+              # This fixture models ONLY the bounded metadata vocabulary;
+              # never mutate/drop these nodes in a real imported project.
+              # Refuse nested metadata while preserving accepted values.
+              for part in (first, second):
+                  for child in list(part):
+                      if child.tag != "metadata":
+                          part.remove(child)
+                      elif list(child):
+                          raise SystemExit("Nested native Part metadata unsupported")
+              target_obj.extend((first, second))
               content = ET.tostring(config, encoding="utf-8")
               with ZipFile(source, "x") as out:
                   out.comment = archive.comment
