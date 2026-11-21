@@ -881,3 +881,29 @@ interchange, WASM/native toolpath equivalence, or real printer safety.
 The new offline tests exercise identifier spelling, subtype/key drift,
 value-only drift and a root redirect with unchanged settings. The existing
 native v2.5.0 CLI workflow invokes the same auditor.
+
+## 2026-11-21: independent native Part versus Core mesh occurrence context
+
+`scripts/audit_native_3mf_part_mesh_context.py` combines the existing bounded
+`Metadata/model_settings.config` direct-object/Part inventory with the
+**independent** multipart Core mesh-instance expansion. For each main build
+item it reports the source main root ID, the number of reachable mesh
+*occurrences*, the number of distinct referenced mesh resources, whether a
+direct native object-settings record exists, the number and descriptors of
+its immediate Part records, and whether the two observed counts agree.
+
+An equality is **only a cardinality observation**: matching numbers or
+similar numeric labels do not demonstrate any Part-to-Core mesh correspondence,
+order, volume mapping, cloned-root setting inheritance, plate semantics or
+Production UUID lineage. A missing direct setting record is represented by
+null rather than zero, so it cannot be mistaken for an empty but valid mapping.
+Only existing Part IDs/subtypes and metadata **key names** are shown; vendor
+metadata values are neither printed nor rewritten.
+
+Offline tests cover a repeated shared mesh, unrelated Part IDs, a count
+mismatch and a build root cloned without a new vendor settings record. The
+pinned official v2.5.0 native CLI workflow records the same read-only
+observations for the ephemeral full-profile 3MF it exports. Actual runtime
+results must be checked in the related Actions run: a PASS validates that
+the script executed on the bounded test input, not semantic project parity.
+The published browser app and WASM assets are unchanged.

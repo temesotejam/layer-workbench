@@ -14,6 +14,8 @@ on:
       - "scripts/audit_native_3mf_instance_placement.py"
       - "scripts/audit_native_3mf_metadata_object_refs.py"
       - "scripts/test_audit_native_3mf_metadata_object_refs.py"
+      - "scripts/audit_native_3mf_part_mesh_context.py"
+      - "scripts/test_audit_native_3mf_part_mesh_context.py"
       - "scripts/audit_native_3mf_edit_ownership.py"
       - "scripts/test_audit_native_3mf_edit_ownership.py"
       - "scripts/plan_native_3mf_copy_on_write.py"
@@ -88,6 +90,8 @@ on:
       - "scripts/audit_native_3mf_instance_placement.py"
       - "scripts/audit_native_3mf_metadata_object_refs.py"
       - "scripts/test_audit_native_3mf_metadata_object_refs.py"
+      - "scripts/audit_native_3mf_part_mesh_context.py"
+      - "scripts/test_audit_native_3mf_part_mesh_context.py"
       - "scripts/audit_native_3mf_edit_ownership.py"
       - "scripts/test_audit_native_3mf_edit_ownership.py"
       - "scripts/plan_native_3mf_copy_on_write.py"
@@ -185,6 +189,9 @@ jobs:
 
       - name: Unit-test direct native model-settings object ID references offline
         run: python3 -m unittest discover -s scripts -p test_audit_native_3mf_metadata_object_refs.py -v
+
+      - name: Unit-test native Part/Core mesh cardinality without assuming identity
+        run: python3 -m unittest discover -s scripts -p test_audit_native_3mf_part_mesh_context.py -v
 
       - name: Unit-test native 3MF multipart world placement composition offline
         run: python3 -m unittest discover -s scripts -p test_audit_native_3mf_instance_placement.py -v
@@ -425,6 +432,12 @@ jobs:
             echo "Official CLI produced no native 3MF project"
             exit 1
           }
+          # Observable Part count vs independent Core mesh occurrence count;
+          # equal cardinality does NOT prove Part ID/mesh-volume identity.
+          python3 scripts/audit_native_3mf_part_mesh_context.py \
+            --input "${project}" \
+            --report native-cli-output/native-part-mesh-context.json
+          cat native-cli-output/native-part-mesh-context.json
           # Inventory is bounded against unsafe members. Record only paths,
           # sizes and hashes; do not upload native project or preset payloads.
           python3 - <<'PY' | tee native-cli-output/native-project-members.log
