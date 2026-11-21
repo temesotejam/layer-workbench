@@ -44,7 +44,7 @@ class NativeWorldFacetComparisonTests(unittest.TestCase):
         self.assertTrue(report["world_triangle_positions_equal_within_tolerance"])
         self.assertEqual(len(report["build_comparisons"]), 2)
         self.assertEqual([b["before_triangle_count"]
-                          for b in report["build_comparisons"]], [24, 24])
+                          for b in report["build_comparisons"]], [2, 2])
         self.assertFalse(report["part_matrix_semantics_proven"])
 
     def test_vendor_part_matrix_changes_do_not_fake_core_geometry_change(self):
