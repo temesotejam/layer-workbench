@@ -2,11 +2,10 @@
 """Compare bounded Core world-space triangle positions across native v2.5.0 3MF exports.
 
 This is an independent, read-only geometric observation. It ignores numeric
-object/Part IDs and per-Part metadata matrices. Triangle winding is checked separately; texture, vendor settings, topology
-beyond triangle vertex positions and winding, and print safety are not proved. Only the existing two-build, three-Core-part native CLI fixture is
-supported. Neither input is modified; no coordinates are logged.
+object/Part IDs and per-Part metadata matrices. Triangle winding and a bounded vertex/edge incidence topology summary are\nchecked separately; complete mesh graph equivalence, texture, vendor settings,\nand print safety are not proved. Only the existing two-build, three-Core-part native CLI fixture is\nsupported. Neither input is modified; no coordinates are logged.
 """
 import argparse
+from collections import Counter
 import json
 import math
 from pathlib import Path
@@ -81,6 +80,47 @@ def _oriented_facets_close(a, b):
     return True
 
 
+
+def _index_topology_summary(vertex_count, faces):
+    """Bounded, ID-independent incidence summary; not graph isomorphism.
+
+    Core triangle positions may be identical while indexed vertices have
+    been split or welded, changing the mesh's edge connectivity. Report only
+    counts/histograms; never expose source coordinates or private IDs.
+    """
+    face_uses = Counter()
+    edge_uses = Counter()
+    parents = {}
+
+    def root(v):
+        parents.setdefault(v, v)
+        while parents[v] != v:
+            parents[v] = parents[parents[v]]
+            v = parents[v]
+        return v
+
+    for a, b, c in faces:
+        for v in {a, b, c}:
+            face_uses[v] += 1
+        for u, v in ((a, b), (b, c), (c, a)):
+            if u == v:
+                continue
+            edge_uses[(min(u, v), max(u, v))] += 1
+            parent_u, parent_v = root(u), root(v)
+            if parent_u != parent_v:
+                parents[parent_v] = parent_u
+
+    component_sizes = Counter(root(v) for v in face_uses)
+    # The summaries survive triangle reordering, cyclic vertex numbering,
+    # and consistent renumbering of Core vertex indices.
+    return (
+        vertex_count,
+        len(face_uses),
+        tuple(sorted(Counter(face_uses.values()).items())),
+        tuple(sorted(Counter(edge_uses.values()).items())),
+        tuple(sorted(component_sizes.values())),
+    )
+
 def _world_facets(path):
     audit_native_package(path)
     placement = inspect_placements(path, max_instances=MAX_MESH_OCCURRENCES)
@@ -91,6 +131,7 @@ def _world_facets(path):
         raise ValueError("No native Core mesh occurrences")
     per_build = [[] for _ in range(2)]
     oriented_per_build = [[] for _ in range(2)]
+    topology_per_build = [[] for _ in range(2)]
     degenerate_per_build = [0, 0]
     triangles_per_build = [0, 0]
     occurrences_per_build = [0, 0]
@@ -122,7 +163,8 @@ def _world_facets(path):
                     tuple(int(node.get(axis)) for axis in ("v1", "v2", "v3"))
                     for node in triangles_node.findall(CORE_NS + "triangle")
                 ]
-                meshes[key] = (vertices, faces, mm_factor)
+                meshes[key] = (vertices, faces, mm_factor,
+                               _index_topology_summary(len(vertices), faces))
 
         total = 0
         for row in rows:
@@ -132,7 +174,8 @@ def _world_facets(path):
             key = (row["mesh_part"], row["mesh_objectid"])
             if key not in meshes:
                 raise ValueError("Missing native Core mesh resource")
-            vertices, faces, mm_factor = meshes[key]
+            vertices, faces, mm_factor, topology = meshes[key]
+            topology_per_build[index].append(topology)
             matrix = row["world_transform3mf"]
             total += len(faces)
             if total > MAX_WORLD_FACETS:
@@ -162,6 +205,7 @@ def _world_facets(path):
     return [
         {"facets": sorted(per_build[i]),
          "oriented_facets": sorted(oriented_per_build[i]),
+         "index_topology_summaries": sorted(topology_per_build[i]),
          "degenerate_facets": degenerate_per_build[i],
          "triangle_count": triangles_per_build[i],
          "mesh_occurrences": occurrences_per_build[i]}
@@ -183,6 +227,9 @@ def compare_world_facets(before_path, after_path):
                          and new["degenerate_facets"] == 0
                          and _oriented_facets_close(old["oriented_facets"],
                                                     new["oriented_facets"]))
+        topology_match = (counts_match and
+                          old["index_topology_summaries"] ==
+                          new["index_topology_summaries"])
         comparisons.append({
             "build_index": index,
             "before_triangle_count": old["triangle_count"],
@@ -190,6 +237,7 @@ def compare_world_facets(before_path, after_path):
             "before_mesh_occurrences": old["mesh_occurrences"],
             "after_mesh_occurrences": new["mesh_occurrences"],
             "triangle_and_occurrence_counts_match": counts_match,
+            "mesh_index_topology_summary_match": topology_match,
             "before_degenerate_triangle_count": old["degenerate_facets"],
             "after_degenerate_triangle_count": new["degenerate_facets"],
             "world_triangle_vertex_positions_match_within_0p005_mm": positions_match,
@@ -199,11 +247,14 @@ def compare_world_facets(before_path, after_path):
                 for row in comparisons)
     winding_equal = all(row["world_triangle_winding_match_within_0p005_mm"]
                         for row in comparisons)
+    topology_equal = all(row["mesh_index_topology_summary_match"]
+                         for row in comparisons)
     return {
         "source": "read-only bounded native Core world triangle position comparison",
         "build_comparisons": comparisons,
         "world_triangle_positions_equal_within_tolerance": equal,
         "world_triangle_winding_equal_within_tolerance": winding_equal,
+        "world_mesh_index_topology_summaries_equal": topology_equal,
         "absolute_position_tolerance_mm": TOLERANCE_MM,
         "part_matrix_semantics_proven": False,
         "complete_native_3mf_parity_proven": False,
@@ -214,7 +265,10 @@ def compare_world_facets(before_path, after_path):
             "after external-part and "
             "nested-component 3MF affine transforms and millimetre conversion. "
             "Degenerate triangles cannot establish winding agreement. "
-            "The comparison does not prove manifold topology, internal "
+            "The index-incidence summary flags differences in vertex/edge "
+            "multiplicity and connected-component sizes, but is not full "
+            "mesh graph isomorphism or a manifoldness proof. "
+            "The comparison does not prove complete topology, internal "
             "metadata Part matrices, object/Part identity, modifiers, GUI "
             "project compatibility, G-code parity or print safety. "
             "Coordinates and private metadata values are never reported."
@@ -239,8 +293,9 @@ def main():
         if args.require_equal and not (
             result["world_triangle_positions_equal_within_tolerance"]
             and result["world_triangle_winding_equal_within_tolerance"]
+            and result["world_mesh_index_topology_summaries_equal"]
         ):
-            print("Native world triangle positions or winding changed",
+            print("Native world triangle positions, winding, or index topology changed",
                   file=sys.stderr)
             return 1
     except (ValueError, OSError, RuntimeError, BadZipFile, EOFError) as exc:
