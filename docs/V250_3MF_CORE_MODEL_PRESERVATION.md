@@ -835,3 +835,25 @@ also flagged; byte identity does not prove per-instance metadata mapping,
 Part-ID/Production UUID semantics, GUI-saved 3MF parity, native/WASM G-code
 matching or physical printer safety. Root remapping still needs a separate
 vendor-aware mapping proof; no automatic metadata rewrite is permitted.
+
+## 2026-11-21: read-only native Part hierarchy inventory (experimental)
+
+The direct model-settings reference audit now inventories each immediate
+`<config><object><part>` entry under its owning settings object. It reports
+the Part `id` and `subtype` strings and the *names* of its immediate
+`<metadata key>` entries, never the vendor metadata values. A
+baseline/candidate comparison also reports the source and destination Part
+inventories for every redirected main build root. This makes the missing
+Part context of a newly cloned root visible alongside the existing
+`needs_vendor_metadata_mapping` finding.
+
+**Important:** Part IDs are kept as opaque lexical strings, not normalized
+to or equated with 3MF Core object IDs; the inventory does not infer volume
+identities, Production UUID relations, plate settings, or correct remapping.
+The checker never copies or rewrites vendor settings. The new offline tests
+cover multiple Part entries, metadata key-only reporting, a missing COW root
+mapping and deliberately unrelated Core/Part IDs. The pinned native CLI
+audit step uses the same updated script on official v2.5.0 CLI-generated
+3MF, provided the workflow run succeeds. Full GUI-authored native 3MF
+compatibility remains unproven.
+
