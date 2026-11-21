@@ -242,6 +242,12 @@ def extrusion_move_metrics(commands, feature_context=None, feature_stats=None,
     units = Decimal(1)
     e_position = Decimal(0)
     xy = {'X': Decimal(0), 'Y': Decimal(0)}
+    # An absolute E value cannot be compared across tool changes: some
+    # firmware restores a per-tool E register or resets it during a change.
+    # Relative E remains countable, but switching back to M82 requires G92 E.
+    last_selected_tool = None
+    e_reference_known = True
+    seen_e_reference = False
     for line_no, command in commands:
         tokens = command.split()
         if tokens and re.fullmatch(r'N\d+', tokens[0], re.I):
@@ -249,6 +255,20 @@ def extrusion_move_metrics(commands, feature_context=None, feature_stats=None,
         if not tokens:
             continue
         opcode = tokens[0].upper()
+        if re.fullmatch(r'T\d+', opcode):
+            tool = int(opcode[1:])
+            # T255 and vendor-private selectors are not necessarily physical
+            # extruders. Their effect on E is unknown, so require an explicit
+            # re-anchor before accepting subsequent absolute-E deposition.
+            if tool >= 255:
+                e_reference_known = False
+            else:
+                if ((last_selected_tool is not None and
+                     last_selected_tool != tool) or
+                    (last_selected_tool is None and seen_e_reference)):
+                    e_reference_known = False
+                last_selected_tool = tool
+            continue
         # M82 is absolute E, M83 is relative E. Preserve padded
         # command spelling for *strict* comparison, but interpret only these
         # well-defined numeric aliases in the deposition sanity gate.
@@ -313,6 +333,8 @@ def extrusion_move_metrics(commands, feature_context=None, feature_stats=None,
                     xy[axis] = words[axis] * units
             if 'E' in words:
                 e_position = words['E'] * units
+                e_reference_known = True
+                seen_e_reference = True
             if 'Z' in words:
                 z_position = words['Z'] * units
             continue
@@ -344,6 +366,11 @@ def extrusion_move_metrics(commands, feature_context=None, feature_stats=None,
             return 0, None, None, 0, None, None, None
         if 'E' not in words:
             continue
+        if absolute_e and not e_reference_known:
+            # Do not manufacture deposition from an old extruder baseline.
+            # The strict comparator still compares every original T command.
+            return 0, None, None, 0, None, None, None
+        seen_e_reference = True
         requested_e = words['E'] * units
         delta = requested_e - e_position if absolute_e else requested_e
         e_position = requested_e if absolute_e else e_position + requested_e

@@ -13,6 +13,60 @@ class ComparatorTests(unittest.TestCase):
             return compare(first, second, **kwargs)
 
 
+
+    def test_absolute_e_tool_change_requires_explicit_g92_reanchor(self):
+        # Two identical files must not pass solely because a global absolute
+        # E register was silently carried across distinct physical tools.
+        ambiguous = ('G90\nM82\nT0\nG1 X10 E10\n'
+                     'T1\nG1 X20 E11\nG1 X30 E12\n')
+        report = self.run_compare(ambiguous, ambiguous, min_extrusion_moves=2)
+        self.assertFalse(report['match'], report)
+        self.assertEqual(report['mismatched_commands'], 0)
+        self.assertIsNone(report['native_counted_positive_e_mm'])
+        self.assertIn('unsupported or malformed stateful geometry',
+                      ' '.join(report['input_issues']))
+
+        explicit = ('G90\nM82\nT0\nG1 X10 E10\n'
+                    'T1\nG92 E0\nG1 X20 E1\n')
+        accepted = self.run_compare(explicit, explicit, min_extrusion_moves=2)
+        self.assertTrue(accepted['match'], accepted)
+        self.assertEqual(accepted['native_extrusion_moves'], 2)
+        self.assertEqual(accepted['native_counted_positive_e_mm'], '11')
+
+    def test_first_and_repeated_tool_selection_are_not_false_changes(self):
+        before_extrusion = ('G90\nM82\nT0\nG1 X10 E1\n'
+                            'T0\nG1 X20 E2\n')
+        report = self.run_compare(before_extrusion, before_extrusion,
+                                  min_extrusion_moves=2)
+        self.assertTrue(report['match'], report)
+
+        # First explicit selector AFTER extrusion may change the E register.
+        late_selector = 'M82\nG1 X10 E5\nT0\nG1 X20 E6\n'
+        self.assertFalse(self.run_compare(
+            late_selector, late_selector, min_extrusion_moves=2)['match'])
+
+    def test_relative_e_tool_switch_and_absolute_resume(self):
+        relative = ('M83\nT0\nG1 X10 E1\nT1\nG1 X20 E2\n')
+        allowed = self.run_compare(relative, relative, min_extrusion_moves=2)
+        self.assertTrue(allowed['match'], allowed)
+        self.assertEqual(allowed['native_counted_positive_e_mm'], '3')
+
+        # M82 after an unanchored tool change cannot reuse the previous E.
+        unknown = relative + 'M82\nG1 X30 E5\n'
+        self.assertFalse(self.run_compare(
+            unknown, unknown, min_extrusion_moves=3)['match'])
+        repaired = relative + 'M82\nG92 E0\nG1 X30 E1\n'
+        self.assertTrue(self.run_compare(
+            repaired, repaired, min_extrusion_moves=3)['match'])
+
+    def test_vendor_tool_selector_requires_reanchor_for_absolute_e(self):
+        vendor = 'M82\nG1 X10 E1\nT255\nG1 X20 E2\n'
+        self.assertFalse(self.run_compare(
+            vendor, vendor, min_extrusion_moves=2)['match'])
+        reanchored = 'M82\nG1 X10 E1\nT1000\nG92 E0\nG1 X20 E2\n'
+        self.assertTrue(self.run_compare(
+            reanchored, reanchored, min_extrusion_moves=2)['match'])
+
     def test_unsupported_stateful_words_fail_closed(self):
         # These lines have plausible XY/E words but contain unsupported axes,
         # extra arc revolutions, or vendor parameters. A matching G-code pair
