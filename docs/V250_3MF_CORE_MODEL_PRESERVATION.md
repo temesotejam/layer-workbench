@@ -939,3 +939,26 @@ without direct settings. The existing pinned native CLI workflow records the
 new observational report on its ephemeral official v2.5.0 export; its results
 must be reviewed separately before expanding any edit capability. The public
 site, WASM loader, engine binaries and machine execution are unchanged.
+
+## 2026-11-21: observational Part/Core numeric candidate drift across COW
+
+`scripts/compare_native_3mf_part_mesh_candidates.py` now compares the
+read-only Part/Core numeric-ID candidate inventory **before and after** a
+bounded 3MF Core edit. It records (per build item) newly absent direct
+object-settings entries, changed opaque Part descriptors, and unique numeric
+Part/mesh candidates that disappear or change their occurrence index.
+The official v2.5.0 CLI-derived two-edge COW test runs this diagnostic
+*after branch detachment and before private-vertex editing*. Synthetic
+adversarial unit tests cover unchanged inputs, missing settings after shared
+root cloning, a relabeled mesh with unchanged vendor Part ID, and unsupported
+changes to the mesh occurrence count.
+
+This is deliberately **read-only**. The comparator does not copy or rewrite
+`Metadata/model_settings.config`, assume `source_object_id` or
+`source_volume_id` is a Core resource ID, or treat numeric matches as semantic
+volume identity. The default command reports suspected drift without failing
+the native acceptance gate, because synthetic COW may intentionally introduce
+an unresolved mapping. `--fail-on-observed-drift` is an explicit optional
+fail-closed gate for callers that require a clean report. Unchanged numeric
+candidates still do **not** demonstrate native GUI metadata compatibility,
+Production UUID correctness, full 3MF fidelity, or printable G-code.

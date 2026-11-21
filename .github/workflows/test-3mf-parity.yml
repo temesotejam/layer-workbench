@@ -16,6 +16,8 @@ on:
       - "scripts/test_audit_native_3mf_metadata_object_refs.py"
       - "scripts/audit_native_3mf_part_mesh_context.py"
       - "scripts/test_audit_native_3mf_part_mesh_context.py"
+      - "scripts/compare_native_3mf_part_mesh_candidates.py"
+      - "scripts/test_compare_native_3mf_part_mesh_candidates.py"
       - "scripts/test_three_mf_instance_expansion.py"
       - "scripts/audit_3mf_scene.py"
       - "scripts/test_audit_3mf_scene.py"
@@ -43,6 +45,8 @@ on:
       - "scripts/test_audit_native_3mf_metadata_object_refs.py"
       - "scripts/audit_native_3mf_part_mesh_context.py"
       - "scripts/test_audit_native_3mf_part_mesh_context.py"
+      - "scripts/compare_native_3mf_part_mesh_candidates.py"
+      - "scripts/test_compare_native_3mf_part_mesh_candidates.py"
       - "scripts/compare_3mf_metadata.py"
       - "scripts/test_compare_3mf_metadata.py"
       - "docs/V250_3MF_ANCILLARY_PRESERVATION.md"
@@ -81,3 +85,4 @@ jobs:
           python3 -m py_compile scripts/audit_native_3mf_metadata_object_refs.py
           python3 -m unittest discover -s scripts -p test_audit_native_3mf_metadata_object_refs.py -v
           python3 -m unittest discover -s scripts -p test_audit_native_3mf_part_mesh_context.py -v
+          python3 -m unittest discover -s scripts -p test_compare_native_3mf_part_mesh_candidates.py -v
