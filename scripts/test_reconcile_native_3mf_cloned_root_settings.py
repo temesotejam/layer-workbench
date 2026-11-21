@@ -18,6 +18,7 @@ def native_fixture():
     parts[SETTINGS] = (
         b'<config><object id="1"><part id="101" subtype="normal_part">'
         b'<metadata key="name" value="SENSITIVE_PART_NAME"/>'
+        b'<metadata key="source_file" value="/private/provenance/sample.stl"/>'
         b'<metadata key="source_object_id" value="999"/>'
         b'<metadata key="source_volume_id" value="888"/>'
         b'</part><part id="102" subtype="normal_part">'
@@ -63,8 +64,10 @@ class BoundedCOWSettingsRemapTests(unittest.TestCase):
         with ZipFile(self.restored) as z:
             settings = z.read(SETTINGS)
         self.assertEqual(settings.count(b'SENSITIVE_PART_NAME'), 2)
+        self.assertEqual(settings.count(b'/private/provenance/sample.stl'), 2)
         self.assertEqual(settings.count(b'value="999"'), 2)
         self.assertNotIn('SENSITIVE_PART_NAME', str(info))
+        self.assertNotIn('/private/provenance/', str(info))
 
     def test_cross_model_part_numeric_collision_refuses(self):
         self.make(edge=0)
