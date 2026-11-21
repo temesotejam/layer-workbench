@@ -41,40 +41,41 @@ class BoundedCOWSettingsRemapTests(unittest.TestCase):
                 z.writestr(name, raw)
         clone_branched_root(self.original, self.core, edge_index=edge)
 
-    def test_one_private_leaf_part_id_remapped_without_touching_other_parts(self):
-        for edge in (0, 1):
-            with self.subTest(edge=edge):
-                self.make(edge=edge)
-                original_bytes, core_bytes = self.original.read_bytes(), self.core.read_bytes()
-                info = copy_bounded_root_settings(self.original, self.core, self.restored)
-                self.assertFalse(info["semantic_vendor_parity_proven"])
-                self.assertEqual(self.original.read_bytes(), original_bytes)
-                self.assertEqual(self.core.read_bytes(), core_bytes)
-                self.assertEqual({k for k in inventory(self.core)
-                                  if inventory(self.core)[k] != inventory(self.restored)[k]},
-                                 {SETTINGS})
-                metadata = inspect_metadata_refs(self.restored)
-                self.assertEqual(metadata["settings_object_ids"], ["1", "3"])
-                clone_parts = metadata["settings_part_inventory"]["3"]
-                original_parts = metadata["settings_part_inventory"]["1"]
-                self.assertEqual([p["id"] for p in original_parts], ["101", "102"])
-                changed = [p["id"] for p in clone_parts]
-                self.assertEqual(changed, ["103", "102"] if edge == 0 else ["101", "103"])
-                self.assertEqual([p["metadata_keys"] for p in clone_parts],
-                                 [p["metadata_keys"] for p in original_parts])
-                with ZipFile(self.restored) as z:
-                    settings = z.read(SETTINGS)
-                self.assertEqual(settings.count(b'SENSITIVE_PART_NAME'), 2)
-                self.assertEqual(settings.count(b'value="999"'), 2)
-                self.assertNotIn('SENSITIVE_PART_NAME', str(info))
-                self.restored.unlink()
-                self.core.unlink()
-                self.original.unlink()
+    def test_one_unique_private_leaf_part_id_remapped_without_touching_sibling(self):
+        # Clone edge 1: new Part 103 is unique. Cloning edge 0 instead
+        # makes a new leaf 102, colliding with the other model-part's ID.
+        self.make(edge=1)
+        original_bytes, core_bytes = self.original.read_bytes(), self.core.read_bytes()
+        info = copy_bounded_root_settings(self.original, self.core, self.restored)
+        self.assertFalse(info["semantic_vendor_parity_proven"])
+        self.assertEqual(self.original.read_bytes(), original_bytes)
+        self.assertEqual(self.core.read_bytes(), core_bytes)
+        before, after = inventory(self.core), inventory(self.restored)
+        self.assertEqual({key for key in before if before[key] != after[key]}, {SETTINGS})
+        metadata = inspect_metadata_refs(self.restored)
+        self.assertEqual(metadata["settings_object_ids"], ["1", "3"])
+        clone_parts = metadata["settings_part_inventory"]["3"]
+        original_parts = metadata["settings_part_inventory"]["1"]
+        self.assertEqual([p["id"] for p in original_parts], ["101", "102"])
+        self.assertEqual([p["id"] for p in clone_parts], ["101", "103"])
+        self.assertEqual([p["metadata_keys"] for p in clone_parts],
+                         [p["metadata_keys"] for p in original_parts])
+        with ZipFile(self.restored) as z:
+            settings = z.read(SETTINGS)
+        self.assertEqual(settings.count(b'SENSITIVE_PART_NAME'), 2)
+        self.assertEqual(settings.count(b'value="999"'), 2)
+        self.assertNotIn('SENSITIVE_PART_NAME', str(info))
+
+    def test_cross_model_part_numeric_collision_refuses(self):
+        self.make(edge=0)
+        with self.assertRaisesRegex(ValueError, "one unique private leaf ID"):
+            copy_bounded_root_settings(self.original, self.core, self.restored)
+        self.assertFalse(self.restored.exists())
 
     def test_opaque_vendor_metadata_refuses_without_output(self):
         parts = native_fixture()
         parts[SETTINGS] = parts[SETTINGS].replace(b'key="name"', b'key="custom_uuid"', 1)
-        self.make(parts)
+        self.make(parts, edge=1)
         with self.assertRaisesRegex(ValueError, "Unknown vendor metadata"):
             copy_bounded_root_settings(self.original, self.core, self.restored)
         self.assertFalse(self.restored.exists())
@@ -83,7 +84,7 @@ class BoundedCOWSettingsRemapTests(unittest.TestCase):
         parts = native_fixture()
         parts[SETTINGS] = parts[SETTINGS].replace(b'<part id="101"', b'<part id="999"')
         self.make(parts)
-        with self.assertRaisesRegex(ValueError, "one-to-one"):
+        with self.assertRaisesRegex(ValueError, "root clone"):
             copy_bounded_root_settings(self.original, self.core, self.restored)
         self.assertFalse(self.restored.exists())
 
@@ -95,10 +96,15 @@ class BoundedCOWSettingsRemapTests(unittest.TestCase):
         self.assertEqual(before, self.original.read_bytes())
 
     def test_candidate_must_be_unchanged_vendor_settings(self):
-        self.make()
-        # A no-op baseline is not a COW root clone and must not be accepted.
+        self.make(edge=1)
+        with ZipFile(self.core) as original:
+            parts = {name: original.read(name) for name in original.namelist()}
+        parts[SETTINGS] = parts[SETTINGS].replace(b'888', b'777')
+        with ZipFile(self.core, "w") as rewritten:
+            for name, raw in parts.items():
+                rewritten.writestr(name, raw)
         with self.assertRaisesRegex(ValueError, "root clone"):
-            copy_bounded_root_settings(self.original, self.original, self.restored)
+            copy_bounded_root_settings(self.original, self.core, self.restored)
         self.assertFalse(self.restored.exists())
 
 
