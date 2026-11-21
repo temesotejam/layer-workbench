@@ -733,3 +733,29 @@ semantics, native-vs-WASM G-code agreement or physical print safety.
 
 Native CLI acceptance status must be read from the associated Actions run;
 passing the Python unit tests alone does not satisfy the native gate.
+
+## 2026-11-21: edited private mesh after distinct-shape branched COW
+
+The new offline-only `scripts/scale_native_3mf_branched_private_leaf.py`
+provides a bounded follow-up to the previous native-derived branch fixture:
+after detaching **one** of the two external leaves under build item 1, it
+scales the selected *private* mesh's vertex coordinates on one axis. This
+separates the geometry of the selected occurrence from both build 0 and the
+other branch of build 1, while preserving all three unselected occurrences.
+
+The writer explicitly requires two build items, two direct external leaf
+occurrences per build, a non-shared selected mesh object, and a safe numeric
+factor in 0.5..1.5. It rejects unsupported graphs, ambiguous XML, shared
+ownership, invalid axes/factors, and existing output destinations. It changes
+only the selected external model-part's target mesh vertex attributes,
+preserving every other decompressed ZIP member and all Core XML outside the
+selected object block. The independent Core geometry inventory checks all
+four instances after the change; the source file remains untouched.
+
+The native v2.5.0 CLI workflow additionally reopens the **synthetic**
+distinct-shape fixture *after both branch detachment and private Y-vertex
+scaling*, exporting STLs without auto-arrangement and comparing four
+12-triangle instance bounds with an independent Core expansion. This gate
+does not establish complete GUI-authored 3MF interoperability, full opaque
+metadata semantics, arbitrary DAG editing, WASM/native G-code equality or
+printer safety. Check the PR and main GitHub Actions for actual gate results.

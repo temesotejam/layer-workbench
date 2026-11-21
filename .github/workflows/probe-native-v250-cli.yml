@@ -26,6 +26,8 @@ on:
       - "scripts/make_native_3mf_distinct_branch_fixture.py"
       - "scripts/test_make_native_3mf_distinct_branch_fixture.py"
       - "scripts/test_make_native_3mf_distinct_shape_fixture.py"
+      - "scripts/scale_native_3mf_branched_private_leaf.py"
+      - "scripts/test_scale_native_3mf_branched_private_leaf.py"
       - "scripts/make_native_3mf_distinct_shape_fixture.py"
       - "scripts/scale_native_3mf_private_leaf.py"
       - "scripts/test_scale_native_3mf_private_leaf.py"
@@ -96,6 +98,8 @@ on:
       - "scripts/make_native_3mf_distinct_branch_fixture.py"
       - "scripts/test_make_native_3mf_distinct_branch_fixture.py"
       - "scripts/test_make_native_3mf_distinct_shape_fixture.py"
+      - "scripts/scale_native_3mf_branched_private_leaf.py"
+      - "scripts/test_scale_native_3mf_branched_private_leaf.py"
       - "scripts/make_native_3mf_distinct_shape_fixture.py"
       - "scripts/scale_native_3mf_private_leaf.py"
       - "scripts/test_scale_native_3mf_private_leaf.py"
@@ -195,6 +199,9 @@ jobs:
 
       - name: Unit-test one private Core mesh vertex edit offline
         run: python3 -m unittest discover -s scripts -p test_scale_native_3mf_private_leaf.py -v
+
+      - name: Unit-test branched private Core leaf vertex edit offline
+        run: python3 -m unittest discover -s scripts -p test_scale_native_3mf_branched_private_leaf.py -v
 
       - name: Unit-test expanded native 3MF instance edit effects offline
         run: python3 -m unittest discover -s scripts -p test_verify_native_3mf_edit_effect.py -v
@@ -1702,10 +1709,16 @@ jobs:
             --input native-cli-output/branched-distinct-shape-source.3mf \
             --output native-cli-output/branched-distinct-shape-private.3mf \
             --edge-index 1 --report native-cli-output/distinct-branch-cow.log
+          # After Copy-on-Write, edit only build item 1's newly private
+          # second leaf; all other three occurrences and metadata must remain.
+          python3 scripts/scale_native_3mf_branched_private_leaf.py \
+            --input native-cli-output/branched-distinct-shape-private.3mf \
+            --output native-cli-output/branched-distinct-shape-private-scaled.3mf \
+            --edge-index 1 --axis y --factor 1.1
           app="$RUNNER_TEMP/OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.5.0.AppImage"
           mkdir -p native-cli-output/branched-distinct-stl
           timeout 180s env APPIMAGE_EXTRACT_AND_RUN=1 "$app" \
-            native-cli-output/branched-distinct-shape-private.3mf \
+            native-cli-output/branched-distinct-shape-private-scaled.3mf \
             --arrange 0 --export-stl \
             --outputdir native-cli-output/branched-distinct-stl \
             > native-cli-output/branched-distinct-reopen.log 2>&1 || {
@@ -1719,7 +1732,7 @@ jobs:
           sys.path.insert(0, "scripts")
           from audit_native_3mf_instance_placement import inspect_placements
           from verify_native_exported_stl import read_triangles
-          target = Path("native-cli-output/branched-distinct-shape-private.3mf")
+          target = Path("native-cli-output/branched-distinct-shape-private-scaled.3mf")
           instances = inspect_placements(target)["mesh_instances"]
           paths = [o["mesh_part"] for o in instances]
           if (len(instances) != 4 or paths[0] == paths[1] or
@@ -1755,7 +1768,7 @@ jobs:
               if any(not math.isfinite(v) or abs(v-w) > eps
                      for v, w in zip(actual, box)):
                   raise SystemExit(f"Native distinct branch {i} mismatch: {actual} vs {box}")
-          print("PASS: pinned official v2.5.0 reopened four synthetic different-shaped branch occurrences")
+          print("PASS: native v2.5.0 reopened post-COW private Y-edited branch with four valid occurrences")
           PY
 
       - name: Archive text diagnostics without redistributing the AppImage
