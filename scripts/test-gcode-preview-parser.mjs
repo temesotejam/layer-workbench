@@ -397,3 +397,51 @@ assert.equal(arcAfterHome.renderedArcs,0);
 assert.equal(arcAfterHome.skippedArcs,1);
 assert.deepEqual(arcAfterHome.layers[0].segments.map(s=>[s.x1,s.x2]),[[10,20]]);
 console.log("PASS: G28 origin uncertainty avoids phantom paths until absolute XYZ/G92 re-anchoring");
+
+
+// G53 can command an unobserved machine-coordinate move, and G54/G59.3
+// switch to an offset workspace. Neither is a trustworthy continuation
+// from the previous work-coordinate point in this read-only preview.
+const g53MachineMove=parseGcodeToolpaths([
+  "G90","M82","G1 X100 Y0 Z0.2 E1",
+  "G53 G0 X250 Y0 Z5","G1 X10 Y0 Z0.2 E2","G1 X20 E3"
+].join("\n"));
+assert.equal(g53MachineMove.skippedWorkspaceCommands,1);
+assert.equal(g53MachineMove.skippedUnlocatedMotions,1);
+assert.deepEqual(g53MachineMove.layers[0].segments.map(s=>[s.x1,s.x2]),
+  [[0,100],[10,20]],"G53 machine move must not draw an old-to-new path");
+
+const workspaceSwitch=parseGcodeToolpaths([
+  "G90","M82","G1 X60 Y2 Z0.2 E1",
+  "G54","G1 X10 Y0 Z0.2 E2","G1 X20 E3",
+  "G59.3","G92 X0 Y0 Z0.2","G1 X5 E4"
+].join("\n"));
+assert.equal(workspaceSwitch.skippedWorkspaceCommands,2);
+assert.equal(workspaceSwitch.skippedUnlocatedMotions,1);
+assert.deepEqual(workspaceSwitch.layers[0].segments.map(s=>[s.x1,s.x2]),
+  [[0,60],[10,20],[0,5]]);
+const standaloneG53=parseGcodeToolpaths(
+  "G90\nG1 X80 Y0 Z0.2\nG53\nG1 X10 Y0 Z0.2\nG1 X20");
+assert.equal(standaloneG53.skippedWorkspaceCommands,1);
+assert.deepEqual(standaloneG53.layers[0].segments.map(s=>[s.x1,s.x2]),
+  [[0,80],[10,20]]);
+
+// If the skipped machine-space command may also modify E, don't infer an
+// extrusion/travel label from an invalid modal E delta. Re-anchor on the
+// first absolute E (without drawing its uncertain stroke), or via G92 E.
+const machineExtruder=parseGcodeToolpaths([
+  "G90","M82","G1 X20 Y0 Z0.2 E1",
+  "G53 G1 X100 Y0 E5","G92 X0 Y0 Z0.2",
+  "G1 X10 E6","G1 X20 E7"
+].join("\n"));
+assert.equal(machineExtruder.skippedWorkspaceCommands,1);
+assert.equal(machineExtruder.skippedUnlocatedMotions,1);
+assert.deepEqual(machineExtruder.layers[0].segments.map(s=>[s.x1,s.x2]),
+  [[0,20],[10,20]]);
+assert.equal(machineExtruder.layers[0].segments.at(-1).extrusion,true);
+const machineExtruderG92=parseGcodeToolpaths(
+  "G90\nM82\nG1 X20 Y0 Z0.2 E1\nG53 G1 X100 E5\nG92 X0 Y0 Z0.2 E5\nG1 X10 E6");
+assert.equal(machineExtruderG92.skippedUnlocatedMotions,0);
+assert.deepEqual(machineExtruderG92.layers[0].segments.map(s=>[s.x1,s.x2]),
+  [[0,20],[0,10]]);
+console.log("PASS: G53 and G54-G59.3 invalidate unknown work/machine coordinates; optional E re-anchoring is conservative");
