@@ -984,3 +984,32 @@ reported, but not promoted into a failed CLI acceptance gate. This strict
 byte criterion detects otherwise invisible modifications but does not prove
 semantic Part-to-volume correspondence, valid settings inheritance, GUI project
 round-trip, native/WASM G-code equality, or real-world print safety.
+
+## 2026-11-22: bounded experimental cloned-root Part settings remap
+
+`reconcile_native_3mf_cloned_root_settings.py` is the first **opt-in writer**
+for a narrowly recognized native Core Copy-on-Write metadata case. Unlike the
+previous read-only numeric-candidate audits, this tool accepts an original
+3MF and a separate, already-cloned Core candidate, and creates a third 3MF
+with a new direct `model_settings.config` object entry for the private root.
+It remaps exactly one distinct leaf Part ID to the private Core leaf ID while
+leaving other Part IDs, vendor metadata bytes, original entries, geometry and
+all non-settings ZIP members unchanged. The two input archives are not edited.
+
+To avoid promoting numeric coincidence to a general Part/volume mapping, the
+writer **refuses** anything outside the two-build, shared-root, two-distinct-
+leaf synthetic topology, including changed geometry/placements, a candidate
+with altered settings, non-one-to-one Part/Core numeric IDs, multiple changed
+leaves, unrecognized metadata keys/subtypes/attributes, unsafe XML markup,
+or ambiguous source object boundaries. Known `source_object_id` and
+`source_volume_id` values are left unchanged as provenance indices, not
+mistaken for Core references. Test-only fixtures include private-valued
+metadata to verify it never appears in the diagnostic JSON.
+
+This is an **offline experimental Core fixture repair**, not a certified
+native OrcaSlicer v2.5.0 model-settings serializer. Correct vendor per-Part
+semantics, new Production UUID references, GUI-saved 3MF import, broader
+object-level settings, full-profile G-code parity, and print safety are not
+established by the bounded tests. Until an independent official v2.5.0 CLI
+import/export confirms the rewritten fixture, do not enable this writer on
+published Pages, arbitrary user projects or machine-ready slicing.
