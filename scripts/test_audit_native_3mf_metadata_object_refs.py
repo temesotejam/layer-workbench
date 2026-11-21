@@ -78,6 +78,30 @@ class MetadataObjectReferencesTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'duplicate'):
             inspect_metadata_refs(self.a)
 
+    def test_integer_id_lexical_aliases_match_across_parts(self):
+        # Core build, Core resources and vendor settings may spell the same
+        # positive integer with different leading zeros.
+        model = MODEL.replace(b'<object id="1"/>', b'<object id="001"/>')
+        model = model.replace(b'objectid="1"', b'objectid="0001"')
+        config = CONFIG.replace(b'<object id="1">', b'<object id="01">')
+        self.put(self.a, model=model, config=config)
+        info = inspect_metadata_refs(self.a)
+        self.assertEqual(info['main_object_ids'], ['1', '2'])
+        self.assertEqual(info['build_object_ids'], ['1', '1'])
+        self.assertEqual(info['settings_object_ids'], ['1', '2'])
+        self.assertFalse(info['local_build_roots_without_object_settings'])
+
+    def test_leading_zero_numeric_aliases_cannot_bypass_duplicate_check(self):
+        duplicate_config = b'<config><object id="1"/><object id="01"/></config>'
+        self.put(self.a, config=duplicate_config)
+        with self.assertRaisesRegex(ValueError, 'Duplicate native'):
+            inspect_metadata_refs(self.a)
+        self.a.unlink()
+        duplicate_core = MODEL.replace(b'<object id="2"/>', b'<object id="01"/>')
+        self.put(self.a, model=duplicate_core)
+        with self.assertRaisesRegex(ValueError, 'Duplicate main'):
+            inspect_metadata_refs(self.a)
+
     def test_baseline_metadata_ids_cannot_be_silently_rewritten(self):
         self.put(self.a)
         self.put(self.b, config=b'<config><object id="2"/></config>')

@@ -35,7 +35,9 @@ def _id(value, label):
     if (not isinstance(value, str) or not value or not value.isascii() or
             not value.isdecimal() or not 1 <= int(value) <= MAX_ID):
         raise ValueError("Invalid numeric object ID in " + label)
-    return value
+    # XML positive integer lexical forms can differ ("01" vs "1").
+    # Compare canonical IDs so aliases cannot evade duplicate/reference checks.
+    return str(int(value))
 
 
 def _read_parts(path):

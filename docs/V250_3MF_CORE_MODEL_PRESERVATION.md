@@ -787,3 +787,27 @@ settings, plate membership, part-ID mapping, Production UUID references,
 compatibility with GUI-authored projects, or real printer safety. A native
 CLI-exported sample must still be inspected separately before broadening any
 writer's accepted layout.
+
+## 2026-11-21: native CLI-produced model-settings ID reference probe
+
+The official pinned OrcaSlicer v2.5.0 CLI verification workflow now runs the
+read-only `audit_native_3mf_metadata_object_refs.py` against the actual
+CLI-exported full-preset 3MF, rather than using only hand-authored XML
+fixtures. It also compares that CLI project to the bounded *leaf-only*
+Copy-on-Write output, with `--fail-on-unmapped-root`. It records JSON
+inventories inside the ephemeral workflow run; no upstream vendor file or
+binary is committed or published by the feature.
+
+The auditor normalizes positive decimal IDs (e.g. `01` and `1` both
+identify object 1), so lexical aliases can neither produce false missing
+references nor evade duplicate-ID rejection. Synthetic tests cover both
+cases, with the same fail-closed XML/member validation as before.
+
+**Acceptance depends on the GitHub Actions result** for the changed workflow;
+a green offline test alone does not establish native acceptance. Even when
+the direct-ID comparison passes, a leaf-only copy does not change the main
+build root. This narrow check therefore cannot establish preservation of
+`part` IDs, copied Production UUID references, plate/instance assignments,
+external mesh-specific metadata, native-vs-WASM G-code parity or GUI-saved
+project semantics. Any *root* remap with source object settings but no
+candidate mapping must still be refused.
