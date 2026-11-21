@@ -907,3 +907,35 @@ observations for the ephemeral full-profile 3MF it exports. Actual runtime
 results must be checked in the related Actions run: a PASS validates that
 the script executed on the bounded test input, not semantic project parity.
 The published browser app and WASM assets are unchanged.
+
+## 2026-11-21: numeric Part/Core mesh leaf ID candidate audit
+
+The read-only Part/Core context checker now compares each native
+`<config><object><part id>` numeric label with the actual Core leaf mesh
+`object id` labels expanded for the same build item, **including the external
+model-part path when detecting repeated occurrences**. Leading-zero numeric
+spellings are canonicalized for matching. An ID seen in multiple leaf
+occurrences, a duplicated Part ID, zero/non-numeric ID, or an unmatched
+numeric ID cannot produce a unique candidate. For each part the report
+records only a status and candidate *occurrence indices* (no vendor metadata
+values), plus an explicitly tentative whole-build one-to-one flag. Missing
+native settings return null, not a false empty mapping.
+
+Source review: pinned upstream
+[`src/libslic3r/Format/bbs_3mf.cpp`](https://github.com/OrcaSlicer/OrcaSlicer/blob/40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19/src/libslic3r/Format/bbs_3mf.cpp)
+serializes Part `id` from the saved volume resource ID and reads Part IDs as
+`subobject_id` when selecting a generated volume. Conversely,
+`source_object_id` and `source_volume_id` are stored in
+`volume->source.object_idx` and `volume->source.volume_idx`: **source
+provenance indices, not 3MF Core resource IDs**. Neither numeric label
+agreement nor upstream source inspection proves that all native GUI-saved
+3MF project settings, UUIDs, nested multi-part structures, or transformed
+volume instances map correctly. No vendor Part settings are copied.
+
+Synthetic regression cases exercise one-to-one candidate labels with distinct
+external meshes, repeated Core mesh occurrences, duplicate Part IDs with
+different lexical spellings, unrelated provenance indices, and a COW root
+without direct settings. The existing pinned native CLI workflow records the
+new observational report on its ephemeral official v2.5.0 export; its results
+must be reviewed separately before expanding any edit capability. The public
+site, WASM loader, engine binaries and machine execution are unchanged.
