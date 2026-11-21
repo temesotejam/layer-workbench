@@ -76,9 +76,11 @@ class NativeDistinctBranchFixtureTests(unittest.TestCase):
         self.assertTrue(report["synthetic_second_mesh"])
         self.assertEqual(report["changed_members"],
                          [MAIN, "3D/Objects/second.model"])
+        instances = inspect_placements(self.output)["mesh_instances"]
         self.assertEqual(
-            [row["mesh_part"] for row in inspect_placements(self.output)["mesh_instances"]],
+            [row["mesh_part"] for row in instances],
             ["3D/Objects/first.model", "3D/Objects/second.model"] * 2)
+        self.assertNotEqual(instances[0]["mesh_objectid"], instances[1]["mesh_objectid"])
         with ZipFile(self.official) as original:
             self.assertEqual(original.read("3D/Objects/second.model"), empty)
         clone_branched_root(self.output, self.clone, edge_index=1)

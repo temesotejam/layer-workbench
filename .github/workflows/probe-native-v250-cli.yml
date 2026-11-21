@@ -25,6 +25,8 @@ on:
       - "scripts/test_clone_native_3mf_branched_root.py"
       - "scripts/make_native_3mf_distinct_branch_fixture.py"
       - "scripts/test_make_native_3mf_distinct_branch_fixture.py"
+      - "scripts/test_make_native_3mf_distinct_shape_fixture.py"
+      - "scripts/make_native_3mf_distinct_shape_fixture.py"
       - "scripts/scale_native_3mf_private_leaf.py"
       - "scripts/test_scale_native_3mf_private_leaf.py"
       - "scripts/test_audit_native_3mf_instance_placement.py"
@@ -93,6 +95,8 @@ on:
       - "scripts/test_clone_native_3mf_branched_root.py"
       - "scripts/make_native_3mf_distinct_branch_fixture.py"
       - "scripts/test_make_native_3mf_distinct_branch_fixture.py"
+      - "scripts/test_make_native_3mf_distinct_shape_fixture.py"
+      - "scripts/make_native_3mf_distinct_shape_fixture.py"
       - "scripts/scale_native_3mf_private_leaf.py"
       - "scripts/test_scale_native_3mf_private_leaf.py"
       - "scripts/test_audit_native_3mf_instance_placement.py"
@@ -1683,18 +1687,25 @@ jobs:
           # No metadata or externally referenced mesh bytes are edited.
           python3 -m unittest discover -s scripts \
             -p test_make_native_3mf_distinct_branch_fixture.py -v
+          python3 -m unittest discover -s scripts \
+            -p test_make_native_3mf_distinct_shape_fixture.py -v
           python3 scripts/make_native_3mf_distinct_branch_fixture.py \
             --official native-cli-output/native-v250-project.3mf \
             --shared native-cli-output/shared-root-branched-source.3mf \
             --output native-cli-output/branched-distinct-source.3mf
-          python3 scripts/clone_native_3mf_branched_root.py \
+          # Modify only the second external mesh, before detaching an occurrence.
+          # Synthetic diagnostic shape: not the untouched official native output.
+          python3 scripts/make_native_3mf_distinct_shape_fixture.py \
             --input native-cli-output/branched-distinct-source.3mf \
-            --output native-cli-output/branched-distinct-private.3mf \
+            --output native-cli-output/branched-distinct-shape-source.3mf
+          python3 scripts/clone_native_3mf_branched_root.py \
+            --input native-cli-output/branched-distinct-shape-source.3mf \
+            --output native-cli-output/branched-distinct-shape-private.3mf \
             --edge-index 1 --report native-cli-output/distinct-branch-cow.log
           app="$RUNNER_TEMP/OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.5.0.AppImage"
           mkdir -p native-cli-output/branched-distinct-stl
           timeout 180s env APPIMAGE_EXTRACT_AND_RUN=1 "$app" \
-            native-cli-output/branched-distinct-private.3mf \
+            native-cli-output/branched-distinct-shape-private.3mf \
             --arrange 0 --export-stl \
             --outputdir native-cli-output/branched-distinct-stl \
             > native-cli-output/branched-distinct-reopen.log 2>&1 || {
@@ -1708,7 +1719,7 @@ jobs:
           sys.path.insert(0, "scripts")
           from audit_native_3mf_instance_placement import inspect_placements
           from verify_native_exported_stl import read_triangles
-          target = Path("native-cli-output/branched-distinct-private.3mf")
+          target = Path("native-cli-output/branched-distinct-shape-private.3mf")
           instances = inspect_placements(target)["mesh_instances"]
           paths = [o["mesh_part"] for o in instances]
           if (len(instances) != 4 or paths[0] == paths[1] or
@@ -1716,6 +1727,10 @@ jobs:
                   any(o["triangle_count"] != 12 for o in instances)):
               raise SystemExit("Expected distinct native leaf parts in four 12-facet occurrences")
           bounds = [o["world_bounds_mm"] for o in instances]
+          # Distinct ZIP paths alone are not evidence of different geometry.
+          widths = [box[3] - box[2] for box in bounds]
+          if abs(widths[1] - widths[0]) < 0.5 or abs(widths[3] - widths[2]) < 0.5:
+              raise SystemExit("Different external mesh leaves still have indistinguishable Y extent")
           stls = list(Path("native-cli-output/branched-distinct-stl").rglob("*.stl"))
           if not 1 <= len(stls) <= 4:
               raise SystemExit(f"Unexpected native STL file count: {len(stls)}")
@@ -1740,7 +1755,7 @@ jobs:
               if any(not math.isfinite(v) or abs(v-w) > eps
                      for v, w in zip(actual, box)):
                   raise SystemExit(f"Native distinct branch {i} mismatch: {actual} vs {box}")
-          print("PASS: pinned official v2.5.0 reopened four distinct-leaf branch occurrences")
+          print("PASS: pinned official v2.5.0 reopened four synthetic different-shaped branch occurrences")
           PY
 
       - name: Archive text diagnostics without redistributing the AppImage
