@@ -1,4 +1,6 @@
 """Offline evidence gates for numeric Part/Core candidate drift; no 3MF rewrite."""
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -41,6 +43,7 @@ class NativePartCandidateDriftTests(unittest.TestCase):
         self.assertEqual(report["status"], "no_observed_numeric_candidate_drift")
         self.assertEqual(report["lost_unique_numeric_candidates"], 0)
         self.assertEqual(report["new_direct_object_settings_gaps"], 0)
+        self.assertTrue(report["model_settings_bytes_unchanged"])
         self.assertFalse(report["semantic_part_to_volume_identity_proven"])
         self.assertNotIn("value=", str(report))
 
@@ -55,6 +58,7 @@ class NativePartCandidateDriftTests(unittest.TestCase):
         clone_branched_root(self.original, self.changed, edge_index=0)
         report = compare_candidate_contexts(self.original, self.changed)
         self.assertEqual(report["new_direct_object_settings_gaps"], 1)
+        self.assertTrue(report["model_settings_bytes_unchanged"])
         self.assertEqual(report["status"], "review_numeric_or_settings_drift")
         self.assertEqual([r["object_settings_entry_missing_after_edit"] for r
                           in report["build_context_changes"]], [False, True])
@@ -82,6 +86,47 @@ class NativePartCandidateDriftTests(unittest.TestCase):
             self.assertEqual(row["lost_unique_numeric_part_id_candidates"][0]
                              ["current_numeric_candidate_status"],
                              "no_numeric_core_id_candidate")
+
+    def test_vendor_value_only_change_is_visible_without_exposing_values(self):
+        parts = self.distinct_parts()
+        parts[SETTINGS] = parts[SETTINGS].replace(
+            b'<part id="101" subtype="normal_part"/>',
+            b'<part id="101" subtype="normal_part">'
+            b'<metadata key="name" value="SECRET_BEFORE"/></part>', 1)
+        self.write(self.original, parts)
+        modified = dict(parts)
+        modified[SETTINGS] = parts[SETTINGS].replace(
+            b"SECRET_BEFORE", b"SECRET_AFTER")
+        self.write(self.changed, modified)
+        report = compare_candidate_contexts(self.original, self.changed)
+        self.assertFalse(report["model_settings_bytes_unchanged"])
+        self.assertEqual(report["lost_unique_numeric_candidates"], 0)
+        self.assertEqual(report["new_direct_object_settings_gaps"], 0)
+        self.assertEqual(report["changed_vendor_part_inventories"], 0)
+        self.assertEqual(report["status"], "review_numeric_or_settings_drift")
+        self.assertNotIn("SECRET_", str(report))
+
+        command = [sys.executable,
+                   str(Path(__file__).with_name(
+                       "compare_native_3mf_part_mesh_candidates.py")),
+                   "--baseline", str(self.original),
+                   "--candidate", str(self.changed),
+                   "--fail-on-observed-drift"]
+        checked = subprocess.run(command, capture_output=True, text=True,
+                                 check=False)
+        self.assertEqual(checked.returncode, 2)
+        self.assertIn("manual review", checked.stderr)
+
+    def test_whitespace_only_settings_change_is_conservatively_reported(self):
+        parts = self.distinct_parts()
+        self.write(self.original, parts)
+        modified = dict(parts)
+        modified[SETTINGS] = parts[SETTINGS] + b"\\n"
+        self.write(self.changed, modified)
+        report = compare_candidate_contexts(self.original, self.changed)
+        self.assertFalse(report["model_settings_bytes_unchanged"])
+        self.assertEqual(report["changed_vendor_part_inventories"], 0)
+        self.assertEqual(report["status"], "review_numeric_or_settings_drift")
 
     def test_mismatched_core_occurrence_count_refused(self):
         parts = self.distinct_parts()
