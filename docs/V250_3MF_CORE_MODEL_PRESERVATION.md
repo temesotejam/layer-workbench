@@ -1026,8 +1026,9 @@ all other unknown metadata keys continue to fail closed.
 The official-native CLI workflow creates a deliberately synthetic two-Part
 shared-root fixture from the **two separately stored Part descriptors** in
 the pinned v2.5.0 CLI-generated package. It omits unrelated config-root
-records (e.g. plate/vendor settings), which the bounded writer does not
-support, while retaining both CLI-derived object/Part descriptors. It assigns
+records (e.g. plate/vendor settings) and object-level identity attributes,
+which the bounded writer intentionally refuses, while retaining actual
+CLI-derived Part metadata values. It assigns
 the second descriptor to
 the distinct second Core mesh ID, performs the already-bounded Core COW and
 Part settings copy, and then invokes the pinned official AppImage with
