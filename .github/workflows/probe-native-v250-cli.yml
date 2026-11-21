@@ -1864,7 +1864,15 @@ jobs:
               raise SystemExit("Expected two distinct external mesh IDs")
           root_id = refs["build_object_ids"][0]
           with ZipFile(original) as archive:
-              config = ET.fromstring(archive.read(SETTINGS))
+              native_config = ET.fromstring(archive.read(SETTINGS))
+              objects = native_config.findall("object")
+              # This bounded serializer explicitly rejects non-object
+              # config-root records. Keep ONLY the two actual native Part
+              # descriptors in a fresh synthetic config; plate/vendor root
+              # records are not inferred, rewritten, or claimed preserved.
+              config = ET.Element("config")
+              for original_object in objects:
+                  config.append(copy.deepcopy(original_object))
               objects = config.findall("object")
               root = [o for o in objects if o.get("id") == root_id]
               others = [o for o in objects if o.get("id") != root_id]
