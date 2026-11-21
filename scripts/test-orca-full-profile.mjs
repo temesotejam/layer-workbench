@@ -31,4 +31,20 @@ assert.throws(()=>resolveFullOrcaProfileFamily([{type:"machine",name:"bad",nozzl
 assert.throws(()=>inspectOrcaNozzleVector(resolveFullOrcaProfileFamily([{type:"machine",name:"bad",nozzle_diameter:["0.4","oops"]}],"machine","bad")),/Invalid native nozzle/);
 assert.throws(()=>inspectOrcaNozzleVector(resolveFullOrcaProfileFamily([{type:"machine",name:"bad",nozzle_diameter:"0.4"}],"machine","bad")),/vector/);
 assert.throws(()=>resolveFullOrcaProfileFamily([{type:"machine",name:"long",note:"x".repeat(1048577)}],"machine","long"),/size limit/);
+// Imported profile limits are UTF-8 JSON byte limits, not JavaScript UTF-16
+// string lengths. A multibyte profile note must not bypass the 1 MiB cap.
+const withinUtf8Limit=resolveFullOrcaProfileFamily(
+  [{type:"machine",name:"utf8-within",note:"あ".repeat(340_000)}],
+  "machine","utf8-within");
+assert.equal(withinUtf8Limit.settings.note.length,340_000);
+for (const oversizedText of ["あ".repeat(350_000),"😀".repeat(270_000)]) {
+  // Neither record reaches one million JS code units; both exceed
+  // 1 MiB when encoded as actual UTF-8 JSON input.
+  assert.ok(JSON.stringify({type:"machine",name:"utf8-over",note:oversizedText}).length<1_048_576);
+  assert.throws(
+    ()=>resolveFullOrcaProfileFamily(
+      [{type:"machine",name:"utf8-over",note:oversizedText}],
+      "machine","utf8-over"),/size limit/);
+}
+console.log("PASS: UTF-8 byte bound for multilingual full-profile records");
 console.log("PASS: full Orca option inheritance, four-nozzle vector, provenance and fail-closed safety");
