@@ -857,3 +857,27 @@ audit step uses the same updated script on official v2.5.0 CLI-generated
 3MF, provided the workflow run succeeds. Full GUI-authored native 3MF
 compatibility remains unproven.
 
+
+
+## 2026-11-21: read-only vendor Part structure drift diagnostics
+
+The native CLI 3MF metadata reference audit now compares the ordered
+`<part>` descriptors inside each direct `Metadata/model_settings.config`
+`<object id>` record. A `part_structure_changes` entry reports the containing
+object ID and the before/after Part ID spelling, subtype and metadata **key
+names**. The Part IDs are opaque: neither equality to Core resource IDs nor
+uniqueness/canonical spelling is assumed. Metadata **values** are never
+included in the report. This makes structure changes visible separately
+from the already existing SHA-256 check of the entire settings member.
+
+A change to an existing metadata value with the same keys still leaves
+`part_structure_changes` empty, but changes
+`model_settings_bytes_unchanged` to false. The existing
+`--fail-on-settings-change` gate remains the strict opt-in refusal for any
+settings byte drift, while direct new-root mapping risks retain priority in
+the diagnostic status. Neither a blank structure diff nor unchanged bytes
+certifies Part ID-to-mesh correspondence, vendor metadata semantics, GUI 3MF
+interchange, WASM/native toolpath equivalence, or real printer safety.
+The new offline tests exercise identifier spelling, subtype/key drift,
+value-only drift and a root redirect with unchanged settings. The existing
+native v2.5.0 CLI workflow invokes the same auditor.
