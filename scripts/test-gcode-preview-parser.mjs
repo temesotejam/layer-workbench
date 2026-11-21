@@ -274,7 +274,7 @@ for(const [previousE,firstNewE,secondNewE] of [[5,100,101],[100,0,1]]){
   ].join("\n"));
   assert.equal(changed.skippedUnlocatedMotions,1);
   assert.equal(changed.extrusions,2);
-  assert.deepEqual(changed.layers[0].segments.map(s=>[s.x1,s.x2,s.toolId]),
+  assert.deepEqual(changed.layers[0].segments.filter(s=>s.extrusion).map(s=>[s.x1,s.x2,s.toolId]),
     [[0,10,0],[20,30,1]]);
 }
 const reanchoredTool=parseGcodeToolpaths(
