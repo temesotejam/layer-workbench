@@ -1,0 +1,89 @@
+"""Offline tests for official-derived distinct 3MF branch construction."""
+from pathlib import Path
+import tempfile
+import unittest
+from zipfile import ZipFile
+
+from audit_native_3mf_instance_placement import inspect_placements
+from clone_native_3mf_branched_root import clone_branched_root
+from compare_3mf_metadata import inventory
+from make_native_3mf_distinct_branch_fixture import make_distinct_branch_fixture
+from test_audit_native_3mf_instance_placement import geometry_parts
+from test_clone_native_3mf_branched_root import branched_parts
+from test_clone_native_3mf_shared_root_chain import shared_root_parts
+
+MAIN = "3D/3dmodel.model"
+
+
+class NativeDistinctBranchFixtureTests(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        root = Path(temp.name)
+        self.official = root / "official.3mf"
+        self.shared = root / "shared.3mf"
+        self.output = root / "distinct.3mf"
+        self.clone = root / "clone.3mf"
+
+    def write(self, path, parts):
+        with ZipFile(path, "w") as archive:
+            archive.comment = b"test native package comment"
+            for name, data in parts.items():
+                archive.writestr(name, data)
+
+    def test_distinct_edge_retains_all_other_payloads_and_can_detach(self):
+        self.write(self.official, geometry_parts())
+        self.write(self.shared, branched_parts())
+        before_bytes = self.shared.read_bytes()
+        report = make_distinct_branch_fixture(
+            self.official, self.shared, self.output)
+        self.assertEqual(report["instances"], 4)
+        self.assertNotEqual(report["first_part"], report["second_part"])
+        self.assertEqual(self.shared.read_bytes(), before_bytes)
+        a, b = inventory(self.shared), inventory(self.output)
+        self.assertEqual(set(a), set(b))
+        self.assertEqual({p for p in a if a[p] != b[p]}, {MAIN})
+        with ZipFile(self.shared) as src, ZipFile(self.output) as dst:
+            self.assertEqual(src.comment, dst.comment)
+            for name in a:
+                if name != MAIN:
+                    self.assertEqual(src.read(name), dst.read(name))
+        observed = inspect_placements(self.output)["mesh_instances"]
+        self.assertEqual([m["mesh_part"] for m in observed],
+                         [report["first_part"], report["second_part"]] * 2)
+        for edge in (0, 1):
+            destination = self.clone if edge == 0 else self.clone.with_name("other.3mf")
+            result = clone_branched_root(self.output, destination, edge_index=edge)
+            self.assertTrue(result["geometry_unchanged"])
+            self.assertEqual(
+                inspect_placements(destination)["per_build_world_bounds_mm"],
+                inspect_placements(self.output)["per_build_world_bounds_mm"])
+
+    def test_absent_second_edge_rejected_without_output(self):
+        self.write(self.official, geometry_parts())
+        self.write(self.shared, shared_root_parts())
+        with self.assertRaises(ValueError):
+            make_distinct_branch_fixture(self.official, self.shared, self.output)
+        self.assertFalse(self.output.exists())
+
+    def test_missing_distinct_target_rejected(self):
+        self.write(self.official, shared_root_parts())
+        self.write(self.shared, branched_parts())
+        with self.assertRaises(ValueError):
+            make_distinct_branch_fixture(self.official, self.shared, self.output)
+        self.assertFalse(self.output.exists())
+
+    def test_existing_output_and_same_input_rejected(self):
+        self.write(self.official, geometry_parts())
+        self.write(self.shared, branched_parts())
+        self.output.write_bytes(b"sentinel")
+        with self.assertRaises(ValueError):
+            make_distinct_branch_fixture(self.official, self.shared, self.output)
+        self.assertEqual(self.output.read_bytes(), b"sentinel")
+        with self.assertRaises(ValueError):
+            make_distinct_branch_fixture(self.official, self.shared, self.shared)
+        self.assertEqual(self.output.read_bytes(), b"sentinel")
+
+
+if __name__ == "__main__":
+    unittest.main()
