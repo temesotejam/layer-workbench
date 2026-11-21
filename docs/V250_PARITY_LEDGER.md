@@ -1029,3 +1029,20 @@ matching strict commands authenticate executable provenance or prove
 native-vs-WASM full-profile slicing parity. No WASM binary, official
 profile file or public Pages engine switch is changed. No G-code is
 certified for printing.
+
+
+## 2026-11-21: G28 homing discontinuity in diagnostic G-code Preview
+
+The read-only `scripts/gcode-preview-parser.mjs` previously ignored `G28`,
+which could draw a fictitious extrusion/travel segment from a pre-home XYZ
+position to the first commanded post-home position. The parser now marks
+homed axes as **unknown** (all XYZ for a bare `G28` or unrecognised vendor
+flags). The first subsequent absolute motion that re-establishes the
+affected axes is **not** drawn: its start remains unknown. A fully explicit
+`G92` for the affected axes can re-anchor without such an omitted move.
+Relative moves alone cannot restore a known origin. The diagnostic exposes
+`skippedUnlocatedMotions` and counts a skipped unlocated arc with
+`skippedArcs`; regressions cover full/partial home, G92, vendor flags,
+and arcs. This does **not** implement firmware-specific home offsets, actual
+homing motion, printer state, or physical G-code compatibility. Existing
+production/public engine integration remains unchanged.
