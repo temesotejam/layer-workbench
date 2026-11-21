@@ -100,11 +100,21 @@ def make_distinct_branch_fixture(official_path, shared_path, output_path):
             target_id = objects[0].get("id")
             if not target_id:
                 raise ValueError("Native source mesh has no ID")
+            # The native v2.5.0 CLI can collapse two different p:path
+            # resources if they reuse the same numeric object ID. Give this
+            # synthetic second model its own explicit Core ID as a diagnostic.
+            if (not target_id.isascii() or not target_id.isdecimal() or
+                    not 1 <= int(target_id) < 2147483647):
+                raise ValueError("Source mesh ID cannot be safely distinguished")
+            new_target_id = str(int(target_id) + 1)
             start_mesh, opening_end_mesh, _ = _object_block(first_raw, target_id)
             refreshed = _renew_production_uuid(
                 first_raw[start_mesh:opening_end_mesh], objects[0], first_raw)
+            refreshed = _replace_attr_in_opening(
+                refreshed, "id", target_id, new_target_id)
             replacement_part = (first_raw[:start_mesh] + refreshed +
                                 first_raw[opening_end_mesh:])
+            target_id = new_target_id
             _guard_xml(replacement_part, "synthetic second external mesh")
         old_id = new_edges[1].get("objectid")
         old_path = new_edges[1].get(PROD_PATH)
