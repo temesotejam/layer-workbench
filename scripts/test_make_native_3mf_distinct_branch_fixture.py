@@ -11,6 +11,7 @@ from make_native_3mf_distinct_branch_fixture import make_distinct_branch_fixture
 from test_audit_native_3mf_instance_placement import geometry_parts
 from test_clone_native_3mf_branched_root import branched_parts
 from test_clone_native_3mf_shared_root_chain import shared_root_parts
+from test_verify_native_3mf_edit_effect import shared_nested_parts
 
 MAIN = "3D/3dmodel.model"
 
@@ -64,7 +65,7 @@ class NativeDistinctBranchFixtureTests(unittest.TestCase):
         # the first external model, while an existing second part is empty.
         empty = (b'<model xmlns="http://schemas.microsoft.com/3dmanufacturing/'
                  b'core/2015/02"><resources/></model>')
-        official_parts = shared_root_parts()
+        official_parts = shared_nested_parts()
         shared_parts = branched_parts()
         official_parts["3D/Objects/second.model"] = empty
         shared_parts["3D/Objects/second.model"] = empty
