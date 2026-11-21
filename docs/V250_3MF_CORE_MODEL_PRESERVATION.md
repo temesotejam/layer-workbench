@@ -672,3 +672,27 @@ is synthetic, and native CLI acceptance for that particular branch shape
 remains to be added. Opaque metadata identity references, arbitrary DAG
 graphs, full project fidelity, WASM/native G-code parity and print safety
 are still unsupported.
+
+## 2026-11-21: native-derived distinct-leaf 3MF reimport acceptance gate
+
+The previous distinct-leaf COW proof covered offline synthetic archives only.
+`scripts/make_native_3mf_distinct_branch_fixture.py` now constructs a bounded
+**native CLI-export-derived** two-branch candidate: it takes the second external
+mesh Core ID and Production `p:path` from the separate second root of the
+pinned official v2.5.0 CLI export, applies those exact references to the
+second component of an existing official-derived shared-root fixture, and
+preserves all other archive members byte-for-byte after decompression.
+The source must have exactly two original build roots, one external edge under
+the second root, and a two-build shared candidate with two identical external
+edges. Any ambiguous topology or target collision is rejected.
+
+Four offline regression tests exercise successful distinct-leaf cloning of
+either branch, preservation of the original bytes and unrelated metadata,
+missing edges, nondistinct targets and refusal to overwrite an existing file.
+The native acceptance workflow now attempts to reopen the independently cloned
+second branch in official OrcaSlicer v2.5.0 with `--arrange 0 --export-stl`,
+then checks four separate 12-facet mesh occurrences against the Core world
+bounds. **Treat this native gate as pending until its new GitHub Actions run
+passes.** The tested source is a synthetic branch added to native CLI bytes;
+this is not a GUI-saved 3MF, a metadata semantic round-trip, native/WASM
+G-code parity or print-safety validation.
