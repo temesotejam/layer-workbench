@@ -759,3 +759,31 @@ scaling*, exporting STLs without auto-arrangement and comparing four
 does not establish complete GUI-authored 3MF interoperability, full opaque
 metadata semantics, arbitrary DAG editing, WASM/native G-code equality or
 printer safety. Check the PR and main GitHub Actions for actual gate results.
+
+
+## 2026-11-21: direct model-settings object ID reference preflight (read-only)
+
+The offline `scripts/audit_native_3mf_metadata_object_refs.py` reads
+`3D/3dmodel.model` and `Metadata/model_settings.config` from a bounded 3MF
+archive. It inventories main Core object IDs, main build object references,
+direct native `<config><object id="…">` entries and the count (not meaning)
+of per-object `<part>` elements. XML DTDs/entities, duplicate object IDs,
+missing files and out-of-range IDs are rejected. No archive is rewritten.
+
+In `--baseline` / `--candidate` mode it detects a specific semantic risk:
+a build item retargeted to a newly cloned main Core object may lack its own
+`model_settings.config` object entry even though the original build target
+had one. This is surfaced as `needs_vendor_metadata_mapping`; the optional
+`--fail-on-unmapped-root` flag refuses such a candidate. The checker does not
+fabricate or copy vendor metadata and the existing geometry-only native 3MF
+clone experiments are **not** silently promoted to metadata-safe operations.
+
+Six synthetic offline regression tests cover the mapped/unmapped clone
+distinction, non-assertion when the original had no mapping, direct part
+inventory, duplicate/invalid XML, ZIP ambiguity, and source metadata-ID
+continuity. They run in lightweight 3MF CI; no AppImage or WASM rebuild is
+required. A matching object ID alone does not establish correct per-instance
+settings, plate membership, part-ID mapping, Production UUID references,
+compatibility with GUI-authored projects, or real printer safety. A native
+CLI-exported sample must still be inspected separately before broadening any
+writer's accepted layout.
