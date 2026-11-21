@@ -709,3 +709,27 @@ mesh shapes may initially be geometrically identical. It is neither a
 native GUI-exported distinct-shape fixture nor full metadata semantic
 preservation, native/WASM G-code parity, public WASM deployment or
 physical printing validation.
+
+## 2026-11-21: native-derived distinct-*shape* synthetic branch gate
+
+The next acceptance test must distinguish **two external mesh shapes**, not
+merely two resource paths. `scripts/make_native_3mf_distinct_shape_fixture.py`
+takes the bounded two-build/two-edge native-derived distinct-part fixture and
+scales **only the second external mesh's Y vertex coordinates by 1.2**.
+The first leaf, build and component transforms, ZIP comment, and all other
+decompressed archive members are preserved. The second leaf is still shared
+by both builds until the existing branched COW writer isolates one occurrence.
+
+The new offline suite rejects same-path output, existing destinations and
+non-distinct graphs, confirms first-leaf geometry and metadata are unchanged,
+confirms both second-leaf occurrences changed, and verifies a COW clone for
+each edge preserves all four shape bounds. The pinned CLI workflow then
+reopens the **synthetically reshaped and detached** 3MF, exports native STL,
+and compares all four 12-triangle groups against expanded Core bounds, with
+an additional check for measurably different Y extents. A successful workflow
+proves only this bounded native reimport geometry, not a real independently
+authored second mesh, complete GUI project preservation, arbitrary 3MF DAG
+semantics, native-vs-WASM G-code agreement or physical print safety.
+
+Native CLI acceptance status must be read from the associated Actions run;
+passing the Python unit tests alone does not satisfy the native gate.
