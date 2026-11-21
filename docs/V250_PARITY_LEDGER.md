@@ -1068,3 +1068,27 @@ may be a no-op on a particular printer, and the diagnostic may hide valid
 paths. The implementation does not reconstruct offsets, execute G53 motion,
 interpret CNC machine state, certify generated G-code, or enable public
 Pages WASM features. Regression coverage uses synthetic source lines only.
+
+## 2026-11-21: explicit tool-change E discontinuity in diagnostic G-code Preview
+
+The isolated read-only G-code Preview no longer assumes that absolute E
+coordinates are comparable across a **change between distinct valid T0–T254
+selectors**. Marlin's [multi-extruder documentation](https://marlinfw.org/docs/features/multi_extruder.html)
+states that tool changes can reset the extruder position, and recommends
+`G92 E0` after switching tools when using `M82`; other firmware and
+multi-material configurations can differ. The parser therefore marks the
+absolute E origin unknown on a distinct explicit tool switch, omits the
+first post-switch absolute-E stroke, and resumes after an explicit `G92 E`
+or that first absolute E re-anchor. Repeated selection of the same tool
+does not invalidate it; the reserved T255 unload label and out-of-range
+vendor T commands are not treated as ordinary physical tool selections.
+Relative-E (`M83`) moves can still use their own signed E word to classify
+extrusion, while a later return to `M82` again requires an absolute anchor.
+
+Regression fixtures cover low-to-high and high-to-low E register changes,
+explicit `G92 E` recovery, unchanged tool reselection, T255/T1000, and a
+relative-to-absolute E mode transition. This is a conservative **preview
+classification safeguard**, not full Marlin/OrcaSlicer G-code interpretation:
+implicit tool selection, tool-change macros, firmware-specific offsets,
+XYZ/toolhead repositioning, and real-world deposition remain unverified.
+These local changes do not enable production WASM or certify print-safe G-code.

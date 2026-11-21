@@ -64,6 +64,8 @@ export function parseGcodeToolpaths(source, options={}) {
   // Reserved/vendor tool commands (e.g. T1000) do not set a label.
   // Bambu X1E emits T255 while unloading AMS filament: clear the label.
   let activeTool=null;
+  // T255 clears the display label, not the last known real T selector.
+  let lastExplicitTool=null;
   const selectedTools=new Set();
   const extrusionsByTool=new Map(),extrusionsByFeature=new Map();
   // Feature attribution uses only explicit slicer comment tags, never free-text
@@ -114,7 +116,15 @@ export function parseGcodeToolpaths(source, options={}) {
     if(toolMatch){
       const id=Number(toolMatch[1]);
       if(id===255)activeTool=null; // vendor unload sentinel, not a material path
-      else if(Number.isSafeInteger(id)&&id>=0&&id<255){activeTool=id;selectedTools.add(id);}
+      else if(Number.isSafeInteger(id)&&id>=0&&id<255){
+        // An actual tool change may restore/reset the firmware's E register.
+        // Never compare absolute E across different explicit T selectors.
+        // A repeated T or reserved vendor selector does not invalidate it.
+        if(lastExplicitTool!==null && lastExplicitTool!==id)knownE=false;
+        activeTool=id;
+        lastExplicitTool=id;
+        selectedTools.add(id);
+      }
       continue;
     }
     const m=/^(?:N\d+\s*)?(G\d+(?:\.\d+)?|M\d+)(?=[A-Z\s]|$)/.exec(line);
@@ -205,7 +215,10 @@ export function parseGcodeToolpaths(source, options={}) {
     if(![state.x,state.y,state.z,state.e].every(Number.isFinite) ||
        Math.max(Math.abs(state.x),Math.abs(state.y),Math.abs(state.z))>100_000)
       throw new Error("Toolpath coordinate exceeds preview limits");
-    const extrusion=wasEKnown && state.e>start.e+1e-7;
+    // A relative-E word has its own signed commanded delta even if an
+    // earlier tool change made the absolute E origin unknowable.
+    const extrusion=("E" in words) && (state.absoluteE
+      ? wasEKnown && state.e>start.e+1e-7 : words.E>1e-7);
     // After homing, even a numerically finite prior coordinate is stale.
     // The first absolute re-anchor has an unknown starting point: do not
     // invent travel/deposition geometry across that discontinuity.
@@ -217,7 +230,7 @@ export function parseGcodeToolpaths(source, options={}) {
     // The first absolute-E command after an opaque machine-space extrusion
     // re-establishes the value, but its signed delta is unknowable. Do not
     // misclassify that stroke as travel or extrusion.
-    if("E" in words && !wasEKnown){
+    if("E" in words && !wasEKnown && state.absoluteE){
       skippedUnlocatedMotions++;
       continue;
     }
