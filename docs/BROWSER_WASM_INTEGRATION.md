@@ -1729,3 +1729,25 @@ A green test is evidence for this read-only path alone.
 The opt-in Prepare inspector now classifies exposed native API 0.7.0 plate/mesh/object/instance IDs, object-to-mesh and instance-to-object/plate references, and the 16-element affine matrix shape. Results contain **only** bounded status labels (`unique`/`duplicate`/`unavailable`, `valid`/`broken`/`unverified`/`unavailable`, `valid`/`invalid`/`unavailable`). If a native imported 3MF does not expose a field, the status is `unavailable`, not a fabricated PASS. No source IDs, coordinates, paths, or private metadata are displayed. Regression tests include missing links, duplicate IDs, NaN and non-affine matrices. The isolated Chrome test checks that the real candidate returns only classified statuses.
 
 This is **not a comparison to browser build-item transforms**, does not prove exact ID mapping to the Three.js viewport, and does not enable 3MF editing/export or printing. Next: establish and test a per-instance source-to-viewport mapping using verified native transform semantics and an independent Core 3MF fixture.
+
+
+## 2026-11-22: read-only native/browser build transform-anchor spacing gate
+
+The opt-in isolated Prepare 3MF inspector now computes **pairwise spacing**
+between the native manifest's instance affine translation anchors and the
+browser Three.js build-item world translation anchors. Pairwise distances
+are order-independent and insensitive to the viewer's global -128 mm XY bed
+origin translation. The result is only `consistent`, `mismatch`, or
+`unavailable` with the number of compared pairs; IDs, coordinates, files
+and raw transform values are never displayed or logged. The comparison
+requires 2–64 instances, valid finite row-major native 4x4 affine matrices,
+valid browser anchors, equal counts and a 0.05 mm distance tolerance.
+Malformed or missing data produces `unavailable`, not a false PASS.
+
+**This is a diagnostic, not instance identity matching or full transform
+parity.** Equal pairwise distances can also arise from rotation, reflection,
+permutation or different absolute placement; shared/nested Core components
+can make top-level anchor spacing differ even with identical mesh geometry.
+It does not compare vertex world bounds, pivot semantics, material settings,
+3MF metadata or any printer-ready G-code. The public site remains unchanged;
+only localhost + COOP/COEP + `?engineLab=1` exposes this test.
