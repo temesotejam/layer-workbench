@@ -162,3 +162,11 @@ flattened STL or establish native mesh-local vertices, pivots, desktop project
 save compatibility, or print safety. The rotated anchor discrepancy remains
 open. Only a green isolated Chrome CI on the pinned v2.5.0 candidate confirms
 the end-to-end synthetic-fixture result.
+
+## Shared native mesh local-origin hypothesis (2026-11-23)
+
+The read-only isolated Prepare inspector now tests a narrowly stated alternative to a simple common bed offset. For native one-slicer-api 0.7.0 instances that refer to the **same manifest mesh ID**, it first requires a unique native/viewer pairing by the full 3×3 linear transform, independent of array or build order. When three or more independently transformed instances share that mesh and at least one relative 3×3 transform is invertible, it solves the hypothesis `nativeTranslation − viewerTranslation = commonRootOffset + linearTransform × sharedLocalReframe` and checks every sibling against the same inferred local-origin shift and root offset. Matrices and fitted coordinates stay local and are never reported.
+
+The classifier returns `hypothesis-consistent`, `hypothesis-mismatch`, `underdetermined`, `insufficient-shared-instances`, `ambiguous`, `linear-mismatch` or `unavailable`, with only a bounded witness count. An exact fit from *only two* transformed instances is **not independent evidence** for any native pivot convention; these are reported `insufficient-shared-instances`. Repeated linear transforms with nonunique correspondence also remain `ambiguous`. The existing two-build rotated Core fixture therefore cannot prove a local reframe, even though the flattened world-space facets match; the original anchor-spacing mismatch remains open. Synthetic three-transform unit tests exercise successful and rejected hypotheses.
+
+This is a constrained **mathematical compatibility check**, not a native mesh-vertex readback, proof of importer normalization, desktop UI parity, 3MF round-trip, G-code equality, or permission to print. Next acceptance requires an independently transformed third build of the same Core mesh, then a real isolated Chrome/WASM residual result and native mesh-local vertex/bounds verification. No production Pages engine is activated.
