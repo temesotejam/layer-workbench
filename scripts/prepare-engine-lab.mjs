@@ -116,12 +116,14 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
       // No native ID↔browser ID matching is implied by this diagnostic.
       const selectedEntries = getEntries().filter(entry =>
         entry.format === "3mf" && entry.file === selected.file);
-      const viewerAnchors = selectedEntries.map(entry => {
+      const viewerMatrices = [];
+       const viewerAnchors = selectedEntries.map(entry => {
         entry.object.updateMatrixWorld(true);
-        const m = entry.object.matrixWorld.elements;
+        const m = Array.from(entry.object.matrixWorld.elements);
+        viewerMatrices.push(m);
         return [m[12],m[13],m[14]];
       });
-      const report = await inspectNative3mf(loaded.engine, selected.file, {viewerAnchors});
+      const report = await inspectNative3mf(loaded.engine, selected.file, {viewerAnchors,viewerMatrices});
       const visible = selectedEntries.length;
       const countMatch = visible === report.instances;
       status.textContent = "Native 3MF read-only import: " + report.objects + " objects, " +
@@ -133,7 +135,9 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
         ", links " + report.relations.references + ", affine matrices " +
         report.relations.affineMatrices + ". Native/viewer anchor spacing: " +
         report.placement.spacing + " (" + report.placement.comparedPairs +
-        " pairs). This does NOT map instance IDs or verify mesh placements." +
+        " pairs). Native/viewer linear parts: " + report.linear.linear +
+        " (" + report.linear.comparedInstances + " instances)." +
+        " This does NOT map instance IDs or verify mesh placements." +
         " Manifest-only diagnostic; browser transform parity untested." +
         " No edit, export or print approval.";
       onStatus("Local WASM imported the original 3MF for a read-only hierarchy diagnostic. " +

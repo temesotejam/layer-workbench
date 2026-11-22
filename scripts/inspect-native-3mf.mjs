@@ -3,9 +3,10 @@
 // Native manifest counts are NOT proof of desktop 3MF compatibility or parity.
 import {auditNative3mfRelations} from './audit-native-3mf-relations.mjs';
 import {auditNative3mfAnchorSpacing} from './audit-native-3mf-anchor-spacing.mjs';
+import {auditNative3mfLinearParity} from './audit-native-3mf-linear-parity.mjs';
 export const MAX_INSPECT_3MF_BYTES = 8 * 1024 * 1024;
 
-export async function inspectNative3mf(engine, file, {viewerAnchors=null}={}) {
+export async function inspectNative3mf(engine, file, {viewerAnchors=null,viewerMatrices=null}={}) {
   if (!engine || typeof engine.createSession !== 'function')
     throw new Error('A compatible local WASM engine is required.');
   if (!file || !/\.3mf$/i.test(file.name ?? '') || !Number.isSafeInteger(file.size) ||
@@ -38,7 +39,8 @@ export async function inspectNative3mf(engine, file, {viewerAnchors=null}={}) {
     // Do not return arbitrary manifest metadata, paths, profiles, or user IDs.
     return Object.freeze({...counts, archiveBytes: bytes.byteLength, schemaVersion:'0.7.0',
       relations:auditNative3mfRelations(manifest),
-      placement:auditNative3mfAnchorSpacing(manifest.instances,viewerAnchors)});
+      placement:auditNative3mfAnchorSpacing(manifest.instances,viewerAnchors),
+      linear:auditNative3mfLinearParity(manifest.instances,viewerMatrices)});
   } finally {
     await session.dispose();
   }

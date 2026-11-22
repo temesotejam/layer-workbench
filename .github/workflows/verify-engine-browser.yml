@@ -28,6 +28,8 @@ on:
       - "scripts/test-audit-native-3mf-relations.mjs"
       - "scripts/audit-native-3mf-anchor-spacing.mjs"
       - "scripts/test-audit-native-3mf-anchor-spacing.mjs"
+      - "scripts/audit-native-3mf-linear-parity.mjs"
+      - "scripts/test-audit-native-3mf-linear-parity.mjs"
       - "scripts/audit-native-3mf-anchor-spacing.mjs"
       - "scripts/test-audit-native-3mf-anchor-spacing.mjs"
       - "scripts/test-inspect-native-3mf.mjs"
@@ -93,6 +95,8 @@ on:
       - "scripts/audit-native-3mf-relations.mjs"
       - "scripts/test-audit-native-3mf-relations.mjs"
       - "scripts/test-inspect-native-3mf.mjs"
+      - "scripts/audit-native-3mf-linear-parity.mjs"
+      - "scripts/test-audit-native-3mf-linear-parity.mjs"
       - "app.js"
       - "index.html"
       - "scripts/serve-isolated.py"
@@ -192,6 +196,7 @@ jobs:
           node scripts/test-inspect-native-3mf.mjs
           node scripts/test-audit-native-3mf-relations.mjs
           node scripts/test-audit-native-3mf-anchor-spacing.mjs
+          node scripts/test-audit-native-3mf-linear-parity.mjs
           node --check scripts/three-mf-viewport-items.mjs
           node --check scripts/gcode-3d-preview.mjs
           node --check scripts/gcode-layer-preview.mjs

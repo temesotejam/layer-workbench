@@ -2077,6 +2077,11 @@ try {
     // separation, independent of the global -128 mm browser bed offset.
     // This is NOT a general object/mesh placement identity test.
     assert.match(inspection,/Native\/viewer anchor spacing: consistent \(1 pairs\)/);
+    // A second, independent real-browser gate compares native and viewer
+    // 3x3 affine linear parts; no instance-ID correspondence is assumed.
+    assert.match(inspection,/Native\/viewer linear parts: consistent \(2 instances\)/);
+    console.log('NATIVE_3MF_LINEAR_PARITY '+
+      inspection.match(/Native\/viewer linear parts: [^.]+\./)[0]);
     console.log('NATIVE_3MF_ANCHOR_SPACING '+
       inspection.match(/Native\/viewer anchor spacing: [^.]+\./)[0]);
     console.log('NATIVE_3MF_RELATION_AUDIT '+inspection.match(/Native manifest relations: IDs [^.]+\./)[0]);
