@@ -2304,6 +2304,14 @@ try {
       'Native-converted/viewer facet winding (vertex order only): ')[1]
       ?.split(' (36 triangles;')[0];
     assert.ok(wasmVsViewer,'Native vs viewer orientation witness must be present');
+    // Immutable pinned v2.5.0 candidate exhibits an explicit known gap:
+    // the flattened STL reverses the original source Core facet order.
+    // Require this evidence to be reviewed if the pinned artifact ever differs;
+    // do NOT treat reversal as a successful orientation parity result.
+    assert.equal(nativeVsSource.winding.winding,'reversed',
+      'Pinned native WASM must retain its observed Core-source winding discrepancy');
+    assert.equal(wasmVsViewer,'reversed',
+      'Pinned native WASM versus ThreeMFLoader winding discrepancy changed');
     console.log('NATIVE_3MF_SOURCE_CORE_WINDING: original Core -> WASM '+
       nativeVsSource.winding.winding+'; WASM -> ThreeMFLoader '+wasmVsViewer+
       ' (36 synthetic triangles; orientation only, not mesh or print parity)');
