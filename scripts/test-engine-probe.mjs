@@ -2300,8 +2300,9 @@ try {
     assert.ok(['consistent','reversed','mixed','ambiguous'].includes(
       nativeVsSource.winding.winding),
       'Source/Core to WASM orientation must be independently classified');
-    const wasmVsViewer=threeReport.match(
-      /Native-converted\\/viewer facet winding \\(vertex order only\\): (consistent|reversed|mixed|ambiguous) \\(36 triangles; not mesh-ID parity\\)/)?.[1];
+    const wasmVsViewer=threeReport.split(
+      'Native-converted/viewer facet winding (vertex order only): ')[1]
+      ?.split(' (36 triangles;')[0];
     assert.ok(wasmVsViewer,'Native vs viewer orientation witness must be present');
     console.log('NATIVE_3MF_SOURCE_CORE_WINDING: original Core -> WASM '+
       nativeVsSource.winding.winding+'; WASM -> ThreeMFLoader '+wasmVsViewer+
