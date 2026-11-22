@@ -201,6 +201,8 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
         " (" + report.sharedMeshReframe.comparedInstances + " matched shared-mesh instances; not proof)." +
         " Native-converted/viewer world facets: " + report.worldFacets.facets +
         " (" + report.worldFacets.comparedTriangles + " triangles)." +
+        " Native-converted/viewer facet winding (vertex order only): " + report.worldWinding.winding +
+        " (" + report.worldWinding.comparedTriangles + " triangles; not mesh-ID parity)." +
         " Viewer build-facet partition: " + report.worldGroups.partition +
         " (" + report.worldGroups.comparedBuilds + " viewer builds)." +
         " Flattened geometry only; no native instance correspondence." +
