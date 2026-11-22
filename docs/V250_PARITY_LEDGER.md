@@ -1092,3 +1092,21 @@ classification safeguard**, not full Marlin/OrcaSlicer G-code interpretation:
 implicit tool selection, tool-change macros, firmware-specific offsets,
 XYZ/toolhead repositioning, and real-world deposition remain unverified.
 These local changes do not enable production WASM or certify print-safe G-code.
+
+
+## 2026-11-23: bounded requested-heater setpoint diagnostics
+
+The native/WASM G-code comparator now includes an independent **read-only
+diagnostic** for explicit \`M104/M109\` nozzle and \`M140/M190\` bed setpoints.
+It preserves command type, S/R mode and explicit T tool selection, compares
+their **ordered** request lists, counts all differences and provides at most
+15 bounded examples. A Celsius delta is reported only when command, heater,
+mode and tool agree. An implicit tool is deliberately \`null\`, not inferred.
+
+Unknown/opaque heater requests (macros, extra or conflicting words, malformed
+temperatures or tool indexes) make the diagnostic unavailable (\`null\`),
+not a fabricated zero difference. It does **not** change strict ordered
+G-code matching, compare actual heater readings, establish profile parity,
+interpret other firmware heater commands or certify printing safety.
+Synthetic comparator regression tests alone are not the still-missing
+official v2.5.0 native-versus-WASM **same STL/full profile** G-code comparison.
