@@ -40,7 +40,7 @@ RELS = """<?xml version="1.0" encoding="UTF-8"?>
 </Relationships>"""
 
 
-def make_file(destination: Path, *, rotated_scaled=False, distinct_objects=False, reverse_build_order=False):
+def make_file(destination: Path, *, rotated_scaled=False, distinct_objects=False, reverse_build_order=False, third_shared_mesh=False):
     vertices = "\n".join(f'<vertex x="{x}" y="{y}" z="{z}"/>' for x,y,z in VERTICES)
     triangles = "\n".join(f'<triangle v1="{a}" v2="{b}" v3="{c}"/>' for a,b,c in TRIANGLES)
     model_xml = MODEL % (vertices, triangles)
@@ -85,6 +85,16 @@ def make_file(destination: Path, *, rotated_scaled=False, distinct_objects=False
         if len(items) != 2:
             raise ValueError("Expected exactly two independent build items")
         model_xml = model_xml[:start] + "\n" + "\n".join(reversed(items)) + "\n" + model_xml[end:]
+    if third_shared_mesh:
+        # Third independently scaled instance of the SAME mesh: a real
+        # three-witness probe for native/viewer local-origin hypotheses.
+        # Keep resource references and build IDs unchanged for other fixtures.
+        if not rotated_scaled or distinct_objects or reverse_build_order:
+            raise ValueError("Third shared-mesh witness requires only --rotated-scaled")
+        third = '<item objectid="1" transform="0.8 0 0 0 1.2 0 0 0 0.9 195 90 0"/>'
+        if model_xml.count("</build>") != 1:
+            raise ValueError("Unexpected fixture build structure")
+        model_xml = model_xml.replace("</build>", third + "\n</build>", 1)
     content = model_xml.encode("utf-8")
     destination.parent.mkdir(parents=True, exist_ok=True)
     with ZipFile(destination, "w", compression=ZIP_DEFLATED) as archive:
@@ -107,10 +117,13 @@ if __name__ == "__main__":
                         help="Use a differently sized second mesh with a distinct object ID")
     parser.add_argument("--reverse-build-order", action="store_true",
                         help="Reverse the order of two build items without changing their poses")
+    parser.add_argument("--third-shared-mesh", action="store_true",
+                        help="Append a third differently scaled build of object 1 (requires --rotated-scaled)")
     args = parser.parse_args()
     make_file(args.output, rotated_scaled=args.rotated_scaled,
               distinct_objects=args.distinct_objects,
-              reverse_build_order=args.reverse_build_order)
+              reverse_build_order=args.reverse_build_order,
+              third_shared_mesh=args.third_shared_mesh)
     print("Generated synthetic two-build-item Core 3MF "
           "(rotated-scaled variant; not desktop parity)" if args.rotated_scaled
           else "Generated synthetic two-build-item Core 3MF (not desktop parity):",
