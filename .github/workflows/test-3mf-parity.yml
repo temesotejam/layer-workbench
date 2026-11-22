@@ -58,6 +58,8 @@ on:
 
   pull_request:
     paths:
+      - "scripts/preflight-3mf-zip.mjs"
+      - "scripts/test-preflight-3mf-zip.mjs"
       - "scripts/compare_3mf_build_preservation.py"
       - "scripts/test_compare_3mf_build_preservation.py"
       - "scripts/edit_3mf_build_transform.py"
