@@ -38,3 +38,18 @@ assert.equal(audit(makeStl(Array.from({length:MAX_WORLD_FACETS+1},()=>a)),[a,b])
 assert.equal(audit(input,Array.from({length:MAX_WORLD_FACETS+1},()=>a)).facets,'unavailable');
 assert.equal(JSON.stringify(audit(input,swapped)).includes('150'),false);
 console.log('PASS: bounded native STL vs Three.js world facets (affine placement, face order/winding, mismatch, malformed/oversized input, privacy)');
+
+import {auditNative3mfWorldFacetGroups as auditGroups} from './audit-native-3mf-world-facets.mjs';
+assert.deepEqual(auditGroups(input,[[a],[b]]),
+  {partition:'separable',comparedBuilds:2,comparedTriangles:2},
+  'Independent viewer builds must each own distinguishable native world facets');
+assert.deepEqual(auditGroups(input,[[b],[a]]).partition,'separable',
+  'Build-order reversal must not affect facet-group separability');
+assert.equal(auditGroups(makeStl([a,a]),[[a],[a]]).partition,'ambiguous',
+  'Two coincident native builds cannot be attributed by triangle order');
+assert.equal(auditGroups(input,[[a],[wrongPosition[0]]]).partition,'mismatch');
+assert.equal(auditGroups(input,[[],[b]]).partition,'unavailable');
+assert.equal(auditGroups(input,[[a]]).partition,'unavailable');
+assert.equal(auditGroups(new Uint8Array(4),[[a],[b]]).partition,'unavailable');
+assert.equal(JSON.stringify(auditGroups(input,[[a],[b]])).includes('150'),false);
+console.log('PASS: flattened 3MF native facets can be separated by viewer build only when unambiguous');
