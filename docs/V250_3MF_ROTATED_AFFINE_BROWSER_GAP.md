@@ -249,3 +249,28 @@ The intermediate oriented vertex coordinates are written only to
 `parity-output/three-build-source-facets.json` inside the local CI job.
 Do not publish that generated file, log its raw coordinates, or enable
 the diagnostic in production Pages. The WASM candidate remains unchanged.
+
+## Advisory binary STL facet-normal witness (2026-11-23)
+
+The isolated Chrome fixture now independently compares the **12-byte binary STL
+normal field** with the cross product of each triangle's actual serialized
+vertex order, using the immutable v2.5.0 candidate's original 3MF-to-STL
+output. The synthetic, locally generated three-build Core 3MF remains the only
+acceptance fixture; no source file or coordinates are published.
+
+The new bounded diagnostic `auditNative3mfStlNormalAlignment` checks at most
+256 faces and returns `aligned`, `opposed`, `mixed`, `inconsistent` or
+`unavailable`. It rejects nonfinite values, malformed STL, near-degenerate
+triangles, and absent (zero) normals rather than assuming valid orientation.
+A missing or uninformative normal field is **not** a failure of STL geometry
+and must not be treated as import parity. The result contains only a category
+and count; no source geometry or private identifiers are logged.
+
+This is an additional **serialization clue**, not an importer-vs-exporter
+attribution: STL normals are advisory and may be recomputed, zero-filled, or
+modified by the converter. Even `aligned` cannot establish what happened
+to the original Core triangle indices during native import. The previously
+observed 36/36 source-to-STL reversal remains unresolved. Only actual Chrome
+CI logs may establish the pinned candidate's normal-field classification.
+No modification is made to the WASM engine, published Pages, saved 3MF,
+or G-code.
