@@ -33,6 +33,8 @@ on:
       - "scripts/audit-native-3mf-linear-parity.mjs"
       - "scripts/audit-native-3mf-frame-offsets.mjs"
       - "scripts/test-audit-native-3mf-frame-offsets.mjs"
+      - "scripts/audit-native-3mf-shared-mesh-reframe.mjs"
+      - "scripts/test-audit-native-3mf-shared-mesh-reframe.mjs"
       - "scripts/audit-native-3mf-world-facets.mjs"
       - "scripts/test-audit-native-3mf-world-facets.mjs"
       - "scripts/test-audit-native-3mf-linear-parity.mjs"
@@ -105,6 +107,8 @@ on:
       - "scripts/audit-native-3mf-linear-parity.mjs"
       - "scripts/audit-native-3mf-frame-offsets.mjs"
       - "scripts/test-audit-native-3mf-frame-offsets.mjs"
+      - "scripts/audit-native-3mf-shared-mesh-reframe.mjs"
+      - "scripts/test-audit-native-3mf-shared-mesh-reframe.mjs"
       - "scripts/test-audit-native-3mf-linear-parity.mjs"
       - "app.js"
       - "index.html"
@@ -209,6 +213,7 @@ jobs:
           node scripts/test-audit-native-3mf-anchor-spacing.mjs
           node scripts/test-audit-native-3mf-linear-parity.mjs
           node scripts/test-audit-native-3mf-frame-offsets.mjs
+          node scripts/test-audit-native-3mf-shared-mesh-reframe.mjs
           node scripts/test-audit-native-3mf-world-facets.mjs
           node --check scripts/three-mf-viewport-items.mjs
           node --check scripts/gcode-3d-preview.mjs
