@@ -47,7 +47,7 @@ def make_file(destination: Path, *, rotated_scaled=False, distinct_objects=False
     if distinct_objects:
         # Give the second build a genuinely different mesh/ID. Without this,
         # two identical cube instances could hide a wrong object-reference map.
-        second_vertices = "\\n".join(
+        second_vertices = "\n".join(
             f'<vertex x="{x / 2:g}" y="{y * 0.75:g}" z="{z * 1.25:g}"/>'
             for x, y, z in VERTICES
         )
@@ -84,7 +84,7 @@ def make_file(destination: Path, *, rotated_scaled=False, distinct_objects=False
         items = re.findall(r'<item\\s+[^<>]*/>', model_xml[start:end])
         if len(items) != 2:
             raise ValueError("Expected exactly two independent build items")
-        model_xml = model_xml[:start] + "\\n" + "\\n".join(reversed(items)) + "\\n" + model_xml[end:]
+        model_xml = model_xml[:start] + "\n" + "\n".join(reversed(items)) + "\n" + model_xml[end:]
     content = model_xml.encode("utf-8")
     destination.parent.mkdir(parents=True, exist_ok=True)
     with ZipFile(destination, "w", compression=ZIP_DEFLATED) as archive:
