@@ -1707,3 +1707,19 @@ tests do **not** establish successful import of a desktop-created 3MF in the
 real WASM candidate. Follow-up: actual isolated-Chrome fixture inspection and
 compare stable instance IDs, transforms and bounding boxes against desktop
 OrcaSlicer before enabling any native transform/edit/export path.
+
+## 2026-11-22: real Prepare 3MF inspector browser acceptance gate
+
+The isolated Chrome regression in `scripts/test-engine-probe.mjs` now exercises
+`#lab-inspect-3mf` through the **actual Prepare UI**, using the pinned local
+WASM candidate and the independently generated two-build-item Core fixture.
+It requires the original selected 3MF to expose two native instances, checks
+the visible build-item count, verifies that the WebGL viewport remains unchanged,
+and confirms that inspection does **not** enable 3MF slicing. The test also
+checks that inspection is disabled before explicit local engine loading.
+Changes to the inspector source or its unit test now trigger this Chrome CI gate.
+
+This is a test of an **independent synthetic 3MF**, not a desktop-authored
+OrcaSlicer project, real machine profile, transform synchronization, native
+3MF editing/export or printing. The public Pages site still does not load WASM.
+A green test is evidence for this read-only path alone.
