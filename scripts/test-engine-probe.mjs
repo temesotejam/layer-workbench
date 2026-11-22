@@ -2265,10 +2265,10 @@ try {
     // Real pinned WASM must now report an independent, bounded winding
     // classification. Mixed/reversed is a diagnostic gap, never parity PASS.
     assert.match(threeReport,
-      /Native-converted\\/viewer facet winding \\(vertex order only\\): (consistent|reversed|mixed|ambiguous) \\(36 triangles; not mesh-ID parity\\)/,
+      /Native-converted\/viewer facet winding \(vertex order only\): (consistent|reversed|mixed|ambiguous) \(36 triangles; not mesh-ID parity\)/,
       'The real Chrome/WASM winding witness must evaluate all 36 converted facets');
     console.log('NATIVE_3MF_WORLD_WINDING '+
-      threeReport.match(/Native-converted\\/viewer facet winding \\(vertex order only\\): [^.]+\\./)[0]);
+      threeReport.match(/Native-converted\/viewer facet winding \(vertex order only\): [^.]+\./)[0]);
 
     // Observed in the pinned v2.5.0 WASM: one shared Core resource is
     // imported as THREE separate native manifest meshes/objects. Therefore
