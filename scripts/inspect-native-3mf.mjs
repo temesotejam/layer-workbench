@@ -5,11 +5,11 @@ import {auditNative3mfRelations} from './audit-native-3mf-relations.mjs';
 import {auditNative3mfAnchorSpacing} from './audit-native-3mf-anchor-spacing.mjs';
 import {auditNative3mfLinearParity} from './audit-native-3mf-linear-parity.mjs';
 import {auditNative3mfFrameOffsets} from './audit-native-3mf-frame-offsets.mjs';
-import {auditNative3mfWorldFacets} from './audit-native-3mf-world-facets.mjs';
+import {auditNative3mfWorldFacets,auditNative3mfWorldFacetGroups} from './audit-native-3mf-world-facets.mjs';
 import {preflight3mfZip} from './preflight-3mf-zip.mjs';
 export const MAX_INSPECT_3MF_BYTES = 8 * 1024 * 1024;
 
-export async function inspectNative3mf(engine, file, {viewerAnchors=null,viewerMatrices=null,viewerFacets=null}={}) {
+export async function inspectNative3mf(engine, file, {viewerAnchors=null,viewerMatrices=null,viewerFacets=null,viewerFacetGroups=null}={}) {
   if (!engine || typeof engine.createSession !== 'function')
     throw new Error('A compatible local WASM engine is required.');
   if (!file || !/\.3mf$/i.test(file.name ?? '') || !Number.isSafeInteger(file.size) ||
@@ -45,10 +45,13 @@ export async function inspectNative3mf(engine, file, {viewerAnchors=null,viewerM
     // translation pivots; absence/failure is explicitly unavailable. Only
     // enable the extra conversion when the caller has bounded viewer facets.
     let worldFacets={facets:'unavailable',comparedTriangles:0};
+    let worldGroups={partition:'unavailable',comparedBuilds:0,comparedTriangles:0};
     if (viewerFacets !== null && typeof engine.threeMfToStl === 'function') {
       try {
         const nativeStl=await engine.threeMfToStl(bytes);
         worldFacets=auditNative3mfWorldFacets(nativeStl,viewerFacets);
+        if (viewerFacetGroups !== null)
+          worldGroups=auditNative3mfWorldFacetGroups(nativeStl,viewerFacetGroups);
       } catch (_error) {
         // Unsupported conversion is not a geometry match or an import failure.
       }
@@ -59,7 +62,7 @@ export async function inspectNative3mf(engine, file, {viewerAnchors=null,viewerM
       placement:auditNative3mfAnchorSpacing(manifest.instances,viewerAnchors),
       linear:auditNative3mfLinearParity(manifest.instances,viewerMatrices),
       frameOffsets:auditNative3mfFrameOffsets(manifest.instances,viewerMatrices),
-      worldFacets});
+      worldFacets,worldGroups});
   } finally {
     await session.dispose();
   }
