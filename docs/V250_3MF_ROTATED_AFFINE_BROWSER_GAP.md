@@ -225,3 +225,27 @@ candidate classification without assuming a result before CI.
 
 It does not solve the remaining native import frame/pivot mismatch in
 Issue #179 or enable the candidate on published Pages.
+
+## Independent original Core winding witness (2026-11-23)
+
+The pinned synthetic **three-build shared-mesh fixture** has a new independent
+source-index comparison. `scripts/export_core_fixture_facets.py` reads its
+actual generated Core 3MF ZIP (only a bounded single millimeter part with
+direct mesh build items), preserves the ordered `v1,v2,v3` triangle indices,
+and applies each Core row-vector affine to form oriented world triangles.
+The local CI then separately compares these **original Core facets** with
+the actual pinned WASM `threeMfToStl` result using the same winding
+classifier that compares WASM with ThreeMFLoader.
+
+The two directional comparisons answer different questions:
+**Core source → WASM conversion** versus **WASM conversion → browser viewer**.
+The workflow must require a 36-triangle *geometric* match to the independently
+derived source and record orientation as `consistent`, `reversed`,
+`mixed` or `ambiguous` from the real isolated Chrome run. The first isolated Chrome result [#45062342626](https://github.com/temesotejam/layer-workbench/actions/runs/45062342626) **PASS** confirms both comparisons on the immutable candidate: **original Core → native WASM: `reversed`; native WASM → ThreeMFLoader: `reversed`** for all 36 fixture facets, with a separate 36/36 positional geometry match. Consequently, this fixture's conversion-to-STL path reverses the original Core face order; the viewer's relative ordering is consistent with the original source by the two comparisons. This does **not** identify whether the reversal occurs during native Core import, internal representation, or STL serialization. The observed reversal is now a pinned known-gap regression assertion, not a claim of oriented parity. This is a diagnostic of one
+synthetic fixture, **not** an importer fix, a result for arbitrary 3MF files,
+a native mesh-ID correspondence, G-code parity or print certification.
+
+The intermediate oriented vertex coordinates are written only to
+`parity-output/three-build-source-facets.json` inside the local CI job.
+Do not publish that generated file, log its raw coordinates, or enable
+the diagnostic in production Pages. The WASM candidate remains unchanged.

@@ -35,6 +35,8 @@ on:
       - "scripts/patch-orcawasm-support-smoke.py"
       - "scripts/test_patch_orcawasm_support_smoke.py"
       - "scripts/make_3mf_two_build_fixture.py"
+      - "scripts/export_core_fixture_facets.py"
+      - "scripts/test_export_core_fixture_facets.py"
       - "scripts/test_check_3mf_stl_bounds.py"
       - "scripts/preflight-3mf-zip.mjs"
       - "scripts/test-preflight-3mf-zip.mjs"
@@ -136,6 +138,7 @@ jobs:
           python3 -m py_compile scripts/compare_3mf_build_preservation.py
           python3 -m unittest discover -s scripts -p test_compare_3mf_build_preservation.py -v
           python3 -m unittest discover -s scripts -p test_audit_3mf_scene.py -v
+          python3 -m unittest discover -s scripts -p test_export_core_fixture_facets.py -v
           python3 -m unittest discover -s scripts -p test_three_mf_instance_expansion.py -v
           python3 -m unittest discover -s scripts -p test_check_3mf_stl_bounds.py -v
           python3 -m py_compile scripts/edit_3mf_build_transform.py

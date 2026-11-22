@@ -2270,6 +2270,52 @@ try {
     console.log('NATIVE_3MF_WORLD_WINDING '+
       threeReport.match(/Native-converted\/viewer facet winding \(vertex order only\): [^.]+\./)[0]);
 
+    // Independent source-of-truth comparison: the source Core triangle indices
+    // and row-vector affines were extracted from the actual fixture ZIP by
+    // Python, NOT from ThreeMFLoader or the WASM STL converter. The *other*
+    // browser tab holds only the locally selected pinned WASM candidate.
+    // Do not expose original vertices, file contents, or engine on Pages.
+    const coreSource = JSON.parse(await readFile(
+      'parity-output/three-build-source-facets.json','utf8'));
+    assert.equal(coreSource.source,'synthetic-core-indices');
+    assert.equal(coreSource.builds,3);
+    assert.equal(coreSource.comparedTriangles,36);
+    const coreArchive = Array.from(await readFile('parity-output/three-build-shared-mesh.3mf'));
+    const nativeVsSource = await page.evaluate(async ({facets,archive}) => {
+      const engine=window.__layerDiagnosticEngine?.engine;
+      if(typeof engine?.threeMfToStl!=='function')
+        throw new Error('Pinned WASM Core conversion is unavailable in isolated Chrome');
+      const {auditNative3mfWorldFacets,auditNative3mfWorldFacetWinding} =
+        await import('./scripts/audit-native-3mf-world-facets.mjs');
+      const nativeStl=await engine.threeMfToStl(new Uint8Array(archive));
+      return {
+        shape:auditNative3mfWorldFacets(nativeStl,facets),
+        winding:auditNative3mfWorldFacetWinding(nativeStl,facets),
+      };
+    },{facets:coreSource.facets,archive:coreArchive});
+    assert.deepEqual(nativeVsSource.shape,
+      {facets:'consistent',comparedTriangles:36},
+      'Core source geometry MUST match the independently converted native STL');
+    assert.equal(nativeVsSource.winding.comparedTriangles,36);
+    assert.ok(['consistent','reversed','mixed','ambiguous'].includes(
+      nativeVsSource.winding.winding),
+      'Source/Core to WASM orientation must be independently classified');
+    const wasmVsViewer=threeReport.split(
+      'Native-converted/viewer facet winding (vertex order only): ')[1]
+      ?.split(' (36 triangles;')[0];
+    assert.ok(wasmVsViewer,'Native vs viewer orientation witness must be present');
+    // Immutable pinned v2.5.0 candidate exhibits an explicit known gap:
+    // the flattened STL reverses the original source Core facet order.
+    // Require this evidence to be reviewed if the pinned artifact ever differs;
+    // do NOT treat reversal as a successful orientation parity result.
+    assert.equal(nativeVsSource.winding.winding,'reversed',
+      'Pinned native WASM must retain its observed Core-source winding discrepancy');
+    assert.equal(wasmVsViewer,'reversed',
+      'Pinned native WASM versus ThreeMFLoader winding discrepancy changed');
+    console.log('NATIVE_3MF_SOURCE_CORE_WINDING: original Core -> WASM '+
+      nativeVsSource.winding.winding+'; WASM -> ThreeMFLoader '+wasmVsViewer+
+      ' (36 synthetic triangles; orientation only, not mesh or print parity)');
+
     // Observed in the pinned v2.5.0 WASM: one shared Core resource is
     // imported as THREE separate native manifest meshes/objects. Therefore
     // a mesh-ID-based "shared local origin" solver has zero eligible groups;
