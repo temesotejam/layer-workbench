@@ -6,7 +6,7 @@ import {auditNative3mfAnchorSpacing} from './audit-native-3mf-anchor-spacing.mjs
 import {auditNative3mfLinearParity} from './audit-native-3mf-linear-parity.mjs';
 import {auditNative3mfFrameOffsets} from './audit-native-3mf-frame-offsets.mjs';
 import {auditNative3mfSharedMeshReframe} from './audit-native-3mf-shared-mesh-reframe.mjs';
-import {auditNative3mfWorldFacets,auditNative3mfWorldFacetGroups} from './audit-native-3mf-world-facets.mjs';
+import {auditNative3mfWorldFacets,auditNative3mfWorldFacetGroups,auditNative3mfWorldFacetWinding} from './audit-native-3mf-world-facets.mjs';
 import {preflight3mfZipVerified} from './preflight-3mf-zip.mjs';
 export const MAX_INSPECT_3MF_BYTES = 8 * 1024 * 1024;
 
@@ -46,11 +46,13 @@ export async function inspectNative3mf(engine, file, {viewerAnchors=null,viewerM
     // translation pivots; absence/failure is explicitly unavailable. Only
     // enable the extra conversion when the caller has bounded viewer facets.
     let worldFacets={facets:'unavailable',comparedTriangles:0};
+    let worldWinding={winding:'unavailable',comparedTriangles:0};
     let worldGroups={partition:'unavailable',comparedBuilds:0,comparedTriangles:0};
     if (viewerFacets !== null && typeof engine.threeMfToStl === 'function') {
       try {
         const nativeStl=await engine.threeMfToStl(bytes);
         worldFacets=auditNative3mfWorldFacets(nativeStl,viewerFacets);
+        worldWinding=auditNative3mfWorldFacetWinding(nativeStl,viewerFacets);
         if (viewerFacetGroups !== null)
           worldGroups=auditNative3mfWorldFacetGroups(nativeStl,viewerFacetGroups);
       } catch (_error) {
@@ -64,7 +66,7 @@ export async function inspectNative3mf(engine, file, {viewerAnchors=null,viewerM
       linear:auditNative3mfLinearParity(manifest.instances,viewerMatrices),
       frameOffsets:auditNative3mfFrameOffsets(manifest.instances,viewerMatrices),
       sharedMeshReframe:auditNative3mfSharedMeshReframe(manifest,viewerMatrices),
-      worldFacets,worldGroups});
+      worldFacets,worldWinding,worldGroups});
   } finally {
     await session.dispose();
   }
