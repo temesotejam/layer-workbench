@@ -187,6 +187,8 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
         report.placement.spacing + " (" + report.placement.comparedPairs +
         " pairs). Native/viewer linear parts: " + report.linear.linear +
         " (" + report.linear.comparedInstances + " instances)." +
+        " Native/viewer affine frame offsets: " + report.frameOffsets.frame +
+        " (" + report.frameOffsets.comparedInstances + " uniquely matched instances)." +
         " Native-converted/viewer world facets: " + report.worldFacets.facets +
         " (" + report.worldFacets.comparedTriangles + " triangles)." +
         " Flattened geometry only; no per-instance correspondence." +

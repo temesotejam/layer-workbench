@@ -4,6 +4,7 @@
 import {auditNative3mfRelations} from './audit-native-3mf-relations.mjs';
 import {auditNative3mfAnchorSpacing} from './audit-native-3mf-anchor-spacing.mjs';
 import {auditNative3mfLinearParity} from './audit-native-3mf-linear-parity.mjs';
+import {auditNative3mfFrameOffsets} from './audit-native-3mf-frame-offsets.mjs';
 import {auditNative3mfWorldFacets} from './audit-native-3mf-world-facets.mjs';
 import {preflight3mfZip} from './preflight-3mf-zip.mjs';
 export const MAX_INSPECT_3MF_BYTES = 8 * 1024 * 1024;
@@ -57,6 +58,7 @@ export async function inspectNative3mf(engine, file, {viewerAnchors=null,viewerM
       relations:auditNative3mfRelations(manifest),
       placement:auditNative3mfAnchorSpacing(manifest.instances,viewerAnchors),
       linear:auditNative3mfLinearParity(manifest.instances,viewerMatrices),
+      frameOffsets:auditNative3mfFrameOffsets(manifest.instances,viewerMatrices),
       worldFacets});
   } finally {
     await session.dispose();

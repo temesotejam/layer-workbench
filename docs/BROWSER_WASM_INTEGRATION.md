@@ -1794,3 +1794,20 @@ This is an **envelope-only preflight**. It does not decompress members, validate
 their CRC or XML, eliminate every ZIP bomb or native parser vulnerability,
 establish 3MF semantic preservation, or make user G-code printable. It does not
 change the published Pages app or enable WASM outside localhost.
+
+## 2026-11-22: unique affine-frame offset gate (localhost only)
+
+The read-only 3MF inspector now reports a **non-sensitive affine translation
+frame classification**. For source-preserving Core build items with uniquely
+matchable 3×3 native/Three.js linear transforms it distinguishes a common
+global bed offset from an instance-dependent displacement. Duplicate or
+near-identical linear transforms are explicitly ambiguous; unsupported
+matrices are unavailable, and missing bijections are linear-mismatch.
+The diagnostic does not inspect local native mesh vertices, expose arbitrary
+project IDs, or change the imported scene. See
+[V250_3MF_ROTATED_AFFINE_BROWSER_GAP.md](V250_3MF_ROTATED_AFFINE_BROWSER_GAP.md).
+
+The synthetic rotated/nonuniform fixture's previously known anchor-spacing
+mismatch must remain visible. Passing world-facet matching and a detailed
+frame classification cannot establish desktop OrcaSlicer 3MF/G-code parity or
+print safety; production Pages still does not load the experimental WASM.

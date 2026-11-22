@@ -2080,6 +2080,8 @@ try {
     // A second, independent real-browser gate compares native and viewer
     // 3x3 affine linear parts; no instance-ID correspondence is assumed.
     assert.match(inspection,/Native\/viewer linear parts: consistent \(2 instances\)/);
+    assert.match(inspection,/Native\/viewer affine frame offsets: ambiguous \(0 uniquely matched instances\)/,
+      'Two identical linear maps must not be assigned fabricated native build identities');
     assert.match(inspection,/Native-converted\/viewer world facets: consistent \(24 triangles\)/);
     console.log('NATIVE_3MF_LINEAR_PARITY '+
       inspection.match(/Native\/viewer linear parts: [^.]+\./)[0]);
@@ -2158,6 +2160,8 @@ try {
     assert.match(rotatedReport,/Native\/viewer anchor spacing: mismatch \(1 pairs\)/);
     console.log('KNOWN GAP: rotated/nonuniform Core 3MF native/viewer transform-anchor spacing mismatch; mesh-level world parity unverified');
     assert.match(rotatedReport,/Native\/viewer linear parts: consistent \(2 instances\)/);
+    assert.match(rotatedReport,/Native\/viewer affine frame offsets: instance-dependent \(2 uniquely matched instances\)/,
+      'Rotated native/viewer anchor gap cannot be explained by one global bed translation');
     assert.match(rotatedReport,/Native-converted\/viewer world facets: consistent \(24 triangles\)/,
       'Rotated Core triangles must match native WASM converted geometry');
     console.log('NATIVE_3MF_WORLD_FACETS '+
