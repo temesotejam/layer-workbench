@@ -235,6 +235,15 @@ jobs:
             --input parity-output/two-build-rotated-scaled.3mf \
             --expected-build-items 2 --min-triangles 12 \
             --report parity-output/two-build-rotated-scaled-scene.json
+          # Different resource meshes and reversed build order: detect incorrect
+          # objectid binding that matching two identical cube instances misses.
+          python3 scripts/make_3mf_two_build_fixture.py \
+            --output parity-output/two-build-distinct-reversed.3mf \
+            --rotated-scaled --distinct-objects --reverse-build-order
+          python3 scripts/audit_3mf_scene.py \
+            --input parity-output/two-build-distinct-reversed.3mf \
+            --expected-build-items 2 --min-triangles 12 \
+            --report parity-output/two-build-distinct-reversed-scene.json
           node scripts/test-engine-probe.mjs
           # Compare actual 3MF bytes exported and re-imported by the browser
           # engine. This is not a desktop 3MF parity result.
