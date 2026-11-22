@@ -2287,16 +2287,27 @@ try {
         throw new Error('Pinned WASM Core conversion is unavailable in isolated Chrome');
       const {auditNative3mfWorldFacets,auditNative3mfWorldFacetWinding} =
         await import('./scripts/audit-native-3mf-world-facets.mjs');
+      const {auditNative3mfStlNormalAlignment} =
+        await import('./scripts/audit-native-3mf-stl-normals.mjs');
       const nativeStl=await engine.threeMfToStl(new Uint8Array(archive));
       return {
         shape:auditNative3mfWorldFacets(nativeStl,facets),
         winding:auditNative3mfWorldFacetWinding(nativeStl,facets),
+        normals:auditNative3mfStlNormalAlignment(nativeStl),
       };
     },{facets:coreSource.facets,archive:coreArchive});
     assert.deepEqual(nativeVsSource.shape,
       {facets:'consistent',comparedTriangles:36},
       'Core source geometry MUST match the independently converted native STL');
     assert.equal(nativeVsSource.winding.comparedTriangles,36);
+    assert.ok(['aligned','opposed','mixed','inconsistent','unavailable'].includes(
+      nativeVsSource.normals.normalAlignment));
+    assert.equal(nativeVsSource.normals.comparedTriangles,
+      nativeVsSource.normals.normalAlignment==='unavailable' ? 0 : 36,
+      'STL normal-field witness must never invent partial triangle coverage');
+    console.log('NATIVE_3MF_STL_NORMAL_FIELD: '+
+      nativeVsSource.normals.normalAlignment+
+      ' (advisory facet normals vs STL vertex winding; not Core importer parity)');
     assert.ok(['consistent','reversed','mixed','ambiguous'].includes(
       nativeVsSource.winding.winding),
       'Source/Core to WASM orientation must be independently classified');
