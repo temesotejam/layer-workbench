@@ -66,3 +66,43 @@ export function auditNative3mfWorldFacets(nativeStl, viewerFacets, toleranceMm=0
   return Object.freeze({facets:same ? 'consistent' : 'mismatch',
     comparedTriangles:native.length});
 }
+
+// A flattened native STL has no object/build IDs. This independent witness
+// asks whether every native triangle has a UNIQUE matching viewer build under
+// the same bounded geometry tolerance. It proves separability of the rendered
+// build geometry, NOT native instance identity, local pivot, or save parity.
+// Ambiguous coincident/intersecting facets must never be assigned by order.
+export function auditNative3mfWorldFacetGroups(nativeStl, viewerFacetGroups, toleranceMm=0.05) {
+  const unavailableGroups=()=>Object.freeze({partition:'unavailable',comparedBuilds:0,comparedTriangles:0});
+  if (!Array.isArray(viewerFacetGroups) || viewerFacetGroups.length < 2 ||
+      viewerFacetGroups.length > 64 || !Number.isFinite(toleranceMm) ||
+      toleranceMm <= 0 || toleranceMm > 0.1 ||
+      viewerFacetGroups.some(group => !Array.isArray(group) || group.length < 1 ||
+        !group.every(validFacet))) return unavailableGroups();
+  const count=viewerFacetGroups.reduce((sum,group)=>sum+group.length,0);
+  if (count > MAX_WORLD_FACETS) return unavailableGroups();
+  const flattened=viewerFacetGroups.flat();
+  const global=auditNative3mfWorldFacets(nativeStl,flattened,toleranceMm);
+  if (global.facets==='unavailable') return unavailableGroups();
+  const report=partition=>Object.freeze({partition,
+    comparedBuilds:viewerFacetGroups.length,comparedTriangles:global.comparedTriangles});
+  if (global.facets!=='consistent') return report('mismatch');
+  const native=parseBinaryStl(nativeStl);
+  const counts=Array(viewerFacetGroups.length).fill(0);
+  let overlapping=false;
+  for(const face of native) {
+    let match=-1;
+    for(let build=0;build<viewerFacetGroups.length;build++) {
+      if (!viewerFacetGroups[build].some(other=>equalFacet(face,other,toleranceMm))) continue;
+      if (match!==-1) {overlapping=true;break;}
+      match=build;
+    }
+    if (match<0) return report('mismatch');
+    if (!overlapping) counts[match]++;
+  }
+  // A global perfect facet matching can exist even when two viewer builds
+  // share identical faces. Never infer build attribution in that case.
+  if (overlapping) return report('ambiguous');
+  return report(counts.every((n,i)=>n===viewerFacetGroups[i].length)
+    ? 'separable' : 'mismatch');
+}
