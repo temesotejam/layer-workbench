@@ -67,6 +67,68 @@ export function auditNative3mfWorldFacets(nativeStl, viewerFacets, toleranceMm=0
     comparedTriangles:native.length});
 }
 
+// Separate winding witness for the flattened 3MF converter. The general
+// geometry audit above intentionally ignores triangle orientation, but a
+// reversed surface may materially change native face semantics. Compare
+// cyclic vertex permutations (same winding) independently of anticyclic
+// permutations (opposite winding). NEVER infer native instance IDs or use
+// binary STL normal-vector fields as a reliable winding proxy.
+// A positive classification is only about the observed bounded triangles.
+const cyclicOrders=[[0,1,2],[1,2,0],[2,0,1]];
+const reversedOrders=[[0,2,1],[2,1,0],[1,0,2]];
+function windingMatch(a,b,orders,tolerance) {
+  return orders.some(order=>order.every((j,i)=>[0,1,2].every(axis=>
+    Math.abs(a[i][axis]-b[j][axis])<=tolerance)));
+}
+function nonDegenerateFacet(f, tolerance) {
+  const u=f[1].map((v,i)=>v-f[0][i]);
+  const v=f[2].map((x,i)=>x-f[0][i]);
+  const cross=[
+    u[1]*v[2]-u[2]*v[1],
+    u[2]*v[0]-u[0]*v[2],
+    u[0]*v[1]-u[1]*v[0],
+  ];
+  // Refuse orientation claims on faces too tiny for the positional
+  // comparison tolerance to determine a stable clockwise order.
+  return Math.hypot(...cross)>4*tolerance*tolerance;
+}
+function fullWindingMatching(native,viewer,orders,tolerance) {
+  const owner=Array(viewer.length).fill(-1);
+  function augment(i,seen) {
+    for(let j=0;j<viewer.length;j++) {
+      if(seen[j] || !windingMatch(native[i],viewer[j],orders,tolerance))continue;
+      seen[j]=true;
+      if(owner[j]===-1 || augment(owner[j],seen)) {
+        owner[j]=i;
+        return true;
+      }
+    }
+    return false;
+  }
+  return native.every((_,i)=>augment(i,Array(viewer.length).fill(false)));
+}
+export function auditNative3mfWorldFacetWinding(nativeStl,viewerFacets,toleranceMm=0.05) {
+  const unavailableWinding=()=>Object.freeze({winding:'unavailable',comparedTriangles:0});
+  // Reuse the separate geometry comparison to reject shape discrepancies,
+  // malformed arrays, and oversized inputs rather than inventing a
+  // winding result for unequal triangle sets.
+  const geometry=auditNative3mfWorldFacets(nativeStl,viewerFacets,toleranceMm);
+  if(geometry.facets==='unavailable')return unavailableWinding();
+  const report=winding=>Object.freeze({winding,comparedTriangles:geometry.comparedTriangles});
+  if(geometry.facets!=='consistent')return report('mismatch');
+  const native=parseBinaryStl(nativeStl);
+  if(!native || ![...native,...viewerFacets].every(f=>nonDegenerateFacet(f,toleranceMm)))
+    return unavailableWinding();
+  const forward=fullWindingMatching(native,viewerFacets,cyclicOrders,toleranceMm);
+  const reverse=fullWindingMatching(native,viewerFacets,reversedOrders,toleranceMm);
+  if(forward && reverse)return report('ambiguous');
+  if(forward)return report('consistent');
+  if(reverse)return report('reversed');
+  // The triangles coincide as an unoriented multiset but cannot all be
+  // matched with one winding convention. Do not call that oriented parity.
+  return report('mixed');
+}
+
 // A flattened native STL has no object/build IDs. This independent witness
 // asks whether every native triangle has a UNIQUE matching viewer build under
 // the same bounded geometry tolerance. It proves separability of the rendered
