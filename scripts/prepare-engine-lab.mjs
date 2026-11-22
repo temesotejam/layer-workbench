@@ -10,6 +10,55 @@ import {readOrcaProfileCollection} from "./orca-profile-collection.mjs";
 import {createLayerPreview} from "./gcode-layer-preview.mjs";
 import {objToBinaryStl} from "./obj-to-stl.mjs";
 import {inspectNative3mf} from "./inspect-native-3mf.mjs";
+import {MAX_WORLD_FACETS} from "./audit-native-3mf-world-facets.mjs";
+import * as THREE from "three";
+
+// Only the opt-in isolated viewer uses this bounded geometry witness. The
+// importer applies a *translation-only* -128 mm root mapping. Undo exactly
+// that mapping before comparing with native Core 3MF world millimeters.
+// Reject edited/ambiguous roots or missing/oversized geometry; never transmit
+// vertex data to UI text, logging or the published website.
+function collectUnedited3mfWorldFacets(entries) {
+  if (!Array.isArray(entries) || !entries.length ||
+      entries.some(e=>e.modified || !e.sourceRoot || e.sourceRoot!==entries[0].sourceRoot))
+    return null;
+  const root=entries[0].sourceRoot;
+  if (![root.position.x,root.position.y,root.position.z].every(Number.isFinite) ||
+      [root.rotation.x,root.rotation.y,root.rotation.z].some(v=>Math.abs(v)>1e-8) ||
+      [root.scale.x,root.scale.y,root.scale.z].some(v=>Math.abs(v-1)>1e-8))
+    return null;
+  const facets=[];
+  try {
+    root.updateMatrixWorld(true);
+    for (const entry of entries) {
+      entry.object.traverse(node=>{
+        if (!node.isMesh) return;
+        const position=node.geometry?.getAttribute('position');
+        const index=node.geometry?.index;
+        const count=index?.count ?? position?.count;
+        const draw=node.geometry?.drawRange;
+        if (!position || position.itemSize!==3 || !Number.isSafeInteger(count) ||
+            count<3 || count%3!==0 || facets.length+count/3>MAX_WORLD_FACETS ||
+            (draw && (draw.start!==0 ||
+             (Number.isFinite(draw.count) && draw.count<count))))
+          throw new Error('Unsupported browser 3MF facet representation');
+        for (let i=0;i<count;i+=3) {
+          const triangle=[];
+          for(let j=0;j<3;j++) {
+            const vertex=index ? index.getX(i+j) : i+j;
+            if (!Number.isSafeInteger(vertex) || vertex<0 || vertex>=position.count)
+              throw new Error('Invalid 3MF browser vertex index');
+            const p=new THREE.Vector3().fromBufferAttribute(position,vertex)
+              .applyMatrix4(node.matrixWorld);
+            triangle.push([p.x-root.position.x,p.y-root.position.y,p.z-root.position.z]);
+          }
+          facets.push(triangle);
+        }
+      });
+    }
+  } catch (_error) {return null;}
+  return facets.length ? facets : null;
+}
 
 export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
   const panel = document.querySelector(".slice-area");
@@ -123,7 +172,8 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
         viewerMatrices.push(m);
         return [m[12],m[13],m[14]];
       });
-      const report = await inspectNative3mf(loaded.engine, selected.file, {viewerAnchors,viewerMatrices});
+      const viewerFacets=collectUnedited3mfWorldFacets(selectedEntries);
+      const report = await inspectNative3mf(loaded.engine, selected.file, {viewerAnchors,viewerMatrices,viewerFacets});
       const visible = selectedEntries.length;
       const countMatch = visible === report.instances;
       status.textContent = "Native 3MF read-only import: " + report.objects + " objects, " +
@@ -137,8 +187,10 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
         report.placement.spacing + " (" + report.placement.comparedPairs +
         " pairs). Native/viewer linear parts: " + report.linear.linear +
         " (" + report.linear.comparedInstances + " instances)." +
-        " This does NOT map instance IDs or verify mesh placements." +
-        " Manifest-only diagnostic; browser transform parity untested." +
+        " Native-converted/viewer world facets: " + report.worldFacets.facets +
+        " (" + report.worldFacets.comparedTriangles + " triangles)." +
+        " Flattened geometry only; no per-instance correspondence." +
+        " Imported metadata, edits and native viewport synchronization unverified." +
         " No edit, export or print approval.";
       onStatus("Local WASM imported the original 3MF for a read-only hierarchy diagnostic. " +
         "The displayed Three.js scene is still independent of the native engine.");
