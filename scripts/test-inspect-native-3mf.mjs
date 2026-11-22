@@ -57,6 +57,7 @@ assert.deepEqual(report,{plates:1,meshes:1,objects:1,instances:1,
     ids:'unique',references:'unavailable',affineMatrices:'unavailable'},
   placement:{spacing:'unavailable',comparedPairs:0},
   linear:{linear:'unavailable',comparedInstances:0},
+  frameOffsets:{frame:'unavailable',comparedInstances:0},
   worldFacets:{facets:'unavailable',comparedTriangles:0}});
 assert.equal(Object.isFrozen(report),true);
 assert.equal(JSON.stringify(report).includes('private-'),false,'Do not leak object IDs or metadata');
@@ -76,6 +77,8 @@ const placementReport=await inspectNative3mf(placementEngine,file(),{
 });
 assert.deepEqual(placementReport.placement,{spacing:'consistent',comparedPairs:1});
 assert.deepEqual(placementReport.linear,{linear:'consistent',comparedInstances:2});
+assert.deepEqual(placementReport.frameOffsets,{frame:'ambiguous',comparedInstances:0},
+  'Identical linear maps cannot identify the corresponding native instance');
 assert.deepEqual(placementReport.worldFacets,{facets:'unavailable',comparedTriangles:0});
 assert.ok(!JSON.stringify(placementReport).includes('"a"'));
 assert.equal(placementEngine.calls.at(-1),'dispose');
