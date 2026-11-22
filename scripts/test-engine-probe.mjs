@@ -2327,6 +2327,45 @@ try {
       nativeVsSource.winding.winding+'; WASM -> ThreeMFLoader '+wasmVsViewer+
       ' (36 synthetic triangles; orientation only, not mesh or print parity)');
 
+    // Controlled sign flip: this independent Core fixture changes ONLY
+    // triangle v2/v3 order. Its vertices, three build transforms, objects
+    // and world geometry are identical to the negative-volume baseline.
+    // If the importer repairs negative signed volume on load, the original
+    // negative source should read "reversed" (above) but the positive
+    // source should read "consistent" when independently converted to STL.
+    // Both are inspected locally; never enable these bytes on public Pages.
+    const positiveSource = JSON.parse(await readFile(
+      'parity-output/three-build-positive-source-facets.json','utf8'));
+    assert.equal(positiveSource.source,'synthetic-core-indices');
+    assert.equal(positiveSource.builds,3);
+    assert.equal(positiveSource.comparedTriangles,36);
+    const positiveArchive = Array.from(await readFile(
+      'parity-output/three-build-positive-winding.3mf'));
+    const positiveNative = await page.evaluate(async ({facets,archive}) => {
+      const engine=window.__layerDiagnosticEngine?.engine;
+      if(typeof engine?.threeMfToStl!=='function')
+        throw new Error('Pinned WASM Core conversion is unavailable');
+      const {auditNative3mfWorldFacets,auditNative3mfWorldFacetWinding} =
+        await import('./scripts/audit-native-3mf-world-facets.mjs');
+      const nativeStl=await engine.threeMfToStl(new Uint8Array(archive));
+      return {
+        shape:auditNative3mfWorldFacets(nativeStl,facets),
+        winding:auditNative3mfWorldFacetWinding(nativeStl,facets),
+      };
+    },{facets:positiveSource.facets,archive:positiveArchive});
+    assert.deepEqual(positiveNative.shape,
+      {facets:'consistent',comparedTriangles:36},
+      'Positive Core winding must preserve the same 36 world triangle locations');
+    assert.equal(positiveNative.winding.comparedTriangles,36);
+    console.log('NATIVE_3MF_SIGN_CONTROL: negative-volume Core -> WASM '+
+      nativeVsSource.winding.winding+'; positive-volume Core -> WASM '+
+      positiveNative.winding.winding+
+      ' (36 synthetic faces each; unchanged world geometry, not print parity)');
+    assert.equal(positiveNative.winding.winding,'consistent',
+      'A positive-volume control should not receive the baseline negative-volume face flip');
+    console.log('PASS: real pinned WASM Core negative/positive signed-volume '+
+      'control isolates importer auto-orientation as the cause of source/STL winding reversal');
+
     // Observed in the pinned v2.5.0 WASM: one shared Core resource is
     // imported as THREE separate native manifest meshes/objects. Therefore
     // a mesh-ID-based "shared local origin" solver has zero eligible groups;
