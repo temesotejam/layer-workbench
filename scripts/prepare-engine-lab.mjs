@@ -9,6 +9,7 @@ import {readProcessPresetBundle} from "./process-preset-inheritance.mjs";
 import {readOrcaProfileCollection} from "./orca-profile-collection.mjs";
 import {createLayerPreview} from "./gcode-layer-preview.mjs";
 import {objToBinaryStl} from "./obj-to-stl.mjs";
+import {inspectNative3mf} from "./inspect-native-3mf.mjs";
 
 export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
   const panel = document.querySelector(".slice-area");
@@ -41,6 +42,8 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
     <small>An explicitly chosen plate selects one of six pinned OrcaSlicer v2.5.0 native bed-temperature key pairs; selection is never inferred. Unsupported or zero-temperature plate settings are refused, and first-layer values are forwarded only when present. This is an isolated development-only test, not printer-profile validation. Inherited first-layer nozzle temperature and bounded (0.5–1.5) single-filament flow ratio are forwarded as native vectors; isolated Chrome tests confirmed changes in actual M104 and G1 E commands. Multi-value flow ratios are rejected. Multi-value volumetric flow limits require an explicit, exact extruder-variant selection; real printer/nozzle compatibility is not verified. Manufacturer startup scripts, complete material settings and desktop G-code parity remain unverified; generated G-code is not print-ready.</small>
     <label>Process preset name <input id="lab-orca-process" type="text" maxlength="160"></label>
     <small>OBJ is locally triangulated to binary STL for this isolated test. Units are assumed millimeters; materials, UVs, groups and colors are not preserved. No STEP import, CAD edits or print-safety verification.</small>
+    <button id="lab-inspect-3mf" disabled>Inspect selected native 3MF (read only)</button>
+    <small>Local 3MF diagnostic only (8 MiB maximum). The WASM engine independently reads the original archive and returns manifest counts; no edit, native viewport sync or 3MF save is claimed. Unknown or incompatible projects are refused.</small>
     <button id="lab-slice" disabled>Slice STL/OBJ plate (test only)</button>
     <a id="lab-download" hidden download="prepare-test.gcode">Download test G-code</a>
     <p id="lab-status" role="status" aria-live="polite">No engine loaded.</p>
@@ -52,6 +55,7 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
   const wasm = $("#lab-wasm");
   const load = $("#lab-load");
   const slice = $("#lab-slice");
+  const inspect = $("#lab-inspect-3mf");
   const processFile = $("#lab-process");
   const presetBundle = $("#lab-preset-bundle");
   const presetName = $("#lab-preset-name");
@@ -73,6 +77,7 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
   const refresh = () => {
     load.disabled = busy || !isolated || !js.files?.length || !wasm.files?.length || !!loaded;
     const entries = getEntries();
+    inspect.disabled = busy || !loaded || getSelection()?.format !== "3mf";
     slice.disabled = busy || !loaded || entries.length === 0 || entries.length > 24 ||
       entries.some(e => !["stl","obj"].includes(e.format) || !e.file || e.file.size > 20 * 1024 * 1024) ||
       entries.reduce((sum,e)=>sum+e.file.size,0) > 80 * 1024 * 1024;
@@ -94,6 +99,33 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
       onStatus("Local engine loaded. STL/OBJ triangle meshes can be sliced on one plate using generic PLA test settings.");
     } catch (error) {
       status.textContent = "FAILED loading engine: " + error.message;
+    } finally {
+      busy = false;
+      refresh();
+    }
+  });
+  inspect.addEventListener("click", async () => {
+    const selected = getSelection();
+    if (!loaded || selected?.format !== "3mf" || !selected.file) return;
+    busy = true;
+    refresh();
+    status.textContent = "Inspecting selected original 3MF in native WASM (read only)…";
+    try {
+      const report = await inspectNative3mf(loaded.engine, selected.file);
+      const visible = getEntries().filter(entry =>
+        entry.format === "3mf" && entry.file === selected.file).length;
+      const countMatch = visible === report.instances;
+      status.textContent = "Native 3MF read-only import: " + report.objects + " objects, " +
+        report.instances + " instances, " + report.meshes + " meshes, " + report.plates +
+        " plates. Browser build items: " + visible + ". " +
+        (countMatch ? "Counts agree (transforms and settings NOT verified)." :
+          "COUNT MISMATCH: do not assume native/viewer hierarchy matches.") +
+        " No edit, export or print approval.";
+      onStatus("Local WASM imported the original 3MF for a read-only hierarchy diagnostic. " +
+        "The displayed Three.js scene is still independent of the native engine.");
+    } catch (_error) {
+      status.textContent = "Native 3MF inspection FAILED: unsupported, malformed or oversized project. " +
+        "The browser model was not changed.";
     } finally {
       busy = false;
       refresh();
