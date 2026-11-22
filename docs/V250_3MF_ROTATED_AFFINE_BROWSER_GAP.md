@@ -47,3 +47,32 @@ also cannot establish a unique instance correspondence.
 This does **not** establish native desktop 3MF project parity, editing and
 re-saving, full metadata compatibility, G-code equivalence, or printable
 output.
+
+## Follow-up: bounded native-converted world-facet gate
+
+The isolated Prepare inspector now optionally compares the triangle
+coordinates of the **real v2.5.0 WASM `threeMfToStl(original3mf)` output**
+against the independently rendered ThreeMFLoader triangles after undoing
+only the known viewer root translation. It compares full world-space
+triangle vertex sets, not just instance transform anchors or bounding boxes.
+The matching is order- and winding-independent with a 0.05 mm per-axis
+threshold, and uses a complete bipartite matching for duplicate faces.
+
+The test is limited to **256 total triangles** and unedited Core 3MF
+build-item scenes under a translation-only viewer root. Any unsupported
+mesh, modified object, malformed binary STL, excessive geometry or missing
+native conversion yields `unavailable`; a valid but different triangle
+set yields `mismatch`. No raw vertices, paths, private IDs or original
+project metadata are emitted in the status. The real Chrome CI explicitly
+checks both the basic two-build fixture and the rotated/nonuniform fixture.
+A future green CI run establishes only the combined rendered geometry
+comparison for those fixtures, not desktop project parity.
+
+**Important:** The native converter yields a flattened STL. Therefore the
+comparison cannot attribute a converted triangle to its original native
+instance or identify the native importer's local mesh pivot. It does NOT
+resolve the previously observed native/viewer **transform-anchor spacing
+mismatch**; that diagnostic remains a mismatch until its frame convention is
+derived. Per-instance matching, nested components, 3MF edit/save,
+manufacturer profiles, G-code parity and print safety remain outstanding.
+The published GitHub Pages workspace and WASM candidate are unchanged.
