@@ -36,6 +36,10 @@ on:
       - "scripts/test_patch_orcawasm_support_smoke.py"
       - "scripts/make_3mf_two_build_fixture.py"
       - "scripts/test_check_3mf_stl_bounds.py"
+      - "scripts/inspect-native-3mf.mjs"
+      - "scripts/test-inspect-native-3mf.mjs"
+      - "scripts/prepare-engine-lab.mjs"
+      - "docs/BROWSER_WASM_INTEGRATION.md"
       - ".github/workflows/test-3mf-parity.yml"
 
   pull_request:
@@ -66,6 +70,10 @@ on:
       - "scripts/test_patch_orcawasm_private_instance_edit.py"
       - "scripts/patch-orcawasm-support-smoke.py"
       - "scripts/test_patch_orcawasm_support_smoke.py"
+      - "scripts/inspect-native-3mf.mjs"
+      - "scripts/test-inspect-native-3mf.mjs"
+      - "scripts/prepare-engine-lab.mjs"
+      - "docs/BROWSER_WASM_INTEGRATION.md"
       - ".github/workflows/test-3mf-parity.yml"
 
 permissions:
@@ -77,6 +85,14 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test read-only native 3MF inspector
+        run: |
+          node --check scripts/inspect-native-3mf.mjs
+          node --check scripts/prepare-engine-lab.mjs
+          node scripts/test-inspect-native-3mf.mjs
       - name: Check 3MF comparator syntax and unit tests
         run: |
           set -euo pipefail
