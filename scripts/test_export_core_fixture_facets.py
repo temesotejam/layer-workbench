@@ -39,6 +39,19 @@ class SourceFacetWitnessTest(unittest.TestCase):
             self.assertGreater(area_z, 0)
         self.assertNotEqual(report["facets"][0], report["facets"][12])
 
+    def test_positive_volume_control_preserves_world_coordinates_but_reverses_indices(self):
+        baseline = extract_source_facets(self.fixture(rotated_scaled=True,
+                                                      third_shared_mesh=True))
+        positive = extract_source_facets(self.fixture(rotated_scaled=True,
+                                                      third_shared_mesh=True,
+                                                      positive_winding=True))
+        self.assertEqual(baseline["builds"], positive["builds"])
+        self.assertEqual(baseline["comparedTriangles"], 36)
+        self.assertEqual(positive["comparedTriangles"], 36)
+        # Paired triangles refer to the same world geometry. Only b/c swap.
+        for old, new in zip(baseline["facets"], positive["facets"]):
+            self.assertEqual(new, [old[0], old[2], old[1]])
+
     def test_build_reorder_changes_sequence_not_geometry(self):
         report = extract_source_facets(self.fixture(rotated_scaled=True,
                                                      distinct_objects=True,
