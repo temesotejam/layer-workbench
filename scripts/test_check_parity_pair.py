@@ -145,6 +145,38 @@ class PairTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unbound source model"):
             verify(self.manifest("native"), self.manifest("wasm"))
 
+    def test_singular_and_near_degenerate_placement_fail_closed(self):
+        # Identical profile/model/G-code hashes cannot establish parity when
+        # the normalized scene transform squashes a spatial dimension or
+        # makes two axes almost linearly dependent.
+        invalid = {
+            "zero X scale": {0: 0},
+            "dependent X/Y columns": {1: 1, 5: 0},
+            "near-zero X scale": {0: 1e-10},
+            "near-parallel X/Y columns": {1: 1, 5: 1e-10},
+        }
+        for label, replacements in invalid.items():
+            with self.subTest(case=label):
+                def edit(scene):
+                    matrix = scene["instances"][0]["matrix"]
+                    matrix[:] = [1, 0, 0, 128, 0, 1, 0, 128,
+                                 0, 0, 1, 0, 0, 0, 0, 1]
+                    for index, value in replacements.items():
+                        matrix[index] = value
+                self.mutate_scene("wasm", edit)
+                with self.assertRaisesRegex(ValueError, "invalid row-major scene matrix"):
+                    verify(self.manifest("native"), self.manifest("wasm"))
+
+    def test_mirrored_nonsingular_placement_is_not_rejected(self):
+        # A reflection (negative determinant) is not rank deficiency.
+        # Both scene witnesses must still agree before accepting comparison.
+        for role in ("native", "wasm"):
+            self.mutate_scene(role, lambda scene:
+                              scene["instances"][0]["matrix"].__setitem__(0, -1))
+        report = verify(self.manifest("native"), self.manifest("wasm"))
+        self.assertTrue(report["match"])
+        self.assertTrue(report["input_hashes_match"])
+
     def test_non_affine_or_nonfinite_scene_rejected(self):
         self.mutate_scene("wasm", lambda scene: scene["instances"][0]["matrix"].__setitem__(15, 0))
         with self.assertRaisesRegex(ValueError, "invalid row-major scene matrix"):

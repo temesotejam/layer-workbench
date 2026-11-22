@@ -17,6 +17,29 @@ PIN = "40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19"
 # NOT independent proof that the engine applied the transform.
 KINDS = ("model", "scene", "machine", "filament", "process", "gcode")
 
+def invertible_scene_linear(matrix):
+    """Conservative affine rank guard; the scene witness is not a mesh proof.
+
+    A self-reported transform that flattens a solid onto a plane cannot act
+    as valid placement evidence, even if both producers report identical
+    hashes and G-code. Normalize determinant by column norms so a large
+    uniform scale does not hide a nearly dependent axis.
+    """
+    columns = ((matrix[0], matrix[4], matrix[8]),
+               (matrix[1], matrix[5], matrix[9]),
+               (matrix[2], matrix[6], matrix[10]))
+    lengths = [math.hypot(*column) for column in columns]
+    if min(lengths) < 1e-6:
+        return False
+    determinant = (
+        matrix[0] * (matrix[5] * matrix[10] - matrix[6] * matrix[9])
+        - matrix[1] * (matrix[4] * matrix[10] - matrix[6] * matrix[8])
+        + matrix[2] * (matrix[4] * matrix[9] - matrix[5] * matrix[8])
+    )
+    normalized = abs(determinant) / math.prod(lengths)
+    return math.isfinite(normalized) and normalized > 1e-8
+
+
 
 def validate_scene(path, model_sha256, role):
     """Reject absent, malformed or unbound placement evidence before comparison."""
@@ -44,7 +67,8 @@ def validate_scene(path, model_sha256, role):
         if (not isinstance(matrix, list) or len(matrix) != 16 or
             any(type(n) not in (int, float) or not math.isfinite(n) or
                 abs(n) > 1_000_000 for n in matrix) or
-            matrix[12:] != [0, 0, 0, 1]):
+            matrix[12:] != [0, 0, 0, 1] or
+            not invertible_scene_linear(matrix)):
             raise ValueError(f"{role}: invalid row-major scene matrix")
 
 
