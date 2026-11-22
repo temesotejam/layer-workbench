@@ -2073,6 +2073,9 @@ try {
     assert.match(inspection,/Browser build items: 2\. Counts agree/);
     assert.match(inspection,/Native manifest relations: IDs (unique|duplicate|unavailable), links (valid|broken|unavailable|unverified), affine matrices (valid|invalid|unavailable)\./,
       'The real WASM response must disclose only bounded relation classifications');
+    assert.match(inspection,/Native\/viewer anchor spacing: (consistent|mismatch|unavailable) \(\d+ pairs\)/);
+    console.log('NATIVE_3MF_ANCHOR_SPACING '+
+      inspection.match(/Native\/viewer anchor spacing: [^.]+\./)[0]);
     console.log('NATIVE_3MF_RELATION_AUDIT '+inspection.match(/Native manifest relations: IDs [^.]+\./)[0]);
     assert.match(inspection,/No edit, export or print approval\./);
     assert.deepEqual(await mfPage.evaluate(()=>globalThis.__layer3mfViewportAudit?.()),before,
