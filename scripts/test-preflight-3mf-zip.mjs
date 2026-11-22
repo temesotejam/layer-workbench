@@ -8,6 +8,8 @@ function fixture(members=[{name:'3D/3dmodel.model',data:'x'}], options={}) {
   let offset=0;
   for (const m of members) {
     const name=encoder.encode(m.name), data=encoder.encode(m.data ?? 'x');
+    const localExtra=m.localExtra ?? new Uint8Array();
+    const centralExtra=m.centralExtra ?? new Uint8Array();
     const descriptor = m.descriptor ? new Uint8Array(m.signedDescriptor ? 16 : 12) : new Uint8Array();
     if (m.descriptor) {
       const dv=new DataView(descriptor.buffer);
@@ -16,7 +18,7 @@ function fixture(members=[{name:'3D/3dmodel.model',data:'x'}], options={}) {
       dv.setUint32(start+4,data.length,true);
       dv.setUint32(start+8,m.size??data.length,true);
     }
-    const local=new Uint8Array(30+name.length+data.length+descriptor.length);
+    const local=new Uint8Array(30+name.length+localExtra.length+data.length+descriptor.length);
     const lv=new DataView(local.buffer);
     lv.setUint32(0,0x04034b50,true);
     lv.setUint16(4,20,true);
@@ -25,10 +27,13 @@ function fixture(members=[{name:'3D/3dmodel.model',data:'x'}], options={}) {
     lv.setUint32(18,m.descriptor?0:data.length,true);
     lv.setUint32(22,m.descriptor?0:(m.size??data.length),true);
     lv.setUint16(26,name.length,true);
-    local.set(name,30); local.set(data,30+name.length);
-    local.set(descriptor,30+name.length+data.length);
+    lv.setUint16(28,localExtra.length,true);
+    local.set(name,30);
+    local.set(localExtra,30+name.length);
+    local.set(data,30+name.length+localExtra.length);
+    local.set(descriptor,30+name.length+localExtra.length+data.length);
     localParts.push(local);
-    const dir=new Uint8Array(46+name.length);
+    const dir=new Uint8Array(46+name.length+centralExtra.length);
     const dv=new DataView(dir.buffer);
     dv.setUint32(0,0x02014b50,true);
     dv.setUint16(4,20,true); dv.setUint16(6,20,true);
@@ -37,9 +42,11 @@ function fixture(members=[{name:'3D/3dmodel.model',data:'x'}], options={}) {
     dv.setUint32(20,data.length,true);
     dv.setUint32(24,m.size??data.length,true);
     dv.setUint16(28,name.length,true);
+    dv.setUint16(30,centralExtra.length,true);
     dv.setUint32(38,m.external??0,true);
     dv.setUint32(42,offset,true);
     dir.set(name,46);
+    dir.set(centralExtra,46+name.length);
     directoryParts.push(dir);
     offset+=local.length;
   }
@@ -113,4 +120,29 @@ for (const signedDescriptor of [false,true]) {
 // Setting the descriptor flag without an actual descriptor is unsafe.
 assert.throws(()=>preflight3mfZip(fixture([{name:'x.model',data:'abc',flags:8}])),
   /unsafe 3MF ZIP/);
-console.log('PASS: bounded 3MF ZIP preflight rejects unsafe local headers, overlaps and descriptors');
+// Known metadata extras are still permitted when well-formed; the preflight
+// intentionally rejects only fields that could override path/offset semantics.
+const timestampExtra=Uint8Array.from([0x55,0x54,0x01,0x00,0x01]);
+assert.deepEqual(preflight3mfZip(fixture([{
+  name:'3D/3dmodel.model', data:'abc',
+  localExtra:timestampExtra, centralExtra:timestampExtra,
+}])),{entries:1,expandedBytes:3});
+const unicodePath=Uint8Array.from([0x75,0x70,0x05,0x00,0x01,0,0,0,0]);
+const zip64Extra=Uint8Array.from([0x01,0x00,0,0]);
+const malformedExtra=Uint8Array.from([0x55,0x54,0x06,0x00,0]);
+for(const extra of [unicodePath,zip64Extra,malformedExtra]) {
+  for(const side of ['localExtra','centralExtra'])
+    assert.throws(()=>preflight3mfZip(fixture([{
+      name:'3D/3dmodel.model',data:'abc',[side]:extra,
+    }])),/unsafe 3MF ZIP/);
+}
+// Unsupported general-purpose bits can alter decompression/header semantics.
+// UTF-8 bit 11 remains accepted.
+assert.deepEqual(preflight3mfZip(fixture([{name:'3D/3dmodel.model',flags:0x0800}]))
+  ,{entries:1,expandedBytes:1});
+for(const flags of [0x0010,0x0020,0x0040,0x2000,0x4000,0x8000,0x0002]) {
+  assert.throws(()=>preflight3mfZip(fixture([{
+    name:'3D/3dmodel.model',flags,
+  }])),/unsafe 3MF ZIP/);
+}
+console.log('PASS: bounded 3MF ZIP preflight rejects unsafe local headers, overlaps, descriptors, ambiguous extras and flags');
