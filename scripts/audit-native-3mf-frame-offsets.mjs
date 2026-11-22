@@ -43,31 +43,42 @@ export function auditNative3mfFrameOffsets(nativeInstances, viewerMatrices,
   if(candidates.some(matches=>matches.length===0))
     return Object.freeze({frame:'linear-mismatch',comparedInstances:0});
 
-  // Exhaustively check whether the LINEAR transforms permit a one-to-one
-  // assignment; cap the count at two to avoid factorial work for duplicates.
-  function matchings(sets,limit=2) {
-    let count=0, mapping=null;
-    const chosen=Array(n).fill(-1), used=Array(n).fill(false);
+  // A naive exhaustive search can take factorial time even for <=64
+  // instances when every native item matches 63 of 64 viewer items but no
+  // perfect bijection exists (Hall's condition). Keep untrusted 3MF inspection
+  // bounded with augmenting-path bipartite matching instead.
+  function findMatching(sets, forbiddenI=-1, forbiddenJ=-1) {
+    const owner=Array(n).fill(-1);
     const order=Array.from({length:n},(_,i)=>i)
       .sort((i,j)=>sets[i].length-sets[j].length);
-    function visit(depth) {
-      if(count>=limit) return;
-      if(depth===n) {
-        count++;
-        if(count===1) mapping=chosen.slice();
-        return;
-      }
-      const i=order[depth];
+    function augment(i,seen) {
       for(const j of sets[i]) {
-        if(used[j]) continue;
-        used[j]=true;chosen[i]=j;
-        visit(depth+1);
-        used[j]=false;chosen[i]=-1;
-        if(count>=limit) return;
+        if ((i===forbiddenI && j===forbiddenJ) || seen[j]) continue;
+        seen[j]=true;
+        if(owner[j]===-1 || augment(owner[j],seen)) {
+          owner[j]=i;
+          return true;
+        }
       }
+      return false;
     }
-    visit(0);
-    return {count,mapping};
+    for(const i of order)
+      if(!augment(i,Array(n).fill(false))) return null;
+    const mapping=Array(n).fill(-1);
+    for(let j=0;j<n;j++) mapping[owner[j]]=j;
+    return mapping;
+  }
+  // A perfect matching is unique iff removing each of its matched edges
+  // destroys every perfect matching. At most n+1 bounded graph searches,
+  // not a factorial enumeration; preserve the old count=0/1/2 contract.
+  function matchings(sets,limit=2) {
+    const mapping=findMatching(sets);
+    if(!mapping) return {count:0,mapping:null};
+    if(limit===1) return {count:1,mapping};
+    for(let i=0;i<n;i++)
+      if(findMatching(sets,i,mapping[i]))
+        return {count:2,mapping};
+    return {count:1,mapping};
   }
   const linearMatches=matchings(candidates);
   if(linearMatches.count===0)
