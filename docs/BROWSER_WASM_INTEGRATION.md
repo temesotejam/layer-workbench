@@ -1811,3 +1811,17 @@ The synthetic rotated/nonuniform fixture's previously known anchor-spacing
 mismatch must remain visible. Passing world-facet matching and a detailed
 frame classification cannot establish desktop OrcaSlicer 3MF/G-code parity or
 print safety; production Pages still does not load the experimental WASM.
+
+## 2026-11-22: repeat-transform affine frame matching
+
+The isolated, read-only 3MF inspector now disambiguates repeated native/Three.js
+**linear** transforms only when there is exactly one bijection that also admits
+one common global translation (0.05 mm tolerance). It does not use array order.
+Repeated/coincident placements, absence of a common offset with multiple
+linear assignments, or otherwise non-unique alignments remain `ambiguous`.
+A unique linear assignment with non-shared translations continues to report
+`instance-dependent`; no mesh-local vertices or native object identity are
+inferred. The synthetic two-cube fixture now expects `common-offset` instead
+of marking all repeated rotations as ambiguous. This is strictly a diagnostic
+for localhost opt-in cross-origin-isolated sessions; the published Pages app,
+engine artifact, G-code and printer safety remain unchanged.
