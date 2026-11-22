@@ -2114,6 +2114,51 @@ try {
     assert.deepEqual(afterDelete[0].boundsMm,before[0].boundsMm);
     console.log('PASS: isolated two-build 3MF viewport has separate selectable/editable viewer instances; native export/save remains unavailable');
 
+    // The previous fixture was translation-only. Test a genuinely rotated,
+    // nonuniformly scaled Core 3MF in real Chrome and with the real pthread
+    // WASM engine, not only with synthetic JavaScript audit matrices.
+    await mfPage.locator('#remove-object').click();
+    await mfPage.locator('#object-count').getByText('0 objects').waitFor();
+    await mfPage.locator('#model-file').setInputFiles({
+      name:'two-build-rotated-scaled.3mf',mimeType:'model/3mf',
+      buffer:await readFile('parity-output/two-build-rotated-scaled.3mf'),
+    });
+    await mfPage.locator('#object-count').getByText('2 objects').waitFor({timeout:30000});
+    const rotatedBefore=await mfPage.evaluate(()=>globalThis.__layer3mfViewportAudit?.());
+    assert.deepEqual(rotatedBefore.map(item=>item.buildIndex),[1,2]);
+    assert.ok(rotatedBefore.every(item=>item.meshCount>0),'Each affine fixture build must render');
+    const approx=(actual,expected)=>Math.abs(actual-expected)<0.02;
+    // Independent corners of a 20-mm cube under local (1.5,.75,1.25)
+    // scale, 30-degree Z rotation and Core translation (90,90,0);
+    // the viewer then subtracts the centered 128-mm plate offset.
+    const first=rotatedBefore[0].boundsMm;
+    assert.ok(approx(first.min[0],-45.5) && approx(first.max[0],-12.01923789) &&
+      approx(first.min[1],-38) && approx(first.max[1],-10.00961894) &&
+      approx(first.min[2],0) && approx(first.max[2],25),
+      'Rotated/scaled 3MF first build must retain its independent world-space bounds');
+    const second=rotatedBefore[1].boundsMm;
+    assert.ok(approx(second.min[0],22) && approx(second.max[0],42) &&
+      approx(second.min[1],-38) && approx(second.max[1],-18) &&
+      approx(second.min[2],0) && approx(second.max[2],20),
+      'Unedited sibling build must preserve its original bounds');
+    assert.equal(await mfPage.locator('#lab-inspect-3mf').isEnabled(),true);
+    await mfPage.locator('#lab-inspect-3mf').click();
+    await mfPage.waitForFunction(()=>{
+      const state=document.querySelector('#lab-status')?.textContent??'';
+      return state.startsWith('Native 3MF read-only import:')||
+        state.startsWith('Native 3MF inspection FAILED:');
+    },null,{timeout:90000});
+    const rotatedReport=await mfPage.locator('#lab-status').innerText();
+    assert.match(rotatedReport,/^Native 3MF read-only import: .*2 instances,/);
+    assert.match(rotatedReport,/Native\/viewer anchor spacing: consistent \(1 pairs\)/);
+    assert.match(rotatedReport,/Native\/viewer linear parts: consistent \(2 instances\)/);
+    assert.deepEqual(await mfPage.evaluate(()=>globalThis.__layer3mfViewportAudit?.()),
+      rotatedBefore,'Read-only inspection of rotated/scaled 3MF must not modify the viewport');
+    assert.equal(await mfPage.locator('#lab-slice').isDisabled(),true,
+      'Rotated/scaled 3MF diagnostics must not enable unsupported slicing');
+    console.log('PASS: real isolated Chrome/WASM rotated + nonuniformly scaled 3MF has matching linear transforms and anchor spacing; independent viewport bounds verified, no print approval');
+
+
   } finally {
     await mfPage.close();
   }
