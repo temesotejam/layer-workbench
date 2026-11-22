@@ -40,9 +40,18 @@ RELS = """<?xml version="1.0" encoding="UTF-8"?>
 </Relationships>"""
 
 
-def make_file(destination: Path, *, rotated_scaled=False, distinct_objects=False, reverse_build_order=False, third_shared_mesh=False):
+def make_file(destination: Path, *, rotated_scaled=False, distinct_objects=False, reverse_build_order=False,
+              third_shared_mesh=False, positive_winding=False):
+    if positive_winding and not (rotated_scaled and third_shared_mesh):
+        raise ValueError('Positive-winding control requires the three-build rotated fixture')
     vertices = "\n".join(f'<vertex x="{x}" y="{y}" z="{z}"/>' for x,y,z in VERTICES)
-    triangles = "\n".join(f'<triangle v1="{a}" v2="{b}" v3="{c}"/>' for a,b,c in TRIANGLES)
+    # Reverse *only* source triangle indices; geometry and all build affines
+    # remain byte-for-byte equivalent to the negative-volume baseline.
+    # The baseline signed volume is -8000 mm^3; reversed faces give +8000.
+    triangles = "\n".join(
+        f'<triangle v1="{a}" v2="{c if positive_winding else b}" v3="{b if positive_winding else c}"/>'
+        for a, b, c in TRIANGLES
+    )
     model_xml = MODEL % (vertices, triangles)
     if distinct_objects:
         # Give the second build a genuinely different mesh/ID. Without this,
@@ -119,11 +128,14 @@ if __name__ == "__main__":
                         help="Reverse the order of two build items without changing their poses")
     parser.add_argument("--third-shared-mesh", action="store_true",
                         help="Append a third differently scaled build of object 1 (requires --rotated-scaled)")
+    parser.add_argument("--positive-winding", action="store_true",
+                        help="Reverse all Core face indices for a positive-volume three-build control")
     args = parser.parse_args()
     make_file(args.output, rotated_scaled=args.rotated_scaled,
               distinct_objects=args.distinct_objects,
               reverse_build_order=args.reverse_build_order,
-              third_shared_mesh=args.third_shared_mesh)
+              third_shared_mesh=args.third_shared_mesh,
+              positive_winding=args.positive_winding)
     print("Generated synthetic two-build-item Core 3MF "
           "(rotated-scaled variant; not desktop parity)" if args.rotated_scaled
           else "Generated synthetic two-build-item Core 3MF (not desktop parity):",
