@@ -9,12 +9,15 @@ function makeFakeArchive() {
   const v=new DataView(bytes.buffer);
   v.setUint32(0,0x04034b50,true);
   v.setUint16(4,20,true);
+  // CRC32 of the one-byte stored payload 'x' (0x78), verified independently.
+  v.setUint32(14,0x8cdc1683,true);
   v.setUint32(18,1,true); v.setUint32(22,1,true);
   v.setUint16(26,name.length,true);
   bytes.set(name,30); bytes[30+name.length]=0x78;
   const p=localLength;
   v.setUint32(p,0x02014b50,true);
   v.setUint16(p+4,20,true); v.setUint16(p+6,20,true);
+  v.setUint32(p+16,0x8cdc1683,true);
   v.setUint32(p+20,1,true); v.setUint32(p+24,1,true);
   v.setUint16(p+28,name.length,true);
   bytes.set(name,p+46);

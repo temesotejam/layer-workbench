@@ -1,12 +1,30 @@
 // Bounded ZIP envelope preflight for untrusted 3MF inspection on isolated localhost.
 // Checks central/local directory coherence before passing a compressed file to
-// native WASM. This does NOT decompress, verify CRCs, validate 3MF XML, or
-// guarantee that a compliant archive cannot trigger a native parser defect.
+// native WASM. CRC32 is independently checked for STORED members only; DEFLATE
+// members are NOT decompressed or CRC-verified. This does not validate 3MF XML
+// or guarantee that a compliant archive cannot trigger a native parser defect.
 // Deliberately reject ZIP64, split archives, encryption and exotic methods.
 export const MAX_3MF_ZIP_MEMBERS = 512;
 export const MAX_3MF_ZIP_EXPANDED_BYTES = 128 * 1024 * 1024;
 const MAX_MEMBER = 64 * 1024 * 1024;
 const fail = () => { throw new Error('Unsupported or unsafe 3MF ZIP envelope.'); };
+
+// CRC32 of raw ZIP STORED (method 0) bytes. DEFLATE member CRC requires a
+// bounded decompressor and is deliberately outside this synchronous preflight.
+// Use an unsigned result so checksum 0xffffffff is compared correctly.
+const CRC32_TABLE = new Uint32Array(256);
+for (let n = 0; n < CRC32_TABLE.length; n++) {
+  let c = n;
+  for (let bit = 0; bit < 8; bit++)
+    c = (c & 1) ? (c >>> 1) ^ 0xedb88320 : c >>> 1;
+  CRC32_TABLE[n] = c >>> 0;
+}
+function crc32Stored(bytes, start, end) {
+  let c = 0xffffffff;
+  for (let i = start; i < end; i++)
+    c = CRC32_TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
 
 export function preflight3mfZip(bytes) {
   if (!(bytes instanceof Uint8Array) || bytes.length < 22 || bytes.length > 8 * 1024 * 1024) fail();
@@ -87,6 +105,9 @@ export function preflight3mfZip(bytes) {
       if (bytes[local + 30 + j] !== bytes[offset + 46 + j]) fail();
     }
     const dataEnd = dataStart + compressed;
+    // A corrupted STORED member can otherwise pass matching ZIP headers.
+    // DEFLATE members are still structurally validated only.
+    if (method === 0 && crc32Stored(bytes, dataStart, dataEnd) !== crc) fail();
     const usesDescriptor = (flags & 0x0008) !== 0;
     const localCrc = u32(local + 14);
     const localCompressed = u32(local + 18);
