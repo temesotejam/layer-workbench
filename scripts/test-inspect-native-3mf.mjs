@@ -56,6 +56,31 @@ assert.deepEqual(placementReport.worldFacets,{facets:'unavailable',comparedTrian
 assert.ok(!JSON.stringify(placementReport).includes('"a"'));
 assert.equal(placementEngine.calls.at(-1),'dispose');
 
+// The inspector must run a REAL geometry comparator when a native converter
+// exists, while returning only a classification (never private vertex data).
+const face=[[90,90,0],[110,90,0],[90,110,0]];
+const singleStl=new Uint8Array(134);
+const dv=new DataView(singleStl.buffer);
+dv.setUint32(80,1,true);
+face.forEach((vertex,i)=>vertex.forEach((coord,axis)=>
+  dv.setFloat32(84+12+i*12+axis*4,coord,true)));
+const geometryEngine=fakeEngine();
+geometryEngine.threeMfToStl=async bytes=>{
+  assert.deepEqual(bytes,archive);
+  return singleStl;
+};
+const geometryReport=await inspectNative3mf(geometryEngine,file(),{
+  viewerFacets:[face.slice().reverse()],
+});
+assert.deepEqual(geometryReport.worldFacets,{facets:'consistent',comparedTriangles:1});
+assert.ok(!JSON.stringify(geometryReport).includes('90'));
+assert.equal(geometryEngine.calls.at(-1),'dispose');
+const incompatible=await inspectNative3mf(geometryEngine,file(),{
+  viewerFacets:[[[91,90,0],[111,90,0],[91,110,0]]],
+});
+assert.equal(incompatible.worldFacets.facets,'mismatch');
+
+
 for(const [f,pattern] of [
   [file(archive,'not-stl.stl'),/3MF archive/],
   [file(archive,'project.3mf',MAX_INSPECT_3MF_BYTES+1),/8 MiB/],
