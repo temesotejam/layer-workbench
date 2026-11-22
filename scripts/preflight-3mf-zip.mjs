@@ -29,12 +29,14 @@ export function preflight3mfZip(bytes) {
       directoryStart === 0xffffffff || directoryStart + directorySize !== end) fail();
   const decoder = new TextDecoder('utf-8', {fatal:true});
   const seen = new Set();
+  const localRanges = [];
   let offset = directoryStart;
   let expanded = 0;
   for (let i = 0; i < count; i++) {
     if (offset + 46 > end || u32(offset) !== 0x02014b50) fail();
     const flags = u16(offset + 8);
     const method = u16(offset + 10);
+    const crc = u32(offset + 16);
     const compressed = u32(offset + 20);
     const uncompressed = u32(offset + 24);
     const nameSize = u16(offset + 28);
@@ -68,10 +70,42 @@ export function preflight3mfZip(bytes) {
     for (let j = 0; j < nameSize; j++) {
       if (bytes[local + 30 + j] !== bytes[offset + 46 + j]) fail();
     }
+    const dataEnd = dataStart + compressed;
+    const usesDescriptor = (flags & 0x0008) !== 0;
+    const localCrc = u32(local + 14);
+    const localCompressed = u32(local + 18);
+    const localUncompressed = u32(local + 22);
+    // Without a descriptor, local and central headers must agree on CRC and
+    // lengths. Otherwise two ZIP readers can interpret different boundaries.
+    if (!usesDescriptor && (localCrc !== crc || localCompressed !== compressed ||
+        localUncompressed !== uncompressed)) fail();
+    // Streaming ZIP writers may use zero placeholders with flag bit 3, but
+    // populated local values must still agree with the central directory.
+    if (usesDescriptor && ((localCrc !== 0 && localCrc !== crc) ||
+        (localCompressed !== 0 && localCompressed !== compressed) ||
+        (localUncompressed !== 0 && localUncompressed !== uncompressed))) fail();
+    let recordEnd = dataEnd;
+    if (usesDescriptor) {
+      // Support both permitted 32-bit forms (12 bytes or signed 16 bytes).
+      // ZIP64 is rejected earlier. CRC bytes are compared, not recomputed.
+      const signed = dataEnd + 4 <= directoryStart && u32(dataEnd) === 0x08074b50;
+      const payloadStart = dataEnd + (signed ? 4 : 0);
+      if (payloadStart + 12 > directoryStart || u32(payloadStart) !== crc ||
+          u32(payloadStart + 4) !== compressed ||
+          u32(payloadStart + 8) !== uncompressed) fail();
+      recordEnd = payloadStart + 12;
+    }
+    localRanges.push([local, recordEnd]);
     expanded += uncompressed;
     if (expanded > MAX_3MF_ZIP_EXPANDED_BYTES) fail();
     offset += length;
   }
   if (offset !== end) fail();
+  // Reject overlapping local headers, data and optional descriptors. The
+  // central directory alone must not alias records or point into payloads.
+  localRanges.sort((a,b) => a[0] - b[0]);
+  for (let i = 1; i < localRanges.length; i++) {
+    if (localRanges[i][0] < localRanges[i - 1][1]) fail();
+  }
   return Object.freeze({entries:count, expandedBytes:expanded});
 }

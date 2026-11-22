@@ -50,6 +50,8 @@ on:
       - "scripts/audit-native-3mf-anchor-spacing.mjs"
       - "scripts/test-audit-native-3mf-anchor-spacing.mjs"
       - "scripts/test-inspect-native-3mf.mjs"
+      - "scripts/preflight-3mf-zip.mjs"
+      - "scripts/test-preflight-3mf-zip.mjs"
       - "scripts/prepare-engine-lab.mjs"
       - "docs/BROWSER_WASM_INTEGRATION.md"
       - ".github/workflows/test-3mf-parity.yml"

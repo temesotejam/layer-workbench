@@ -8,16 +8,25 @@ function fixture(members=[{name:'3D/3dmodel.model',data:'x'}], options={}) {
   let offset=0;
   for (const m of members) {
     const name=encoder.encode(m.name), data=encoder.encode(m.data ?? 'x');
-    const local=new Uint8Array(30+name.length+data.length);
+    const descriptor = m.descriptor ? new Uint8Array(m.signedDescriptor ? 16 : 12) : new Uint8Array();
+    if (m.descriptor) {
+      const dv=new DataView(descriptor.buffer);
+      const start=m.signedDescriptor ? 4 : 0;
+      if (m.signedDescriptor) dv.setUint32(0,0x08074b50,true);
+      dv.setUint32(start+4,data.length,true);
+      dv.setUint32(start+8,m.size??data.length,true);
+    }
+    const local=new Uint8Array(30+name.length+data.length+descriptor.length);
     const lv=new DataView(local.buffer);
     lv.setUint32(0,0x04034b50,true);
     lv.setUint16(4,20,true);
     lv.setUint16(6,m.flags??0,true);
     lv.setUint16(8,m.method??0,true);
-    lv.setUint32(18,data.length,true);
-    lv.setUint32(22,m.size??data.length,true);
+    lv.setUint32(18,m.descriptor?0:data.length,true);
+    lv.setUint32(22,m.descriptor?0:(m.size??data.length),true);
     lv.setUint16(26,name.length,true);
     local.set(name,30); local.set(data,30+name.length);
+    local.set(descriptor,30+name.length+data.length);
     localParts.push(local);
     const dir=new Uint8Array(46+name.length);
     const dv=new DataView(dir.buffer);
@@ -78,4 +87,30 @@ assert.throws(()=>preflight3mfZip(invalidOffsets),/unsafe 3MF ZIP/);
 const invalidLocalName=valid.slice();
 invalidLocalName[30]=0x61;
 assert.throws(()=>preflight3mfZip(invalidLocalName),/unsafe 3MF ZIP/);
-console.log('PASS: bounded 3MF ZIP preflight accepts stored envelopes and rejects unsafe/malformed structures');
+// A second parser must not be able to use different local/central lengths or
+// overlapping record ranges to see a different archive structure.
+for (const [headerOffset,value] of [[14,17],[18,2],[22,2]]) {
+  const invalid=valid.slice();
+  new DataView(invalid.buffer).setUint32(headerOffset,value,true);
+  assert.throws(()=>preflight3mfZip(invalid),/unsafe 3MF ZIP/);
+}
+const overlap=fixture([{name:'a.model',data:'x'},{name:'b.model',data:'y'}]);
+// This shifts the first payload one byte into the next local file header,
+// without affecting the central directory's original offsets.
+new DataView(overlap.buffer).setUint16(28,1,true);
+assert.throws(()=>preflight3mfZip(overlap),/unsafe 3MF ZIP/);
+// Both signed and unsigned standard streaming data descriptors are supported.
+for (const signedDescriptor of [false,true]) {
+  const member={name:'3D/3dmodel.model',data:'abc',flags:8,descriptor:true,signedDescriptor};
+  const streamed=fixture([member]);
+  assert.deepEqual(preflight3mfZip(streamed),{entries:1,expandedBytes:3});
+  const invalid=streamed.slice();
+  const crcOffset=30+new TextEncoder().encode(member.name).length+3+
+    (signedDescriptor?4:0);
+  new DataView(invalid.buffer).setUint32(crcOffset,7,true);
+  assert.throws(()=>preflight3mfZip(invalid),/unsafe 3MF ZIP/);
+}
+// Setting the descriptor flag without an actual descriptor is unsafe.
+assert.throws(()=>preflight3mfZip(fixture([{name:'x.model',data:'abc',flags:8}])),
+  /unsafe 3MF ZIP/);
+console.log('PASS: bounded 3MF ZIP preflight rejects unsafe local headers, overlaps and descriptors');
