@@ -197,6 +197,8 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
         " (" + report.linear.comparedInstances + " instances)." +
         " Native/viewer affine frame offsets: " + report.frameOffsets.frame +
         " (" + report.frameOffsets.comparedInstances + " uniquely matched instances)." +
+        " Shared native mesh local-origin hypothesis: " + report.sharedMeshReframe.reframe +
+        " (" + report.sharedMeshReframe.comparedInstances + " matched shared-mesh instances; not proof)." +
         " Native-converted/viewer world facets: " + report.worldFacets.facets +
         " (" + report.worldFacets.comparedTriangles + " triangles)." +
         " Viewer build-facet partition: " + report.worldGroups.partition +
