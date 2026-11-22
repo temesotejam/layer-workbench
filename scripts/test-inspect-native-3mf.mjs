@@ -66,6 +66,7 @@ assert.deepEqual(report,{plates:1,meshes:1,objects:1,instances:1,
   placement:{spacing:'unavailable',comparedPairs:0},
   linear:{linear:'unavailable',comparedInstances:0},
   frameOffsets:{frame:'unavailable',comparedInstances:0},
+  sharedMeshReframe:{reframe:'unavailable',comparedInstances:0},
   worldFacets:{facets:'unavailable',comparedTriangles:0},
   worldGroups:{partition:'unavailable',comparedBuilds:0,comparedTriangles:0}});
 assert.equal(Object.isFrozen(report),true);
@@ -86,6 +87,8 @@ const placementReport=await inspectNative3mf(placementEngine,file(),{
 });
 assert.deepEqual(placementReport.placement,{spacing:'consistent',comparedPairs:1});
 assert.deepEqual(placementReport.linear,{linear:'consistent',comparedInstances:2});
+assert.deepEqual(placementReport.sharedMeshReframe,{reframe:'ambiguous',comparedInstances:0},
+  'Repeated native/viewer transforms cannot identify individual local mesh origins');
 assert.deepEqual(placementReport.frameOffsets,{frame:'common-offset',comparedInstances:2},
   'Distinct positions uniquely align under a common offset even with identical linear maps');
 assert.deepEqual(placementReport.worldFacets,{facets:'unavailable',comparedTriangles:0});
