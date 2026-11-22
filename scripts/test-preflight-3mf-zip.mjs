@@ -1,13 +1,24 @@
 import assert from 'node:assert/strict';
 import {preflight3mfZip} from './preflight-3mf-zip.mjs';
 
-// A deterministic stored ZIP: tests envelope parsing, not 3MF XML semantics.
+// A deterministic stored ZIP: tests ZIP integrity, not 3MF XML semantics.
+// Deliberately use a bit-by-bit CRC implementation independent of the preflight.
+function fixtureCrc32(bytes) {
+  let crc = 0xffffffff;
+  for (const value of bytes) {
+    crc ^= value;
+    for (let bit = 0; bit < 8; bit++)
+      crc = (crc & 1) ? (crc >>> 1) ^ 0xedb88320 : crc >>> 1;
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
 function fixture(members=[{name:'3D/3dmodel.model',data:'x'}], options={}) {
   const encoder=new TextEncoder();
   const localParts=[], directoryParts=[];
   let offset=0;
   for (const m of members) {
     const name=encoder.encode(m.name), data=encoder.encode(m.data ?? 'x');
+    const crc=fixtureCrc32(data);
     const localExtra=m.localExtra ?? new Uint8Array();
     const centralExtra=m.centralExtra ?? new Uint8Array();
     const descriptor = m.descriptor ? new Uint8Array(m.signedDescriptor ? 16 : 12) : new Uint8Array();
@@ -15,6 +26,7 @@ function fixture(members=[{name:'3D/3dmodel.model',data:'x'}], options={}) {
       const dv=new DataView(descriptor.buffer);
       const start=m.signedDescriptor ? 4 : 0;
       if (m.signedDescriptor) dv.setUint32(0,0x08074b50,true);
+      dv.setUint32(start,crc,true);
       dv.setUint32(start+4,data.length,true);
       dv.setUint32(start+8,m.size??data.length,true);
     }
@@ -24,6 +36,7 @@ function fixture(members=[{name:'3D/3dmodel.model',data:'x'}], options={}) {
     lv.setUint16(4,20,true);
     lv.setUint16(6,m.flags??0,true);
     lv.setUint16(8,m.method??0,true);
+    lv.setUint32(14,m.descriptor?0:crc,true);
     lv.setUint32(18,m.descriptor?0:data.length,true);
     lv.setUint32(22,m.descriptor?0:(m.size??data.length),true);
     lv.setUint16(26,name.length,true);
@@ -39,6 +52,7 @@ function fixture(members=[{name:'3D/3dmodel.model',data:'x'}], options={}) {
     dv.setUint16(4,20,true); dv.setUint16(6,20,true);
     dv.setUint16(8,m.flags??0,true);
     dv.setUint16(10,m.method??0,true);
+    dv.setUint32(16,crc,true);
     dv.setUint32(20,data.length,true);
     dv.setUint32(24,m.size??data.length,true);
     dv.setUint16(28,name.length,true);
@@ -67,6 +81,21 @@ function fixture(members=[{name:'3D/3dmodel.model',data:'x'}], options={}) {
 
 const valid=fixture();
 assert.deepEqual(preflight3mfZip(valid),{entries:1,expandedBytes:1});
+assert.equal(fixtureCrc32(new TextEncoder().encode('123456789')),0xcbf43926,
+  'independent CRC fixture must match the standard test vector');
+// Changes to STORED file data must be rejected even when both ZIP headers
+// and any data descriptor still contain perfectly matching (stale) CRCs.
+const corruptedStored=valid.slice();
+corruptedStored[30+new TextEncoder().encode('3D/3dmodel.model').length] ^= 1;
+assert.throws(()=>preflight3mfZip(corruptedStored),/unsafe 3MF ZIP/);
+const forgedStored=valid.slice();
+const forgedView=new DataView(forgedStored.buffer);
+const directoryOffset=forgedView.getUint32(forgedStored.length-22+16,true);
+forgedView.setUint32(14,0,true);
+forgedView.setUint32(directoryOffset+16,0,true);
+assert.throws(()=>preflight3mfZip(forgedStored),/unsafe 3MF ZIP/);
+assert.deepEqual(preflight3mfZip(fixture([{name:'empty.model',data:''}])),
+  {entries:1,expandedBytes:0});
 assert.deepEqual(preflight3mfZip(fixture([
   {name:'[Content_Types].xml',data:'hello'},
   {name:'3D/3dmodel.model',data:'abc'},
@@ -145,4 +174,4 @@ for(const flags of [0x0010,0x0020,0x0040,0x2000,0x4000,0x8000,0x0002]) {
     name:'3D/3dmodel.model',flags,
   }])),/unsafe 3MF ZIP/);
 }
-console.log('PASS: bounded 3MF ZIP preflight rejects unsafe local headers, overlaps, descriptors, ambiguous extras and flags');
+console.log('PASS: bounded 3MF ZIP preflight verifies stored-member CRC and rejects unsafe local records, overlaps, descriptors, extras and flags');
