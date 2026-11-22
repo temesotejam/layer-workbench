@@ -260,6 +260,16 @@ jobs:
             --input parity-output/two-build-distinct-reversed.3mf \
             --expected-build-items 2 --min-triangles 12 \
             --report parity-output/two-build-distinct-reversed-scene.json
+          # Three independent transforms on the same Core mesh exercise the
+          # shared-local-origin hypothesis using the REAL pinned WASM candidate.
+          # The two-build fixture alone is mathematically insufficient.
+          python3 scripts/make_3mf_two_build_fixture.py \
+            --output parity-output/three-build-shared-mesh.3mf \
+            --rotated-scaled --third-shared-mesh
+          python3 scripts/audit_3mf_scene.py \
+            --input parity-output/three-build-shared-mesh.3mf \
+            --expected-build-items 3 --min-triangles 12 \
+            --report parity-output/three-build-shared-mesh-scene.json
           node scripts/test-engine-probe.mjs
           # Compare actual 3MF bytes exported and re-imported by the browser
           # engine. This is not a desktop 3MF parity result.
