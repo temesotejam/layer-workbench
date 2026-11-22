@@ -1,7 +1,8 @@
 // Read-only diagnostic of affine translation-frame consistency for native
 // one-slicer-api 0.7.0 instances and Three.js Core 3MF build items.
-// Match only uniquely distinguishable LINEAR transforms. Identical/nearby
-// transforms make correspondence ambiguous, not a successful parity claim.
+// First match 3x3 linear transforms; repeated transforms require exactly
+// one shared-translation bijection or are explicitly ambiguous. This remains
+// an alignment hypothesis, not native object identity or mesh attribution.
 // No original IDs, offsets, matrices or private geometry leave this module.
 const unavailable = Object.freeze({frame:'unavailable', comparedInstances:0});
 const finite = n => typeof n === 'number' && Number.isFinite(n) && Math.abs(n) <= 1e7;
