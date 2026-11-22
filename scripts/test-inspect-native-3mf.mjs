@@ -1,24 +1,29 @@
 import assert from 'node:assert/strict';
+import {deflateRawSync} from 'node:zlib';
 import {inspectNative3mf, MAX_INSPECT_3MF_BYTES} from './inspect-native-3mf.mjs';
 
-function makeFakeArchive() {
+function makeFakeArchive({compressed=false,corrupt=false}={}) {
   const name=new TextEncoder().encode('3D/3dmodel.model');
-  const localLength=30+name.length+1;
+  const payload=compressed ? new Uint8Array(deflateRawSync(Uint8Array.of(0x78))) : Uint8Array.of(0x78);
+  const localLength=30+name.length+payload.length;
   const directoryLength=46+name.length;
   const bytes=new Uint8Array(localLength+directoryLength+22);
   const v=new DataView(bytes.buffer);
   v.setUint32(0,0x04034b50,true);
   v.setUint16(4,20,true);
+  v.setUint16(8,compressed?8:0,true);
   // CRC32 of the one-byte stored payload 'x' (0x78), verified independently.
   v.setUint32(14,0x8cdc1683,true);
-  v.setUint32(18,1,true); v.setUint32(22,1,true);
+  v.setUint32(18,payload.length,true); v.setUint32(22,1,true);
   v.setUint16(26,name.length,true);
-  bytes.set(name,30); bytes[30+name.length]=0x78;
+  bytes.set(name,30); bytes.set(payload,30+name.length);
+  if (corrupt) bytes[30+name.length]^=1;
   const p=localLength;
   v.setUint32(p,0x02014b50,true);
   v.setUint16(p+4,20,true); v.setUint16(p+6,20,true);
+  v.setUint16(p+10,compressed?8:0,true);
   v.setUint32(p+16,0x8cdc1683,true);
-  v.setUint32(p+20,1,true); v.setUint32(p+24,1,true);
+  v.setUint32(p+20,payload.length,true); v.setUint32(p+24,1,true);
   v.setUint16(p+28,name.length,true);
   bytes.set(name,p+46);
   const e=p+directoryLength;
@@ -32,7 +37,7 @@ const archive = makeFakeArchive();
 const file = (bytes=archive, name='project.3mf', size=bytes.length) => ({
   name, size, async arrayBuffer() {return bytes.slice().buffer;},
 });
-function fakeEngine({failAt=null, manifest={
+function fakeEngine({failAt=null,expectedArchive=archive, manifest={
   schemaVersion:'0.7.0',plates:[{id:'plate'}],meshes:[{id:'mesh'}],
   objects:[{id:'private-object'}],instances:[{id:'private-instance'}],
 }}={}) {
@@ -41,7 +46,7 @@ function fakeEngine({failAt=null, manifest={
     async initProfile(kind,bytes) {
       calls.push('init');
       assert.equal(kind,'project.3mf');
-      assert.deepEqual(bytes,archive);
+      assert.deepEqual(bytes,expectedArchive);
       if(failAt==='init') throw new Error('unsupported format');
     },
     async getManifest() {
@@ -141,4 +146,17 @@ for(const invalid of [
 const rejected=fakeEngine();
 await assert.rejects(inspectNative3mf(rejected,file(Uint8Array.from([...archive,0]))),/unsafe 3MF ZIP/);
 assert.deepEqual(rejected.calls,[]);
-console.log('PASS: native 3MF read-only inspection, anchor spacing, linear parity, size/signature limits, privacy and session cleanup');
+// A valid raw-DEFLATE member is accepted, but corrupt compressed bytes are
+// rejected before any native WASM session exists (not merely in a unit test).
+const deflatedArchive=makeFakeArchive({compressed:true});
+const deflatedEngine=fakeEngine({expectedArchive:deflatedArchive});
+const deflatedReport=await inspectNative3mf(deflatedEngine,file(deflatedArchive));
+assert.equal(deflatedReport.instances,1);
+assert.deepEqual(deflatedEngine.calls,['init','manifest','dispose']);
+const invalidDeflated=makeFakeArchive({compressed:true,corrupt:true});
+const blockedDeflatedEngine=fakeEngine();
+await assert.rejects(inspectNative3mf(blockedDeflatedEngine,file(invalidDeflated)),
+  /unsafe 3MF ZIP/);
+assert.deepEqual(blockedDeflatedEngine.calls,[],
+  'Corrupt DEFLATE must be rejected without allocating a native session');
+console.log('PASS: native 3MF read-only inspection, pre-session compressed CRC rejection, affine diagnostics, privacy and cleanup');
