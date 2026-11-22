@@ -26,6 +26,10 @@ on:
       - "scripts/inspect-native-3mf.mjs"
       - "scripts/audit-native-3mf-relations.mjs"
       - "scripts/test-audit-native-3mf-relations.mjs"
+      - "scripts/audit-native-3mf-anchor-spacing.mjs"
+      - "scripts/test-audit-native-3mf-anchor-spacing.mjs"
+      - "scripts/audit-native-3mf-anchor-spacing.mjs"
+      - "scripts/test-audit-native-3mf-anchor-spacing.mjs"
       - "scripts/test-inspect-native-3mf.mjs"
       - "scripts/test-engine-probe.mjs"
       - "scripts/parity-cube-fixture.mjs"
@@ -187,6 +191,7 @@ jobs:
           node scripts/test-3mf-viewport-items.mjs
           node scripts/test-inspect-native-3mf.mjs
           node scripts/test-audit-native-3mf-relations.mjs
+          node scripts/test-audit-native-3mf-anchor-spacing.mjs
           node --check scripts/three-mf-viewport-items.mjs
           node --check scripts/gcode-3d-preview.mjs
           node --check scripts/gcode-layer-preview.mjs
