@@ -1790,10 +1790,13 @@ declared expansion at 128 MiB. Invalid input is rejected without exposing entry
 names or invoking the native engine. Synthetic ZIP regression fixtures are tested
 on CI; an isolated Chrome test exercises the existing real 3MF import path.
 
-This is an **envelope-only preflight**. It does not decompress members, validate
-their CRC or XML, eliminate every ZIP bomb or native parser vulnerability,
-establish 3MF semantic preservation, or make user G-code printable. It does not
-change the published Pages app or enable WASM outside localhost.
+This is a **bounded ZIP-structure preflight with STORED-entry CRC32 checks**.
+It recalculates CRC32 for uncompressed (method 0) member payloads before native
+WASM session creation, rejecting corrupted bytes even when ZIP headers agree.
+**DEFLATE (method 8) member payloads are NOT decompressed or CRC-verified.**
+It does not validate 3MF XML, eliminate every ZIP bomb or native parser
+vulnerability, establish semantic preservation, or make G-code printable.
+The published Pages app is unchanged; WASM remains limited to opt-in localhost.
 
 ## 2026-11-22: unique affine-frame offset gate (localhost only)
 
