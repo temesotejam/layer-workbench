@@ -2082,7 +2082,7 @@ try {
     assert.match(inspection,/Native\/viewer linear parts: consistent \(2 instances\)/);
     assert.match(inspection,/Native\/viewer affine frame offsets: common-offset \(2 uniquely matched instances\)/,
       'Two identical linear maps with distinct anchors require a unique common-translation assignment');
-    assert.match(inspection,/Shared native mesh local-origin hypothesis: ambiguous \\(0 matched shared-mesh instances; not proof\\)\\./,
+    assert.match(inspection,/Shared native mesh local-origin hypothesis: ambiguous \(0 matched shared-mesh instances; not proof\)\./,
       'Duplicate linear transformations do not identify native/viewer mesh frame pairs');
     assert.match(inspection,/Native-converted\/viewer world facets: consistent \(24 triangles\)/);
     assert.match(inspection,/Viewer build-facet partition: separable \(2 viewer builds\)/);
@@ -2165,7 +2165,7 @@ try {
     assert.match(rotatedReport,/Native\/viewer linear parts: consistent \(2 instances\)/);
     assert.match(rotatedReport,/Native\/viewer affine frame offsets: instance-dependent \(2 uniquely matched instances\)/,
       'Rotated native/viewer anchor gap cannot be explained by one global bed translation');
-    assert.match(rotatedReport,/Shared native mesh local-origin hypothesis: insufficient-shared-instances \\(0 matched shared-mesh instances; not proof\\)\\./,
+    assert.match(rotatedReport,/Shared native mesh local-origin hypothesis: insufficient-shared-instances \(0 matched shared-mesh instances; not proof\)\./,
       'Two transforms cannot independently validate a shared local mesh reframe hypothesis');
     assert.match(rotatedReport,/Native-converted\/viewer world facets: consistent \(24 triangles\)/,
       'Rotated Core triangles must match native WASM converted geometry');
