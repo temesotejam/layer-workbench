@@ -49,6 +49,27 @@ assert.equal(audit(n([invalid,b]),[vA,vB]).frame,'unavailable');
 const singular=row(90,90,0,0,0,1);
 assert.equal(audit(n([singular,b]),[vA,vB]).frame,'unavailable');
 assert.equal(audit(n([a,b]),[vA,vB],-1).frame,'unavailable');
+// Hall-deficient near-complete graph: all 64 native instances can match
+// 63 viewer slots with the same linear map, but none can use the last slot.
+// Exhaustive backtracking previously needed up to 63! dead-end assignments.
+// The bounded matcher must return a genuine mismatch without hanging.
+const hallNative=n(Array.from({length:64},(_,i)=>row(i*2,0,0)));
+const hallView=Array.from({length:63},(_,i)=>col(row(i*2-128,0,0)))
+  .concat([col(row(0,0,0,Math.PI/2))]);
+assert.deepEqual(audit(hallNative,hallView),
+  {frame:'linear-mismatch',comparedInstances:0},
+  'Hall-deficient 64-instance affine graph must not trigger factorial search');
+// A valid 64-item shared translation has exactly one full matching despite
+// all 3x3 linear parts being identical and arbitrary viewer ordering.
+const fullViewer=Array.from({length:64},(_,i)=>col(row((63-i)*2-128,0,0)));
+assert.deepEqual(audit(hallNative,fullViewer),
+  {frame:'common-offset',comparedInstances:64},
+  'Polynomial search must retain valid 64-instance common-offset evidence');
+// Exactly coincident geometry is still ambiguous, not a unique ID match.
+const duplicates=n(Array.from({length:8},()=>row(0,0,0)));
+assert.deepEqual(audit(duplicates,Array.from({length:8},()=>col(row(-128,0,0)))),
+  {frame:'ambiguous',comparedInstances:0});
+
 const report=audit(n([a,b]),[moved,vB]);
 assert.ok(Object.isFrozen(report));
 assert.ok(!JSON.stringify(report).includes('90') && !JSON.stringify(report).includes('38'),
