@@ -39,6 +39,10 @@ on:
       - "scripts/inspect-native-3mf.mjs"
       - "scripts/audit-native-3mf-relations.mjs"
       - "scripts/test-audit-native-3mf-relations.mjs"
+      - "scripts/audit-native-3mf-anchor-spacing.mjs"
+      - "scripts/test-audit-native-3mf-anchor-spacing.mjs"
+      - "scripts/audit-native-3mf-anchor-spacing.mjs"
+      - "scripts/test-audit-native-3mf-anchor-spacing.mjs"
       - "scripts/test-inspect-native-3mf.mjs"
       - "scripts/prepare-engine-lab.mjs"
       - "docs/BROWSER_WASM_INTEGRATION.md"
@@ -98,6 +102,7 @@ jobs:
           node --check scripts/prepare-engine-lab.mjs
           node scripts/test-inspect-native-3mf.mjs
           node scripts/test-audit-native-3mf-relations.mjs
+          node scripts/test-audit-native-3mf-anchor-spacing.mjs
       - name: Check 3MF comparator syntax and unit tests
         run: |
           set -euo pipefail
