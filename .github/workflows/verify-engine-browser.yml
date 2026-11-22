@@ -36,6 +36,7 @@ on:
       - "scripts/test-audit-native-3mf-anchor-spacing.mjs"
       - "scripts/test-inspect-native-3mf.mjs"
       - "scripts/test-engine-probe.mjs"
+      - "scripts/test_make_3mf_two_build_fixture.py"
       - "scripts/parity-cube-fixture.mjs"
       - "scripts/test-parity-cube-fixture.mjs"
       - "scripts/audit-wasm-cube-deposition.mjs"
@@ -103,6 +104,7 @@ on:
       - "index.html"
       - "scripts/serve-isolated.py"
       - "scripts/test-engine-probe.mjs"
+      - "scripts/test_make_3mf_two_build_fixture.py"
       - "scripts/parity-cube-fixture.mjs"
       - "scripts/test-parity-cube-fixture.mjs"
       - "scripts/audit-wasm-cube-deposition.mjs"
@@ -210,6 +212,7 @@ jobs:
           node --check scripts/test-browser-3mf-roundtrip.mjs
           node --check scripts/test-browser-3mf-multiobject.mjs
           python3 -m unittest discover -s scripts -p test_check_3mf_stl_bounds.py -v
+          python3 scripts/test_make_3mf_two_build_fixture.py -v
       - name: Launch isolated local server and probe engine in Chrome
         shell: bash
         run: |
@@ -235,6 +238,15 @@ jobs:
             --input parity-output/two-build-rotated-scaled.3mf \
             --expected-build-items 2 --min-triangles 12 \
             --report parity-output/two-build-rotated-scaled-scene.json
+          # Different resource meshes and reversed build order: detect incorrect
+          # objectid binding that matching two identical cube instances misses.
+          python3 scripts/make_3mf_two_build_fixture.py \
+            --output parity-output/two-build-distinct-reversed.3mf \
+            --rotated-scaled --distinct-objects --reverse-build-order
+          python3 scripts/audit_3mf_scene.py \
+            --input parity-output/two-build-distinct-reversed.3mf \
+            --expected-build-items 2 --min-triangles 12 \
+            --report parity-output/two-build-distinct-reversed-scene.json
           node scripts/test-engine-probe.mjs
           # Compare actual 3MF bytes exported and re-imported by the browser
           # engine. This is not a desktop 3MF parity result.

@@ -76,3 +76,25 @@ mismatch**; that diagnostic remains a mismatch until its frame convention is
 derived. Per-instance matching, nested components, 3MF edit/save,
 manufacturer profiles, G-code parity and print safety remain outstanding.
 The published GitHub Pages workspace and WASM candidate are unchanged.
+
+## Distinct-resource/reordered-build regression (proposed)
+
+The original two-item synthetic Core fixture references the **same 20-mm cube
+resource twice**. A global 24-triangle match may miss an incorrect assignment
+between those identical instances. A new opt-in isolated Chrome fixture now
+uses two actual mesh resources: the rotated/scaled 20-mm cube and a separate
+10 × 15 × 25-mm rectangular solid. The Core `<build>` items are deliberately
+reversed while retaining their original transforms and object references.
+
+The browser integration gate checks both displayed per-build world bounding
+boxes independently and uses the original read-only real WASM 3MF-to-STL
+conversion to compare the combined 24 world triangles. It also verifies that
+the inspector does not modify the viewer or enable unverified 3MF slicing.
+The fixture is produced on demand inside CI, with no vendor files included.
+
+This increases coverage of object-reference/order handling; **flattened STL
+still cannot prove native instance-ID equivalence** or explain the remaining
+transform-anchor mismatch. The acceptance result must be taken from a
+successful isolated-Chrome CI run rather than from generation of the fixture
+alone. 3MF editing/saving, desktop G-code parity, and print safety remain
+unproven.

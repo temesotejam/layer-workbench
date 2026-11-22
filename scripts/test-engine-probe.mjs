@@ -2168,6 +2168,53 @@ try {
       'Rotated/scaled 3MF diagnostics must not enable unsupported slicing');
     console.log('PASS: real isolated Chrome/WASM rotated/nonuniform Core 3MF: linear terms consistent, independent Three.js world bounds verified; native anchor spacing MISMATCH explicitly retained, no print approval');
 
+    // The two previous builds reference the SAME cube mesh. That cannot
+    // reveal every wrong objectid -> mesh mapping. In this independent test
+    // the second resource has a different size, while the <build> item order
+    // is reversed (object 2 first, transformed object 1 second).
+    for (const remaining of [1, 0]) {
+      await mfPage.locator('#object-tree [data-object-id]').first().click();
+      await mfPage.locator('#remove-object').click();
+      await mfPage.locator('#object-count')
+        .getByText(remaining === 1 ? '1 object' : '0 objects').waitFor();
+    }
+    await mfPage.locator('#model-file').setInputFiles({
+      name:'two-build-distinct-reversed.3mf', mimeType:'model/3mf',
+      buffer:await readFile('parity-output/two-build-distinct-reversed.3mf'),
+    });
+    await mfPage.locator('#object-count').getByText('2 objects').waitFor({timeout:30000});
+    const distinctBefore=await mfPage.evaluate(()=>globalThis.__layer3mfViewportAudit?.());
+    assert.deepEqual(distinctBefore.map(item=>item.buildIndex),[1,2]);
+    assert.ok(distinctBefore.every(item=>item.meshCount>0));
+    // Build item 1 now uses object 2: (10 x 15 x 25) mm at (150,90,0).
+    // Build item 2 uses object 1: rotated/nonuniform 20-mm cube at (90,90,0).
+    const distinctFirst=distinctBefore[0].boundsMm;
+    const distinctSecond=distinctBefore[1].boundsMm;
+    assert.ok(approx(distinctFirst.min[0],22) && approx(distinctFirst.max[0],32) &&
+      approx(distinctFirst.min[1],-38) && approx(distinctFirst.max[1],-23) &&
+      approx(distinctFirst.min[2],0) && approx(distinctFirst.max[2],25),
+      'Reordered first build must use the distinct second resource, not the original cube');
+    assert.ok(approx(distinctSecond.min[0],-45.5) && approx(distinctSecond.max[0],-12.01923789) &&
+      approx(distinctSecond.min[1],-38) && approx(distinctSecond.max[1],-10.00961894) &&
+      approx(distinctSecond.min[2],0) && approx(distinctSecond.max[2],25),
+      'Reordered second build must retain the rotated/scaled original resource');
+    await mfPage.locator('#lab-inspect-3mf').click();
+    await mfPage.waitForFunction(()=>{
+      const state=document.querySelector('#lab-status')?.textContent??'';
+      return state.startsWith('Native 3MF read-only import:')||
+        state.startsWith('Native 3MF inspection FAILED:');
+    },null,{timeout:90000});
+    const distinctReport=await mfPage.locator('#lab-status').innerText();
+    assert.match(distinctReport,/^Native 3MF read-only import: .*2 instances,/);
+    assert.match(distinctReport,/Native-converted\/viewer world facets: consistent \(24 triangles\)/,
+      'Real WASM and viewer must agree on BOTH distinct resources after build reordering');
+    assert.deepEqual(await mfPage.evaluate(()=>globalThis.__layer3mfViewportAudit?.()),
+      distinctBefore,'Distinct/reversed Core inspection must not change the viewport');
+    assert.equal(await mfPage.locator('#lab-slice').isDisabled(),true,
+      'Unverified 3MF project slicing must remain disabled');
+    console.log('PASS: real Chrome/WASM distinct two-resource 3MF with reversed build order: 24 world triangles consistent; no edit/export/print approval');
+
+
 
   } finally {
     await mfPage.close();
