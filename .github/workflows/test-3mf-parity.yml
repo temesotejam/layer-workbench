@@ -65,6 +65,8 @@ on:
       - "scripts/audit-native-3mf-frame-offsets.mjs"
       - "scripts/test-audit-native-3mf-frame-offsets.mjs"
       - "scripts/audit-native-3mf-shared-mesh-reframe.mjs"
+      - "scripts/audit-native-3mf-world-facets.mjs"
+      - "scripts/test-audit-native-3mf-world-facets.mjs"
       - "scripts/test-audit-native-3mf-shared-mesh-reframe.mjs"
       - "scripts/preflight-3mf-zip.mjs"
       - "scripts/test-preflight-3mf-zip.mjs"

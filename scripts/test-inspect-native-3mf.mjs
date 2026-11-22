@@ -68,6 +68,7 @@ assert.deepEqual(report,{plates:1,meshes:1,objects:1,instances:1,
   frameOffsets:{frame:'unavailable',comparedInstances:0},
   sharedMeshReframe:{reframe:'unavailable',comparedInstances:0},
   worldFacets:{facets:'unavailable',comparedTriangles:0},
+  worldWinding:{winding:'unavailable',comparedTriangles:0},
   worldGroups:{partition:'unavailable',comparedBuilds:0,comparedTriangles:0}});
 assert.equal(Object.isFrozen(report),true);
 assert.equal(JSON.stringify(report).includes('private-'),false,'Do not leak object IDs or metadata');
@@ -113,6 +114,8 @@ const geometryReport=await inspectNative3mf(geometryEngine,file(),{
   viewerFacetGroups:[[face.slice().reverse()]],
 });
 assert.deepEqual(geometryReport.worldFacets,{facets:'consistent',comparedTriangles:1});
+assert.deepEqual(geometryReport.worldWinding,{winding:'reversed',comparedTriangles:1},
+  'Geometry matches but reversed corners must NOT be labeled oriented parity');
 assert.equal(geometryReport.worldGroups.partition,'unavailable',
   'One build cannot establish between-build facet separability');
 assert.ok(!JSON.stringify(geometryReport).includes('90'));
@@ -121,6 +124,7 @@ const incompatible=await inspectNative3mf(geometryEngine,file(),{
   viewerFacets:[[[91,90,0],[111,90,0],[91,110,0]]],
 });
 assert.equal(incompatible.worldFacets.facets,'mismatch');
+assert.equal(incompatible.worldWinding.winding,'mismatch');
 
 
 for(const [f,pattern] of [

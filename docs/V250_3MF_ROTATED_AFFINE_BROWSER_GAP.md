@@ -200,3 +200,28 @@ correspondence (or independently retrieved mesh-local geometry) before
 testing a reframe residual. This new regression is *not* 3MF project
 round-trip, desktop G-code parity, or printer safety. Public Pages
 remains unchanged.
+
+
+## Separate flattened-facet winding witness (2026-11-23)
+
+The prior `worldFacets: consistent` comparison intentionally allowed **all
+six triangle-corner permutations**, so it could not detect reversed native
+surface orientation. This matters for interpreting imported mesh topology:
+matching three points does not imply matching face winding.
+
+The isolated localhost inspector now independently compares cyclic
+permutations (preserved vertex order) and anticyclic permutations (reversed
+order), with a bounded full bipartite matching of up to 256 triangles.
+Its read-only `worldWinding` result is `consistent`, `reversed`,
+`mixed`, `ambiguous`, `mismatch`, or `unavailable`.
+Degenerate or tolerance-scale tiny triangles fail closed as `unavailable`;
+the STL header's normal-vector fields are **not** treated as trustworthy
+winding evidence. A shape-consistent but reversed/mixed result is explicitly
+**not** oriented parity. This witness is order-independent, exposes no
+user vertices/IDs, and does not establish native object associations,
+watertightness, manifoldness, 3MF metadata fidelity, G-code parity, or print
+safety. The synthetic three-build browser test records the actual v2.5.0
+candidate classification without assuming a result before CI.
+
+It does not solve the remaining native import frame/pivot mismatch in
+Issue #179 or enable the candidate on published Pages.

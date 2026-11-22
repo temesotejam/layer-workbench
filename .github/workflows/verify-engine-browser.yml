@@ -109,6 +109,8 @@ on:
       - "scripts/test-audit-native-3mf-frame-offsets.mjs"
       - "scripts/audit-native-3mf-shared-mesh-reframe.mjs"
       - "scripts/test-audit-native-3mf-shared-mesh-reframe.mjs"
+      - "scripts/audit-native-3mf-world-facets.mjs"
+      - "scripts/test-audit-native-3mf-world-facets.mjs"
       - "scripts/test-audit-native-3mf-linear-parity.mjs"
       - "app.js"
       - "index.html"
