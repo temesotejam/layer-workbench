@@ -36,6 +36,8 @@ on:
       - "scripts/test_patch_orcawasm_support_smoke.py"
       - "scripts/make_3mf_two_build_fixture.py"
       - "scripts/test_check_3mf_stl_bounds.py"
+      - "scripts/preflight-3mf-zip.mjs"
+      - "scripts/test-preflight-3mf-zip.mjs"
       - "scripts/inspect-native-3mf.mjs"
       - "scripts/audit-native-3mf-relations.mjs"
       - "scripts/test-audit-native-3mf-relations.mjs"
@@ -104,6 +106,7 @@ jobs:
         run: |
           node --check scripts/inspect-native-3mf.mjs
           node --check scripts/prepare-engine-lab.mjs
+          node scripts/test-preflight-3mf-zip.mjs
           node scripts/test-inspect-native-3mf.mjs
           node scripts/test-audit-native-3mf-relations.mjs
           node scripts/test-audit-native-3mf-anchor-spacing.mjs
