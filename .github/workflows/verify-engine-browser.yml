@@ -43,6 +43,8 @@ on:
       - "scripts/test-inspect-native-3mf.mjs"
       - "scripts/test-engine-probe.mjs"
       - "scripts/test_make_3mf_two_build_fixture.py"
+      - "scripts/export_core_fixture_facets.py"
+      - "scripts/test_export_core_fixture_facets.py"
       - "scripts/parity-cube-fixture.mjs"
       - "scripts/test-parity-cube-fixture.mjs"
       - "scripts/audit-wasm-cube-deposition.mjs"
@@ -117,6 +119,8 @@ on:
       - "scripts/serve-isolated.py"
       - "scripts/test-engine-probe.mjs"
       - "scripts/test_make_3mf_two_build_fixture.py"
+      - "scripts/export_core_fixture_facets.py"
+      - "scripts/test_export_core_fixture_facets.py"
       - "scripts/parity-cube-fixture.mjs"
       - "scripts/test-parity-cube-fixture.mjs"
       - "scripts/audit-wasm-cube-deposition.mjs"
@@ -228,6 +232,7 @@ jobs:
           node --check scripts/test-browser-3mf-multiobject.mjs
           python3 -m unittest discover -s scripts -p test_check_3mf_stl_bounds.py -v
           python3 scripts/test_make_3mf_two_build_fixture.py -v
+          python3 scripts/test_export_core_fixture_facets.py -v
       - name: Launch isolated local server and probe engine in Chrome
         shell: bash
         run: |
@@ -272,6 +277,10 @@ jobs:
             --input parity-output/three-build-shared-mesh.3mf \
             --expected-build-items 3 --min-triangles 12 \
             --report parity-output/three-build-shared-mesh-scene.json
+          # Independent original Core triangle indices; local CI artifact only.
+          python3 scripts/export_core_fixture_facets.py \
+            --input parity-output/three-build-shared-mesh.3mf \
+            --output parity-output/three-build-source-facets.json
           node scripts/test-engine-probe.mjs
           # Compare actual 3MF bytes exported and re-imported by the browser
           # engine. This is not a desktop 3MF parity result.
