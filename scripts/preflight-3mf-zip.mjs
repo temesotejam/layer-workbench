@@ -28,6 +28,20 @@ export function preflight3mfZip(bytes) {
   if (!count || count > MAX_3MF_ZIP_MEMBERS || directorySize === 0xffffffff ||
       directoryStart === 0xffffffff || directoryStart + directorySize !== end) fail();
   const decoder = new TextDecoder('utf-8', {fatal:true});
+  // Unicode Path (0x7075) can change the effective filename in ZIP readers.
+  // ZIP64 (0x0001) can change size/offset interpretation. Fail closed rather
+  // than disagreeing with the native parser about an archive member.
+  const inspectExtra = (start, size) => {
+    const limit = start + size;
+    if (limit > bytes.length) fail();
+    for (let pos = start; pos < limit;) {
+      if (pos + 4 > limit) fail();
+      const type = u16(pos), length = u16(pos + 2);
+      pos += 4;
+      if (pos + length > limit || type === 0x7075 || type === 0x0001) fail();
+      pos += length;
+    }
+  };
   const seen = new Set();
   const localRanges = [];
   let offset = directoryStart;
@@ -47,11 +61,12 @@ export function preflight3mfZip(bytes) {
     const length = 46 + nameSize + extraSize + commentSize;
     if (offset + length > end || !nameSize || u16(offset + 34) !== 0 ||
         compressed === 0xffffffff || uncompressed === 0xffffffff ||
-        local === 0xffffffff || (flags & (1 | 0x40 | 0x2000)) !== 0 ||
+        local === 0xffffffff || (flags & ~(method === 8 ? 0x080e : 0x0808)) !== 0 ||
         (method !== 0 && method !== 8) || compressed > bytes.length ||
         uncompressed > MAX_MEMBER || (uncompressed && !compressed) ||
         (method === 0 && compressed !== uncompressed) ||
         ((externalAttributes >>> 16) & 0o170000) === 0o120000) fail();
+    inspectExtra(offset + 46 + nameSize, extraSize);
     let name;
     try { name = decoder.decode(bytes.subarray(offset + 46, offset + 46 + nameSize)); }
     catch { fail(); }
@@ -67,6 +82,7 @@ export function preflight3mfZip(bytes) {
     const localExtraSize = u16(local + 28);
     const dataStart = local + 30 + localNameSize + localExtraSize;
     if (localNameSize !== nameSize || dataStart + compressed > directoryStart) fail();
+    inspectExtra(local + 30 + localNameSize, localExtraSize);
     for (let j = 0; j < nameSize; j++) {
       if (bytes[local + 30 + j] !== bytes[offset + 46 + j]) fail();
     }
