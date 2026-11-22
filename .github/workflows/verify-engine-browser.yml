@@ -224,6 +224,14 @@ jobs:
             --input parity-output/two-build-items.3mf \
             --expected-build-items 2 --min-triangles 12 \
             --report parity-output/two-build-items-scene.json
+          # Rotated + nonuniformly scaled Core build item: real Chrome must
+          # compare Three.js geometry/affines with the independent native WASM.
+          python3 scripts/make_3mf_two_build_fixture.py \
+            --output parity-output/two-build-rotated-scaled.3mf --rotated-scaled
+          python3 scripts/audit_3mf_scene.py \
+            --input parity-output/two-build-rotated-scaled.3mf \
+            --expected-build-items 2 --min-triangles 12 \
+            --report parity-output/two-build-rotated-scaled-scene.json
           node scripts/test-engine-probe.mjs
           # Compare actual 3MF bytes exported and re-imported by the browser
           # engine. This is not a desktop 3MF parity result.
