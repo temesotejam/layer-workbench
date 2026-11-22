@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "scripts/compare_gcode.py"
+      - "scripts/heater_setpoint_diagnostic.py"
       - "scripts/test_compare_gcode.py"
       - "scripts/check_parity_pair.py"
       - "scripts/test_check_parity_pair.py"
@@ -22,6 +23,7 @@ on:
   pull_request:
     paths:
       - "scripts/compare_gcode.py"
+      - "scripts/heater_setpoint_diagnostic.py"
       - "scripts/test_compare_gcode.py"
       - "scripts/check_parity_pair.py"
       - "scripts/test_check_parity_pair.py"
