@@ -32,7 +32,8 @@ assert.deepEqual(report,{plates:1,meshes:1,objects:1,instances:1,
   archiveBytes:archive.byteLength,schemaVersion:'0.7.0',relations:{
     ids:'unique',references:'unavailable',affineMatrices:'unavailable'},
   placement:{spacing:'unavailable',comparedPairs:0},
-  linear:{linear:'unavailable',comparedInstances:0}});
+  linear:{linear:'unavailable',comparedInstances:0},
+  worldFacets:{facets:'unavailable',comparedTriangles:0}});
 assert.equal(Object.isFrozen(report),true);
 assert.equal(JSON.stringify(report).includes('private-'),false,'Do not leak object IDs or metadata');
 assert.deepEqual(engine.calls,['init','manifest','dispose']);
@@ -51,8 +52,34 @@ const placementReport=await inspectNative3mf(placementEngine,file(),{
 });
 assert.deepEqual(placementReport.placement,{spacing:'consistent',comparedPairs:1});
 assert.deepEqual(placementReport.linear,{linear:'consistent',comparedInstances:2});
+assert.deepEqual(placementReport.worldFacets,{facets:'unavailable',comparedTriangles:0});
 assert.ok(!JSON.stringify(placementReport).includes('"a"'));
 assert.equal(placementEngine.calls.at(-1),'dispose');
+
+// The inspector must run a REAL geometry comparator when a native converter
+// exists, while returning only a classification (never private vertex data).
+const face=[[90,90,0],[110,90,0],[90,110,0]];
+const singleStl=new Uint8Array(134);
+const dv=new DataView(singleStl.buffer);
+dv.setUint32(80,1,true);
+face.forEach((vertex,i)=>vertex.forEach((coord,axis)=>
+  dv.setFloat32(84+12+i*12+axis*4,coord,true)));
+const geometryEngine=fakeEngine();
+geometryEngine.threeMfToStl=async bytes=>{
+  assert.deepEqual(bytes,archive);
+  return singleStl;
+};
+const geometryReport=await inspectNative3mf(geometryEngine,file(),{
+  viewerFacets:[face.slice().reverse()],
+});
+assert.deepEqual(geometryReport.worldFacets,{facets:'consistent',comparedTriangles:1});
+assert.ok(!JSON.stringify(geometryReport).includes('90'));
+assert.equal(geometryEngine.calls.at(-1),'dispose');
+const incompatible=await inspectNative3mf(geometryEngine,file(),{
+  viewerFacets:[[[91,90,0],[111,90,0],[91,110,0]]],
+});
+assert.equal(incompatible.worldFacets.facets,'mismatch');
+
 
 for(const [f,pattern] of [
   [file(archive,'not-stl.stl'),/3MF archive/],
