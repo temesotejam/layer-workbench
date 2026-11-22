@@ -81,7 +81,7 @@ def make_file(destination: Path, *, rotated_scaled=False, distinct_objects=False
         # its affine transform bound together. This catches index-based pairing.
         start = model_xml.index("<build>") + len("<build>")
         end = model_xml.index("</build>", start)
-        items = re.findall(r'<item\\s+[^<>]*/>', model_xml[start:end])
+        items = re.findall(r'<item\s+[^<>]*/>', model_xml[start:end])
         if len(items) != 2:
             raise ValueError("Expected exactly two independent build items")
         model_xml = model_xml[:start] + "\n" + "\n".join(reversed(items)) + "\n" + model_xml[end:]
