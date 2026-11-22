@@ -104,9 +104,11 @@ unproven.
 The opt-in localhost inspector adds an independent **affine frame offset**
 classification using only one-slicer-api 0.7.0 instance matrices and the
 currently rendered Three.js build-item world matrices. It matches row-major
-native and column-major Three.js **3×3 linear parts** only if the entire
-bipartite assignment is unique. Equal/similar rotations and scales are
-**ambiguous**, not a fabricated instance match. When unique, it checks whether
+native and column-major Three.js **3×3 linear parts**. For duplicated
+rotations/scales, it now also tests all possible one-to-one assignments under
+a **single common translation**, accepting only a unique full assignment.
+Coincident placements or multiple valid assignments remain `ambiguous`.
+Where linear parts uniquely identify items, it checks whether
 the per-instance translation deltas all equal one global viewer-root offset
 within 0.05 mm. Results: common-offset, instance-dependent, ambiguous,
 linear-mismatch, or unavailable; the UI and logs do not show coordinates,
@@ -116,9 +118,10 @@ The rotated and nonuniform Core fixture is required to show
 instance-dependent in isolated Chrome alongside the existing anchor-spacing
 mismatch. This tests whether a single 128-mm bed translation explains the
 gap: it does **not** claim an import pivot correction. The original
-translation-only two-cube fixture is intentionally ambiguous because both
-instances have identical linear transforms, even though the existing aggregate
-anchor-spacing gate is consistent. Native-converted flattened triangles must
+translation-only two-cube fixture now yields `common-offset` **only** because
+its two separated anchors admit exactly one shared-translation matching,
+despite identical linear transforms. This is still a constrained alignment
+hypothesis, not independent confirmation of native object IDs. Native-converted flattened triangles must
 still pass independently; the two diagnostics measure different properties.
 
 This is a diagnostic classification, **not** native instance identity, per-mesh

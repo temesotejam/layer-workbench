@@ -2080,8 +2080,8 @@ try {
     // A second, independent real-browser gate compares native and viewer
     // 3x3 affine linear parts; no instance-ID correspondence is assumed.
     assert.match(inspection,/Native\/viewer linear parts: consistent \(2 instances\)/);
-    assert.match(inspection,/Native\/viewer affine frame offsets: ambiguous \(0 uniquely matched instances\)/,
-      'Two identical linear maps must not be assigned fabricated native build identities');
+    assert.match(inspection,/Native\/viewer affine frame offsets: common-offset \(2 uniquely matched instances\)/,
+      'Two identical linear maps with distinct anchors require a unique common-translation assignment');
     assert.match(inspection,/Native-converted\/viewer world facets: consistent \(24 triangles\)/);
     console.log('NATIVE_3MF_LINEAR_PARITY '+
       inspection.match(/Native\/viewer linear parts: [^.]+\./)[0]);

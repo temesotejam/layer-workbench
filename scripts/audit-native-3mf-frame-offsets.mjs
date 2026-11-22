@@ -1,7 +1,8 @@
 // Read-only diagnostic of affine translation-frame consistency for native
 // one-slicer-api 0.7.0 instances and Three.js Core 3MF build items.
-// Match only uniquely distinguishable LINEAR transforms. Identical/nearby
-// transforms make correspondence ambiguous, not a successful parity claim.
+// First match 3x3 linear transforms; repeated transforms require exactly
+// one shared-translation bijection or are explicitly ambiguous. This remains
+// an alignment hypothesis, not native object identity or mesh attribution.
 // No original IDs, offsets, matrices or private geometry leave this module.
 const unavailable = Object.freeze({frame:'unavailable', comparedInstances:0});
 const finite = n => typeof n === 'number' && Number.isFinite(n) && Math.abs(n) <= 1e7;
@@ -41,30 +42,65 @@ export function auditNative3mfFrameOffsets(nativeInstances, viewerMatrices,
     similar(x.linear,y.linear,linearTolerance)?[j]:[]));
   if(candidates.some(matches=>matches.length===0))
     return Object.freeze({frame:'linear-mismatch',comparedInstances:0});
-  // Count up to two full bijections. More than one mapping would silently
-  // assign the wrong mesh/instance when transforms are duplicated.
-  let solutions=0, mapping=null;
-  const chosen=Array(n).fill(-1), used=Array(n).fill(false);
-  const order=Array.from({length:n},(_,i)=>i)
-    .sort((i,j)=>candidates[i].length-candidates[j].length);
-  function visit(depth) {
-    if (solutions>1) return;
-    if (depth===n) {solutions++;mapping=chosen.slice();return;}
-    const i=order[depth];
-    for(const j of candidates[i]) {
-      if(used[j]) continue;
-      used[j]=true;chosen[i]=j;
-      visit(depth+1);
-      used[j]=false;chosen[i]=-1;
-      if(solutions>1) return;
+
+  // Exhaustively check whether the LINEAR transforms permit a one-to-one
+  // assignment; cap the count at two to avoid factorial work for duplicates.
+  function matchings(sets,limit=2) {
+    let count=0, mapping=null;
+    const chosen=Array(n).fill(-1), used=Array(n).fill(false);
+    const order=Array.from({length:n},(_,i)=>i)
+      .sort((i,j)=>sets[i].length-sets[j].length);
+    function visit(depth) {
+      if(count>=limit) return;
+      if(depth===n) {
+        count++;
+        if(count===1) mapping=chosen.slice();
+        return;
+      }
+      const i=order[depth];
+      for(const j of sets[i]) {
+        if(used[j]) continue;
+        used[j]=true;chosen[i]=j;
+        visit(depth+1);
+        used[j]=false;chosen[i]=-1;
+        if(count>=limit) return;
+      }
     }
+    visit(0);
+    return {count,mapping};
   }
-  visit(0);
-  if(solutions===0) return Object.freeze({frame:'linear-mismatch',comparedInstances:0});
-  if(solutions>1) return Object.freeze({frame:'ambiguous',comparedInstances:0});
-  const delta = a[0].translation.map((v,axis)=>v-b[mapping[0]].translation[axis]);
-  const consistent = a.every((item,i)=>item.translation.every((v,axis)=>
-    Math.abs((v-b[mapping[i]].translation[axis])-delta[axis])<=translationToleranceMm));
-  return Object.freeze({frame:consistent?'common-offset':'instance-dependent',
-    comparedInstances:n});
+  const linearMatches=matchings(candidates);
+  if(linearMatches.count===0)
+    return Object.freeze({frame:'linear-mismatch',comparedInstances:0});
+  const deltaFor=(i,j)=>a[i].translation.map((v,axis)=>v-b[j].translation[axis]);
+  const matchesDelta=(i,j,delta)=>deltaFor(i,j).every((v,axis)=>
+    Math.abs(v-delta[axis])<=translationToleranceMm);
+
+  // With a unique linear assignment, test its translations directly.
+  if(linearMatches.count===1) {
+    const mapping=linearMatches.mapping;
+    const delta=deltaFor(0,mapping[0]);
+    const consistent=a.every((_,i)=>matchesDelta(i,mapping[i],delta));
+    return Object.freeze({frame:consistent?'common-offset':'instance-dependent',
+      comparedInstances:n});
+  }
+
+  // Duplicated rotations/scales need not imply ambiguous *placements*.
+  // Try each possible first-instance match as a common translation anchor,
+  // then require exactly ONE full matching respecting both the linear terms
+  // and that same global translation. Never select by array/build order.
+  let commonMappings=0;
+  for(const j of candidates[0]) {
+    const delta=deltaFor(0,j);
+    const constrained=candidates.map((choices,i)=>
+      choices.filter(k=>matchesDelta(i,k,delta)));
+    if(constrained.some(choices=>choices.length===0)) continue;
+    commonMappings+=matchings(constrained,2-commonMappings).count;
+    if(commonMappings>1) break;
+  }
+  // If no globally translated matching exists, duplicated linear transforms
+  // still cannot uniquely attribute a per-instance pivot difference.
+  // Coincident placements with >1 valid matching remain ambiguous as well.
+  return Object.freeze({frame:commonMappings===1?'common-offset':'ambiguous',
+    comparedInstances:commonMappings===1?n:0});
 }
