@@ -61,7 +61,8 @@ assert.deepEqual(report,{plates:1,meshes:1,objects:1,instances:1,
   placement:{spacing:'unavailable',comparedPairs:0},
   linear:{linear:'unavailable',comparedInstances:0},
   frameOffsets:{frame:'unavailable',comparedInstances:0},
-  worldFacets:{facets:'unavailable',comparedTriangles:0}});
+  worldFacets:{facets:'unavailable',comparedTriangles:0},
+  worldGroups:{partition:'unavailable',comparedBuilds:0,comparedTriangles:0}});
 assert.equal(Object.isFrozen(report),true);
 assert.equal(JSON.stringify(report).includes('private-'),false,'Do not leak object IDs or metadata');
 assert.deepEqual(engine.calls,['init','manifest','dispose']);
@@ -101,8 +102,11 @@ geometryEngine.threeMfToStl=async bytes=>{
 };
 const geometryReport=await inspectNative3mf(geometryEngine,file(),{
   viewerFacets:[face.slice().reverse()],
+  viewerFacetGroups:[[face.slice().reverse()]],
 });
 assert.deepEqual(geometryReport.worldFacets,{facets:'consistent',comparedTriangles:1});
+assert.equal(geometryReport.worldGroups.partition,'unavailable',
+  'One build cannot establish between-build facet separability');
 assert.ok(!JSON.stringify(geometryReport).includes('90'));
 assert.equal(geometryEngine.calls.at(-1),'dispose');
 const incompatible=await inspectNative3mf(geometryEngine,file(),{

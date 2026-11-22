@@ -2083,6 +2083,7 @@ try {
     assert.match(inspection,/Native\/viewer affine frame offsets: common-offset \(2 uniquely matched instances\)/,
       'Two identical linear maps with distinct anchors require a unique common-translation assignment');
     assert.match(inspection,/Native-converted\/viewer world facets: consistent \(24 triangles\)/);
+    assert.match(inspection,/Viewer build-facet partition: separable \(2 viewer builds\)/);
     console.log('NATIVE_3MF_LINEAR_PARITY '+
       inspection.match(/Native\/viewer linear parts: [^.]+\./)[0]);
     console.log('NATIVE_3MF_ANCHOR_SPACING '+
@@ -2164,6 +2165,8 @@ try {
       'Rotated native/viewer anchor gap cannot be explained by one global bed translation');
     assert.match(rotatedReport,/Native-converted\/viewer world facets: consistent \(24 triangles\)/,
       'Rotated Core triangles must match native WASM converted geometry');
+    assert.match(rotatedReport,/Viewer build-facet partition: separable \(2 viewer builds\)/,
+      'Rotated native facets must remain separable by their visible builds');
     console.log('NATIVE_3MF_WORLD_FACETS '+
       rotatedReport.match(/Native-converted\/viewer world facets: [^.]+\./)[0]);
     assert.deepEqual(await mfPage.evaluate(()=>globalThis.__layer3mfViewportAudit?.()),
@@ -2212,6 +2215,8 @@ try {
     assert.match(distinctReport,/^Native 3MF read-only import: .*2 instances,/);
     assert.match(distinctReport,/Native-converted\/viewer world facets: consistent \(24 triangles\)/,
       'Real WASM and viewer must agree on BOTH distinct resources after build reordering');
+    assert.match(distinctReport,/Viewer build-facet partition: separable \(2 viewer builds\)/,
+      'Distinct/reordered builds must be separable without relying on item order');
     assert.deepEqual(await mfPage.evaluate(()=>globalThis.__layer3mfViewportAudit?.()),
       distinctBefore,'Distinct/reversed Core inspection must not change the viewport');
     assert.equal(await mfPage.locator('#lab-slice').isDisabled(),true,

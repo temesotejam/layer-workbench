@@ -144,3 +144,21 @@ bounded 0.05 mm/1e-5 tolerances, and privacy-safe summaries are unchanged.
 This protects diagnostic responsiveness; it does **not** identify native
 mesh-local vertices, resolve the rotated anchor mismatch, or prove desktop
 3MF / G-code parity. No production Pages integration or WASM binaries change.
+
+## Bounded viewer-build facet partition (2026-11-23)
+
+The localhost-only 3MF inspector now asks whether triangles from the **flattened**
+native WASM 3MF-to-STL conversion can be assigned to the geometry of *each
+independent ThreeMFLoader build item*. It accepts only a full, bounded
+(256 triangles / 64 build items) world-facet match where every native
+triangle has a candidate match in exactly one viewer build. Duplicated or
+overlapping build triangles yield `ambiguous`, malformed/oversized input
+`unavailable`, and disagreements `mismatch`. The status reports only
+classification, build count and triangle count, never source coordinates.
+
+This is a more specific **viewer-build separability witness** than global
+triangle-set equality. It cannot recover any native build/object ID from the
+flattened STL or establish native mesh-local vertices, pivots, desktop project
+save compatibility, or print safety. The rotated anchor discrepancy remains
+open. Only a green isolated Chrome CI on the pinned v2.5.0 candidate confirms
+the end-to-end synthetic-fixture result.

@@ -28,9 +28,11 @@ function collectUnedited3mfWorldFacets(entries) {
       [root.scale.x,root.scale.y,root.scale.z].some(v=>Math.abs(v-1)>1e-8))
     return null;
   const facets=[];
+  const groups=[];
   try {
     root.updateMatrixWorld(true);
     for (const entry of entries) {
+      const group=[];
       entry.object.traverse(node=>{
         if (!node.isMesh) return;
         const position=node.geometry?.getAttribute('position');
@@ -53,11 +55,14 @@ function collectUnedited3mfWorldFacets(entries) {
             triangle.push([p.x-root.position.x,p.y-root.position.y,p.z-root.position.z]);
           }
           facets.push(triangle);
+          group.push(triangle);
         }
       });
+      if (!group.length) throw new Error('Empty 3MF viewer build');
+      groups.push(group);
     }
   } catch (_error) {return null;}
-  return facets.length ? facets : null;
+  return facets.length ? {facets,groups} : null;
 }
 
 export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
@@ -172,8 +177,11 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
         viewerMatrices.push(m);
         return [m[12],m[13],m[14]];
       });
-      const viewerFacets=collectUnedited3mfWorldFacets(selectedEntries);
-      const report = await inspectNative3mf(loaded.engine, selected.file, {viewerAnchors,viewerMatrices,viewerFacets});
+      const geometry=collectUnedited3mfWorldFacets(selectedEntries);
+      const report = await inspectNative3mf(loaded.engine, selected.file, {
+        viewerAnchors,viewerMatrices,viewerFacets:geometry?.facets??null,
+        viewerFacetGroups:geometry?.groups??null,
+      });
       const visible = selectedEntries.length;
       const countMatch = visible === report.instances;
       status.textContent = "Native 3MF read-only import: " + report.objects + " objects, " +
@@ -191,7 +199,9 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
         " (" + report.frameOffsets.comparedInstances + " uniquely matched instances)." +
         " Native-converted/viewer world facets: " + report.worldFacets.facets +
         " (" + report.worldFacets.comparedTriangles + " triangles)." +
-        " Flattened geometry only; no per-instance correspondence." +
+        " Viewer build-facet partition: " + report.worldGroups.partition +
+        " (" + report.worldGroups.comparedBuilds + " viewer builds)." +
+        " Flattened geometry only; no native instance correspondence." +
         " Imported metadata, edits and native viewport synchronization unverified." +
         " No edit, export or print approval.";
       onStatus("Local WASM imported the original 3MF for a read-only hierarchy diagnostic. " +
