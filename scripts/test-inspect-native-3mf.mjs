@@ -77,8 +77,8 @@ const placementReport=await inspectNative3mf(placementEngine,file(),{
 });
 assert.deepEqual(placementReport.placement,{spacing:'consistent',comparedPairs:1});
 assert.deepEqual(placementReport.linear,{linear:'consistent',comparedInstances:2});
-assert.deepEqual(placementReport.frameOffsets,{frame:'ambiguous',comparedInstances:0},
-  'Identical linear maps cannot identify the corresponding native instance');
+assert.deepEqual(placementReport.frameOffsets,{frame:'common-offset',comparedInstances:2},
+  'Distinct positions uniquely align under a common offset even with identical linear maps');
 assert.deepEqual(placementReport.worldFacets,{facets:'unavailable',comparedTriangles:0});
 assert.ok(!JSON.stringify(placementReport).includes('"a"'));
 assert.equal(placementEngine.calls.at(-1),'dispose');
