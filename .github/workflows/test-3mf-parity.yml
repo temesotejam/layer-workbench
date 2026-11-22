@@ -73,6 +73,8 @@ on:
       - "scripts/patch-orcawasm-support-smoke.py"
       - "scripts/test_patch_orcawasm_support_smoke.py"
       - "scripts/inspect-native-3mf.mjs"
+      - "scripts/audit-native-3mf-relations.mjs"
+      - "scripts/test-audit-native-3mf-relations.mjs"
       - "scripts/test-inspect-native-3mf.mjs"
       - "scripts/prepare-engine-lab.mjs"
       - "docs/BROWSER_WASM_INTEGRATION.md"

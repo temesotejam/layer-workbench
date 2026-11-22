@@ -86,6 +86,8 @@ on:
       - "scripts/test-transform-matrix.mjs"
       - "scripts/prepare-engine-lab.mjs"
       - "scripts/inspect-native-3mf.mjs"
+      - "scripts/audit-native-3mf-relations.mjs"
+      - "scripts/test-audit-native-3mf-relations.mjs"
       - "scripts/test-inspect-native-3mf.mjs"
       - "app.js"
       - "index.html"
