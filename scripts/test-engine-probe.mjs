@@ -2071,6 +2071,8 @@ try {
     assert.match(inspection,/^Native 3MF read-only import: .*2 instances,/,
       'Native WASM must expose both independent Core 3MF build placements');
     assert.match(inspection,/Browser build items: 2\. Counts agree/);
+    assert.match(inspection,/Native manifest relations: IDs (unique|duplicate|unavailable), links (valid|broken|unavailable|unverified), affine matrices (valid|invalid|unavailable)\./,
+      'The real WASM response must disclose only bounded relation classifications');
     assert.match(inspection,/No edit, export or print approval\./);
     assert.deepEqual(await mfPage.evaluate(()=>globalThis.__layer3mfViewportAudit?.()),before,
       'Read-only native 3MF inspection must not alter the Three.js viewport');

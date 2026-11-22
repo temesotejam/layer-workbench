@@ -1723,3 +1723,9 @@ This is a test of an **independent synthetic 3MF**, not a desktop-authored
 OrcaSlicer project, real machine profile, transform synchronization, native
 3MF editing/export or printing. The public Pages site still does not load WASM.
 A green test is evidence for this read-only path alone.
+
+## 2026-11-22: Native 3MF manifest relation classification
+
+The opt-in Prepare inspector now classifies exposed native API 0.7.0 plate/mesh/object/instance IDs, object-to-mesh and instance-to-object/plate references, and the 16-element affine matrix shape. Results contain **only** bounded status labels (`unique`/`duplicate`/`unavailable`, `valid`/`broken`/`unverified`/`unavailable`, `valid`/`invalid`/`unavailable`). If a native imported 3MF does not expose a field, the status is `unavailable`, not a fabricated PASS. No source IDs, coordinates, paths, or private metadata are displayed. Regression tests include missing links, duplicate IDs, NaN and non-affine matrices. The isolated Chrome test checks that the real candidate returns only classified statuses.
+
+This is **not a comparison to browser build-item transforms**, does not prove exact ID mapping to the Three.js viewport, and does not enable 3MF editing/export or printing. Next: establish and test a per-instance source-to-viewport mapping using verified native transform semantics and an independent Core 3MF fixture.

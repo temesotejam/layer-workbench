@@ -29,7 +29,8 @@ function fakeEngine({failAt=null, manifest={
 const engine=fakeEngine();
 const report=await inspectNative3mf(engine,file());
 assert.deepEqual(report,{plates:1,meshes:1,objects:1,instances:1,
-  archiveBytes:archive.byteLength,schemaVersion:'0.7.0'});
+  archiveBytes:archive.byteLength,schemaVersion:'0.7.0',relations:{
+    ids:'unique',references:'unavailable',affineMatrices:'unavailable'}});
 assert.equal(Object.isFrozen(report),true);
 assert.equal(JSON.stringify(report).includes('private-'),false,'Do not leak object IDs or metadata');
 assert.deepEqual(engine.calls,['init','manifest','dispose']);

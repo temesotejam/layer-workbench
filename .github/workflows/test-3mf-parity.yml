@@ -37,6 +37,8 @@ on:
       - "scripts/make_3mf_two_build_fixture.py"
       - "scripts/test_check_3mf_stl_bounds.py"
       - "scripts/inspect-native-3mf.mjs"
+      - "scripts/audit-native-3mf-relations.mjs"
+      - "scripts/test-audit-native-3mf-relations.mjs"
       - "scripts/test-inspect-native-3mf.mjs"
       - "scripts/prepare-engine-lab.mjs"
       - "docs/BROWSER_WASM_INTEGRATION.md"
@@ -93,6 +95,7 @@ jobs:
           node --check scripts/inspect-native-3mf.mjs
           node --check scripts/prepare-engine-lab.mjs
           node scripts/test-inspect-native-3mf.mjs
+          node scripts/test-audit-native-3mf-relations.mjs
       - name: Check 3MF comparator syntax and unit tests
         run: |
           set -euo pipefail
