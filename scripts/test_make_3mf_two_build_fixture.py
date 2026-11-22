@@ -11,11 +11,12 @@ from make_3mf_two_build_fixture import make_file
 NS = {"m": "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"}
 
 
-def read_model(*, distinct=False, reverse=False, rotated=False, third=False):
+def read_model(*, distinct=False, reverse=False, rotated=False, third=False, positive=False):
     with tempfile.TemporaryDirectory() as tmp:
         target = Path(tmp) / "fixture.3mf"
         make_file(target, distinct_objects=distinct, reverse_build_order=reverse,
-                  rotated_scaled=rotated, third_shared_mesh=third)
+                  rotated_scaled=rotated, third_shared_mesh=third,
+                  positive_winding=positive)
         with ZipFile(target) as zf:
             return ET.fromstring(zf.read("3D/3dmodel.model"))
 
@@ -39,6 +40,46 @@ class GeneratedCoreFixtureTest(unittest.TestCase):
         self.assertEqual([float(x) for x in items[2].attrib["transform"].split()],
                          [0.8, 0., 0., 0., 1.2, 0., 0., 0., 0.9, 195., 90., 0.])
         self.assertEqual(len(objects[0].findall("m:mesh/m:triangles/m:triangle", NS)), 12)
+
+    def test_positive_volume_control_changes_only_face_winding(self):
+        original = read_model(rotated=True, third=True)
+        positive = read_model(rotated=True, third=True, positive=True)
+        for root in (original, positive):
+            self.assertEqual(len(root.findall("m:build/m:item", NS)), 3)
+        # Same source vertices, object ID, build references and transform matrices.
+        old_obj = original.find("m:resources/m:object", NS)
+        new_obj = positive.find("m:resources/m:object", NS)
+        self.assertEqual(ET.tostring(old_obj.find("m:mesh/m:vertices", NS)),
+                         ET.tostring(new_obj.find("m:mesh/m:vertices", NS)))
+        self.assertEqual(
+            [i.attrib for i in original.findall("m:build/m:item", NS)],
+            [i.attrib for i in positive.findall("m:build/m:item", NS)])
+        old_tri = [tuple(int(t.get(k)) for k in ("v1", "v2", "v3"))
+                   for t in old_obj.findall("m:mesh/m:triangles/m:triangle", NS)]
+        new_tri = [tuple(int(t.get(k)) for k in ("v1", "v2", "v3"))
+                   for t in new_obj.findall("m:mesh/m:triangles/m:triangle", NS)]
+        self.assertEqual(new_tri, [(a, c, b) for a, b, c in old_tri])
+
+        vertices = [tuple(float(v.get(k)) for k in ("x", "y", "z"))
+                    for v in old_obj.findall("m:mesh/m:vertices/m:vertex", NS)]
+        def signed_volume(triangles):
+            total = 0.
+            for a, b, c in triangles:
+                p, q, r = (vertices[i] for i in (a, b, c))
+                total += (p[0] * (q[1] * r[2] - q[2] * r[1])
+                          + p[1] * (q[2] * r[0] - q[0] * r[2])
+                          + p[2] * (q[0] * r[1] - q[1] * r[0])) / 6
+            return total
+        self.assertAlmostEqual(signed_volume(old_tri), -8000.)
+        self.assertAlmostEqual(signed_volume(new_tri), 8000.)
+
+    def test_positive_winding_refuses_non_control_scenes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(ValueError):
+                make_file(Path(tmp) / "invalid.3mf", positive_winding=True)
+            with self.assertRaises(ValueError):
+                make_file(Path(tmp) / "invalid.3mf", rotated_scaled=True,
+                          positive_winding=True)
 
     def test_third_shared_mesh_witness_rejects_unsupported_combination(self):
         with tempfile.TemporaryDirectory() as tmp:

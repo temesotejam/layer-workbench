@@ -274,3 +274,29 @@ observed 36/36 source-to-STL reversal remains unresolved. Only actual Chrome
 CI logs may establish the pinned candidate's normal-field classification.
 No modification is made to the WASM engine, published Pages, saved 3MF,
 or G-code.
+
+## Positive/negative Core signed-volume control (2026-11-23; pending real Chrome)
+
+A new paired, locally generated synthetic 3MF fixture preserves the same
+three Build Item affine transforms, source vertices, single resource, archive
+structure and 36 world triangle locations. Only the Core triangle index order
+changes from `v1,v2,v3` to `v1,v3,v2`. The baseline mesh has a signed
+volume of −8,000 mm³; the index-reversed control has +8,000 mm³. Both
+volumes are asserted by Python regression tests. Their independently
+extracted Core world facets must differ only in facet orientation.
+
+The isolated Chrome workflow now runs **both** fixtures through the same
+immutable pinned v2.5.0 WASM `threeMfToStl` API and checks shape and winding
+independently. The test currently expects the negative-volume source to
+convert with reversed winding (already observed), and the positive-volume
+source to convert with consistent winding. **This is a hypothesis until the
+new Chrome job actually passes**; a failure must be investigated, not
+silently reclassified as parity. An aligned STL normal is only an advisory
+serialization witness and cannot by itself locate the importer operation.
+
+Even if the sign-control passes, it establishes only this bounded synthetic
+Core import/conversion behavior; it does not prove the exact internal
+flip stage, arbitrary 3MF support, mesh-local frame equivalence, desktop
+project round-trip, native G-code equality, or safe printing. No candidate
+WASM binary or public Pages behavior is changed; raw geometry stays in the
+isolated CI output.

@@ -286,6 +286,19 @@ jobs:
           python3 scripts/export_core_fixture_facets.py \
             --input parity-output/three-build-shared-mesh.3mf \
             --output parity-output/three-build-source-facets.json
+          # Controlled positive-volume Core face order: identical vertices,
+          # build references and transforms; ONLY v2/v3 are swapped.
+          # Keep the synthetic archive and source coordinates local to CI.
+          python3 scripts/make_3mf_two_build_fixture.py \
+            --output parity-output/three-build-positive-winding.3mf \
+            --rotated-scaled --third-shared-mesh --positive-winding
+          python3 scripts/audit_3mf_scene.py \
+            --input parity-output/three-build-positive-winding.3mf \
+            --expected-build-items 3 --min-triangles 12 \
+            --report parity-output/three-build-positive-winding-scene.json
+          python3 scripts/export_core_fixture_facets.py \
+            --input parity-output/three-build-positive-winding.3mf \
+            --output parity-output/three-build-positive-source-facets.json
           node scripts/test-engine-probe.mjs
           # Compare actual 3MF bytes exported and re-imported by the browser
           # engine. This is not a desktop 3MF parity result.
