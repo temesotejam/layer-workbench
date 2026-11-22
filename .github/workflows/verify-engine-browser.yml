@@ -23,6 +23,8 @@ on:
       - "scripts/obj-to-stl.mjs"
       - "scripts/test-obj-to-stl.mjs"
       - "scripts/prepare-engine-lab.mjs"
+      - "scripts/preflight-3mf-zip.mjs"
+      - "scripts/test-preflight-3mf-zip.mjs"
       - "scripts/inspect-native-3mf.mjs"
       - "scripts/audit-native-3mf-relations.mjs"
       - "scripts/test-audit-native-3mf-relations.mjs"
@@ -197,6 +199,7 @@ jobs:
           node scripts/test-surface-skin-diagnostic.mjs
           node scripts/test-initial-layer-travel-diagnostic.mjs
           node scripts/test-3mf-viewport-items.mjs
+          node scripts/test-preflight-3mf-zip.mjs
           node scripts/test-inspect-native-3mf.mjs
           node scripts/test-audit-native-3mf-relations.mjs
           node scripts/test-audit-native-3mf-anchor-spacing.mjs

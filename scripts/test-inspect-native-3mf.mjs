@@ -1,7 +1,31 @@
 import assert from 'node:assert/strict';
 import {inspectNative3mf, MAX_INSPECT_3MF_BYTES} from './inspect-native-3mf.mjs';
 
-const archive = new Uint8Array([0x50,0x4b,0x03,0x04,0,0,0,0]);
+function makeFakeArchive() {
+  const name=new TextEncoder().encode('3D/3dmodel.model');
+  const localLength=30+name.length+1;
+  const directoryLength=46+name.length;
+  const bytes=new Uint8Array(localLength+directoryLength+22);
+  const v=new DataView(bytes.buffer);
+  v.setUint32(0,0x04034b50,true);
+  v.setUint16(4,20,true);
+  v.setUint32(18,1,true); v.setUint32(22,1,true);
+  v.setUint16(26,name.length,true);
+  bytes.set(name,30); bytes[30+name.length]=0x78;
+  const p=localLength;
+  v.setUint32(p,0x02014b50,true);
+  v.setUint16(p+4,20,true); v.setUint16(p+6,20,true);
+  v.setUint32(p+20,1,true); v.setUint32(p+24,1,true);
+  v.setUint16(p+28,name.length,true);
+  bytes.set(name,p+46);
+  const e=p+directoryLength;
+  v.setUint32(e,0x06054b50,true);
+  v.setUint16(e+8,1,true); v.setUint16(e+10,1,true);
+  v.setUint32(e+12,directoryLength,true);
+  v.setUint32(e+16,p,true);
+  return bytes;
+}
+const archive = makeFakeArchive();
 const file = (bytes=archive, name='project.3mf', size=bytes.length) => ({
   name, size, async arrayBuffer() {return bytes.slice().buffer;},
 });
@@ -85,6 +109,7 @@ for(const [f,pattern] of [
   [file(archive,'not-stl.stl'),/3MF archive/],
   [file(archive,'project.3mf',MAX_INSPECT_3MF_BYTES+1),/8 MiB/],
   [file(new Uint8Array(8)),/ZIP signature/],
+  [file(Uint8Array.from([...archive,0])),/unsafe 3MF ZIP/],
   [file(new Uint8Array([0x50,0x4b,0x05,0x06,0,0,0,0])),/ZIP signature/],
 ]) await assert.rejects(inspectNative3mf(fakeEngine(),f),pattern);
 
@@ -102,4 +127,8 @@ for(const invalid of [
   await assert.rejects(inspectNative3mf(e,file()),/schema|manifest/);
   assert.equal(e.calls.at(-1),'dispose');
 }
+// Invalid ZIP is rejected before the WASM session is allocated.
+const rejected=fakeEngine();
+await assert.rejects(inspectNative3mf(rejected,file(Uint8Array.from([...archive,0]))),/unsafe 3MF ZIP/);
+assert.deepEqual(rejected.calls,[]);
 console.log('PASS: native 3MF read-only inspection, anchor spacing, linear parity, size/signature limits, privacy and session cleanup');

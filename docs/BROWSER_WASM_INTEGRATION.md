@@ -1777,3 +1777,20 @@ mapping and does not establish which browser rotation belongs to which native
 object. Component-local transforms, mesh world vertices, pivots, texture
 materials, 3MF settings, desktop authoring behavior, full G-code parity and
 print safety remain unverified. Browser edits are not exported as native 3MF.
+
+
+## 2026-11-22: bounded ZIP preflight for opt-in native 3MF inspection
+
+The read-only `inspectNative3mf()` localhost path now scans the 3MF ZIP central
+and local headers **before** allocating a native WASM session. It rejects split,
+ZIP64, encrypted, unsafe-path, duplicate-path, symbolic-link, unsupported-method,
+inconsistent-length and malformed directory entries. The diagnostic caps archive
+size at 8 MiB, member count at 512, any one expanded member at 64 MiB, and total
+declared expansion at 128 MiB. Invalid input is rejected without exposing entry
+names or invoking the native engine. Synthetic ZIP regression fixtures are tested
+on CI; an isolated Chrome test exercises the existing real 3MF import path.
+
+This is an **envelope-only preflight**. It does not decompress members, validate
+their CRC or XML, eliminate every ZIP bomb or native parser vulnerability,
+establish 3MF semantic preservation, or make user G-code printable. It does not
+change the published Pages app or enable WASM outside localhost.
