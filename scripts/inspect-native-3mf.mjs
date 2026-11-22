@@ -6,7 +6,7 @@ import {auditNative3mfAnchorSpacing} from './audit-native-3mf-anchor-spacing.mjs
 import {auditNative3mfLinearParity} from './audit-native-3mf-linear-parity.mjs';
 import {auditNative3mfFrameOffsets} from './audit-native-3mf-frame-offsets.mjs';
 import {auditNative3mfWorldFacets,auditNative3mfWorldFacetGroups} from './audit-native-3mf-world-facets.mjs';
-import {preflight3mfZip} from './preflight-3mf-zip.mjs';
+import {preflight3mfZipVerified} from './preflight-3mf-zip.mjs';
 export const MAX_INSPECT_3MF_BYTES = 8 * 1024 * 1024;
 
 export async function inspectNative3mf(engine, file, {viewerAnchors=null,viewerMatrices=null,viewerFacets=null,viewerFacetGroups=null}={}) {
@@ -22,7 +22,7 @@ export async function inspectNative3mf(engine, file, {viewerAnchors=null,viewerM
     throw new Error('Selected 3MF has an invalid ZIP signature or byte length.');
 
   // Fail closed on unsafe ZIP structure before invoking the native parser.
-  preflight3mfZip(bytes);
+  await preflight3mfZipVerified(bytes);
   const session = await engine.createSession();
   if (!session || typeof session.initProfile !== 'function' ||
       typeof session.getManifest !== 'function' || typeof session.dispose !== 'function')
