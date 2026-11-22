@@ -111,9 +111,18 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
     refresh();
     status.textContent = "Inspecting selected original 3MF in native WASM (read only)…";
     try {
-      const report = await inspectNative3mf(loaded.engine, selected.file);
-      const visible = getEntries().filter(entry =>
-        entry.format === "3mf" && entry.file === selected.file).length;
+      // Three.js matrixWorld uses column-major storage; only take the
+      // translation anchor, not the mesh or arbitrary model metadata.
+      // No native ID↔browser ID matching is implied by this diagnostic.
+      const selectedEntries = getEntries().filter(entry =>
+        entry.format === "3mf" && entry.file === selected.file);
+      const viewerAnchors = selectedEntries.map(entry => {
+        entry.object.updateMatrixWorld(true);
+        const m = entry.object.matrixWorld.elements;
+        return [m[12],m[13],m[14]];
+      });
+      const report = await inspectNative3mf(loaded.engine, selected.file, {viewerAnchors});
+      const visible = selectedEntries.length;
       const countMatch = visible === report.instances;
       status.textContent = "Native 3MF read-only import: " + report.objects + " objects, " +
         report.instances + " instances, " + report.meshes + " meshes, " + report.plates +
@@ -122,7 +131,10 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
           "COUNT MISMATCH: do not assume native/viewer hierarchy matches.") +
         " Native manifest relations: IDs " + report.relations.ids +
         ", links " + report.relations.references + ", affine matrices " +
-        report.relations.affineMatrices + ". Manifest-only diagnostic; browser transform parity untested." +
+        report.relations.affineMatrices + ". Native/viewer anchor spacing: " +
+        report.placement.spacing + " (" + report.placement.comparedPairs +
+        " pairs). This does NOT map instance IDs or verify mesh placements." +
+        " Manifest-only diagnostic; browser transform parity untested." +
         " No edit, export or print approval.";
       onStatus("Local WASM imported the original 3MF for a read-only hierarchy diagnostic. " +
         "The displayed Three.js scene is still independent of the native engine.");
