@@ -1790,11 +1790,18 @@ declared expansion at 128 MiB. Invalid input is rejected without exposing entry
 names or invoking the native engine. Synthetic ZIP regression fixtures are tested
 on CI; an isolated Chrome test exercises the existing real 3MF import path.
 
-This is a **bounded ZIP-structure preflight with STORED-entry CRC32 checks**.
-It recalculates CRC32 for uncompressed (method 0) member payloads before native
-WASM session creation, rejecting corrupted bytes even when ZIP headers agree.
-**DEFLATE (method 8) member payloads are NOT decompressed or CRC-verified.**
-It does not validate 3MF XML, eliminate every ZIP bomb or native parser
+The synchronous ZIP envelope preflight independently checks STORED (method 0)
+member CRC32. Since 2026-11-23, the isolated read-only inspector additionally
+uses an **async bounded raw-DEFLATE (method 8) payload verifier** before it
+allocates a native WASM session. It streams each compressed member, checking
+its actual expanded byte count against the declared per-member size and
+CRC32 against the central directory. Mismatched sizes/CRC, decoder failures,
+and absent browser `DecompressionStream('deflate-raw')` support fail closed.
+No inflated member payload or private member name is surfaced in the report.
+Node regression tests cover legitimate compressed/streaming members, forged CRC,
+corrupted payloads, understated expansion sizes, and decompression-bomb-shaped
+inputs. The isolated Chrome gate exercises the existing end-to-end 3MF path.
+This does not validate 3MF XML, eliminate every ZIP bomb or native parser
 vulnerability, establish semantic preservation, or make G-code printable.
 The published Pages app is unchanged; WASM remains limited to opt-in localhost.
 

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import {preflight3mfZip} from './preflight-3mf-zip.mjs';
+import {deflateRawSync} from 'node:zlib';
+import {preflight3mfZip,preflight3mfZipVerified} from './preflight-3mf-zip.mjs';
 
 // A deterministic stored ZIP: tests ZIP integrity, not 3MF XML semantics.
 // Deliberately use a bit-by-bit CRC implementation independent of the preflight.
@@ -17,8 +18,9 @@ function fixture(members=[{name:'3D/3dmodel.model',data:'x'}], options={}) {
   const localParts=[], directoryParts=[];
   let offset=0;
   for (const m of members) {
-    const name=encoder.encode(m.name), data=encoder.encode(m.data ?? 'x');
-    const crc=fixtureCrc32(data);
+    const name=encoder.encode(m.name), raw=encoder.encode(m.data ?? 'x');
+    const data=m.method===8 ? new Uint8Array(deflateRawSync(raw)) : raw;
+    const crc=fixtureCrc32(raw);
     const localExtra=m.localExtra ?? new Uint8Array();
     const centralExtra=m.centralExtra ?? new Uint8Array();
     const descriptor = m.descriptor ? new Uint8Array(m.signedDescriptor ? 16 : 12) : new Uint8Array();
@@ -28,7 +30,7 @@ function fixture(members=[{name:'3D/3dmodel.model',data:'x'}], options={}) {
       if (m.signedDescriptor) dv.setUint32(0,0x08074b50,true);
       dv.setUint32(start,crc,true);
       dv.setUint32(start+4,data.length,true);
-      dv.setUint32(start+8,m.size??data.length,true);
+      dv.setUint32(start+8,m.size??raw.length,true);
     }
     const local=new Uint8Array(30+name.length+localExtra.length+data.length+descriptor.length);
     const lv=new DataView(local.buffer);
@@ -38,7 +40,7 @@ function fixture(members=[{name:'3D/3dmodel.model',data:'x'}], options={}) {
     lv.setUint16(8,m.method??0,true);
     lv.setUint32(14,m.descriptor?0:crc,true);
     lv.setUint32(18,m.descriptor?0:data.length,true);
-    lv.setUint32(22,m.descriptor?0:(m.size??data.length),true);
+    lv.setUint32(22,m.descriptor?0:(m.size??raw.length),true);
     lv.setUint16(26,name.length,true);
     lv.setUint16(28,localExtra.length,true);
     local.set(name,30);
@@ -54,7 +56,7 @@ function fixture(members=[{name:'3D/3dmodel.model',data:'x'}], options={}) {
     dv.setUint16(10,m.method??0,true);
     dv.setUint32(16,crc,true);
     dv.setUint32(20,data.length,true);
-    dv.setUint32(24,m.size??data.length,true);
+    dv.setUint32(24,m.size??raw.length,true);
     dv.setUint16(28,name.length,true);
     dv.setUint16(30,centralExtra.length,true);
     dv.setUint32(38,m.external??0,true);
@@ -174,4 +176,46 @@ for(const flags of [0x0010,0x0020,0x0040,0x2000,0x4000,0x8000,0x0002]) {
     name:'3D/3dmodel.model',flags,
   }])),/unsafe 3MF ZIP/);
 }
-console.log('PASS: bounded 3MF ZIP preflight verifies stored-member CRC and rejects unsafe local records, overlaps, descriptors, extras and flags');
+// Method 8 is raw DEFLATE. Structural validation alone must NOT approve
+// corrupt compressed data or forged size/CRC fields before native import.
+const compressedName='3D/3dmodel.model';
+const compressed=fixture([{name:compressedName,data:'hello compressed model',method:8}]);
+const expectedCompressed={entries:1,expandedBytes:'hello compressed model'.length};
+assert.deepEqual(preflight3mfZip(compressed),expectedCompressed);
+assert.deepEqual(await preflight3mfZipVerified(compressed),expectedCompressed);
+assert.deepEqual(await preflight3mfZipVerified(valid),{entries:1,expandedBytes:1});
+assert.deepEqual(await preflight3mfZipVerified(fixture([
+  {name:'[Content_Types].xml',data:'type info',method:8},
+  {name:'3D/3dmodel.model',data:'cube',method:0},
+])),{entries:2,expandedBytes:13});
+for(const signedDescriptor of [false,true]) {
+  const streamed=fixture([{name:compressedName,data:'streamed deflate',method:8,
+    flags:8,descriptor:true,signedDescriptor}]);
+  assert.deepEqual(await preflight3mfZipVerified(streamed),
+    {entries:1,expandedBytes:'streamed deflate'.length});
+}
+const corruptDeflate=compressed.slice();
+corruptDeflate[30+new TextEncoder().encode(compressedName).length] ^= 1;
+assert.deepEqual(preflight3mfZip(corruptDeflate),expectedCompressed,
+  'The structural checker intentionally does not decompress method 8');
+await assert.rejects(preflight3mfZipVerified(corruptDeflate),/unsafe 3MF ZIP/);
+const forgedDeflateCrc=compressed.slice();
+const forgedDeflateView=new DataView(forgedDeflateCrc.buffer);
+const forgedDeflateDir=forgedDeflateView.getUint32(forgedDeflateCrc.length-22+16,true);
+forgedDeflateView.setUint32(14,0,true);
+forgedDeflateView.setUint32(forgedDeflateDir+16,0,true);
+assert.deepEqual(preflight3mfZip(forgedDeflateCrc),expectedCompressed);
+await assert.rejects(preflight3mfZipVerified(forgedDeflateCrc),/unsafe 3MF ZIP/);
+const forgedDeflateSize=fixture([{name:compressedName,data:'longer than claimed',method:8,size:1}]);
+assert.deepEqual(preflight3mfZip(forgedDeflateSize),{entries:1,expandedBytes:1});
+await assert.rejects(preflight3mfZipVerified(forgedDeflateSize),/unsafe 3MF ZIP/);
+const compressedBomb=fixture([{name:compressedName,data:'A'.repeat(512*1024),method:8,size:1}]);
+await assert.rejects(preflight3mfZipVerified(compressedBomb),/unsafe 3MF ZIP/);
+const originalDecompressionStream=globalThis.DecompressionStream;
+try {
+  globalThis.DecompressionStream=undefined;
+  await assert.rejects(preflight3mfZipVerified(compressed),/unsafe 3MF ZIP/);
+} finally {
+  globalThis.DecompressionStream=originalDecompressionStream;
+}
+console.log('PASS: bounded 3MF ZIP preflight verifies STORED/DEFLATE CRC, declared expansion limits, local records, overlaps, descriptors, extras and flags');

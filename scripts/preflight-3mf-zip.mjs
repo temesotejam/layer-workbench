@@ -1,7 +1,8 @@
 // Bounded ZIP envelope preflight for untrusted 3MF inspection on isolated localhost.
 // Checks central/local directory coherence before passing a compressed file to
-// native WASM. CRC32 is independently checked for STORED members only; DEFLATE
-// members are NOT decompressed or CRC-verified. This does not validate 3MF XML
+// native WASM. The synchronous preflight checks STORED CRC32, while the async
+// verified preflight additionally streams DEFLATE members with bounded output
+// and checks their exact expanded size and CRC32. This does not validate 3MF XML
 // or guarantee that a compliant archive cannot trigger a native parser defect.
 // Deliberately reject ZIP64, split archives, encryption and exotic methods.
 export const MAX_3MF_ZIP_MEMBERS = 512;
@@ -9,8 +10,8 @@ export const MAX_3MF_ZIP_EXPANDED_BYTES = 128 * 1024 * 1024;
 const MAX_MEMBER = 64 * 1024 * 1024;
 const fail = () => { throw new Error('Unsupported or unsafe 3MF ZIP envelope.'); };
 
-// CRC32 of raw ZIP STORED (method 0) bytes. DEFLATE member CRC requires a
-// bounded decompressor and is deliberately outside this synchronous preflight.
+// CRC32 of raw ZIP STORED (method 0) bytes. DEFLATE CRC is verified in
+// preflight3mfZipVerified() using the browser/Node deflate-raw stream.
 // Use an unsigned result so checksum 0xffffffff is compared correctly.
 const CRC32_TABLE = new Uint32Array(256);
 for (let n = 0; n < CRC32_TABLE.length; n++) {
@@ -26,7 +27,7 @@ function crc32Stored(bytes, start, end) {
   return (c ^ 0xffffffff) >>> 0;
 }
 
-export function preflight3mfZip(bytes) {
+export function preflight3mfZip(bytes, deflatedMembers=null) {
   if (!(bytes instanceof Uint8Array) || bytes.length < 22 || bytes.length > 8 * 1024 * 1024) fail();
   const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const u16 = offset => v.getUint16(offset, true);
@@ -106,8 +107,10 @@ export function preflight3mfZip(bytes) {
     }
     const dataEnd = dataStart + compressed;
     // A corrupted STORED member can otherwise pass matching ZIP headers.
-    // DEFLATE members are still structurally validated only.
+    // Record bounded DEFLATE ranges for the separate async integrity gate.
     if (method === 0 && crc32Stored(bytes, dataStart, dataEnd) !== crc) fail();
+    if (method === 8 && deflatedMembers !== null)
+      deflatedMembers.push({start:dataStart,end:dataEnd,expandedBytes:uncompressed,crc});
     const usesDescriptor = (flags & 0x0008) !== 0;
     const localCrc = u32(local + 14);
     const localCompressed = u32(local + 18);
@@ -145,4 +148,45 @@ export function preflight3mfZip(bytes) {
     if (localRanges[i][0] < localRanges[i - 1][1]) fail();
   }
   return Object.freeze({entries:count, expandedBytes:expanded});
+}
+
+// Call this (not just the synchronous envelope check) before passing an
+// untrusted 3MF to native WASM. ZIP method 8 is raw DEFLATE, not zlib-wrapped.
+// Stream each member and reject inflated sizes larger than the central record,
+// so an archive with forged tiny size declarations cannot allocate unbounded
+// decompressed data. No payload, path or private identifier is returned.
+export async function preflight3mfZipVerified(bytes) {
+  const deflated=[];
+  const summary=preflight3mfZip(bytes,deflated);
+  if (!deflated.length) return summary;
+  if (typeof DecompressionStream !== 'function' || typeof Blob !== 'function') fail();
+  for (const member of deflated) {
+    let reader;
+    try {
+      reader=new Blob([bytes.subarray(member.start,member.end)]).stream()
+        .pipeThrough(new DecompressionStream('deflate-raw')).getReader();
+      let expanded=0;
+      let crc=0xffffffff;
+      for (;;) {
+        const {done,value}=await reader.read();
+        if (done) break;
+        if (!(value instanceof Uint8Array) ||
+            expanded + value.byteLength > member.expandedBytes) fail();
+        expanded+=value.byteLength;
+        for (const byte of value)
+          crc=CRC32_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+      }
+      if (expanded !== member.expandedBytes ||
+          ((crc ^ 0xffffffff) >>> 0) !== member.crc) fail();
+    } catch {
+      // Deflate decoder exceptions must not expose user-controlled bytes.
+      fail();
+    } finally {
+      if (reader) {
+        try { await reader.cancel(); } catch { /* decompression may have failed */ }
+        reader.releaseLock();
+      }
+    }
+  }
+  return summary;
 }
