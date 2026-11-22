@@ -2058,7 +2058,7 @@ try {
       return state.startsWith('Ready:')||state.startsWith('FAILED');
     },null,{timeout:120000});
     assert.match(await mfPage.locator('#lab-status').innerText(),
-      /^Ready: OrcaSlicer 2\\.5\\.0/);
+      /^Ready: OrcaSlicer 2\.5\.0/);
     assert.equal(await mfPage.locator('#lab-inspect-3mf').isEnabled(),true,
       'A selected 3MF must enable read-only native inspection');
     await mfPage.locator('#lab-inspect-3mf').click();
@@ -2070,8 +2070,8 @@ try {
     const inspection=await mfPage.locator('#lab-status').innerText();
     assert.match(inspection,/^Native 3MF read-only import: .*2 instances,/,
       'Native WASM must expose both independent Core 3MF build placements');
-    assert.match(inspection,/Browser build items: 2\\. Counts agree/);
-    assert.match(inspection,/No edit, export or print approval\\./);
+    assert.match(inspection,/Browser build items: 2\. Counts agree/);
+    assert.match(inspection,/No edit, export or print approval\./);
     assert.deepEqual(await mfPage.evaluate(()=>globalThis.__layer3mfViewportAudit?.()),before,
       'Read-only native 3MF inspection must not alter the Three.js viewport');
     assert.equal(await mfPage.locator('#lab-slice').isDisabled(),true,
