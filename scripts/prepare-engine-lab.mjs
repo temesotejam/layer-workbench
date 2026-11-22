@@ -120,6 +120,9 @@ export function installPrepareEngineLab({getSelection, getEntries, onStatus}) {
         " plates. Browser build items: " + visible + ". " +
         (countMatch ? "Counts agree (transforms and settings NOT verified)." :
           "COUNT MISMATCH: do not assume native/viewer hierarchy matches.") +
+        " Native manifest relations: IDs " + report.relations.ids +
+        ", links " + report.relations.references + ", affine matrices " +
+        report.relations.affineMatrices + ". Manifest-only diagnostic; browser transform parity untested." +
         " No edit, export or print approval.";
       onStatus("Local WASM imported the original 3MF for a read-only hierarchy diagnostic. " +
         "The displayed Three.js scene is still independent of the native engine.");

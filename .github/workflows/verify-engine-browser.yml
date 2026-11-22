@@ -24,6 +24,8 @@ on:
       - "scripts/test-obj-to-stl.mjs"
       - "scripts/prepare-engine-lab.mjs"
       - "scripts/inspect-native-3mf.mjs"
+      - "scripts/audit-native-3mf-relations.mjs"
+      - "scripts/test-audit-native-3mf-relations.mjs"
       - "scripts/test-inspect-native-3mf.mjs"
       - "scripts/test-engine-probe.mjs"
       - "scripts/parity-cube-fixture.mjs"
@@ -84,6 +86,8 @@ on:
       - "scripts/test-transform-matrix.mjs"
       - "scripts/prepare-engine-lab.mjs"
       - "scripts/inspect-native-3mf.mjs"
+      - "scripts/audit-native-3mf-relations.mjs"
+      - "scripts/test-audit-native-3mf-relations.mjs"
       - "scripts/test-inspect-native-3mf.mjs"
       - "app.js"
       - "index.html"
@@ -181,6 +185,8 @@ jobs:
           node scripts/test-surface-skin-diagnostic.mjs
           node scripts/test-initial-layer-travel-diagnostic.mjs
           node scripts/test-3mf-viewport-items.mjs
+          node scripts/test-inspect-native-3mf.mjs
+          node scripts/test-audit-native-3mf-relations.mjs
           node --check scripts/three-mf-viewport-items.mjs
           node --check scripts/gcode-3d-preview.mjs
           node --check scripts/gcode-layer-preview.mjs
