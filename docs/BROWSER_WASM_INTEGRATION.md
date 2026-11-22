@@ -1679,3 +1679,31 @@ unordered XY geometry differs, that native desktop uses the same effective
 full profiles, that the 2,616 mm previously observed native/WASM solid
 gap is reduced, or that G-code is physically safe. No candidate is made
 available on public Pages by this experiment.
+
+
+## 2026-11-22: isolated Prepare native 3MF read-only inspection
+
+In the explicit localhost `?engineLab=1` mode, after loading a manually selected verified
+WASM artifact, the selected 3MF can now be **inspected through native
+`session.initProfile("project.3mf", bytes)` and `getManifest()`**. This is the
+first narrowly scoped direct linkage from a selected 3MF in the Prepare viewport
+to the native WASM import API. The local browser viewer still uses ThreeMFLoader;
+the two representations are NOT synchronized and no editing or exporting is
+enabled by this feature.
+
+The read-only diagnostic checks the input ZIP signature and an 8 MiB cap, disposes
+the native session on success/error, and displays only bounded counts of
+plates/meshes/objects/instances. It compares the number of currently visible
+Three.js build items from the *same original File* with the native instance count.
+A count disagreement is flagged explicitly rather than silently treated as
+equivalent. Even agreeing counts are not evidence of transform/mesh/settings
+parity. Import failure is reported without leaking project metadata or filenames.
+The original 3MF is never replaced or uploaded. The ordinary GitHub Pages UI
+does not enable this diagnostic and no WASM binaries are published.
+
+Lightweight CI executes `node scripts/test-inspect-native-3mf.mjs` with a fake
+session, testing input refusal, manifest limits, privacy and disposal. These
+tests do **not** establish successful import of a desktop-created 3MF in the
+real WASM candidate. Follow-up: actual isolated-Chrome fixture inspection and
+compare stable instance IDs, transforms and bounding boxes against desktop
+OrcaSlicer before enabling any native transform/edit/export path.
