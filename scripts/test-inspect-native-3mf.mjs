@@ -30,10 +30,25 @@ const engine=fakeEngine();
 const report=await inspectNative3mf(engine,file());
 assert.deepEqual(report,{plates:1,meshes:1,objects:1,instances:1,
   archiveBytes:archive.byteLength,schemaVersion:'0.7.0',relations:{
-    ids:'unique',references:'unavailable',affineMatrices:'unavailable'}});
+    ids:'unique',references:'unavailable',affineMatrices:'unavailable'},
+  placement:{spacing:'unavailable',comparedPairs:0}});
 assert.equal(Object.isFrozen(report),true);
 assert.equal(JSON.stringify(report).includes('private-'),false,'Do not leak object IDs or metadata');
 assert.deepEqual(engine.calls,['init','manifest','dispose']);
+const identityAt=x=>[1,0,0,x,0,1,0,0,0,0,1,0,0,0,0,1];
+const placementEngine=fakeEngine({manifest:{
+  schemaVersion:'0.7.0',plates:[{id:'p'}],meshes:[{id:'m'}],
+  objects:[{id:'o',meshId:'m'}],instances:[
+    {id:'a',objectId:'o',plateId:'p',transform:{matrix:identityAt(90)}},
+    {id:'b',objectId:'o',plateId:'p',transform:{matrix:identityAt(150)}},
+  ],
+}});
+const placementReport=await inspectNative3mf(placementEngine,file(),{
+  viewerAnchors:[[-38,0,0],[22,0,0]],
+});
+assert.deepEqual(placementReport.placement,{spacing:'consistent',comparedPairs:1});
+assert.ok(!JSON.stringify(placementReport).includes('"a"'));
+assert.equal(placementEngine.calls.at(-1),'dispose');
 
 for(const [f,pattern] of [
   [file(archive,'not-stl.stl'),/3MF archive/],
@@ -56,4 +71,4 @@ for(const invalid of [
   await assert.rejects(inspectNative3mf(e,file()),/schema|manifest/);
   assert.equal(e.calls.at(-1),'dispose');
 }
-console.log('PASS: native 3MF read-only inspection, size/signature limits, privacy and session cleanup');
+console.log('PASS: native 3MF read-only inspection, anchor spacing, size/signature limits, privacy and session cleanup');
