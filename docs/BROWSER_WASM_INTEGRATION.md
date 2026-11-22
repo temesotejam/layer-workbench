@@ -1835,3 +1835,23 @@ inferred. The synthetic two-cube fixture now expects `common-offset` instead
 of marking all repeated rotations as ambiguous. This is strictly a diagnostic
 for localhost opt-in cross-origin-isolated sessions; the published Pages app,
 engine artifact, G-code and printer safety remain unchanged.
+
+## 2026-11-23: source-shared Core 3MF three-build diagnostic
+
+The isolated Chrome/real v2.5.0 WASM test now generates a synthetic Core
+3MF where **three differently transformed build items reference the same
+source mesh**. Although native-converted world-space triangles agree with
+the Three.js viewer (36 triangles), the official one-slicer-api manifest
+reports three distinct internal meshes and objects. Consequently,
+`auditNative3mfSharedMeshReframe` cannot legally classify all three
+as a common native mesh merely because the source Core XML shared one
+resource; it returns `insufficient-shared-instances` (zero eligible
+shared-mesh instances). This is a newly observed normalization gap,
+not a failed world geometry comparison.
+
+The initial test that assumed three native instances must share one
+manifest mesh failed on real Chrome (#45051023095). The regression now
+asserts the observed native cardinality and the fail-closed classification
+instead of labelling it a reframe hypothesis pass. Deriving an actual
+native-to-source mesh association remains open; no editing, printing or
+WASM production deployment was enabled.

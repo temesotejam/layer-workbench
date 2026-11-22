@@ -170,3 +170,33 @@ The read-only isolated Prepare inspector now tests a narrowly stated alternative
 The classifier returns `hypothesis-consistent`, `hypothesis-mismatch`, `underdetermined`, `insufficient-shared-instances`, `ambiguous`, `linear-mismatch` or `unavailable`, with only a bounded witness count. An exact fit from *only two* transformed instances is **not independent evidence** for any native pivot convention; these are reported `insufficient-shared-instances`. Repeated linear transforms with nonunique correspondence also remain `ambiguous`. The existing two-build rotated Core fixture therefore cannot prove a local reframe, even though the flattened world-space facets match; the original anchor-spacing mismatch remains open. Synthetic three-transform unit tests exercise successful and rejected hypotheses.
 
 This is a constrained **mathematical compatibility check**, not a native mesh-vertex readback, proof of importer normalization, desktop UI parity, 3MF round-trip, G-code equality, or permission to print. Next acceptance requires an independently transformed third build of the same Core mesh, then a real isolated Chrome/WASM residual result and native mesh-local vertex/bounds verification. No production Pages engine is activated.
+
+## Three-build source Core mesh versus native manifest identity (2026-11-23)
+
+An independent synthetic Core 3MF now contains **three build items that all
+reference the one original Core object/mesh**. Its affines are a rotated
+nonuniform transform, identity, and independent (0.8, 1.2, 0.9) scaling.
+The 3MF is constructed and audited inside CI; the isolated Chrome test loads
+it through the pinned official v2.5.0 WASM candidate and ThreeMFLoader.
+
+The *actual* first Chrome run
+[#45051023095](https://github.com/temesotejam/layer-workbench/actions/runs/45051023095)
+showed: three viewer builds; **three native instances, three native objects,
+three native meshes**; 3×3 linear parts consistent; **native/viewer anchor
+spacing mismatch**; 36 converted world facets consistent and separable by
+viewer build. The shared-local-origin classifier correctly returned
+`insufficient-shared-instances` with zero matched instances. The acceptance
+assertion expecting a 3-witness residual FAILED. That test was overly
+optimistic: the native importer exposes distinct internal mesh IDs for
+original Core build items sharing one resource, so a solver that groups on
+native manifest mesh IDs cannot obtain a three-member group.
+
+The corrected test explicitly preserves and checks the observed
+per-build native mesh cardinality and the fail-closed residual status.
+It must **not** equate identical source object IDs, converted world facets,
+or native mesh counts with a proven common importer pivot. A future
+acceptance gate needs a trustworthy source-resource-to-native-mesh
+correspondence (or independently retrieved mesh-local geometry) before
+testing a reframe residual. This new regression is *not* 3MF project
+round-trip, desktop G-code parity, or printer safety. Public Pages
+remains unchanged.

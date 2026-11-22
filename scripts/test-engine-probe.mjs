@@ -2228,6 +2228,55 @@ try {
     console.log('PASS: real Chrome/WASM distinct two-resource 3MF with reversed build order: 24 world triangles consistent; no edit/export/print approval');
 
 
+    // Three different affine transforms referencing a single shared Core
+    // mesh make the reframe residual test independent of a two-instance fit.
+    // This is still a read-only local diagnostic, NOT 3MF save/slice parity.
+    for (const remaining of [1, 0]) {
+      await mfPage.locator('#object-tree [data-object-id]').first().click();
+      await mfPage.locator('#remove-object').click();
+      await mfPage.locator('#object-count')
+        .getByText(remaining === 1 ? '1 object' : '0 objects').waitFor();
+    }
+    await mfPage.locator('#model-file').setInputFiles({
+      name:'three-build-shared-mesh.3mf', mimeType:'model/3mf',
+      buffer:await readFile('parity-output/three-build-shared-mesh.3mf'),
+    });
+    await mfPage.locator('#object-count').getByText('3 objects').waitFor({timeout:30000});
+    const threeBefore=await mfPage.evaluate(()=>globalThis.__layer3mfViewportAudit?.());
+    assert.deepEqual(threeBefore.map(item=>item.buildIndex),[1,2,3]);
+    assert.ok(threeBefore.every(item=>item.meshCount>0));
+    const thirdBounds=threeBefore[2].boundsMm;
+    assert.ok(approx(thirdBounds.min[0],67) && approx(thirdBounds.max[0],83) &&
+      approx(thirdBounds.min[1],-38) && approx(thirdBounds.max[1],-14) &&
+      approx(thirdBounds.min[2],0) && approx(thirdBounds.max[2],18),
+      'Independent third Core transform bounds must match a 0.8/1.2/0.9 scale');
+    await mfPage.locator('#lab-inspect-3mf').click();
+    await mfPage.waitForFunction(()=>{
+      const state=document.querySelector('#lab-status')?.textContent??'';
+      return state.startsWith('Native 3MF read-only import:')||
+        state.startsWith('Native 3MF inspection FAILED:');
+    },null,{timeout:90000});
+    const threeReport=await mfPage.locator('#lab-status').innerText();
+    assert.match(threeReport,/^Native 3MF read-only import: .*3 instances,/);
+    assert.match(threeReport,/Native\/viewer linear parts: consistent \(3 instances\)/);
+    assert.match(threeReport,/Native-converted\/viewer world facets: consistent \(36 triangles\)/);
+    assert.match(threeReport,/Viewer build-facet partition: separable \(3 viewer builds\)/);
+    // Observed in the pinned v2.5.0 WASM: one shared Core resource is
+    // imported as THREE separate native manifest meshes/objects. Therefore
+    // a mesh-ID-based "shared local origin" solver has zero eligible groups;
+    // never infer a common pivot from matching world-space geometry alone.
+    assert.match(threeReport,/^Native 3MF read-only import: 3 objects, 3 instances, 3 meshes,/,
+      'Pin the real native normalization cardinality, not the original Core resource count');
+    assert.match(threeReport,/Shared native mesh local-origin hypothesis: insufficient-shared-instances \(0 matched shared-mesh instances; not proof\)\./,
+      'Distinct native mesh IDs must not be silently grouped by source Core object ID');
+    console.log('KNOWN GAP: pinned native 3MF importer expands one shared Core mesh to 3 native meshes; shared-mesh reframe residual is not identifiable from native mesh IDs alone');
+    assert.deepEqual(await mfPage.evaluate(()=>globalThis.__layer3mfViewportAudit?.()),
+      threeBefore,'Third shared-mesh 3MF inspection must not alter viewport');
+    assert.equal(await mfPage.locator('#lab-slice').isDisabled(),true,
+      'The synthetic three-build 3MF must not enable unverified printer slicing');
+    console.log('PASS: real isolated Chrome/WASM three-build source-mesh duplication detected without false reframe parity; 36 world facets consistent; no printing');
+
+
 
   } finally {
     await mfPage.close();
