@@ -774,5 +774,54 @@ class ComparatorTests(unittest.TestCase):
         self.assertIsNone(result['first_feature_z_differences'])
 
 
+    def test_heater_setpoint_delta_is_reported_without_overriding_match(self):
+        native = ('M104 S200 T0\nM140 S60\nM109 R205 T0\nM190 R60\n'
+                  'M83\nG1 X10 E1\n')
+        wasm = native.replace('M104 S200', 'M104 S215').replace('M190 R60', 'M190 R65')
+        report = self.run_compare(native, wasm, min_extrusion_moves=1)
+        self.assertFalse(report['match'])
+        self.assertEqual(report['native_heater_setpoint_events'], 4)
+        self.assertEqual(report['wasm_heater_setpoint_events'], 4)
+        self.assertEqual(report['heater_setpoint_difference_count'], 2)
+        first, second = report['first_heater_setpoint_differences']
+        self.assertEqual(first['native']['heater'], 'nozzle')
+        self.assertEqual(first['native']['tool'], 0)
+        self.assertEqual(first['wasm_minus_native_setpoint_c'], '15')
+        self.assertEqual(second['native']['heater'], 'bed')
+        self.assertEqual(second['wasm_minus_native_setpoint_c'], '5')
+        self.assertEqual(
+            self.run_compare(native, native)['heater_setpoint_difference_count'], 0)
+
+    def test_heater_mode_tool_and_missing_event_are_not_collapsed(self):
+        native = 'M109 S210 T0\nM140 S60\nG1 X1 E1\n'
+        wasm = 'M109 R210 T1\nG1 X1 E1\n'
+        report = self.run_compare(native, wasm)
+        self.assertFalse(report['match'])
+        self.assertEqual(report['heater_setpoint_difference_count'], 2)
+        self.assertNotIn('wasm_minus_native_setpoint_c',
+                         report['first_heater_setpoint_differences'][0])
+        self.assertIsNone(report['first_heater_setpoint_differences'][1]['wasm'])
+
+    def test_opaque_heater_requests_are_unknown_not_fake_zero(self):
+        for command in ('M104 S{temperature}', 'M104S220',
+                        'M109 S200 R210', 'M140 S60 P1',
+                        'M104 S-5', 'M104 S200 T999'):
+            with self.subTest(command=command):
+                report = self.run_compare(command + '\nG1 X1 E1\n',
+                                          command + '\nG1 X1 E1\n')
+                self.assertIsNone(report['heater_setpoint_difference_count'])
+                self.assertIsNone(report['first_heater_setpoint_differences'])
+                self.assertEqual(report['mismatched_commands'], 0)
+
+    def test_heater_setpoint_difference_samples_bounded_but_count_complete(self):
+        native = ''.join(f'M104 S{200 + i}\n' for i in range(20)) + 'G1 X1 E1\n'
+        wasm = ''.join(f'M104 S{201 + i}\n' for i in range(20)) + 'G1 X1 E1\n'
+        result = self.run_compare(native, wasm)
+        self.assertEqual(result['heater_setpoint_difference_count'], 20)
+        self.assertEqual(len(result['first_heater_setpoint_differences']), 15)
+        self.assertEqual(result['first_heater_setpoint_differences'][0]
+                         ['wasm_minus_native_setpoint_c'], '1')
+
+
 if __name__ == '__main__':
     unittest.main()
