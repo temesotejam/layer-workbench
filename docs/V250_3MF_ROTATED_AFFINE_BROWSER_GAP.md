@@ -127,3 +127,20 @@ still pass independently; the two diagnostics measure different properties.
 This is a diagnostic classification, **not** native instance identity, per-mesh
 local vertex attribution, desktop 3MF parity, or permission to edit/export/slice
 a real print. The published workspace is unchanged.
+
+## Bounded affine-frame matching regression (2026-11-22)
+
+The localhost-only affine frame classifier now uses polynomial-time
+augmenting-path bipartite matching instead of enumerating all candidate
+instance permutations. The previous search could take factorial time for an
+adversarial 64-instance case where each native transform matched the same
+63 viewer transforms but no complete matching existed. Untrusted 3MF input
+must not be allowed to stall a browser diagnostic.
+
+The regression tests include (1) that Hall-deficient 64-instance case,
+(2) a valid 64-instance reversed-order common translation, and (3)
+coincident instances that must remain `ambiguous`. The result categories,
+bounded 0.05 mm/1e-5 tolerances, and privacy-safe summaries are unchanged.
+This protects diagnostic responsiveness; it does **not** identify native
+mesh-local vertices, resolve the rotated anchor mismatch, or prove desktop
+3MF / G-code parity. No production Pages integration or WASM binaries change.
