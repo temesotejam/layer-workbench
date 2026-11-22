@@ -1751,3 +1751,29 @@ can make top-level anchor spacing differ even with identical mesh geometry.
 It does not compare vertex world bounds, pivot semantics, material settings,
 3MF metadata or any printer-ready G-code. The public site remains unchanged;
 only localhost + COOP/COEP + `?engineLab=1` exposes this test.
+
+## 2026-11-22: isolated native/Three.js 3MF linear transform comparison
+
+The read-only Prepare inspector now checks whether the native WASM manifest's
+per-instance 3×3 affine linear transform blocks (rotation, nonuniform scale,
+shear and reflection) form the **same unordered multiset** as the Three.js
+build-item world matrices. Three.js column-major storage is converted without
+changing the geometric transformation. The test ignores global XYZ translation
+and does not depend on native object IDs or import enumeration order. Matching
+uses tolerance 1e-5 per dimensionless element and a bounded bipartite matching
+algorithm (1–64 instances). Singular, malformed, nonfinite or missing matrices
+produce `unavailable`, not a presumed match. Only a bounded
+`consistent`/`mismatch`/`unavailable` status and number of compared items
+are emitted; source IDs, matrix values and coordinates are not logged.
+
+Unit tests deliberately keep instance-anchor spacing identical while changing
+rotation or nonuniform scale, to ensure those changes are rejected. The real
+isolated Chrome/WASM two-build synthetic Core 3MF acceptance test now requires
+both linear-part consistency and the previously checked anchor spacing. No
+published Pages behavior or WASM binaries are changed.
+
+**Limits:** matching the unordered linear blocks is not an instance identity
+mapping and does not establish which browser rotation belongs to which native
+object. Component-local transforms, mesh world vertices, pivots, texture
+materials, 3MF settings, desktop authoring behavior, full G-code parity and
+print safety remain unverified. Browser edits are not exported as native 3MF.
