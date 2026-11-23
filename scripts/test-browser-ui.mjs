@@ -90,6 +90,20 @@ try {
   assert.equal(await threeDButton.getAttribute('aria-pressed'), 'true');
   assert.equal(await frontButton.getAttribute('aria-pressed'), 'false');
 
+  // Dropping onto the logical plate must use actual transformed geometry
+  // rather than resetting Z blindly. This is a browser-only layout operation.
+  const dropToBedButton = page.locator('#drop-to-bed');
+  assert.equal(await dropToBedButton.isEnabled(), true);
+  const originalZ = Number(await page.locator('#transform-z').inputValue());
+  await page.locator('#transform-z').fill('25');
+  await page.locator('#transform-z').press('Tab');
+  await dropToBedButton.click();
+  assert.ok(Math.abs(Number(await page.locator('#transform-z').inputValue()) - originalZ) < 0.001,
+    'drop-to-bed must return translated cube to its physical bed height');
+  assert.equal(await page.locator('#transform-x').inputValue(), modelX,
+    'drop-to-bed must preserve horizontal placement');
+  assert.match(await page.locator('#file-status').innerText(), /viewer bed Z=0/);
+
   // Duplication is a viewer-only STL/OBJ operation, with independent object
   // transforms and independent selection highlights (not a native 3MF edit).
   const duplicateButton = page.locator('#duplicate-object');
@@ -102,6 +116,15 @@ try {
   assert.match(await page.locator('#file-status').innerText(), /browser viewport only/);
   assert.ok(Math.abs(Number(await page.locator('#transform-x').inputValue()) - originalX - 20) < 0.001);
   assert.ok(Math.abs(Number(await page.locator('#transform-y').inputValue()) - originalY - 20) < 0.001);
+  const duplicateX = Number(await page.locator('#transform-x').inputValue());
+  const duplicateY = Number(await page.locator('#transform-y').inputValue());
+  await page.locator('#transform-z').fill('31');
+  await page.locator('#transform-z').press('Tab');
+  await dropToBedButton.click();
+  assert.ok(Math.abs(Number(await page.locator('#transform-z').inputValue()) - originalZ) < 0.001,
+    'dropping the duplicate must use its own world bounds');
+  assert.equal(Number(await page.locator('#transform-x').inputValue()), duplicateX);
+  assert.equal(Number(await page.locator('#transform-y').inputValue()), duplicateY);
   await page.locator('#transform-x').fill('57');
   await page.locator('#transform-x').press('Tab');
   assert.equal(Number(await page.locator('#transform-x').inputValue()), 57);
@@ -126,7 +149,8 @@ try {
   await page.locator('#object-count').getByText('0 objects').waitFor();
   assert.equal(await page.locator('[data-transform="translate"]').isDisabled(), true);
   assert.equal(await duplicateButton.isDisabled(), true);
-  console.log('PASS: WebGL canvas, STL rendering, selection, transform modes, camera views, independent duplication and deletion');
+  assert.equal(await dropToBedButton.isDisabled(), true);
+  console.log('PASS: WebGL canvas, STL rendering, camera views, drop to bed, independent duplication and deletion');
 } catch (error) {
   await mkdir('browser-test-artifacts', { recursive: true });
   await page.screenshot({ path: 'browser-test-artifacts/prepare-failure.png', fullPage: true }).catch(() => {});
