@@ -12,6 +12,9 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
+      - "scripts/patch-orcawasm-3mf-object-export.py"
+      - "scripts/test_patch_orcawasm_3mf_object_export.py"
+      - "scripts/test-v250-native-multiobject-export.mjs"
       - "scripts/patch-orcawasm-support-smoke.py"
       - "scripts/test_patch_orcawasm_support_smoke.py"
       - "scripts/patch_orcawasm_private_instance_edit.py"
@@ -372,7 +375,22 @@ jobs:
         # released; this isolates 3MF regressions from unrelated smoke results.
         if: ${{ !cancelled() && steps.wasm_build.outcome == 'success' }}
         timeout-minutes: 12
-        run: node scripts/test-v250-native-multiobject-export.mjs
+        run: |
+          set -euo pipefail
+          node scripts/test-v250-native-multiobject-export.mjs
+          python3 - <<'PY'
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, 'scripts')
+          from audit_3mf_scene import audit
+          report = audit(Path('parity-output/rebuilt-shared-object.3mf'))
+          if (report['totalBuildItems'], report['totalMeshTriangles'], report['totalResolvedTriangleInstances']) != (2, 12, 24):
+              raise SystemExit('Shared Core resource or placement count was not preserved')
+          scenes = [s for s in report['scenes'] if s['buildItems']]
+          if len(scenes) != 1 or len({i['objectId'] for i in scenes[0]['buildItems']}) != 1:
+              raise SystemExit('Shared object must have one Core build root ID')
+          print('PASS: two Core build items share one root and 12 stored triangles')
+          PY
 
       - name: Record build metadata
         if: always()
