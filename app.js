@@ -259,6 +259,7 @@ deleteButton?.addEventListener("click", () => {
     sceneFile.textContent = "No model loaded";
     projectLabel.textContent = "Untitled project";
   } else {
+    projectLabel.textContent = entries.length === 1 ? entries[0].name : entries.length + " objects";
     sceneFile.textContent = entries.length + " model(s) loaded";
   }
   status.textContent = "Removed " + entry.name + " from the browser viewport (original file unchanged)";
