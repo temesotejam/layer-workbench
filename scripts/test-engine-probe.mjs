@@ -68,6 +68,13 @@ try {
   console.log('MULTIOBJECT_3MF_DIAGNOSTIC '+JSON.stringify(multi3mf));
   if (!multi3mf.supported) console.log('KNOWN GAP: native two-object 3MF reimport parity not established');
   else console.log('PASS: two-object WASM native 3MF reimport and conversion');
+  // Same native mesh/object referenced by TWO separate placed instances.
+  // This detects an exporter that silently flattens instancing while still
+  // keeping all 24 triangles in the converted STL.
+  const shared3mf = await checkBrowserMultiObject3mf(page,cube,'parity-output',{sharedMesh:true});
+  console.log('SHARED_MESH_3MF_DIAGNOSTIC '+JSON.stringify(shared3mf));
+  if (!shared3mf.supported) console.log('KNOWN GAP: shared-mesh 3MF instance hierarchy not retained');
+  else console.log('PASS: shared-mesh native WASM 3MF hierarchy and geometry preserved');
   console.log('PASS: browser native WASM 3MF round-trip, ' +
     native3mf.triangles+' converted geometry triangles, mapped preview supported='+
     native3mf.mappedPreviewSupported+', sha256='+native3mf.sha256);
