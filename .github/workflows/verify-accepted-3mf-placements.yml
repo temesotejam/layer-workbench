@@ -4,6 +4,9 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
+      - "scripts/test-browser-3mf-multiobject.mjs"
+      - "scripts/classify_3mf_hierarchy_gap.py"
+      - "scripts/test_classify_3mf_hierarchy_gap.py"
       - "scripts/edit_3mf_build_transform.py"
       - "scripts/test_edit_3mf_build_transform.py"
       - "scripts/native-manifest-edit.mjs"
@@ -22,6 +25,8 @@ on:
   push:
     branches: [main]
     paths:
+      - "scripts/classify_3mf_hierarchy_gap.py"
+      - "scripts/test_classify_3mf_hierarchy_gap.py"
       - "scripts/test-browser-3mf-multiobject.mjs"
       - "scripts/test-candidate-browser-3mf.mjs"
       - "scripts/test-browser-3mf-private-instance-edit.mjs"
@@ -100,7 +105,7 @@ jobs:
             if curl -fsS http://127.0.0.1:8766/engine-probe.html >/dev/null; then break; fi
             sleep 1
           done
-          node scripts/test-candidate-browser-3mf.mjs
+          CHECK_ACCEPTED_SHARED_MESH=1 node scripts/test-candidate-browser-3mf.mjs
           # Audit non-model/opaque ZIP entries independently of the surgical
           # transform utility, while allowing the edited 3D model XML to differ.
           for variant in edited-core-build rotated-core-build scaled-core-build; do
@@ -151,6 +156,21 @@ jobs:
             --input parity-output/wasm-multiobject-3mf.3mf \
             --stl parity-output/wasm-multiobject-converted.stl \
             --report parity-output/accepted-candidate-3mf-stl-comparison.json
+          # Compare the accepted (patched) exporter to the legacy candidate
+          # with the same shared-source fixture and independent Core audit.
+          # A diagnostic classification is not a parity acceptance result.
+          python3 scripts/audit_3mf_scene.py \
+            --input parity-output/wasm-sharedmesh-3mf.3mf \
+            --min-triangles 24 \
+            --report parity-output/accepted-sharedmesh-scene.json
+          python3 scripts/check_3mf_stl_bounds.py \
+            --input parity-output/wasm-sharedmesh-3mf.3mf \
+            --stl parity-output/wasm-sharedmesh-converted.stl \
+            --report parity-output/accepted-sharedmesh-stl-comparison.json
+          python3 scripts/classify_3mf_hierarchy_gap.py \
+            --summary parity-output/wasm-sharedmesh-3mf-summary.json \
+            --scene parity-output/accepted-sharedmesh-scene.json \
+            --report parity-output/accepted-sharedmesh-hierarchy-stage.json
       - name: Retain diagnostic evidence only
         if: always()
         uses: actions/upload-artifact@v4
