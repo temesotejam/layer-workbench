@@ -172,7 +172,1590 @@ def feature_z_deposition_deltas(native, wasm):
         })
     return len(changed), examples
 
-MOTION = re.compile(r'^G0*[0123](?:\.0+)?$', re.I)
+MOTION = re.compile(r'^G0*[0123](?:\.0+)?
+def count_motion(commands):
+    """Minimal fixture sanity check; NOT a printer-safety or parity proof."""
+    count = 0
+    for _, command in commands:
+        tokens = command.split()
+        if tokens and re.fullmatch(r'N\d+', tokens[0], re.I):
+            tokens = tokens[1:]
+        if tokens and MOTION.fullmatch(tokens[0]):
+            count += 1
+    return count
+
+EXTRUSION_MOTION = re.compile(r'^G0*[123](?:\.0+)?$', re.I)
+
+def valid_g17_arc(start, end, words, units, absolute_arc_centers):
+    """Conservatively require a geometrically possible XY arc for fixture counting.
+
+    This only validates G17 planar circular geometry, not firmware semantics
+    or extrusion volume. Unsupported/ambiguous arcs fail closed.
+    """
+    has_radius = 'R' in words
+    has_center = 'I' in words or 'J' in words
+    if has_radius == has_center:
+        return False  # neither definition, or conflicting R and I/J
+    dx, dy = end['X'] - start['X'], end['Y'] - start['Y']
+    if has_radius:
+        radius = abs(words['R'] * units)
+        chord_sq = dx * dx + dy * dy
+        return radius > 0 and chord_sq > 0 and chord_sq <= 4 * radius * radius
+    if absolute_arc_centers:
+        cx = words['I'] * units if 'I' in words else start['X']
+        cy = words['J'] * units if 'J' in words else start['Y']
+    else:
+        cx = start['X'] + words.get('I', Decimal(0)) * units
+        cy = start['Y'] + words.get('J', Decimal(0)) * units
+    r0 = math.hypot(float(start['X'] - cx), float(start['Y'] - cy))
+    r1 = math.hypot(float(end['X'] - cx), float(end['Y'] - cy))
+    return (math.isfinite(r0) and math.isfinite(r1) and r0 > 0
+            and abs(r0 - r1) <= max(0.05, r0 * 0.001))
+
+def extrusion_move_metrics(commands, feature_context=None, feature_stats=None,
+                           feature_z_stats=None):
+    """Summarize positive E and G1 XY path length for fixture sanity.
+
+    A present X/Y word alone does not prove movement: e.g. G1 X0 E1 at the
+    initial position is priming, not deposited path. Track G90/G91, G92 and
+    G20/G21 coordinates as well as M82/M83 and E resets. Arc center/radius
+    words may indicate a full circle with no XY endpoint displacement.
+    This is a conservative *fixture gate*, not a full firmware interpreter,
+    watertightness test, deposited-volume or print-safety certification.
+    """
+    count = 0
+    counted_e_mm = Decimal(0)
+    counted_linear_xy_mm = Decimal(0)
+    counted_linear_moves = 0
+    # Only deposition on a constant-Z move is assigned to a Z plane.
+    # Simultaneous XY+Z extrusion remains counted, but not as a flat layer.
+    planar_layer_moves = {}
+    # Numeric-only footprint for each observed constant-Z deposited stratum.
+    # G17 arc lengths and mid-arc extrema are deliberately NOT approximated.
+    planar_linear_stats = {}
+    nonplanar_deposition_moves = 0
+    z_position = Decimal(0)
+    absolute_e = True
+    absolute_xyz = True
+    absolute_arc_centers = False
+    plane = 'G17'
+    units = Decimal(1)
+    e_position = Decimal(0)
+    xy = {'X': Decimal(0), 'Y': Decimal(0)}
+    # An absolute E value cannot be compared across tool changes: some
+    # firmware restores a per-tool E register or resets it during a change.
+    # Relative E remains countable, but switching back to M82 requires G92 E.
+    last_selected_tool = None
+    e_reference_known = True
+    seen_e_reference = False
+    for line_no, command in commands:
+        tokens = command.split()
+        if tokens and re.fullmatch(r'N\d+', tokens[0], re.I):
+            tokens = tokens[1:]
+        if not tokens:
+            continue
+        opcode = tokens[0].upper()
+        if re.fullmatch(r'T\d+', opcode):
+            tool = int(opcode[1:])
+            # T255 and vendor-private selectors are not necessarily physical
+            # extruders. Their effect on E is unknown, so require an explicit
+            # re-anchor before accepting subsequent absolute-E deposition.
+            if tool >= 255:
+                e_reference_known = False
+            else:
+                if ((last_selected_tool is not None and
+                     last_selected_tool != tool) or
+                    (last_selected_tool is None and seen_e_reference)):
+                    e_reference_known = False
+                last_selected_tool = tool
+            continue
+        # M82 is absolute E, M83 is relative E. Preserve padded
+        # command spelling for *strict* comparison, but interpret only these
+        # well-defined numeric aliases in the deposition sanity gate.
+        # The former M083-in-M82 branch could count phantom extrusion after
+        # a relative retract or silently miss a real relative deposition.
+        if re.fullmatch(r'M0*82(?:\.0+)?', opcode):
+            absolute_e = True
+            continue
+        if re.fullmatch(r'M0*83(?:\.0+)?', opcode):
+            absolute_e = False
+            continue
+        modal = fixture_modal_opcode(opcode)
+        if modal == 'G90':
+            absolute_xyz = True
+            continue
+        if modal == 'G91':
+            absolute_xyz = False
+            continue
+        if modal in ('G17', 'G18', 'G19'):
+            plane = modal
+            continue
+        if modal == 'G90.1':
+            absolute_arc_centers = True
+            continue
+        if modal == 'G91.1':
+            absolute_arc_centers = False
+            continue
+        if modal == 'G20':
+            units = Decimal('25.4')
+            continue
+        if modal == 'G21':
+            units = Decimal(1)
+            continue
+        words = {}
+        stateful = modal == 'G92' or bool(MOTION.fullmatch(opcode))
+        # The numeric diagnostic is not a firmware interpreter. Reject extra
+        # motion axes and vendor parameters rather than silently counting a
+        # plausible XY/E path with different actual modal semantics.
+        if stateful:
+            if modal == 'G92':
+                allowed_stateful_words = frozenset('XYZE')
+            elif int(Decimal(opcode[1:])) in (0, 1):
+                allowed_stateful_words = frozenset('XYZEF')
+            else:
+                allowed_stateful_words = frozenset('XYZEIJKRF')
+        for token in tokens[1:]:
+            match = PARAM.fullmatch(token)
+            if not match:
+                if stateful:
+                    # Opaque move/reset syntax leaves the position unknown.
+                    # Never use later moves to satisfy the fixture gate.
+                    return 0, None, None, 0, None, None, None
+                continue
+            letter = match[1].upper()
+            if stateful and (letter in words or letter not in allowed_stateful_words):
+                # Duplicate, unhandled or nonstandard motion parameters have
+                # firmware-dependent meaning; never infer deposition from them.
+                return 0, None, None, 0, None, None, None
+            words[letter] = Decimal(match[2])
+        if modal == 'G92':
+            for axis in xy:
+                if axis in words:
+                    xy[axis] = words[axis] * units
+            if 'E' in words:
+                e_position = words['E'] * units
+                e_reference_known = True
+                seen_e_reference = True
+            if 'Z' in words:
+                z_position = words['Z'] * units
+            continue
+        if not MOTION.fullmatch(opcode):
+            continue
+        start_xy = xy.copy()
+        start_z = z_position
+        moved_xy = False
+        for axis in xy:
+            if axis not in words:
+                continue
+            requested = words[axis] * units
+            new_position = requested if absolute_xyz else xy[axis] + requested
+            moved_xy |= new_position != xy[axis]
+            xy[axis] = new_position
+        if 'Z' in words:
+            requested_z = words['Z'] * units
+            z_position = requested_z if absolute_xyz else z_position + requested_z
+        code = int(Decimal(opcode[1:]))
+        # An impossible G17 arc changes the interpreted XY endpoint even
+        # when E is absent or retracting. Silently ignoring it would let
+        # later straight moves satisfy a false deposition/parity gate.
+        # Unsupported non-XY planes retain their existing excluded status.
+        if code in (2, 3) and plane == 'G17' and (
+                'K' in words or not valid_g17_arc(
+                    start_xy, xy, words, units, absolute_arc_centers)):
+            # K belongs to non-XY planes; ignoring it would make an
+            # unsupported/misconfigured arc look like verified G17 geometry.
+            return 0, None, None, 0, None, None, None
+        if 'E' not in words:
+            continue
+        if absolute_e and not e_reference_known:
+            # Do not manufacture deposition from an old extruder baseline.
+            # The strict comparator still compares every original T command.
+            return 0, None, None, 0, None, None, None
+        seen_e_reference = True
+        requested_e = words['E'] * units
+        delta = requested_e - e_position if absolute_e else requested_e
+        e_position = requested_e if absolute_e else e_position + requested_e
+        if delta <= 0 or not EXTRUSION_MOTION.fullmatch(opcode):
+            continue
+        if code == 1 and not moved_xy:
+            continue
+        if code in (2, 3) and plane != 'G17':
+            continue
+        count += 1
+        counted_e_mm += delta
+        if start_z == z_position:
+            planar_layer_moves[z_position] = planar_layer_moves.get(z_position, 0) + 1
+            footprint = planar_linear_stats.setdefault(
+                z_position, {'linear_moves': 0, 'g17_arc_moves': 0,
+                             'linear_xy_mm': Decimal(0),
+                             'linear_positive_e_mm': Decimal(0),
+                             'linear_xy_endpoint_bounds_mm': None})
+            if code in (2, 3):
+                footprint['g17_arc_moves'] += 1
+        else:
+            nonplanar_deposition_moves += 1
+        if code == 1:
+            # Only G1 XY deposition is a straight segment. G17 arcs remain
+            # in the extrusion count/E total but are excluded from this metric.
+            dx = xy['X'] - start_xy['X']
+            dy = xy['Y'] - start_xy['Y']
+            length = (dx * dx + dy * dy).sqrt()
+            counted_linear_xy_mm += length
+            counted_linear_moves += 1
+            if start_z == z_position:
+                footprint['linear_moves'] += 1
+                footprint['linear_xy_mm'] += length
+                footprint['linear_positive_e_mm'] += delta
+                if feature_stats is not None or feature_z_stats is not None:
+                    # Observed deposited Z is not a validated native layer.
+                    label = (feature_context or {}).get(line_no) or 'unclassified'
+                    if feature_stats is not None:
+                        entry = feature_stats.setdefault(
+                            label, {'moves': 0, 'xy': Decimal(0), 'e': Decimal(0)})
+                        entry['moves'] += 1
+                        entry['xy'] += length
+                        entry['e'] += delta
+                    if feature_z_stats is not None:
+                        item = feature_z_stats.setdefault(
+                            (label, z_position),
+                            {'moves': 0, 'xy': Decimal(0), 'e': Decimal(0)})
+                        item['moves'] += 1
+                        item['xy'] += length
+                        item['e'] += delta
+                bounds = footprint['linear_xy_endpoint_bounds_mm']
+                for point in (start_xy, xy):
+                    x, y = point['X'], point['Y']
+                    if bounds is None:
+                        bounds = [x, y, x, y]
+                    else:
+                        bounds = [min(bounds[0], x), min(bounds[1], y),
+                                  max(bounds[2], x), max(bounds[3], y)]
+                footprint['linear_xy_endpoint_bounds_mm'] = bounds
+    return (count, counted_e_mm, counted_linear_xy_mm, counted_linear_moves,
+            planar_layer_moves, nonplanar_deposition_moves, planar_linear_stats)
+
+
+def count_extrusion_moves(commands):
+    """Backward-compatible fixture count; diagnostics also sum positive E."""
+    return extrusion_move_metrics(commands)[0]
+
+def numeric_parameter_deltas(native_command, wasm_command):
+    """Return diagnostic WASM-minus-native deltas for aligned numeric words."""
+    if native_command is None or wasm_command is None:
+        return []
+    a, b = native_command[1].split(), wasm_command[1].split()
+    if not a or not b or a[0] != b[0] or len(a) != len(b):
+        return []
+    deltas = []
+    for original, candidate in zip(a[1:], b[1:]):
+        x, y = PARAM.fullmatch(original), PARAM.fullmatch(candidate)
+        if x and y and x[1].upper() == y[1].upper():
+            delta = Decimal(y[2]) - Decimal(x[2])
+            if delta:
+                deltas.append({
+                    'parameter': x[1].upper(),
+                    'wasm_minus_native': str(delta.normalize()),
+                })
+    return deltas
+
+def rounded_mm(value):
+    """Format a rounded diagnostic length without scientific notation."""
+    return format(value.quantize(Decimal('0.000001')).normalize(), 'f')
+
+
+def only_z_footprints(heights, layers, footprints):
+    """Bounded, numeric-only deposited G1 footprint at absent Z positions.
+
+    Endpoint bounds omit arc interior points; lengths omit G17 curves.
+    This deliberately cannot classify a feature, determine layer identity,
+    prove equal settings or certify physical toolpaths.
+    """
+    if heights is None:
+        return None
+    result = []
+    for z in heights[:15]:
+        data = footprints[z]
+        bounds = data['linear_xy_endpoint_bounds_mm']
+        result.append({
+            'z_mm': format(z.normalize(), 'f'),
+            'deposition_moves': layers[z],
+            'linear_moves': data['linear_moves'],
+            'g17_arc_moves': data['g17_arc_moves'],
+            'linear_xy_mm': rounded_mm(data['linear_xy_mm']),
+            'linear_positive_e_mm': format(
+                data['linear_positive_e_mm'].normalize(), 'f'),
+            'linear_xy_endpoint_bounds_mm': None if bounds is None else [
+                format(value.normalize(), 'f') for value in bounds],
+        })
+    return result
+
+
+
+def shared_z_footprint_differences(native_layers, wasm_layers,
+                                   native_footprints, wasm_footprints):
+    """Find differing numeric G1 footprints at exact shared deposited Z values.
+
+    Unlike one-sided Z diagnostics, this catches equal move counts with
+    different XY lengths, positive E or endpoint bounds. The overall count
+    is complete; only the first 15 numeric entries are returned. Do not
+    infer feature identities or actual material volume from these metrics.
+    """
+    if native_layers is None or wasm_layers is None:
+        return None, None
+    total = 0
+    examples = []
+    for z in sorted(set(native_layers) & set(wasm_layers)):
+        a, b = native_footprints[z], wasm_footprints[z]
+        changed = (
+            native_layers[z] != wasm_layers[z]
+            or a['linear_moves'] != b['linear_moves']
+            or a['g17_arc_moves'] != b['g17_arc_moves']
+            or rounded_mm(a['linear_xy_mm']) != rounded_mm(b['linear_xy_mm'])
+            or a['linear_positive_e_mm'] != b['linear_positive_e_mm']
+            or a['linear_xy_endpoint_bounds_mm'] != b['linear_xy_endpoint_bounds_mm']
+        )
+        if not changed:
+            continue
+        total += 1
+        if len(examples) < 15:
+            examples.append({
+                'z_mm': format(z.normalize(), 'f'),
+                'native': only_z_footprints([z], native_layers, native_footprints)[0],
+                'wasm': only_z_footprints([z], wasm_layers, wasm_footprints)[0],
+                'wasm_minus_native_linear_xy_mm':
+                    rounded_mm(b['linear_xy_mm'] - a['linear_xy_mm']),
+                'wasm_minus_native_linear_positive_e_mm':
+                    format((b['linear_positive_e_mm'] -
+                            a['linear_positive_e_mm']).normalize(), 'f'),
+            })
+    return total, examples
+
+
+def compare(native, wasm, min_extrusion_moves=0):
+    if min_extrusion_moves < 0:
+        raise ValueError('minimum extrusion moves must not be negative')
+    a, b = canonical(native), canonical(wasm)
+    native_features, wasm_features = {}, {}
+    native_feature_layers, wasm_feature_layers = {}, {}
+    differences = []
+    mismatch_count = 0
+    for i in range(max(len(a), len(b))):
+        x, y = a[i] if i < len(a) else None, b[i] if i < len(b) else None
+        if x is None or y is None or x[1] != y[1]:
+            mismatch_count += 1
+            if len(differences) < 15:
+                entry = {'command_index': i, 'native': x, 'wasm': y}
+                deltas = numeric_parameter_deltas(x, y)
+                if deltas:
+                    entry['parameter_deltas'] = deltas
+                differences.append(entry)
+    native_motion, wasm_motion = count_motion(a), count_motion(b)
+    (native_extrusion, native_e_mm, native_linear_xy_mm, native_linear_moves,
+     native_layers, native_nonplanar, native_footprints) = extrusion_move_metrics(
+         a, gcode_feature_context(native), native_features, native_feature_layers)
+    (wasm_extrusion, wasm_e_mm, wasm_linear_xy_mm, wasm_linear_moves,
+     wasm_layers, wasm_nonplanar, wasm_footprints) = extrusion_move_metrics(
+         b, gcode_feature_context(wasm), wasm_features, wasm_feature_layers)
+    # Bounded, read-only per-Z differences: do not imply that a Z plane
+    # represents a complete OrcaSlicer layer or deposited volume.
+    planar_layer_differences = None
+    native_only_z = None
+    wasm_only_z = None
+    if native_layers is not None and wasm_layers is not None:
+        # Set membership is independent of how many moves each shared Z has.
+        # Keep exact Decimal heights; never silently round distinct planes.
+        native_only_z = sorted(set(native_layers) - set(wasm_layers))
+        wasm_only_z = sorted(set(wasm_layers) - set(native_layers))
+        planar_layer_differences = [
+            {'z_mm': format(z.normalize(), 'f'),
+             'native_moves': native_layers.get(z, 0),
+             'wasm_moves': wasm_layers.get(z, 0)}
+            for z in sorted(set(native_layers) | set(wasm_layers))
+            if native_layers.get(z, 0) != wasm_layers.get(z, 0)
+        ][:15]
+    (shared_z_footprint_difference_count,
+     shared_z_footprint_examples) = shared_z_footprint_differences(
+         native_layers, wasm_layers, native_footprints, wasm_footprints)
+    feature_z_count, feature_z_examples = (None, None)
+    if native_layers is not None and wasm_layers is not None:
+        feature_z_count, feature_z_examples = feature_z_deposition_deltas(
+            native_feature_layers, wasm_feature_layers)
+    issues = []
+    # A malformed stateful command yields unknown deposition metrics, not
+    # zero deposited material. Reject even when the optional minimum is 0:
+    # two identical *invalid* files must never pass the strict fixture gate.
+    if native_layers is None:
+        issues.append('native has unsupported or malformed stateful geometry')
+    if wasm_layers is None:
+        issues.append('wasm has unsupported or malformed stateful geometry')
+    if native_motion == 0:
+        issues.append('native input has no G0/G1/G2/G3 motion commands')
+    if wasm_motion == 0:
+        issues.append('wasm input has no G0/G1/G2/G3 motion commands')
+    if native_extrusion < min_extrusion_moves:
+        issues.append(f'native has {native_extrusion} extrusion moves; expected at least {min_extrusion_moves}')
+    if wasm_extrusion < min_extrusion_moves:
+        issues.append(f'wasm has {wasm_extrusion} extrusion moves; expected at least {min_extrusion_moves}')
+    return {
+        **heater_setpoint_differences(a, b),
+        'native': str(native), 'wasm': str(wasm),
+        'native_commands': len(a), 'wasm_commands': len(b),
+        'native_motion_commands': native_motion, 'wasm_motion_commands': wasm_motion,
+        'native_extrusion_moves': native_extrusion, 'wasm_extrusion_moves': wasm_extrusion,
+        # Positive commanded filament-axis E for counted XY deposition only.
+        # This is not deposited material volume or an actual extrusion sensor.
+        'native_counted_positive_e_mm': None if native_e_mm is None else str(native_e_mm.normalize()),
+        'wasm_counted_positive_e_mm': None if wasm_e_mm is None else str(wasm_e_mm.normalize()),
+        'counted_positive_e_delta_mm': None if native_e_mm is None or wasm_e_mm is None
+            else str((wasm_e_mm - native_e_mm).normalize()),
+        # Only positive-E G1 XY strokes (not G17 arc lengths or travels).
+        # Rounded to 1 micrometre for a stable diagnostic display.
+        'native_counted_linear_xy_moves': native_linear_moves,
+        'wasm_counted_linear_xy_moves': wasm_linear_moves,
+        'native_counted_linear_xy_mm': None if native_linear_xy_mm is None
+            else rounded_mm(native_linear_xy_mm),
+        'wasm_counted_linear_xy_mm': None if wasm_linear_xy_mm is None
+            else rounded_mm(wasm_linear_xy_mm),
+        'counted_linear_xy_delta_mm': None if native_linear_xy_mm is None or wasm_linear_xy_mm is None
+            else rounded_mm(wasm_linear_xy_mm - native_linear_xy_mm),
+        # Exact numeric Z locations of constant-height positive-E XY moves,
+        # including valid G17 arcs. Changing Z during deposition is excluded.
+        'native_counted_planar_z_levels': None if native_layers is None else len(native_layers),
+        'wasm_counted_planar_z_levels': None if wasm_layers is None else len(wasm_layers),
+        'native_counted_nonplanar_deposition_moves': native_nonplanar,
+        'wasm_counted_nonplanar_deposition_moves': wasm_nonplanar,
+        'first_counted_planar_z_differences': planar_layer_differences,
+        # The 15-position preview of changed move counts does not tell us
+        # whether an entire deposited Z plane is absent on one side.
+        # Report full membership counts and bounded numeric-only examples.
+        'native_only_counted_planar_z_levels': None if native_only_z is None else len(native_only_z),
+        'wasm_only_counted_planar_z_levels': None if wasm_only_z is None else len(wasm_only_z),
+        'first_native_only_counted_planar_z_mm': None if native_only_z is None
+            else [format(z.normalize(), 'f') for z in native_only_z[:15]],
+        'first_wasm_only_counted_planar_z_mm': None if wasm_only_z is None
+            else [format(z.normalize(), 'f') for z in wasm_only_z[:15]],
+        # Endpoint-only G1 footprint; arcs counted but not geometrically
+        # reconstructed. Bounded by the existing 15 per-direction Z samples.
+        'first_native_only_counted_planar_z_footprints':
+            only_z_footprints(native_only_z, native_layers, native_footprints),
+        'first_wasm_only_counted_planar_z_footprints':
+            only_z_footprints(wasm_only_z, wasm_layers, wasm_footprints),
+        # Shared exact Z levels can differ in geometry/E even when the
+        # planar deposited move counts agree. Never classify these as prime
+        # or model features; full-profile parity is still a separate gate.
+        'shared_counted_planar_z_footprint_difference_count':
+            shared_z_footprint_difference_count,
+        'first_shared_counted_planar_z_footprint_differences':
+            shared_z_footprint_examples,
+        # Fixed-label, comment-attributed planar positive-E G1 footprint
+        # census. Tag discrepancies are diagnostic only, NOT parity gates.
+        'native_feature_tagged_planar_g1': None if native_layers is None
+            else feature_deposition_summary(native_features),
+        'wasm_feature_tagged_planar_g1': None if wasm_layers is None
+            else feature_deposition_summary(wasm_features),
+        'feature_category_differences': None if native_layers is None or wasm_layers is None
+            else sorted(
+                key for key in set(native_features) | set(wasm_features)
+                if native_features.get(key) != wasm_features.get(key)
+            ),
+        # Signed category deltas are intentionally diagnostic-only. Ranked
+        # by absolute XY difference to prioritize further profile audits.
+        # No untrusted comment labels or executable G-code are included.
+        'feature_category_deltas': None if native_layers is None or wasm_layers is None
+            else feature_deposition_deltas(native_features, wasm_features),
+        # Observed height/feature attribution, excluding arcs and sloped moves.
+        'feature_z_difference_count': feature_z_count,
+        'first_feature_z_differences': feature_z_examples,
+        'minimum_extrusion_moves': min_extrusion_moves,
+        'input_issues': issues,
+        'native_sha256': hashlib.sha256(native.read_bytes()).hexdigest(),
+        'wasm_sha256': hashlib.sha256(wasm.read_bytes()).hexdigest(),
+        'match': mismatch_count == 0 and not issues,
+        'mismatched_commands': mismatch_count,
+        'first_differences': differences,
+    }
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--native', type=Path, required=True)
+    parser.add_argument('--wasm', type=Path, required=True)
+    parser.add_argument('--report', type=Path)
+    parser.add_argument('--min-extrusion-moves', type=int, default=0,
+                        help='Optional minimum number of positive-E XY/arc moves on each side')
+    args = parser.parse_args()
+    if args.min_extrusion_moves < 0:
+        parser.error('--min-extrusion-moves must be nonnegative')
+    report = compare(args.native, args.wasm, min_extrusion_moves=args.min_extrusion_moves)
+    output = json.dumps(report, ensure_ascii=False, indent=2)
+    print(output)
+    if args.report:
+        args.report.parent.mkdir(parents=True, exist_ok=True)
+        args.report.write_text(output + '\n', encoding='utf-8')
+    return 0 if report['match'] else 1
+
+if __name__ == '__main__':
+    sys.exit(main())
+, re.I)
+
+# Only the fixture deposition metrics interpret padded modal aliases.
+# Original command spellings remain untouched for strict comparison.
+FIXTURE_MODAL = re.compile(r'^G0*(17|18|19|20|21|90|91|92)(?:\.0+)?
+def count_motion(commands):
+    """Minimal fixture sanity check; NOT a printer-safety or parity proof."""
+    count = 0
+    for _, command in commands:
+        tokens = command.split()
+        if tokens and re.fullmatch(r'N\d+', tokens[0], re.I):
+            tokens = tokens[1:]
+        if tokens and MOTION.fullmatch(tokens[0]):
+            count += 1
+    return count
+
+EXTRUSION_MOTION = re.compile(r'^G0*[123](?:\.0+)?$', re.I)
+
+def valid_g17_arc(start, end, words, units, absolute_arc_centers):
+    """Conservatively require a geometrically possible XY arc for fixture counting.
+
+    This only validates G17 planar circular geometry, not firmware semantics
+    or extrusion volume. Unsupported/ambiguous arcs fail closed.
+    """
+    has_radius = 'R' in words
+    has_center = 'I' in words or 'J' in words
+    if has_radius == has_center:
+        return False  # neither definition, or conflicting R and I/J
+    dx, dy = end['X'] - start['X'], end['Y'] - start['Y']
+    if has_radius:
+        radius = abs(words['R'] * units)
+        chord_sq = dx * dx + dy * dy
+        return radius > 0 and chord_sq > 0 and chord_sq <= 4 * radius * radius
+    if absolute_arc_centers:
+        cx = words['I'] * units if 'I' in words else start['X']
+        cy = words['J'] * units if 'J' in words else start['Y']
+    else:
+        cx = start['X'] + words.get('I', Decimal(0)) * units
+        cy = start['Y'] + words.get('J', Decimal(0)) * units
+    r0 = math.hypot(float(start['X'] - cx), float(start['Y'] - cy))
+    r1 = math.hypot(float(end['X'] - cx), float(end['Y'] - cy))
+    return (math.isfinite(r0) and math.isfinite(r1) and r0 > 0
+            and abs(r0 - r1) <= max(0.05, r0 * 0.001))
+
+def extrusion_move_metrics(commands, feature_context=None, feature_stats=None,
+                           feature_z_stats=None):
+    """Summarize positive E and G1 XY path length for fixture sanity.
+
+    A present X/Y word alone does not prove movement: e.g. G1 X0 E1 at the
+    initial position is priming, not deposited path. Track G90/G91, G92 and
+    G20/G21 coordinates as well as M82/M83 and E resets. Arc center/radius
+    words may indicate a full circle with no XY endpoint displacement.
+    This is a conservative *fixture gate*, not a full firmware interpreter,
+    watertightness test, deposited-volume or print-safety certification.
+    """
+    count = 0
+    counted_e_mm = Decimal(0)
+    counted_linear_xy_mm = Decimal(0)
+    counted_linear_moves = 0
+    # Only deposition on a constant-Z move is assigned to a Z plane.
+    # Simultaneous XY+Z extrusion remains counted, but not as a flat layer.
+    planar_layer_moves = {}
+    # Numeric-only footprint for each observed constant-Z deposited stratum.
+    # G17 arc lengths and mid-arc extrema are deliberately NOT approximated.
+    planar_linear_stats = {}
+    nonplanar_deposition_moves = 0
+    z_position = Decimal(0)
+    absolute_e = True
+    absolute_xyz = True
+    absolute_arc_centers = False
+    plane = 'G17'
+    units = Decimal(1)
+    e_position = Decimal(0)
+    xy = {'X': Decimal(0), 'Y': Decimal(0)}
+    # An absolute E value cannot be compared across tool changes: some
+    # firmware restores a per-tool E register or resets it during a change.
+    # Relative E remains countable, but switching back to M82 requires G92 E.
+    last_selected_tool = None
+    e_reference_known = True
+    seen_e_reference = False
+    for line_no, command in commands:
+        tokens = command.split()
+        if tokens and re.fullmatch(r'N\d+', tokens[0], re.I):
+            tokens = tokens[1:]
+        if not tokens:
+            continue
+        opcode = tokens[0].upper()
+        if re.fullmatch(r'T\d+', opcode):
+            tool = int(opcode[1:])
+            # T255 and vendor-private selectors are not necessarily physical
+            # extruders. Their effect on E is unknown, so require an explicit
+            # re-anchor before accepting subsequent absolute-E deposition.
+            if tool >= 255:
+                e_reference_known = False
+            else:
+                if ((last_selected_tool is not None and
+                     last_selected_tool != tool) or
+                    (last_selected_tool is None and seen_e_reference)):
+                    e_reference_known = False
+                last_selected_tool = tool
+            continue
+        # M82 is absolute E, M83 is relative E. Preserve padded
+        # command spelling for *strict* comparison, but interpret only these
+        # well-defined numeric aliases in the deposition sanity gate.
+        # The former M083-in-M82 branch could count phantom extrusion after
+        # a relative retract or silently miss a real relative deposition.
+        if re.fullmatch(r'M0*82(?:\.0+)?', opcode):
+            absolute_e = True
+            continue
+        if re.fullmatch(r'M0*83(?:\.0+)?', opcode):
+            absolute_e = False
+            continue
+        if opcode == 'G90':
+            absolute_xyz = True
+            continue
+        if opcode == 'G91':
+            absolute_xyz = False
+            continue
+        if opcode in ('G17', 'G18', 'G19'):
+            plane = opcode
+            continue
+        if opcode == 'G90.1':
+            absolute_arc_centers = True
+            continue
+        if opcode == 'G91.1':
+            absolute_arc_centers = False
+            continue
+        if opcode == 'G20':
+            units = Decimal('25.4')
+            continue
+        if opcode == 'G21':
+            units = Decimal(1)
+            continue
+        words = {}
+        stateful = opcode == 'G92' or bool(MOTION.fullmatch(opcode))
+        # The numeric diagnostic is not a firmware interpreter. Reject extra
+        # motion axes and vendor parameters rather than silently counting a
+        # plausible XY/E path with different actual modal semantics.
+        if stateful:
+            if opcode == 'G92':
+                allowed_stateful_words = frozenset('XYZE')
+            elif int(Decimal(opcode[1:])) in (0, 1):
+                allowed_stateful_words = frozenset('XYZEF')
+            else:
+                allowed_stateful_words = frozenset('XYZEIJKRF')
+        for token in tokens[1:]:
+            match = PARAM.fullmatch(token)
+            if not match:
+                if stateful:
+                    # Opaque move/reset syntax leaves the position unknown.
+                    # Never use later moves to satisfy the fixture gate.
+                    return 0, None, None, 0, None, None, None
+                continue
+            letter = match[1].upper()
+            if stateful and (letter in words or letter not in allowed_stateful_words):
+                # Duplicate, unhandled or nonstandard motion parameters have
+                # firmware-dependent meaning; never infer deposition from them.
+                return 0, None, None, 0, None, None, None
+            words[letter] = Decimal(match[2])
+        if opcode == 'G92':
+            for axis in xy:
+                if axis in words:
+                    xy[axis] = words[axis] * units
+            if 'E' in words:
+                e_position = words['E'] * units
+                e_reference_known = True
+                seen_e_reference = True
+            if 'Z' in words:
+                z_position = words['Z'] * units
+            continue
+        if not MOTION.fullmatch(opcode):
+            continue
+        start_xy = xy.copy()
+        start_z = z_position
+        moved_xy = False
+        for axis in xy:
+            if axis not in words:
+                continue
+            requested = words[axis] * units
+            new_position = requested if absolute_xyz else xy[axis] + requested
+            moved_xy |= new_position != xy[axis]
+            xy[axis] = new_position
+        if 'Z' in words:
+            requested_z = words['Z'] * units
+            z_position = requested_z if absolute_xyz else z_position + requested_z
+        code = int(Decimal(opcode[1:]))
+        # An impossible G17 arc changes the interpreted XY endpoint even
+        # when E is absent or retracting. Silently ignoring it would let
+        # later straight moves satisfy a false deposition/parity gate.
+        # Unsupported non-XY planes retain their existing excluded status.
+        if code in (2, 3) and plane == 'G17' and (
+                'K' in words or not valid_g17_arc(
+                    start_xy, xy, words, units, absolute_arc_centers)):
+            # K belongs to non-XY planes; ignoring it would make an
+            # unsupported/misconfigured arc look like verified G17 geometry.
+            return 0, None, None, 0, None, None, None
+        if 'E' not in words:
+            continue
+        if absolute_e and not e_reference_known:
+            # Do not manufacture deposition from an old extruder baseline.
+            # The strict comparator still compares every original T command.
+            return 0, None, None, 0, None, None, None
+        seen_e_reference = True
+        requested_e = words['E'] * units
+        delta = requested_e - e_position if absolute_e else requested_e
+        e_position = requested_e if absolute_e else e_position + requested_e
+        if delta <= 0 or not EXTRUSION_MOTION.fullmatch(opcode):
+            continue
+        if code == 1 and not moved_xy:
+            continue
+        if code in (2, 3) and plane != 'G17':
+            continue
+        count += 1
+        counted_e_mm += delta
+        if start_z == z_position:
+            planar_layer_moves[z_position] = planar_layer_moves.get(z_position, 0) + 1
+            footprint = planar_linear_stats.setdefault(
+                z_position, {'linear_moves': 0, 'g17_arc_moves': 0,
+                             'linear_xy_mm': Decimal(0),
+                             'linear_positive_e_mm': Decimal(0),
+                             'linear_xy_endpoint_bounds_mm': None})
+            if code in (2, 3):
+                footprint['g17_arc_moves'] += 1
+        else:
+            nonplanar_deposition_moves += 1
+        if code == 1:
+            # Only G1 XY deposition is a straight segment. G17 arcs remain
+            # in the extrusion count/E total but are excluded from this metric.
+            dx = xy['X'] - start_xy['X']
+            dy = xy['Y'] - start_xy['Y']
+            length = (dx * dx + dy * dy).sqrt()
+            counted_linear_xy_mm += length
+            counted_linear_moves += 1
+            if start_z == z_position:
+                footprint['linear_moves'] += 1
+                footprint['linear_xy_mm'] += length
+                footprint['linear_positive_e_mm'] += delta
+                if feature_stats is not None or feature_z_stats is not None:
+                    # Observed deposited Z is not a validated native layer.
+                    label = (feature_context or {}).get(line_no) or 'unclassified'
+                    if feature_stats is not None:
+                        entry = feature_stats.setdefault(
+                            label, {'moves': 0, 'xy': Decimal(0), 'e': Decimal(0)})
+                        entry['moves'] += 1
+                        entry['xy'] += length
+                        entry['e'] += delta
+                    if feature_z_stats is not None:
+                        item = feature_z_stats.setdefault(
+                            (label, z_position),
+                            {'moves': 0, 'xy': Decimal(0), 'e': Decimal(0)})
+                        item['moves'] += 1
+                        item['xy'] += length
+                        item['e'] += delta
+                bounds = footprint['linear_xy_endpoint_bounds_mm']
+                for point in (start_xy, xy):
+                    x, y = point['X'], point['Y']
+                    if bounds is None:
+                        bounds = [x, y, x, y]
+                    else:
+                        bounds = [min(bounds[0], x), min(bounds[1], y),
+                                  max(bounds[2], x), max(bounds[3], y)]
+                footprint['linear_xy_endpoint_bounds_mm'] = bounds
+    return (count, counted_e_mm, counted_linear_xy_mm, counted_linear_moves,
+            planar_layer_moves, nonplanar_deposition_moves, planar_linear_stats)
+
+
+def count_extrusion_moves(commands):
+    """Backward-compatible fixture count; diagnostics also sum positive E."""
+    return extrusion_move_metrics(commands)[0]
+
+def numeric_parameter_deltas(native_command, wasm_command):
+    """Return diagnostic WASM-minus-native deltas for aligned numeric words."""
+    if native_command is None or wasm_command is None:
+        return []
+    a, b = native_command[1].split(), wasm_command[1].split()
+    if not a or not b or a[0] != b[0] or len(a) != len(b):
+        return []
+    deltas = []
+    for original, candidate in zip(a[1:], b[1:]):
+        x, y = PARAM.fullmatch(original), PARAM.fullmatch(candidate)
+        if x and y and x[1].upper() == y[1].upper():
+            delta = Decimal(y[2]) - Decimal(x[2])
+            if delta:
+                deltas.append({
+                    'parameter': x[1].upper(),
+                    'wasm_minus_native': str(delta.normalize()),
+                })
+    return deltas
+
+def rounded_mm(value):
+    """Format a rounded diagnostic length without scientific notation."""
+    return format(value.quantize(Decimal('0.000001')).normalize(), 'f')
+
+
+def only_z_footprints(heights, layers, footprints):
+    """Bounded, numeric-only deposited G1 footprint at absent Z positions.
+
+    Endpoint bounds omit arc interior points; lengths omit G17 curves.
+    This deliberately cannot classify a feature, determine layer identity,
+    prove equal settings or certify physical toolpaths.
+    """
+    if heights is None:
+        return None
+    result = []
+    for z in heights[:15]:
+        data = footprints[z]
+        bounds = data['linear_xy_endpoint_bounds_mm']
+        result.append({
+            'z_mm': format(z.normalize(), 'f'),
+            'deposition_moves': layers[z],
+            'linear_moves': data['linear_moves'],
+            'g17_arc_moves': data['g17_arc_moves'],
+            'linear_xy_mm': rounded_mm(data['linear_xy_mm']),
+            'linear_positive_e_mm': format(
+                data['linear_positive_e_mm'].normalize(), 'f'),
+            'linear_xy_endpoint_bounds_mm': None if bounds is None else [
+                format(value.normalize(), 'f') for value in bounds],
+        })
+    return result
+
+
+
+def shared_z_footprint_differences(native_layers, wasm_layers,
+                                   native_footprints, wasm_footprints):
+    """Find differing numeric G1 footprints at exact shared deposited Z values.
+
+    Unlike one-sided Z diagnostics, this catches equal move counts with
+    different XY lengths, positive E or endpoint bounds. The overall count
+    is complete; only the first 15 numeric entries are returned. Do not
+    infer feature identities or actual material volume from these metrics.
+    """
+    if native_layers is None or wasm_layers is None:
+        return None, None
+    total = 0
+    examples = []
+    for z in sorted(set(native_layers) & set(wasm_layers)):
+        a, b = native_footprints[z], wasm_footprints[z]
+        changed = (
+            native_layers[z] != wasm_layers[z]
+            or a['linear_moves'] != b['linear_moves']
+            or a['g17_arc_moves'] != b['g17_arc_moves']
+            or rounded_mm(a['linear_xy_mm']) != rounded_mm(b['linear_xy_mm'])
+            or a['linear_positive_e_mm'] != b['linear_positive_e_mm']
+            or a['linear_xy_endpoint_bounds_mm'] != b['linear_xy_endpoint_bounds_mm']
+        )
+        if not changed:
+            continue
+        total += 1
+        if len(examples) < 15:
+            examples.append({
+                'z_mm': format(z.normalize(), 'f'),
+                'native': only_z_footprints([z], native_layers, native_footprints)[0],
+                'wasm': only_z_footprints([z], wasm_layers, wasm_footprints)[0],
+                'wasm_minus_native_linear_xy_mm':
+                    rounded_mm(b['linear_xy_mm'] - a['linear_xy_mm']),
+                'wasm_minus_native_linear_positive_e_mm':
+                    format((b['linear_positive_e_mm'] -
+                            a['linear_positive_e_mm']).normalize(), 'f'),
+            })
+    return total, examples
+
+
+def compare(native, wasm, min_extrusion_moves=0):
+    if min_extrusion_moves < 0:
+        raise ValueError('minimum extrusion moves must not be negative')
+    a, b = canonical(native), canonical(wasm)
+    native_features, wasm_features = {}, {}
+    native_feature_layers, wasm_feature_layers = {}, {}
+    differences = []
+    mismatch_count = 0
+    for i in range(max(len(a), len(b))):
+        x, y = a[i] if i < len(a) else None, b[i] if i < len(b) else None
+        if x is None or y is None or x[1] != y[1]:
+            mismatch_count += 1
+            if len(differences) < 15:
+                entry = {'command_index': i, 'native': x, 'wasm': y}
+                deltas = numeric_parameter_deltas(x, y)
+                if deltas:
+                    entry['parameter_deltas'] = deltas
+                differences.append(entry)
+    native_motion, wasm_motion = count_motion(a), count_motion(b)
+    (native_extrusion, native_e_mm, native_linear_xy_mm, native_linear_moves,
+     native_layers, native_nonplanar, native_footprints) = extrusion_move_metrics(
+         a, gcode_feature_context(native), native_features, native_feature_layers)
+    (wasm_extrusion, wasm_e_mm, wasm_linear_xy_mm, wasm_linear_moves,
+     wasm_layers, wasm_nonplanar, wasm_footprints) = extrusion_move_metrics(
+         b, gcode_feature_context(wasm), wasm_features, wasm_feature_layers)
+    # Bounded, read-only per-Z differences: do not imply that a Z plane
+    # represents a complete OrcaSlicer layer or deposited volume.
+    planar_layer_differences = None
+    native_only_z = None
+    wasm_only_z = None
+    if native_layers is not None and wasm_layers is not None:
+        # Set membership is independent of how many moves each shared Z has.
+        # Keep exact Decimal heights; never silently round distinct planes.
+        native_only_z = sorted(set(native_layers) - set(wasm_layers))
+        wasm_only_z = sorted(set(wasm_layers) - set(native_layers))
+        planar_layer_differences = [
+            {'z_mm': format(z.normalize(), 'f'),
+             'native_moves': native_layers.get(z, 0),
+             'wasm_moves': wasm_layers.get(z, 0)}
+            for z in sorted(set(native_layers) | set(wasm_layers))
+            if native_layers.get(z, 0) != wasm_layers.get(z, 0)
+        ][:15]
+    (shared_z_footprint_difference_count,
+     shared_z_footprint_examples) = shared_z_footprint_differences(
+         native_layers, wasm_layers, native_footprints, wasm_footprints)
+    feature_z_count, feature_z_examples = (None, None)
+    if native_layers is not None and wasm_layers is not None:
+        feature_z_count, feature_z_examples = feature_z_deposition_deltas(
+            native_feature_layers, wasm_feature_layers)
+    issues = []
+    # A malformed stateful command yields unknown deposition metrics, not
+    # zero deposited material. Reject even when the optional minimum is 0:
+    # two identical *invalid* files must never pass the strict fixture gate.
+    if native_layers is None:
+        issues.append('native has unsupported or malformed stateful geometry')
+    if wasm_layers is None:
+        issues.append('wasm has unsupported or malformed stateful geometry')
+    if native_motion == 0:
+        issues.append('native input has no G0/G1/G2/G3 motion commands')
+    if wasm_motion == 0:
+        issues.append('wasm input has no G0/G1/G2/G3 motion commands')
+    if native_extrusion < min_extrusion_moves:
+        issues.append(f'native has {native_extrusion} extrusion moves; expected at least {min_extrusion_moves}')
+    if wasm_extrusion < min_extrusion_moves:
+        issues.append(f'wasm has {wasm_extrusion} extrusion moves; expected at least {min_extrusion_moves}')
+    return {
+        **heater_setpoint_differences(a, b),
+        'native': str(native), 'wasm': str(wasm),
+        'native_commands': len(a), 'wasm_commands': len(b),
+        'native_motion_commands': native_motion, 'wasm_motion_commands': wasm_motion,
+        'native_extrusion_moves': native_extrusion, 'wasm_extrusion_moves': wasm_extrusion,
+        # Positive commanded filament-axis E for counted XY deposition only.
+        # This is not deposited material volume or an actual extrusion sensor.
+        'native_counted_positive_e_mm': None if native_e_mm is None else str(native_e_mm.normalize()),
+        'wasm_counted_positive_e_mm': None if wasm_e_mm is None else str(wasm_e_mm.normalize()),
+        'counted_positive_e_delta_mm': None if native_e_mm is None or wasm_e_mm is None
+            else str((wasm_e_mm - native_e_mm).normalize()),
+        # Only positive-E G1 XY strokes (not G17 arc lengths or travels).
+        # Rounded to 1 micrometre for a stable diagnostic display.
+        'native_counted_linear_xy_moves': native_linear_moves,
+        'wasm_counted_linear_xy_moves': wasm_linear_moves,
+        'native_counted_linear_xy_mm': None if native_linear_xy_mm is None
+            else rounded_mm(native_linear_xy_mm),
+        'wasm_counted_linear_xy_mm': None if wasm_linear_xy_mm is None
+            else rounded_mm(wasm_linear_xy_mm),
+        'counted_linear_xy_delta_mm': None if native_linear_xy_mm is None or wasm_linear_xy_mm is None
+            else rounded_mm(wasm_linear_xy_mm - native_linear_xy_mm),
+        # Exact numeric Z locations of constant-height positive-E XY moves,
+        # including valid G17 arcs. Changing Z during deposition is excluded.
+        'native_counted_planar_z_levels': None if native_layers is None else len(native_layers),
+        'wasm_counted_planar_z_levels': None if wasm_layers is None else len(wasm_layers),
+        'native_counted_nonplanar_deposition_moves': native_nonplanar,
+        'wasm_counted_nonplanar_deposition_moves': wasm_nonplanar,
+        'first_counted_planar_z_differences': planar_layer_differences,
+        # The 15-position preview of changed move counts does not tell us
+        # whether an entire deposited Z plane is absent on one side.
+        # Report full membership counts and bounded numeric-only examples.
+        'native_only_counted_planar_z_levels': None if native_only_z is None else len(native_only_z),
+        'wasm_only_counted_planar_z_levels': None if wasm_only_z is None else len(wasm_only_z),
+        'first_native_only_counted_planar_z_mm': None if native_only_z is None
+            else [format(z.normalize(), 'f') for z in native_only_z[:15]],
+        'first_wasm_only_counted_planar_z_mm': None if wasm_only_z is None
+            else [format(z.normalize(), 'f') for z in wasm_only_z[:15]],
+        # Endpoint-only G1 footprint; arcs counted but not geometrically
+        # reconstructed. Bounded by the existing 15 per-direction Z samples.
+        'first_native_only_counted_planar_z_footprints':
+            only_z_footprints(native_only_z, native_layers, native_footprints),
+        'first_wasm_only_counted_planar_z_footprints':
+            only_z_footprints(wasm_only_z, wasm_layers, wasm_footprints),
+        # Shared exact Z levels can differ in geometry/E even when the
+        # planar deposited move counts agree. Never classify these as prime
+        # or model features; full-profile parity is still a separate gate.
+        'shared_counted_planar_z_footprint_difference_count':
+            shared_z_footprint_difference_count,
+        'first_shared_counted_planar_z_footprint_differences':
+            shared_z_footprint_examples,
+        # Fixed-label, comment-attributed planar positive-E G1 footprint
+        # census. Tag discrepancies are diagnostic only, NOT parity gates.
+        'native_feature_tagged_planar_g1': None if native_layers is None
+            else feature_deposition_summary(native_features),
+        'wasm_feature_tagged_planar_g1': None if wasm_layers is None
+            else feature_deposition_summary(wasm_features),
+        'feature_category_differences': None if native_layers is None or wasm_layers is None
+            else sorted(
+                key for key in set(native_features) | set(wasm_features)
+                if native_features.get(key) != wasm_features.get(key)
+            ),
+        # Signed category deltas are intentionally diagnostic-only. Ranked
+        # by absolute XY difference to prioritize further profile audits.
+        # No untrusted comment labels or executable G-code are included.
+        'feature_category_deltas': None if native_layers is None or wasm_layers is None
+            else feature_deposition_deltas(native_features, wasm_features),
+        # Observed height/feature attribution, excluding arcs and sloped moves.
+        'feature_z_difference_count': feature_z_count,
+        'first_feature_z_differences': feature_z_examples,
+        'minimum_extrusion_moves': min_extrusion_moves,
+        'input_issues': issues,
+        'native_sha256': hashlib.sha256(native.read_bytes()).hexdigest(),
+        'wasm_sha256': hashlib.sha256(wasm.read_bytes()).hexdigest(),
+        'match': mismatch_count == 0 and not issues,
+        'mismatched_commands': mismatch_count,
+        'first_differences': differences,
+    }
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--native', type=Path, required=True)
+    parser.add_argument('--wasm', type=Path, required=True)
+    parser.add_argument('--report', type=Path)
+    parser.add_argument('--min-extrusion-moves', type=int, default=0,
+                        help='Optional minimum number of positive-E XY/arc moves on each side')
+    args = parser.parse_args()
+    if args.min_extrusion_moves < 0:
+        parser.error('--min-extrusion-moves must be nonnegative')
+    report = compare(args.native, args.wasm, min_extrusion_moves=args.min_extrusion_moves)
+    output = json.dumps(report, ensure_ascii=False, indent=2)
+    print(output)
+    if args.report:
+        args.report.parent.mkdir(parents=True, exist_ok=True)
+        args.report.write_text(output + '\n', encoding='utf-8')
+    return 0 if report['match'] else 1
+
+if __name__ == '__main__':
+    sys.exit(main())
+, re.I)
+FIXTURE_ARC_CENTER_MODAL = re.compile(r'^G0*(90|91)\.1
+def count_motion(commands):
+    """Minimal fixture sanity check; NOT a printer-safety or parity proof."""
+    count = 0
+    for _, command in commands:
+        tokens = command.split()
+        if tokens and re.fullmatch(r'N\d+', tokens[0], re.I):
+            tokens = tokens[1:]
+        if tokens and MOTION.fullmatch(tokens[0]):
+            count += 1
+    return count
+
+EXTRUSION_MOTION = re.compile(r'^G0*[123](?:\.0+)?$', re.I)
+
+def valid_g17_arc(start, end, words, units, absolute_arc_centers):
+    """Conservatively require a geometrically possible XY arc for fixture counting.
+
+    This only validates G17 planar circular geometry, not firmware semantics
+    or extrusion volume. Unsupported/ambiguous arcs fail closed.
+    """
+    has_radius = 'R' in words
+    has_center = 'I' in words or 'J' in words
+    if has_radius == has_center:
+        return False  # neither definition, or conflicting R and I/J
+    dx, dy = end['X'] - start['X'], end['Y'] - start['Y']
+    if has_radius:
+        radius = abs(words['R'] * units)
+        chord_sq = dx * dx + dy * dy
+        return radius > 0 and chord_sq > 0 and chord_sq <= 4 * radius * radius
+    if absolute_arc_centers:
+        cx = words['I'] * units if 'I' in words else start['X']
+        cy = words['J'] * units if 'J' in words else start['Y']
+    else:
+        cx = start['X'] + words.get('I', Decimal(0)) * units
+        cy = start['Y'] + words.get('J', Decimal(0)) * units
+    r0 = math.hypot(float(start['X'] - cx), float(start['Y'] - cy))
+    r1 = math.hypot(float(end['X'] - cx), float(end['Y'] - cy))
+    return (math.isfinite(r0) and math.isfinite(r1) and r0 > 0
+            and abs(r0 - r1) <= max(0.05, r0 * 0.001))
+
+def extrusion_move_metrics(commands, feature_context=None, feature_stats=None,
+                           feature_z_stats=None):
+    """Summarize positive E and G1 XY path length for fixture sanity.
+
+    A present X/Y word alone does not prove movement: e.g. G1 X0 E1 at the
+    initial position is priming, not deposited path. Track G90/G91, G92 and
+    G20/G21 coordinates as well as M82/M83 and E resets. Arc center/radius
+    words may indicate a full circle with no XY endpoint displacement.
+    This is a conservative *fixture gate*, not a full firmware interpreter,
+    watertightness test, deposited-volume or print-safety certification.
+    """
+    count = 0
+    counted_e_mm = Decimal(0)
+    counted_linear_xy_mm = Decimal(0)
+    counted_linear_moves = 0
+    # Only deposition on a constant-Z move is assigned to a Z plane.
+    # Simultaneous XY+Z extrusion remains counted, but not as a flat layer.
+    planar_layer_moves = {}
+    # Numeric-only footprint for each observed constant-Z deposited stratum.
+    # G17 arc lengths and mid-arc extrema are deliberately NOT approximated.
+    planar_linear_stats = {}
+    nonplanar_deposition_moves = 0
+    z_position = Decimal(0)
+    absolute_e = True
+    absolute_xyz = True
+    absolute_arc_centers = False
+    plane = 'G17'
+    units = Decimal(1)
+    e_position = Decimal(0)
+    xy = {'X': Decimal(0), 'Y': Decimal(0)}
+    # An absolute E value cannot be compared across tool changes: some
+    # firmware restores a per-tool E register or resets it during a change.
+    # Relative E remains countable, but switching back to M82 requires G92 E.
+    last_selected_tool = None
+    e_reference_known = True
+    seen_e_reference = False
+    for line_no, command in commands:
+        tokens = command.split()
+        if tokens and re.fullmatch(r'N\d+', tokens[0], re.I):
+            tokens = tokens[1:]
+        if not tokens:
+            continue
+        opcode = tokens[0].upper()
+        if re.fullmatch(r'T\d+', opcode):
+            tool = int(opcode[1:])
+            # T255 and vendor-private selectors are not necessarily physical
+            # extruders. Their effect on E is unknown, so require an explicit
+            # re-anchor before accepting subsequent absolute-E deposition.
+            if tool >= 255:
+                e_reference_known = False
+            else:
+                if ((last_selected_tool is not None and
+                     last_selected_tool != tool) or
+                    (last_selected_tool is None and seen_e_reference)):
+                    e_reference_known = False
+                last_selected_tool = tool
+            continue
+        # M82 is absolute E, M83 is relative E. Preserve padded
+        # command spelling for *strict* comparison, but interpret only these
+        # well-defined numeric aliases in the deposition sanity gate.
+        # The former M083-in-M82 branch could count phantom extrusion after
+        # a relative retract or silently miss a real relative deposition.
+        if re.fullmatch(r'M0*82(?:\.0+)?', opcode):
+            absolute_e = True
+            continue
+        if re.fullmatch(r'M0*83(?:\.0+)?', opcode):
+            absolute_e = False
+            continue
+        if opcode == 'G90':
+            absolute_xyz = True
+            continue
+        if opcode == 'G91':
+            absolute_xyz = False
+            continue
+        if opcode in ('G17', 'G18', 'G19'):
+            plane = opcode
+            continue
+        if opcode == 'G90.1':
+            absolute_arc_centers = True
+            continue
+        if opcode == 'G91.1':
+            absolute_arc_centers = False
+            continue
+        if opcode == 'G20':
+            units = Decimal('25.4')
+            continue
+        if opcode == 'G21':
+            units = Decimal(1)
+            continue
+        words = {}
+        stateful = opcode == 'G92' or bool(MOTION.fullmatch(opcode))
+        # The numeric diagnostic is not a firmware interpreter. Reject extra
+        # motion axes and vendor parameters rather than silently counting a
+        # plausible XY/E path with different actual modal semantics.
+        if stateful:
+            if opcode == 'G92':
+                allowed_stateful_words = frozenset('XYZE')
+            elif int(Decimal(opcode[1:])) in (0, 1):
+                allowed_stateful_words = frozenset('XYZEF')
+            else:
+                allowed_stateful_words = frozenset('XYZEIJKRF')
+        for token in tokens[1:]:
+            match = PARAM.fullmatch(token)
+            if not match:
+                if stateful:
+                    # Opaque move/reset syntax leaves the position unknown.
+                    # Never use later moves to satisfy the fixture gate.
+                    return 0, None, None, 0, None, None, None
+                continue
+            letter = match[1].upper()
+            if stateful and (letter in words or letter not in allowed_stateful_words):
+                # Duplicate, unhandled or nonstandard motion parameters have
+                # firmware-dependent meaning; never infer deposition from them.
+                return 0, None, None, 0, None, None, None
+            words[letter] = Decimal(match[2])
+        if opcode == 'G92':
+            for axis in xy:
+                if axis in words:
+                    xy[axis] = words[axis] * units
+            if 'E' in words:
+                e_position = words['E'] * units
+                e_reference_known = True
+                seen_e_reference = True
+            if 'Z' in words:
+                z_position = words['Z'] * units
+            continue
+        if not MOTION.fullmatch(opcode):
+            continue
+        start_xy = xy.copy()
+        start_z = z_position
+        moved_xy = False
+        for axis in xy:
+            if axis not in words:
+                continue
+            requested = words[axis] * units
+            new_position = requested if absolute_xyz else xy[axis] + requested
+            moved_xy |= new_position != xy[axis]
+            xy[axis] = new_position
+        if 'Z' in words:
+            requested_z = words['Z'] * units
+            z_position = requested_z if absolute_xyz else z_position + requested_z
+        code = int(Decimal(opcode[1:]))
+        # An impossible G17 arc changes the interpreted XY endpoint even
+        # when E is absent or retracting. Silently ignoring it would let
+        # later straight moves satisfy a false deposition/parity gate.
+        # Unsupported non-XY planes retain their existing excluded status.
+        if code in (2, 3) and plane == 'G17' and (
+                'K' in words or not valid_g17_arc(
+                    start_xy, xy, words, units, absolute_arc_centers)):
+            # K belongs to non-XY planes; ignoring it would make an
+            # unsupported/misconfigured arc look like verified G17 geometry.
+            return 0, None, None, 0, None, None, None
+        if 'E' not in words:
+            continue
+        if absolute_e and not e_reference_known:
+            # Do not manufacture deposition from an old extruder baseline.
+            # The strict comparator still compares every original T command.
+            return 0, None, None, 0, None, None, None
+        seen_e_reference = True
+        requested_e = words['E'] * units
+        delta = requested_e - e_position if absolute_e else requested_e
+        e_position = requested_e if absolute_e else e_position + requested_e
+        if delta <= 0 or not EXTRUSION_MOTION.fullmatch(opcode):
+            continue
+        if code == 1 and not moved_xy:
+            continue
+        if code in (2, 3) and plane != 'G17':
+            continue
+        count += 1
+        counted_e_mm += delta
+        if start_z == z_position:
+            planar_layer_moves[z_position] = planar_layer_moves.get(z_position, 0) + 1
+            footprint = planar_linear_stats.setdefault(
+                z_position, {'linear_moves': 0, 'g17_arc_moves': 0,
+                             'linear_xy_mm': Decimal(0),
+                             'linear_positive_e_mm': Decimal(0),
+                             'linear_xy_endpoint_bounds_mm': None})
+            if code in (2, 3):
+                footprint['g17_arc_moves'] += 1
+        else:
+            nonplanar_deposition_moves += 1
+        if code == 1:
+            # Only G1 XY deposition is a straight segment. G17 arcs remain
+            # in the extrusion count/E total but are excluded from this metric.
+            dx = xy['X'] - start_xy['X']
+            dy = xy['Y'] - start_xy['Y']
+            length = (dx * dx + dy * dy).sqrt()
+            counted_linear_xy_mm += length
+            counted_linear_moves += 1
+            if start_z == z_position:
+                footprint['linear_moves'] += 1
+                footprint['linear_xy_mm'] += length
+                footprint['linear_positive_e_mm'] += delta
+                if feature_stats is not None or feature_z_stats is not None:
+                    # Observed deposited Z is not a validated native layer.
+                    label = (feature_context or {}).get(line_no) or 'unclassified'
+                    if feature_stats is not None:
+                        entry = feature_stats.setdefault(
+                            label, {'moves': 0, 'xy': Decimal(0), 'e': Decimal(0)})
+                        entry['moves'] += 1
+                        entry['xy'] += length
+                        entry['e'] += delta
+                    if feature_z_stats is not None:
+                        item = feature_z_stats.setdefault(
+                            (label, z_position),
+                            {'moves': 0, 'xy': Decimal(0), 'e': Decimal(0)})
+                        item['moves'] += 1
+                        item['xy'] += length
+                        item['e'] += delta
+                bounds = footprint['linear_xy_endpoint_bounds_mm']
+                for point in (start_xy, xy):
+                    x, y = point['X'], point['Y']
+                    if bounds is None:
+                        bounds = [x, y, x, y]
+                    else:
+                        bounds = [min(bounds[0], x), min(bounds[1], y),
+                                  max(bounds[2], x), max(bounds[3], y)]
+                footprint['linear_xy_endpoint_bounds_mm'] = bounds
+    return (count, counted_e_mm, counted_linear_xy_mm, counted_linear_moves,
+            planar_layer_moves, nonplanar_deposition_moves, planar_linear_stats)
+
+
+def count_extrusion_moves(commands):
+    """Backward-compatible fixture count; diagnostics also sum positive E."""
+    return extrusion_move_metrics(commands)[0]
+
+def numeric_parameter_deltas(native_command, wasm_command):
+    """Return diagnostic WASM-minus-native deltas for aligned numeric words."""
+    if native_command is None or wasm_command is None:
+        return []
+    a, b = native_command[1].split(), wasm_command[1].split()
+    if not a or not b or a[0] != b[0] or len(a) != len(b):
+        return []
+    deltas = []
+    for original, candidate in zip(a[1:], b[1:]):
+        x, y = PARAM.fullmatch(original), PARAM.fullmatch(candidate)
+        if x and y and x[1].upper() == y[1].upper():
+            delta = Decimal(y[2]) - Decimal(x[2])
+            if delta:
+                deltas.append({
+                    'parameter': x[1].upper(),
+                    'wasm_minus_native': str(delta.normalize()),
+                })
+    return deltas
+
+def rounded_mm(value):
+    """Format a rounded diagnostic length without scientific notation."""
+    return format(value.quantize(Decimal('0.000001')).normalize(), 'f')
+
+
+def only_z_footprints(heights, layers, footprints):
+    """Bounded, numeric-only deposited G1 footprint at absent Z positions.
+
+    Endpoint bounds omit arc interior points; lengths omit G17 curves.
+    This deliberately cannot classify a feature, determine layer identity,
+    prove equal settings or certify physical toolpaths.
+    """
+    if heights is None:
+        return None
+    result = []
+    for z in heights[:15]:
+        data = footprints[z]
+        bounds = data['linear_xy_endpoint_bounds_mm']
+        result.append({
+            'z_mm': format(z.normalize(), 'f'),
+            'deposition_moves': layers[z],
+            'linear_moves': data['linear_moves'],
+            'g17_arc_moves': data['g17_arc_moves'],
+            'linear_xy_mm': rounded_mm(data['linear_xy_mm']),
+            'linear_positive_e_mm': format(
+                data['linear_positive_e_mm'].normalize(), 'f'),
+            'linear_xy_endpoint_bounds_mm': None if bounds is None else [
+                format(value.normalize(), 'f') for value in bounds],
+        })
+    return result
+
+
+
+def shared_z_footprint_differences(native_layers, wasm_layers,
+                                   native_footprints, wasm_footprints):
+    """Find differing numeric G1 footprints at exact shared deposited Z values.
+
+    Unlike one-sided Z diagnostics, this catches equal move counts with
+    different XY lengths, positive E or endpoint bounds. The overall count
+    is complete; only the first 15 numeric entries are returned. Do not
+    infer feature identities or actual material volume from these metrics.
+    """
+    if native_layers is None or wasm_layers is None:
+        return None, None
+    total = 0
+    examples = []
+    for z in sorted(set(native_layers) & set(wasm_layers)):
+        a, b = native_footprints[z], wasm_footprints[z]
+        changed = (
+            native_layers[z] != wasm_layers[z]
+            or a['linear_moves'] != b['linear_moves']
+            or a['g17_arc_moves'] != b['g17_arc_moves']
+            or rounded_mm(a['linear_xy_mm']) != rounded_mm(b['linear_xy_mm'])
+            or a['linear_positive_e_mm'] != b['linear_positive_e_mm']
+            or a['linear_xy_endpoint_bounds_mm'] != b['linear_xy_endpoint_bounds_mm']
+        )
+        if not changed:
+            continue
+        total += 1
+        if len(examples) < 15:
+            examples.append({
+                'z_mm': format(z.normalize(), 'f'),
+                'native': only_z_footprints([z], native_layers, native_footprints)[0],
+                'wasm': only_z_footprints([z], wasm_layers, wasm_footprints)[0],
+                'wasm_minus_native_linear_xy_mm':
+                    rounded_mm(b['linear_xy_mm'] - a['linear_xy_mm']),
+                'wasm_minus_native_linear_positive_e_mm':
+                    format((b['linear_positive_e_mm'] -
+                            a['linear_positive_e_mm']).normalize(), 'f'),
+            })
+    return total, examples
+
+
+def compare(native, wasm, min_extrusion_moves=0):
+    if min_extrusion_moves < 0:
+        raise ValueError('minimum extrusion moves must not be negative')
+    a, b = canonical(native), canonical(wasm)
+    native_features, wasm_features = {}, {}
+    native_feature_layers, wasm_feature_layers = {}, {}
+    differences = []
+    mismatch_count = 0
+    for i in range(max(len(a), len(b))):
+        x, y = a[i] if i < len(a) else None, b[i] if i < len(b) else None
+        if x is None or y is None or x[1] != y[1]:
+            mismatch_count += 1
+            if len(differences) < 15:
+                entry = {'command_index': i, 'native': x, 'wasm': y}
+                deltas = numeric_parameter_deltas(x, y)
+                if deltas:
+                    entry['parameter_deltas'] = deltas
+                differences.append(entry)
+    native_motion, wasm_motion = count_motion(a), count_motion(b)
+    (native_extrusion, native_e_mm, native_linear_xy_mm, native_linear_moves,
+     native_layers, native_nonplanar, native_footprints) = extrusion_move_metrics(
+         a, gcode_feature_context(native), native_features, native_feature_layers)
+    (wasm_extrusion, wasm_e_mm, wasm_linear_xy_mm, wasm_linear_moves,
+     wasm_layers, wasm_nonplanar, wasm_footprints) = extrusion_move_metrics(
+         b, gcode_feature_context(wasm), wasm_features, wasm_feature_layers)
+    # Bounded, read-only per-Z differences: do not imply that a Z plane
+    # represents a complete OrcaSlicer layer or deposited volume.
+    planar_layer_differences = None
+    native_only_z = None
+    wasm_only_z = None
+    if native_layers is not None and wasm_layers is not None:
+        # Set membership is independent of how many moves each shared Z has.
+        # Keep exact Decimal heights; never silently round distinct planes.
+        native_only_z = sorted(set(native_layers) - set(wasm_layers))
+        wasm_only_z = sorted(set(wasm_layers) - set(native_layers))
+        planar_layer_differences = [
+            {'z_mm': format(z.normalize(), 'f'),
+             'native_moves': native_layers.get(z, 0),
+             'wasm_moves': wasm_layers.get(z, 0)}
+            for z in sorted(set(native_layers) | set(wasm_layers))
+            if native_layers.get(z, 0) != wasm_layers.get(z, 0)
+        ][:15]
+    (shared_z_footprint_difference_count,
+     shared_z_footprint_examples) = shared_z_footprint_differences(
+         native_layers, wasm_layers, native_footprints, wasm_footprints)
+    feature_z_count, feature_z_examples = (None, None)
+    if native_layers is not None and wasm_layers is not None:
+        feature_z_count, feature_z_examples = feature_z_deposition_deltas(
+            native_feature_layers, wasm_feature_layers)
+    issues = []
+    # A malformed stateful command yields unknown deposition metrics, not
+    # zero deposited material. Reject even when the optional minimum is 0:
+    # two identical *invalid* files must never pass the strict fixture gate.
+    if native_layers is None:
+        issues.append('native has unsupported or malformed stateful geometry')
+    if wasm_layers is None:
+        issues.append('wasm has unsupported or malformed stateful geometry')
+    if native_motion == 0:
+        issues.append('native input has no G0/G1/G2/G3 motion commands')
+    if wasm_motion == 0:
+        issues.append('wasm input has no G0/G1/G2/G3 motion commands')
+    if native_extrusion < min_extrusion_moves:
+        issues.append(f'native has {native_extrusion} extrusion moves; expected at least {min_extrusion_moves}')
+    if wasm_extrusion < min_extrusion_moves:
+        issues.append(f'wasm has {wasm_extrusion} extrusion moves; expected at least {min_extrusion_moves}')
+    return {
+        **heater_setpoint_differences(a, b),
+        'native': str(native), 'wasm': str(wasm),
+        'native_commands': len(a), 'wasm_commands': len(b),
+        'native_motion_commands': native_motion, 'wasm_motion_commands': wasm_motion,
+        'native_extrusion_moves': native_extrusion, 'wasm_extrusion_moves': wasm_extrusion,
+        # Positive commanded filament-axis E for counted XY deposition only.
+        # This is not deposited material volume or an actual extrusion sensor.
+        'native_counted_positive_e_mm': None if native_e_mm is None else str(native_e_mm.normalize()),
+        'wasm_counted_positive_e_mm': None if wasm_e_mm is None else str(wasm_e_mm.normalize()),
+        'counted_positive_e_delta_mm': None if native_e_mm is None or wasm_e_mm is None
+            else str((wasm_e_mm - native_e_mm).normalize()),
+        # Only positive-E G1 XY strokes (not G17 arc lengths or travels).
+        # Rounded to 1 micrometre for a stable diagnostic display.
+        'native_counted_linear_xy_moves': native_linear_moves,
+        'wasm_counted_linear_xy_moves': wasm_linear_moves,
+        'native_counted_linear_xy_mm': None if native_linear_xy_mm is None
+            else rounded_mm(native_linear_xy_mm),
+        'wasm_counted_linear_xy_mm': None if wasm_linear_xy_mm is None
+            else rounded_mm(wasm_linear_xy_mm),
+        'counted_linear_xy_delta_mm': None if native_linear_xy_mm is None or wasm_linear_xy_mm is None
+            else rounded_mm(wasm_linear_xy_mm - native_linear_xy_mm),
+        # Exact numeric Z locations of constant-height positive-E XY moves,
+        # including valid G17 arcs. Changing Z during deposition is excluded.
+        'native_counted_planar_z_levels': None if native_layers is None else len(native_layers),
+        'wasm_counted_planar_z_levels': None if wasm_layers is None else len(wasm_layers),
+        'native_counted_nonplanar_deposition_moves': native_nonplanar,
+        'wasm_counted_nonplanar_deposition_moves': wasm_nonplanar,
+        'first_counted_planar_z_differences': planar_layer_differences,
+        # The 15-position preview of changed move counts does not tell us
+        # whether an entire deposited Z plane is absent on one side.
+        # Report full membership counts and bounded numeric-only examples.
+        'native_only_counted_planar_z_levels': None if native_only_z is None else len(native_only_z),
+        'wasm_only_counted_planar_z_levels': None if wasm_only_z is None else len(wasm_only_z),
+        'first_native_only_counted_planar_z_mm': None if native_only_z is None
+            else [format(z.normalize(), 'f') for z in native_only_z[:15]],
+        'first_wasm_only_counted_planar_z_mm': None if wasm_only_z is None
+            else [format(z.normalize(), 'f') for z in wasm_only_z[:15]],
+        # Endpoint-only G1 footprint; arcs counted but not geometrically
+        # reconstructed. Bounded by the existing 15 per-direction Z samples.
+        'first_native_only_counted_planar_z_footprints':
+            only_z_footprints(native_only_z, native_layers, native_footprints),
+        'first_wasm_only_counted_planar_z_footprints':
+            only_z_footprints(wasm_only_z, wasm_layers, wasm_footprints),
+        # Shared exact Z levels can differ in geometry/E even when the
+        # planar deposited move counts agree. Never classify these as prime
+        # or model features; full-profile parity is still a separate gate.
+        'shared_counted_planar_z_footprint_difference_count':
+            shared_z_footprint_difference_count,
+        'first_shared_counted_planar_z_footprint_differences':
+            shared_z_footprint_examples,
+        # Fixed-label, comment-attributed planar positive-E G1 footprint
+        # census. Tag discrepancies are diagnostic only, NOT parity gates.
+        'native_feature_tagged_planar_g1': None if native_layers is None
+            else feature_deposition_summary(native_features),
+        'wasm_feature_tagged_planar_g1': None if wasm_layers is None
+            else feature_deposition_summary(wasm_features),
+        'feature_category_differences': None if native_layers is None or wasm_layers is None
+            else sorted(
+                key for key in set(native_features) | set(wasm_features)
+                if native_features.get(key) != wasm_features.get(key)
+            ),
+        # Signed category deltas are intentionally diagnostic-only. Ranked
+        # by absolute XY difference to prioritize further profile audits.
+        # No untrusted comment labels or executable G-code are included.
+        'feature_category_deltas': None if native_layers is None or wasm_layers is None
+            else feature_deposition_deltas(native_features, wasm_features),
+        # Observed height/feature attribution, excluding arcs and sloped moves.
+        'feature_z_difference_count': feature_z_count,
+        'first_feature_z_differences': feature_z_examples,
+        'minimum_extrusion_moves': min_extrusion_moves,
+        'input_issues': issues,
+        'native_sha256': hashlib.sha256(native.read_bytes()).hexdigest(),
+        'wasm_sha256': hashlib.sha256(wasm.read_bytes()).hexdigest(),
+        'match': mismatch_count == 0 and not issues,
+        'mismatched_commands': mismatch_count,
+        'first_differences': differences,
+    }
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--native', type=Path, required=True)
+    parser.add_argument('--wasm', type=Path, required=True)
+    parser.add_argument('--report', type=Path)
+    parser.add_argument('--min-extrusion-moves', type=int, default=0,
+                        help='Optional minimum number of positive-E XY/arc moves on each side')
+    args = parser.parse_args()
+    if args.min_extrusion_moves < 0:
+        parser.error('--min-extrusion-moves must be nonnegative')
+    report = compare(args.native, args.wasm, min_extrusion_moves=args.min_extrusion_moves)
+    output = json.dumps(report, ensure_ascii=False, indent=2)
+    print(output)
+    if args.report:
+        args.report.parent.mkdir(parents=True, exist_ok=True)
+        args.report.write_text(output + '\n', encoding='utf-8')
+    return 0 if report['match'] else 1
+
+if __name__ == '__main__':
+    sys.exit(main())
+, re.I)
+
+
+def fixture_modal_opcode(opcode):
+    mode = FIXTURE_MODAL.fullmatch(opcode)
+    if mode:
+        return 'G' + mode[1]
+    arc_center = FIXTURE_ARC_CENTER_MODAL.fullmatch(opcode)
+    if arc_center:
+        return 'G' + arc_center[1] + '.1'
+    return opcode
+
 
 def count_motion(commands):
     """Minimal fixture sanity check; NOT a printer-safety or parity proof."""
