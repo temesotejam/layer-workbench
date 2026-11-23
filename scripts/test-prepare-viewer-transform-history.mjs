@@ -63,6 +63,34 @@ test("invalid snapshots and invalid limit fail closed", () => {
   assert.throws(() => h.record({id: "bad", before: snapshot(0), after: {...snapshot(1), quaternion: [0,0,0]}}), TypeError);
 });
 
+test("loose-mesh duplication is reversible after transform edits", () => {
+  const h = createViewerTransformHistory();
+  h.recordDuplicate("copy");
+  h.record({id:"copy", before:snapshot(20,true), after:snapshot(25,true)});
+  assert.deepEqual(h.undo(), {id:"copy",snapshot:snapshot(20,true)});
+  assert.deepEqual(h.undo(), {id:"copy",duplicateAction:"remove"});
+  assert.equal(h.canUndo(), false);
+  assert.deepEqual(h.redo(), {id:"copy",duplicateAction:"restore"});
+  assert.deepEqual(h.redo(), {id:"copy",snapshot:snapshot(25,true)});
+  assert.equal(h.canRedo(), false);
+});
+
+test("new edits and explicit clears invalidate a detached duplicate redo", () => {
+  const h = createViewerTransformHistory();
+  assert.throws(() => h.recordDuplicate(""), TypeError);
+  assert.equal(h.canUndo(), false);
+  h.recordDuplicate("copy");
+  assert.deepEqual(h.undo(), {id:"copy",duplicateAction:"remove"});
+  assert.equal(h.canRedo(), true);
+  h.record({id:"original",before:snapshot(0),after:snapshot(10,true)});
+  assert.equal(h.canRedo(), false);
+  assert.deepEqual(h.undo(), {id:"original",snapshot:snapshot(0)});
+  h.recordDuplicate("next");
+  h.clear();
+  assert.equal(h.canUndo(), false);
+  assert.equal(h.canRedo(), false);
+});
+
 test("capture extracts independently owned Three.js-compatible arrays", () => {
   const entry = {modified: true, object: {
     position: {toArray: () => [1,2,3]},
