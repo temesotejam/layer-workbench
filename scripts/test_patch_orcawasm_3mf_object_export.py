@@ -9,7 +9,13 @@ module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
 FUNCTION_ANCHORS = (
-    module.CONSTRUCTOR_OLD + "\n" + module.STAGE_MESH + "\n" +\n    module.INSTANCE_TRANSFORM + "\n}\n" +\n    "static oneslicer_status_t slice_project_model(\n" +
+    module.CONSTRUCTOR_OLD + "\n"
+    "    std::map<std::string, std::vector<Slic3r::ModelObject*>> native_objects_by_id;\n"
+    + module.STAGE_MESH + "\n"
+    + module.INSTANCE_TRANSFORM
+    + "    native_objects_by_id[object_input->id].push_back(object);\n"
+    "}\n"
+    "static oneslicer_status_t slice_project_model(\n"
     "static oneslicer_status_t write_project_model_3mf(\n"
 )
 
