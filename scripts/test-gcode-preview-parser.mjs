@@ -485,3 +485,34 @@ assert.equal(machineExtruderG92.skippedUnlocatedMotions,0);
 assert.deepEqual(machineExtruderG92.layers[0].segments.map(s=>[s.x1,s.x2]),
   [[0,20],[0,10]]);
 console.log("PASS: G53 and G54-G59.3 invalidate unknown work/machine coordinates; optional E re-anchoring is conservative");
+
+// A G0/G1 word is modal in standard G-code. Preview must show successive
+// parameter-only moves, including compact N-numbered lines, F-only changes
+// and G92-origin resets, without accepting unsupported modal arcs/macros.
+const implicitLinear=parseGcodeToolpaths([
+  "G90","M82","G1 X10 Y0 Z0.2 E1 F1200",
+  "X20 E2","N15X30E3","F900","Y10 E4",
+  "G0 X40","X45","G92 E0","G1 X50 E1"
+].join("\n"));
+assert.equal(implicitLinear.extrusions,5);
+assert.equal(implicitLinear.travels,2);
+assert.deepEqual(
+  implicitLinear.layers[0].segments.map(s=>[s.x1,s.y1,s.x2,s.y2]),
+  [[0,0,10,0],[10,0,20,0],[20,0,30,0],
+   [30,0,30,10],[30,10,40,10],[40,10,45,10],[45,10,50,10]]);
+assert.deepEqual(implicitLinear.layers[0].segments.map(s=>s.feedrateMmMin),
+  [1200,1200,1200,900,900,900,900]);
+assert.equal(implicitLinear.skippedMalformedMotion,0);
+
+// Unknown G modes and ambiguous explicit moves must not make a subsequent
+// bare axis line appear printable; require a fresh explicit linear mode.
+const implicitGuard=parseGcodeToolpaths([
+  "X100 E100","G1 X10 E1","G5 X100","X200 E2",
+  "G1 X20 E2","G28","X300 E3","G92 X0 Y0 Z0.2 E0",
+  "G1 X5 E1","X10E2","G1 Xbad E3","X500 E4","G1 X15 E3"
+].join("\n"));
+assert.deepEqual(implicitGuard.layers.flatMap(layer=>layer.segments).map(s=>[s.x1,s.x2]),
+  [[0,10],[10,20],[0,5],[5,10],[10,15]]);
+assert.equal(implicitGuard.skippedMalformedMotion,1);
+console.log("PASS: bounded explicit G0/G1 modal moves, F-only words and fail-closed modal invalidation");
+
