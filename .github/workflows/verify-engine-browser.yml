@@ -44,6 +44,10 @@ on:
       - "scripts/test-audit-native-3mf-anchor-spacing.mjs"
       - "scripts/test-inspect-native-3mf.mjs"
       - "scripts/test-engine-probe.mjs"
+      # Native 3MF export/reimport browser probes are required at PR time,
+      # not merely after merging to main.
+      - "scripts/test-browser-3mf-roundtrip.mjs"
+      - "scripts/test-browser-3mf-multiobject.mjs"
       - "scripts/test_make_3mf_two_build_fixture.py"
       - "scripts/export_core_fixture_facets.py"
       - "scripts/test_export_core_fixture_facets.py"
