@@ -69,7 +69,9 @@ jobs:
         with:
           name: layer-workbench-orcaslicer-v2.5.0-wasm
           repository: temesotejam/layer-workbench
-          run-id: 43639277062
+          # PR #219, successful build of f2b3c08bdc97ca551df924e82a2d5929f35654fe.
+          # Browser acceptance only; this does not activate WASM on Pages.
+          run-id: 45284215349
           github-token: ${{ github.token }}
           path: engine-test-artifacts
       - name: Build independent synthetic 3MF Core input
@@ -156,17 +158,32 @@ jobs:
             --input parity-output/wasm-multiobject-3mf.3mf \
             --stl parity-output/wasm-multiobject-converted.stl \
             --report parity-output/accepted-candidate-3mf-stl-comparison.json
-          # Compare the accepted (patched) exporter to the legacy candidate
-          # with the same shared-source fixture and independent Core audit.
-          # A diagnostic classification is not a parity acceptance result.
+          # Require the rebuilt exporter to preserve the shared Core resource
+          # and both world placements. Reimport normalization is a separate gap.
           python3 scripts/audit_3mf_scene.py \
             --input parity-output/wasm-sharedmesh-3mf.3mf \
-            --min-triangles 24 \
+            --expected-build-items 2 --min-triangles 12 \
             --report parity-output/accepted-sharedmesh-scene.json
           python3 scripts/check_3mf_stl_bounds.py \
             --input parity-output/wasm-sharedmesh-3mf.3mf \
             --stl parity-output/wasm-sharedmesh-converted.stl \
             --report parity-output/accepted-sharedmesh-stl-comparison.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path('parity-output')
+          scene = json.loads((root / 'accepted-sharedmesh-scene.json').read_text())
+          summary = json.loads((root / 'wasm-sharedmesh-3mf-summary.json').read_text())
+          if (scene['totalBuildItems'], scene['totalMeshTriangles'], scene['totalResolvedMeshInstances'], scene['totalResolvedTriangleInstances']) != (2, 12, 2, 24):
+              raise SystemExit('Shared Core resource or placement count was not preserved')
+          scenes = [s for s in scene['scenes'] if s['buildItems']]
+          if len(scenes) != 1 or len({i['objectId'] for i in scenes[0]['buildItems']}) != 1:
+              raise SystemExit('Two Core build items must share the same root object')
+          if summary['absolutePlacementVerified'] is not True or summary['flattenedTriangles'] != 24:
+              raise SystemExit('Shared-object world placement failed')
+          print('PASS: real isolated Chrome export retained a shared Core root, 12 stored and 24 placed triangles, and exact XYZ bounds')
+          print('DIAGNOSTIC: native reimport mesh count =', summary['reimportedMeshes'])
+          PY
           python3 scripts/classify_3mf_hierarchy_gap.py \
             --summary parity-output/wasm-sharedmesh-3mf-summary.json \
             --scene parity-output/accepted-sharedmesh-scene.json \
