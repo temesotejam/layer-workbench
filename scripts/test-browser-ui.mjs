@@ -151,7 +151,7 @@ try {
   assert.equal(await page.locator('#object-tree [data-object-id]').count(), 2);
   assert.ok(Math.abs(Number(await page.locator('#transform-x').inputValue()) - originalX - 20) < 0.001,
     'redo must restore the same independent duplicate');
-  assert.match(await page.locator('#file-status').innerText(), /browser viewport only/);
+  assert.match(await page.locator('#file-status').innerText(), /browser-only duplication/);
   assert.ok(Math.abs(Number(await page.locator('#transform-x').inputValue()) - originalX - 20) < 0.001);
   assert.ok(Math.abs(Number(await page.locator('#transform-y').inputValue()) - originalY - 20) < 0.001);
   const duplicateX = Number(await page.locator('#transform-x').inputValue());
