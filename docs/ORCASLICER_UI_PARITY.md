@@ -49,8 +49,9 @@ The public Prepare workspace now provides bounded (50-step) Undo / Redo for
 **browser transforms only**: numeric position/Z rotation/XYZ scale edits,
 TransformControls drag gestures and Drop to bed. It restores position,
 quaternion, scale and the viewer-modified flag. New edits invalidate redo.
-Importing clears the transform stack. Deleting native 3MF build items also
-clears history and remains irreversible. Loose STL/OBJ duplication **and deletion**
+Importing clears the transform stack. Deleting a native 3MF build item in the isolated viewport also clears earlier
+history but now supports viewer-only Undo/Redo of that deletion. No native
+project changes are performed. Loose STL/OBJ duplication **and deletion**
 clear earlier transform history but create reversible structural actions:
 Undo removes only the copy from the viewport and Redo restores the *same*
 copy, including its independently cloned materials and transforms. Undo of a
@@ -65,5 +66,27 @@ outside editable fields; input elements keep native text editing shortcuts.
 These controls never rewrite source STL/OBJ/3MF files or native projects.
 The pure history unit tests and real Chrome UI tests run in
 `browser-e2e.yml`. This does not reproduce the native OrcaSlicer command
-history, undo imports or native 3MF deletions, or certify native 3MF editing.
+history, undo imports, native 3MF project edits or deletions, or certify native 3MF editing.
 The public WASM slicing function remains disabled.
+
+## 2026-11-23: reversible 3MF viewport deletion (not native editing)
+
+The browser's 3MF *displayed scene* can now be removed and restored with
+Undo/Redo without reparsing or overwriting its source file. In normal public
+Prepare mode, the ThreeMFLoader scene is one viewport item. Under the explicit
+localhost, COOP/COEP-isolated `?engineLab=1` diagnostic, individual Core build
+items can be detached and restored to the same source root, including its
+original relative child order and the special case of deleting the final
+build item and temporarily removing the root from the Three.js world.
+
+This operates only on the existing in-memory Three.js object references.
+It does **not** change 3MF Core build transforms, the native/WASM one-slicer-api
+manifest, project metadata, native save/export or slicer print geometry.
+Imported 3MF source bytes remain untouched. Other viewer history is still
+cleared on structural deletion, so this is **one reversible deletion action**,
+not a complete project command stack. 3MF duplication remains unsupported.
+
+The browser CI generates an independent synthetic Core 3MF with two build items,
+tests deletion/Undo/Redo in regular Chrome and isolated Chrome, and checks that
+a final-child deletion can be reversed without losing the scene root. The
+public Pages deployment still does not enable unverified WASM features.
