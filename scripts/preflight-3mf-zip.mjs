@@ -91,10 +91,16 @@ export function preflight3mfZip(bytes, deflatedMembers=null) {
     catch { fail(); }
     // Reject traversal, drive/absolute paths, backslashes, NUL, duplicates and
     // noncanonical separators; never expose member names in diagnostics.
+    // ZIP member paths become OPC part URIs inside 3MF importers. Encoded
+    // separators, dot, NUL, colon, or percent can produce ambiguous paths
+    // after URI decoding. Canonicalize only for duplicate detection.
+    const canonicalName = name.normalize('NFC').toLowerCase();
     if (!name || name.startsWith('/') || name.includes('\\') || name.includes('\0') ||
-        name.includes(':') || name.split('/').some(part => part === '.' || part === '..') ||
-        name.includes('//') || seen.has(name.toLowerCase())) fail();
-    seen.add(name.toLowerCase());
+        name.includes(':') || /[\x00-\x1f\x7f]/.test(name) ||
+        /%(?:00|25|2e|2f|3a|5c)/i.test(name) ||
+        name.split('/').some(part => part === '.' || part === '..') ||
+        name.includes('//') || seen.has(canonicalName)) fail();
+    seen.add(canonicalName);
     if (local + 30 > directoryStart || u32(local) !== 0x04034b50 ||
         u16(local + 6) !== flags || u16(local + 8) !== method) fail();
     const localNameSize = u16(local + 26);
