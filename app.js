@@ -18,6 +18,7 @@ const emptyHint = document.querySelector("#scene-empty");
 const transformButtons = [...document.querySelectorAll("[data-transform]")];
 const deleteButton = document.querySelector("#remove-object");
 const duplicateButton = document.querySelector("#duplicate-object");
+const dropToBedButton = document.querySelector("#drop-to-bed");
 const fitButton = document.querySelector("#fit-view");
 const viewButtons = [...document.querySelectorAll("[data-view-orientation]")];
 const transformStatus = document.querySelector("#transform-status");
@@ -182,6 +183,7 @@ function selectEntry(id) {
   // Browser-only duplication is deliberately limited to loose mesh files.
   // Complex 3MF projects require native instance/volume semantics first.
   duplicateButton.disabled = !entry || !["stl", "obj"].includes(entry.format) || !!entry.sourceRoot;
+  dropToBedButton.disabled = !entry || !["stl", "obj"].includes(entry.format) || !!entry.sourceRoot;
   entries.forEach(item => item.object?.traverse(node => {
     if (!node.isMesh) return;
     const materials = Array.isArray(node.material) ? node.material : [node.material];
@@ -293,6 +295,31 @@ duplicateButton?.addEventListener("click", () => {
   sceneFile.textContent = entries.length + " model(s) loaded";
   status.textContent = "Duplicated " + source.name +
     " in browser viewport only (20 mm X/Y offset; no native project change)";
+});
+// Adjust only the selected loose mesh's viewer transform so that its actual
+// transformed geometry touches the logical bed surface at world Z=0. This is
+// not a native arrangement operation and never modifies the original file.
+// 3MF items remain unavailable until native project placement is supported.
+dropToBedButton?.addEventListener("click", () => {
+  const entry = entries.find(item => item.id === selectedId);
+  if (!rendererReady || !entry || entry.sourceRoot || !["stl", "obj"].includes(entry.format)) return;
+  entry.object.updateMatrixWorld(true);
+  const bounds = new THREE.Box3().setFromObject(entry.object);
+  if (bounds.isEmpty() || !Number.isFinite(bounds.min.z)) {
+    status.textContent = "Cannot place model: its geometry bounds are invalid.";
+    return;
+  }
+  const dz = -bounds.min.z;
+  if (!Number.isFinite(dz) || Math.abs(dz) > 5000) {
+    status.textContent = "Cannot place model: vertical correction is out of bounds.";
+    return;
+  }
+  entry.object.position.z += dz;
+  entry.object.updateMatrixWorld(true);
+  entry.modified = true;
+  updateTransformStatus();
+  status.textContent = "Dropped " + entry.name +
+    " to viewer bed Z=0 (browser only; original file unchanged)";
 });
 // These are real browser-camera controls, independent of the experimental WASM
 // engine. They change only the view; they never change object coordinates.
