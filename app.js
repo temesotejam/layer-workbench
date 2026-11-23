@@ -17,6 +17,7 @@ const canvasHost = document.querySelector("#viewport-canvas");
 const emptyHint = document.querySelector("#scene-empty");
 const transformButtons = [...document.querySelectorAll("[data-transform]")];
 const deleteButton = document.querySelector("#remove-object");
+const duplicateButton = document.querySelector("#duplicate-object");
 const fitButton = document.querySelector("#fit-view");
 const viewButtons = [...document.querySelectorAll("[data-view-orientation]")];
 const transformStatus = document.querySelector("#transform-status");
@@ -178,6 +179,9 @@ function selectEntry(id) {
   }
   transformButtons.forEach(button => { button.disabled = !entry; });
   deleteButton.disabled = !entry;
+  // Browser-only duplication is deliberately limited to loose mesh files.
+  // Complex 3MF projects require native instance/volume semantics first.
+  duplicateButton.disabled = !entry || !["stl", "obj"].includes(entry.format) || !!entry.sourceRoot;
   entries.forEach(item => item.object?.traverse(node => {
     if (!node.isMesh) return;
     const materials = Array.isArray(node.material) ? node.material : [node.material];
@@ -255,9 +259,40 @@ deleteButton?.addEventListener("click", () => {
     sceneFile.textContent = "No model loaded";
     projectLabel.textContent = "Untitled project";
   } else {
+    projectLabel.textContent = entries.length === 1 ? entries[0].name : entries.length + " objects";
     sceneFile.textContent = entries.length + " model(s) loaded";
   }
   status.textContent = "Removed " + entry.name + " from the browser viewport (original file unchanged)";
+});
+// Clone a loose STL/OBJ scene entry for local layout experiments only.
+// Share immutable mesh buffers for efficiency, but keep material instances
+// independent so selection highlights cannot leak between copies.
+duplicateButton?.addEventListener("click", () => {
+  const source = entries.find(item => item.id === selectedId);
+  if (!rendererReady || !source || source.sourceRoot || !["stl", "obj"].includes(source.format)) return;
+  const copy = source.object.clone(true);
+  copy.traverse(node => {
+    if (!node.isMesh) return;
+    if (Array.isArray(node.material)) {
+      node.material = node.material.map(material => material?.clone?.() ?? material);
+    } else if (node.material?.clone) {
+      node.material = node.material.clone();
+    }
+  });
+  copy.position.x += 20;
+  copy.position.y += 20;
+  copy.updateMatrixWorld(true);
+  const duplicate = {
+    id: crypto.randomUUID(), name: source.name + " (copy)", size: source.size,
+    object: copy, format: source.format, file: source.file, modified: true
+  };
+  world.add(copy);
+  entries.push(duplicate);
+  selectEntry(duplicate.id);
+  projectLabel.textContent = entries.length + " objects";
+  sceneFile.textContent = entries.length + " model(s) loaded";
+  status.textContent = "Duplicated " + source.name +
+    " in browser viewport only (20 mm X/Y offset; no native project change)";
 });
 // These are real browser-camera controls, independent of the experimental WASM
 // engine. They change only the view; they never change object coordinates.
