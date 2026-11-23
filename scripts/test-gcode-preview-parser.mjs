@@ -511,7 +511,7 @@ const implicitGuard=parseGcodeToolpaths([
   "G1 X20 E2","G28","X300 E3","G92 X0 Y0 Z0.2 E0",
   "G1 X5 E1","X10E2","G1 Xbad E3","X500 E4","G1 X15 E3"
 ].join("\n"));
-assert.deepEqual(implicitGuard.layers[0].segments.map(s=>[s.x1,s.x2]),
+assert.deepEqual(implicitGuard.layers.flatMap(layer=>layer.segments).map(s=>[s.x1,s.x2]),
   [[0,10],[10,20],[0,5],[5,10],[10,15]]);
 assert.equal(implicitGuard.skippedMalformedMotion,1);
 console.log("PASS: bounded explicit G0/G1 modal moves, F-only words and fail-closed modal invalidation");
