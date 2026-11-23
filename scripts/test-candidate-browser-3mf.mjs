@@ -61,7 +61,16 @@ try {
   assert.equal(result.instances,2);
   assert.equal(result.triangles,24);
   assert.equal(result.placementVerified,true,'3MF per-object world-space positions must match input');
-  console.log('PASS: real isolated Chrome v2.5.0 WASM retains 2 objects, 2 instances and exact XYZ bounds of both 20 mm cubes');
+  console.log('PASS: real isolated Chrome v2.5.0 WASM retains 2 distinct objects, 2 instances and exact XYZ bounds');
+  // The accepted binary uses a different export path than the legacy probe.
+  // Record shared resource identity separately from successful placement.
+  // This is a diagnostic: do not turn an expanded object graph into parity.
+  if (process.env.CHECK_ACCEPTED_SHARED_MESH === '1') {
+    const shared = await checkBrowserMultiObject3mf(page,cube,'parity-output',{
+      sharedMesh:true,requireExactPlacement:false
+    });
+    console.log('DIAGNOSTIC: accepted shared-mesh export '+JSON.stringify(shared));
+  }
   const edited = await checkNativeManifestEditRoundTrip(page,cube);
   assert.equal(edited.triangles,24);
   console.log('PASS: native 3MF export/reimport after isolated instance-only rotation, scale and translation; source is synthetic STL, not desktop 3MF');
