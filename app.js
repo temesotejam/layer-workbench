@@ -239,6 +239,41 @@ function updateViewerProjectHeader() {
   sceneFile.textContent = entries.length === 0 ? "No model loaded" :
     entries.length + " model(s) loaded";
 }
+// Detach/restore imported browser scene entries without serializing them.
+// A 3MF build item remains attached to its original ThreeMFLoader root on
+// Undo, preserving its nested geometry and transforms. No native 3MF edit.
+function detachViewerEntry(entry, index) {
+  const root = entry.sourceRoot;
+  let childIndex = null;
+  if (root) {
+    childIndex = root.children.indexOf(entry.object);
+    if (childIndex < 0) return null;
+    entry.object.removeFromParent();
+    if (!entries.some((item, i) => i !== index && item.sourceRoot === root))
+      world.remove(root);
+  } else {
+    world.remove(entry.object);
+  }
+  entries.splice(index, 1);
+  return {entry, index, childIndex};
+}
+function restoreDetachedViewerEntry(saved) {
+  if (saved.entry.sourceRoot) {
+    const root = saved.entry.sourceRoot;
+    if (saved.entry.object.parent) return false;
+    root.add(saved.entry.object);
+    // Undo may restore a build item ahead of existing siblings.
+    const children = root.children;
+    children.splice(children.indexOf(saved.entry.object), 1);
+    children.splice(Math.max(0, Math.min(saved.childIndex, children.length)), 0, saved.entry.object);
+    if (root.parent !== world) world.add(root);
+  } else {
+    if (saved.entry.object.parent) return false;
+    world.add(saved.entry.object);
+  }
+  entries.splice(Math.min(saved.index, entries.length), 0, saved.entry);
+  return true;
+}
 function restoreViewerHistory(step) {
   if (!step) return;
   if (step.deleteAction) {
@@ -248,8 +283,10 @@ function restoreViewerHistory(step) {
         clearViewerHistory();
         return;
       }
-      entries.splice(Math.min(saved.index, entries.length), 0, saved.entry);
-      world.add(saved.entry.object);
+      if (!restoreDetachedViewerEntry(saved)) {
+        clearViewerHistory();
+        return;
+      }
       detachedViewerDeletions.delete(step.id);
       selectEntry(saved.entry.id);
       status.textContent = "Undid browser-only deletion of " + saved.entry.name +
@@ -257,14 +294,17 @@ function restoreViewerHistory(step) {
     } else if (step.deleteAction === "remove") {
       const index = entries.findIndex(item => item.id === step.id);
       const entry = entries[index];
-      if (!entry || entry.sourceRoot || !["stl", "obj"].includes(entry.format)) {
+      if (!entry || !["stl", "obj", "3mf"].includes(entry.format)) {
         clearViewerHistory();
         return;
       }
       transformControls?.detach();
-      world.remove(entry.object);
-      entries.splice(index, 1);
-      detachedViewerDeletions.set(entry.id, {entry, index});
+      const detached = detachViewerEntry(entry, index);
+      if (!detached) {
+        clearViewerHistory();
+        return;
+      }
+      detachedViewerDeletions.set(entry.id, detached);
       selectEntry(entries.at(-1)?.id ?? null);
       status.textContent = "Redid browser-only deletion of " + entry.name +
         " (original file unchanged)";
@@ -383,28 +423,21 @@ deleteButton?.addEventListener("click", () => {
   const index = entries.findIndex(item => item.id === selectedId);
   if (index < 0) return;
   const entry = entries[index];
-  // Preserve the deleted loose mesh for Undo; native 3MF build-item deletion
-  // remains irreversible until native project semantics are available.
-  const reversible = !entry.sourceRoot && ["stl", "obj"].includes(entry.format);
+  // Even for a 3MF build item this only detaches the displayed Three.js
+  // object, never edits the source archive, instance manifest or WASM session.
   clearViewerHistory();
   transformControls?.detach();
-  if (entry.sourceRoot) {
-    entry.object.removeFromParent();
-    // Remove the original grouped 3MF scene only after its last build item
-    // is removed; deleting one build item must leave siblings untouched.
-    if (!entries.some((item, i) => i !== index && item.sourceRoot === entry.sourceRoot))
-      world.remove(entry.sourceRoot);
-  } else world.remove(entry.object);
-  entries.splice(index, 1);
-  if (reversible) {
-    detachedViewerDeletions.set(entry.id, {entry, index});
-    viewerHistory.recordDelete(entry.id);
+  const detached = detachViewerEntry(entry, index);
+  if (!detached) {
+    status.textContent = "Cannot remove an inconsistent 3MF build item.";
+    return;
   }
+  detachedViewerDeletions.set(entry.id, detached);
+  viewerHistory.recordDelete(entry.id);
   selectEntry(entries.at(-1)?.id || null);
   updateViewerProjectHeader();
   updateViewerHistoryButtons();
-  status.textContent = "Removed " + entry.name + " from the browser viewport (original file unchanged)" +
-    (reversible ? " · Undo available" : " · 3MF deletion cannot be undone");
+  status.textContent = "Removed " + entry.name + " from the browser viewport (original file unchanged) · Undo available";
 });
 // Clone a loose STL/OBJ scene entry for local layout experiments only.
 // Share immutable mesh buffers for efficiency, but keep material instances
