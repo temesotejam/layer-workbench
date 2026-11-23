@@ -90,15 +90,42 @@ try {
   assert.equal(await threeDButton.getAttribute('aria-pressed'), 'true');
   assert.equal(await frontButton.getAttribute('aria-pressed'), 'false');
 
+  // Duplication is a viewer-only STL/OBJ operation, with independent object
+  // transforms and independent selection highlights (not a native 3MF edit).
+  const duplicateButton = page.locator('#duplicate-object');
+  assert.equal(await duplicateButton.isEnabled(), true);
+  const originalX = Number(await page.locator('#transform-x').inputValue());
+  const originalY = Number(await page.locator('#transform-y').inputValue());
+  await duplicateButton.click();
+  await page.locator('#object-count').getByText('2 objects').waitFor();
+  assert.equal(await page.locator('#object-tree [data-object-id]').count(), 2);
+  assert.match(await page.locator('#file-status').innerText(), /browser viewport only/);
+  assert.ok(Math.abs(Number(await page.locator('#transform-x').inputValue()) - originalX - 20) < 0.001);
+  assert.ok(Math.abs(Number(await page.locator('#transform-y').inputValue()) - originalY - 20) < 0.001);
+  await page.locator('#transform-x').fill('57');
+  await page.locator('#transform-x').press('Tab');
+  assert.equal(Number(await page.locator('#transform-x').inputValue()), 57);
+  await page.locator('#object-tree [data-object-id]').first().click();
+  assert.ok(Math.abs(Number(await page.locator('#transform-x').inputValue()) - originalX) < 0.001,
+    'editing the duplicated object must not move its source');
+  assert.equal(await duplicateButton.isEnabled(), true);
+  await page.locator('#object-tree [data-object-id]').last().click();
+  assert.equal(Number(await page.locator('#transform-x').inputValue()), 57,
+    'duplicate transform must persist when selection changes');
 
   await mkdir('browser-test-artifacts', { recursive: true });
   await page.screenshot({ path: 'browser-test-artifacts/prepare-loaded.png', fullPage: true });
   assert.equal(errors.length, 0, 'Uncaught browser errors: ' + errors.join('; '));
 
   await page.locator('#remove-object').click();
+  await page.locator('#object-count').getByText('1 object').waitFor();
+  assert.ok(Math.abs(Number(await page.locator('#transform-x').inputValue()) - originalX) < 0.001,
+    'deleting the duplicate must retain its source geometry and transform');
+  await page.locator('#remove-object').click();
   await page.locator('#object-count').getByText('0 objects').waitFor();
   assert.equal(await page.locator('[data-transform="translate"]').isDisabled(), true);
-  console.log('PASS: WebGL canvas, STL rendering, selection, transform modes, fit view and deletion');
+  assert.equal(await duplicateButton.isDisabled(), true);
+  console.log('PASS: WebGL canvas, STL rendering, selection, transform modes, camera views, independent duplication and deletion');
 } catch (error) {
   await mkdir('browser-test-artifacts', { recursive: true });
   await page.screenshot({ path: 'browser-test-artifacts/prepare-failure.png', fullPage: true }).catch(() => {});
