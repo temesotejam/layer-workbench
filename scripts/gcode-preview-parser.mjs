@@ -197,7 +197,7 @@ export function parseGcodeToolpaths(source, options={}) {
         // connecting stroke when a later explicit G0/G1 resumes. Common
         // probing/gantry operations also move without explicit XYZ words.
         // G4 dwell and other non-motion G commands without XYZ are unaffected.
-        if(/[XYZ]/.test(movementArgs) || /^G(?:5|29|30|32|34|35|38(?:\\.\\d+)?)$/.test(cmd)){
+        if(/[XYZ]/.test(movementArgs) || /^G(?:5|29|30|32|34|35|38(?:\.\d+)?)$/.test(cmd)){
           knownXYZ.x=false;knownXYZ.y=false;knownXYZ.z=false;
         }
         // Opaque E changes cannot safely be classified as deposited material
