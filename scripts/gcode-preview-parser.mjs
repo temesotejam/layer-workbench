@@ -189,6 +189,22 @@ export function parseGcodeToolpaths(source, options={}) {
     if(cmd==="G21"){state.units=1;continue;}
     if(["G17","G18","G19"].includes(cmd)){state.plane=cmd;continue;}
     const isArc=cmd==="G2"||cmd==="G3";
+    // G4 is a non-modal dwell, not a movement-mode switch. Keeping the last
+    // explicit G0/G1 lets a parameter-only move after a valid dwell render.
+    // Reject opaque/invalid dwell words instead of inventing positioning.
+    if(cmd==="G4"){
+      const dwell=parseMovementWords(movementArgs,state.units);
+      if(dwell!==null && Object.entries(dwell).every(([key,value])=>
+          (key==="P"||key==="S") && value>=0))
+        continue;
+      modalLinear=null;
+      if(/[XYZ]/.test(movementArgs)){
+        knownXYZ.x=false;knownXYZ.y=false;knownXYZ.z=false;
+      }
+      if(/E/.test(movementArgs))knownE=false;
+      skippedMalformedMotion++;
+      continue;
+    }
     if(!isArc && !["G0","G1","G92"].includes(cmd)){
       if(cmd.startsWith("G")){
         modalLinear=null;
