@@ -49,16 +49,21 @@ The public Prepare workspace now provides bounded (50-step) Undo / Redo for
 **browser transforms only**: numeric position/Z rotation/XYZ scale edits,
 TransformControls drag gestures and Drop to bed. It restores position,
 quaternion, scale and the viewer-modified flag. New edits invalidate redo.
-Importing and deleting clear the transform stack. Loose STL/OBJ duplication
-clears earlier transform history but creates a reversible structural action:
+Importing clears the transform stack. Deleting native 3MF build items also
+clears history and remains irreversible. Loose STL/OBJ duplication **and deletion**
+clear earlier transform history but create reversible structural actions:
 Undo removes only the copy from the viewport and Redo restores the *same*
-copy, including its independently cloned materials and transforms. Editing
-after an undone duplication discards that Redo. 3MF duplication remains
+copy, including its independently cloned materials and transforms. Undo of a
+loose-mesh deletion restores its original scene object, transform, identity and
+list position; Redo removes it again, even when it was the final object.
+New editing after an undone structural action discards that Redo. No deleted
+mesh is reloaded from disk, and the source file remains unmodified.
+3MF duplication remains
 disabled; native 3MF instance or project history is **not** supported. Ctrl+Z, Ctrl+Shift+Z and Ctrl+Y work
 outside editable fields; input elements keep native text editing shortcuts.
 
 These controls never rewrite source STL/OBJ/3MF files or native projects.
 The pure history unit tests and real Chrome UI tests run in
 `browser-e2e.yml`. This does not reproduce the native OrcaSlicer command
-history, restore deleted/imported objects, or certify native 3MF editing.
+history, undo imports or native 3MF deletions, or certify native 3MF editing.
 The public WASM slicing function remains disabled.
