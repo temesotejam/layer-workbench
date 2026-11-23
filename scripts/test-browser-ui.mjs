@@ -120,6 +120,7 @@ try {
   await dropToBedButton.click();
   assert.ok(Math.abs(Number(await page.locator('#transform-z').inputValue()) - originalZ) < 0.001,
     'drop-to-bed must return translated cube to its physical bed height');
+  assert.match(await page.locator('#file-status').innerText(), /viewer bed Z=0/);
   await undoButton.click();
   assert.equal(Number(await page.locator('#transform-z').inputValue()), 25,
     'drop-to-bed must be undoable');
@@ -128,7 +129,6 @@ try {
     'redo must restore drop-to-bed');
   assert.equal(await page.locator('#transform-x').inputValue(), modelX,
     'drop-to-bed must preserve horizontal placement');
-  assert.match(await page.locator('#file-status').innerText(), /viewer bed Z=0/);
 
   // Duplication is a viewer-only STL/OBJ operation, with independent object
   // transforms and independent selection highlights (not a native 3MF edit).
