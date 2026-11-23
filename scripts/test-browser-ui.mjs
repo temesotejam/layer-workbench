@@ -2,7 +2,7 @@
 // No WASM candidate binaries are published or used by this test.
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 
 const site = process.env.UI_TEST_URL || 'http://127.0.0.1:8765/';
 const browser = await chromium.launch({
@@ -209,7 +209,51 @@ try {
   await redoButton.click();
   await page.locator('#object-count').getByText('0 objects').waitFor();
   assert.equal(await undoButton.isEnabled(), true);
-  console.log('PASS: WebGL canvas, STL rendering, camera views, transform history, drop to bed, duplication and reversible deletion');
+
+  // Reversible deletion must also preserve 3MF scene roots. The normal
+  // public viewport treats a Core 3MF as one viewer item; the explicitly
+  // opted-in isolated lab exposes its two build items independently.
+  const is3mfBuildLab = await page.evaluate(() =>
+    globalThis.crossOriginIsolated === true &&
+    new URLSearchParams(location.search).get('engineLab') === '1');
+  await page.locator('#model-file').setInputFiles({
+    name: 'synthetic-two-build.3mf',
+    mimeType: 'model/3mf',
+    buffer: await readFile('browser-test-artifacts/viewer-two-build.3mf'),
+  });
+  const expected3mfCount = is3mfBuildLab ? 2 : 1;
+  await page.locator('#object-count').getByText(expected3mfCount + (expected3mfCount === 1 ? ' object' : ' objects')).waitFor();
+  assert.equal(await duplicateButton.isDisabled(), true, '3MF duplication remains unsupported');
+  assert.equal(await dropToBedButton.isDisabled(), true, 'native 3MF bed editing remains unsupported');
+  assert.equal(await undoButton.isDisabled(), true, 'import must clear preceding STL history');
+  await page.locator('#remove-object').click();
+  await page.locator('#object-count').getByText((expected3mfCount-1) + (expected3mfCount-1 === 1 ? ' object' : ' objects')).waitFor();
+  assert.equal(await undoButton.isEnabled(), true, '3MF viewport deletion must be undoable');
+  await undoButton.click();
+  await page.locator('#object-count').getByText(expected3mfCount + (expected3mfCount === 1 ? ' object' : ' objects')).waitFor();
+  assert.equal(await page.locator('#object-tree [data-object-id]').count(), expected3mfCount,
+    'Undo must restore the same 3MF build items or scene root');
+  await redoButton.click();
+  await page.locator('#object-count').getByText((expected3mfCount-1) + (expected3mfCount-1 === 1 ? ' object' : ' objects')).waitFor();
+  await undoButton.click();
+  await page.locator('#object-count').getByText(expected3mfCount + (expected3mfCount === 1 ? ' object' : ' objects')).waitFor();
+  if (is3mfBuildLab) {
+    // Delete both build items, including the last one that detaches the
+    // shared 3MF root; Undo restores that root with its original hierarchy.
+    await page.locator('#remove-object').click();
+    await page.locator('#object-count').getByText('1 object').waitFor();
+    await page.locator('#remove-object').click();
+    await page.locator('#object-count').getByText('0 objects').waitFor();
+    assert.equal(await undoButton.isEnabled(), true);
+    await undoButton.click();
+    await page.locator('#object-count').getByText('1 object').waitFor();
+    assert.equal(await page.locator('#object-tree [data-object-id]').count(), 1);
+    await redoButton.click();
+    await page.locator('#object-count').getByText('0 objects').waitFor();
+  }
+  assert.equal(errors.length, 0, 'Uncaught 3MF browser errors: ' + errors.join('; '));
+  console.log('PASS: WebGL, STL/OBJ editing history and reversible 3MF viewport deletion (' +
+    (is3mfBuildLab ? 'isolated per-build' : 'public single-root') + ')');
 } catch (error) {
   await mkdir('browser-test-artifacts', { recursive: true });
   await page.screenshot({ path: 'browser-test-artifacts/prepare-failure.png', fullPage: true }).catch(() => {});
