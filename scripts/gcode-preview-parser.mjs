@@ -60,6 +60,11 @@ export function parseGcodeToolpaths(source, options={}) {
   // An unsupported machine-space move can also change E; do not infer
   // extrusion until G92 E or the first absolute-E command re-anchors it.
   let knownE=true;
+  // G0/G1 are modal. Some valid slicer output omits the G word on
+  // subsequent movement lines ("X20 E1"). Support ONLY these linear modes;
+  // after unknown motion modes/coordinate discontinuities, require an
+  // explicit G0/G1 before interpreting a bare axis line again.
+  let modalLinear=null;
   // Tool selectors in G-code label paths, NOT physical extruder IDs or filament colors.
   // Reserved/vendor tool commands (e.g. T1000) do not set a label.
   // Bambu X1E emits T255 while unloading AMS filament: clear the label.
@@ -128,11 +133,17 @@ export function parseGcodeToolpaths(source, options={}) {
       continue;
     }
     const m=/^(?:N\d+\s*)?(G\d+(?:\.\d+)?|M\d+)(?=[A-Z\s]|$)/.exec(line);
-    if(!m)continue;
-    let cmd=m[1];
+    // A parameter-only line inherits the last unambiguous G0/G1 motion,
+    // including optional N line numbers and compact "X20E1" notation.
+    // Never guess a modal arc, firmware macro, or unsupported coordinate form.
+    const implicitWords=m?null:line.replace(/^N\d+\s*/,"");
+    if(!m && (!modalLinear || !/^[XYZEF]/.test(implicitWords)))continue;
+    let cmd=m?m[1]:modalLinear;
+    const movementArgs=m?line.slice(m[0].length):implicitWords;
     // Accept leading-zero G-codes, e.g. G02/G03, without rewriting G90.1.
     if(/^G\d+$/.test(cmd))cmd="G"+String(Number(cmd.slice(1)));
     if(cmd==="G28"){
+      modalLinear=null;
       // G28 can home one or all axes. Do not invent a home coordinate or
       // draw a fictitious move from the pre-home position. Common "G28 X Y"
       // and "G28 X0 Y0" forms are recognized; unfamiliar flags (e.g. W)
@@ -146,6 +157,7 @@ export function parseGcodeToolpaths(source, options={}) {
       continue;
     }
     if(cmd==="G53" || /^G(?:5[4-9]|59\.[123])$/.test(cmd)){
+      modalLinear=null;
       // Machine (G53) and work coordinate systems (G54..G59.3) may have
       // firmware-defined offsets. A G53 G0/G1 machine-space move must never
       // be silently ignored while the next workspace path bridges its old
@@ -177,13 +189,18 @@ export function parseGcodeToolpaths(source, options={}) {
     if(cmd==="G21"){state.units=1;continue;}
     if(["G17","G18","G19"].includes(cmd)){state.plane=cmd;continue;}
     const isArc=cmd==="G2"||cmd==="G3";
-    if(!isArc && !["G0","G1","G92"].includes(cmd))continue;
-    const words=parseMovementWords(line.slice(m[0].length),state.units);
-    if(words===null){skippedMalformedMotion++;continue;}
+    if(!isArc && !["G0","G1","G92"].includes(cmd)){
+      if(cmd.startsWith("G"))modalLinear=null;
+      continue;
+    }
+    if(isArc)modalLinear=null;
+    else if(cmd==="G0"||cmd==="G1")modalLinear=cmd;
+    const words=parseMovementWords(movementArgs,state.units);
+    if(words===null){modalLinear=null;skippedMalformedMotion++;continue;}
     // Reject nonpositive or implausibly large F instead of displaying a
     // misleading commanded speed. Never mutate modal state on rejection.
     if("F" in words && (words.F<=0 || words.F>10_000_000)){
-      skippedMalformedMotion++;continue;
+      modalLinear=null;skippedMalformedMotion++;continue;
     }
     // Never render a motion with auxiliary words that this read-only parser
     // does not interpret. In particular G2/G3 P can request extra arc turns;
@@ -191,7 +208,7 @@ export function parseGcodeToolpaths(source, options={}) {
     // Arc endpoints still advance below, even when their path is omitted.
     const allowedWords=cmd==="G92"?"XYZE":isArc?"XYZEIJKRF":"XYZEF";
     const unhandledWords=Object.keys(words).some(key=>!allowedWords.includes(key));
-    if(unhandledWords && !isArc){skippedMalformedMotion++;continue;}
+    if(unhandledWords && !isArc){modalLinear=null;skippedMalformedMotion++;continue;}
     if(cmd==="G92"){
       for(const axis of ["X","Y","Z","E"])if(axis in words){
         state[axis.toLowerCase()]=words[axis];
