@@ -102,6 +102,8 @@ assert.deepEqual(preflight3mfZip(fixture([
   {name:'[Content_Types].xml',data:'hello'},
   {name:'3D/3dmodel.model',data:'abc'},
 ])),{entries:2,expandedBytes:8});
+assert.deepEqual(preflight3mfZip(fixture([{name:'3D/name%20with%20space.model'}])),
+  {entries:1,expandedBytes:1});
 for(const candidate of [
   new Uint8Array([0x50,0x4b,0x03,0x04]),
   fixture([{name:'../escape.model'}]),
@@ -111,7 +113,18 @@ for(const candidate of [
   fixture([{name:'3D//double.model'}]),
   fixture([{name:'3D/./dot.model'}]),
   fixture([{name:'3D/../parent.model'}]),
+  // Different OPC URI decoders must never disagree about member identity.
+  fixture([{name:'3D/%2e%2e/parent.model'}]),
+  fixture([{name:'3D/safe%2fname.model'}]),
+  fixture([{name:'3D/%5cwindows.model'}]),
+  fixture([{name:'C%3a/drive.model'}]),
+  fixture([{name:'3D/%00nul.model'}]),
+  fixture([{name:'3D/%25encoded.model'}]),
+  fixture([{name:'3D/control\nline.model'}]),
+  fixture([{name:'3D/control\rline.model'}]),
+  fixture([{name:'3D/control\tline.model'}]),
   fixture([{name:'a.model'},{name:'A.model'}]),
+  fixture([{name:'3D/caf\u00e9.model'},{name:'3D/cafe\u0301.model'}]),
   fixture([{name:'a.model',flags:1}]),
   fixture([{name:'a.model',method:12}]),
   fixture([{name:'a.model',size:128*1024*1024}]),
