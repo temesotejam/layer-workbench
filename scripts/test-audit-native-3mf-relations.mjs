@@ -11,6 +11,15 @@ const report=auditNative3mfRelations(fixture());
 assert.deepEqual(report,{ids:'unique',references:'valid',affineMatrices:'valid'});
 assert.ok(Object.isFrozen(report));
 assert.ok(!JSON.stringify(report).includes('plate-0'),'Native IDs must remain private');
+// An empty domain must not pass ID, link, or affine checks vacuously.
+for(const domain of ['plates','meshes','objects','instances']) {
+  const empty=fixture();empty[domain]=[];
+  assert.deepEqual(auditNative3mfRelations(empty),{
+    ids:'unavailable',references:'unavailable',affineMatrices:'unavailable'});
+}
+// Missing/primitive native transform evidence must not crash diagnostics.
+const primitiveTransform=fixture();primitiveTransform.instances[0].transform='bad';
+assert.equal(auditNative3mfRelations(primitiveTransform).affineMatrices,'unavailable');
 const noTransform=fixture();delete noTransform.instances[0].transform;
 assert.equal(auditNative3mfRelations(noTransform).affineMatrices,'unavailable');
 const opaque=fixture();delete opaque.objects[0].meshId;
@@ -44,4 +53,4 @@ assert.deepEqual(auditNative3mfRelations(absentId),{
   ids:'unavailable',references:'unverified',affineMatrices:'valid'});
 assert.deepEqual(auditNative3mfRelations(null),{
   ids:'unavailable',references:'unavailable',affineMatrices:'unavailable'});
-console.log('PASS: native manifest IDs, references, invertible affine transforms, privacy, opaque fields');
+console.log('PASS: native manifest IDs, nonempty references, invertible affine transforms, malformed data and privacy');
