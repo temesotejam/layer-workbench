@@ -119,6 +119,7 @@ try {
 
   await page.locator('#remove-object').click();
   await page.locator('#object-count').getByText('1 object').waitFor();
+  assert.equal(await page.locator('#project-label').innerText(), 'test-cube.stl');
   assert.ok(Math.abs(Number(await page.locator('#transform-x').inputValue()) - originalX) < 0.001,
     'deleting the duplicate must retain its source geometry and transform');
   await page.locator('#remove-object').click();
