@@ -25,7 +25,8 @@ export async function checkBrowserMultiObject3mf(page, cubeBytes, outputDir='par
       assert.ok(Number.isFinite(z),'Nonfinite source cube vertex');
       view.setFloat32(zOffset,z/2,true);
     }
-    assert.notDeepEqual(secondSource,cubeBytes,'Independent source STL must have different vertex geometry');
+    assert.notEqual(Buffer.compare(Buffer.from(secondSource),Buffer.from(cubeBytes)),0,
+      'Independent source STL must have different vertex geometry');
   }
   const report = await page.evaluate(async ({input,secondInput,requireExactPlacement,sharedMesh}) => {
     if (!globalThis.crossOriginIsolated) throw new Error('Isolated Chrome required');
