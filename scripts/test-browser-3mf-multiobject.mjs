@@ -1,4 +1,4 @@
-// Isolated Chrome proof of TWO separate native mesh objects in a 3MF project.
+// Isolated Chrome proof of two placed native objects or two instances of one mesh.
 // Uses only synthetic STL and the already verified v2.5.0 WASM candidate.
 // Legacy candidate uses diagnostic placement reporting; accepted candidates
 // require exact per-object XYZ bounds. No native editor or print validation.
@@ -6,33 +6,33 @@ import assert from 'node:assert/strict';
 import {mkdir, writeFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 
-export async function checkBrowserMultiObject3mf(page, cubeBytes, outputDir='parity-output', {requireExactPlacement=false}={}) {
+export async function checkBrowserMultiObject3mf(page, cubeBytes, outputDir='parity-output', {requireExactPlacement=false, sharedMesh=false}={}) {
   assert.ok(cubeBytes instanceof Uint8Array && cubeBytes.byteLength >= 134);
-  const report = await page.evaluate(async ({input,requireExactPlacement}) => {
+  const report = await page.evaluate(async ({input,requireExactPlacement,sharedMesh}) => {
     if (!globalThis.crossOriginIsolated) throw new Error('Isolated Chrome required');
     const engine = globalThis.__layerDiagnosticEngine?.engine;
     if (!engine || typeof engine.createSession !== 'function')
       throw new Error('Verified WASM engine not loaded');
     const cube = new Uint8Array(input);
-    const combined = new Uint8Array(cube.length * 2);
+    const combined = new Uint8Array(cube.length * (sharedMesh ? 1 : 2));
     combined.set(cube);
-    combined.set(cube, cube.length);
+    if (!sharedMesh) combined.set(cube, cube.length);
     const matrix = (x, y) => [1,0,0,x, 0,1,0,y, 0,0,1,0, 0,0,0,1];
     const project = {
       schemaVersion:'0.7.0',
       plates:[{id:'plate-0',index:0}],
       meshes:[
         {id:'mesh-0',format:'stl',dataRange:{offset:0,length:cube.length}},
-        {id:'mesh-1',format:'stl',dataRange:{offset:cube.length,length:cube.length}}
+        ...(!sharedMesh ? [{id:'mesh-1',format:'stl',dataRange:{offset:cube.length,length:cube.length}}] : [])
       ],
       objects:[
         {id:'object-0',meshId:'mesh-0'},
-        {id:'object-1',meshId:'mesh-1'}
+        ...(!sharedMesh ? [{id:'object-1',meshId:'mesh-1'}] : [])
       ],
       instances:[
         {id:'instance-0',objectId:'object-0',plateId:'plate-0',
           transform:{matrix:matrix(90,90)}},
-        {id:'instance-1',objectId:'object-1',plateId:'plate-0',
+        {id:'instance-1',objectId:sharedMesh ? 'object-0' : 'object-1',plateId:'plate-0',
           transform:{matrix:matrix(150,90)}}
       ],
       modifierVolumes:[]
@@ -50,8 +50,8 @@ export async function checkBrowserMultiObject3mf(page, cubeBytes, outputDir='par
       await source.init(new TextEncoder().encode(JSON.stringify(config)));
       await source.setObjects(combined, project);
       initial = await source.getManifest();
-      if (initial?.instances?.length !== 2 || initial?.objects?.length !== 2
-          || initial?.meshes?.length !== 2)
+      if (initial?.instances?.length !== 2 || initial?.objects?.length !== (sharedMesh ? 1 : 2)
+          || initial?.meshes?.length !== (sharedMesh ? 1 : 2))
         throw new Error('Native multi-object session manifest is incomplete');
       const descriptor = await source.export('project.3mf', {
         schemaVersion:'0.7.0',preservation:'best-effort',includeSliceArtifacts:false
@@ -68,7 +68,8 @@ export async function checkBrowserMultiObject3mf(page, cubeBytes, outputDir='par
     try {
       await reopened.initProfile('project.3mf', original);
       imported = await reopened.getManifest();
-      if (imported?.schemaVersion !== '0.7.0' || !Array.isArray(imported.instances) || !Array.isArray(imported.objects))
+      if (imported?.schemaVersion !== '0.7.0' || !Array.isArray(imported.instances) ||
+          !Array.isArray(imported.objects) || !Array.isArray(imported.meshes))
         throw new Error('Reimported 3MF returned invalid project manifest');
       converted = await engine.threeMfToStl(original);
       if (!(converted instanceof Uint8Array) || converted.byteLength < 134)
@@ -130,35 +131,47 @@ export async function checkBrowserMultiObject3mf(page, cubeBytes, outputDir='par
     } finally { await reopened.dispose(); }
     return {
       archive:Array.from(original), stl:Array.from(converted),
-      initialObjects:initial.objects.length, initialInstances:initial.instances.length,
-      importedObjects:imported.objects.length, importedInstances:imported.instances.length,
+      initialObjects:initial.objects.length, initialMeshes:initial.meshes.length,
+      initialInstances:initial.instances.length, importedObjects:imported.objects.length,
+      importedMeshes:imported.meshes.length, importedInstances:imported.instances.length,
       stlTriangles:convertedCount, splitGapMm, placedBoundsMm,
       absolutePlacementVerified
     };
-  }, {input:Array.from(cubeBytes),requireExactPlacement});
+  }, {input:Array.from(cubeBytes),requireExactPlacement,sharedMesh});
   assert.equal(report.initialInstances, 2);
+  assert.equal(report.initialObjects, sharedMesh ? 1 : 2);
+  assert.equal(report.initialMeshes, sharedMesh ? 1 : 2);
   assert.equal(report.stlTriangles, 24);
   assert.ok(report.splitGapMm >= 30);
   const archive=Buffer.from(report.archive), stl=Buffer.from(report.stl);
   await mkdir(outputDir,{recursive:true});
-  await writeFile(outputDir+'/wasm-multiobject-3mf.3mf',archive);
-  await writeFile(outputDir+'/wasm-multiobject-converted.stl',stl);
+  const prefix=sharedMesh ? 'wasm-sharedmesh' : 'wasm-multiobject';
+  await writeFile(outputDir+`/${prefix}-3mf.3mf`,archive);
+  await writeFile(outputDir+`/${prefix}-converted.stl`,stl);
+  const expectedResources=sharedMesh ? 1 : 2;
+  const hierarchyRetained=report.importedInstances===2 &&
+    report.importedObjects===expectedResources && report.importedMeshes===expectedResources;
   const sha256=createHash('sha256').update(archive).digest('hex');
-  await writeFile(outputDir+'/wasm-multiobject-3mf-summary.json',JSON.stringify({
-    fixture:'two separate synthetic 12-triangle cube meshes, translated 60 mm in X',
+  await writeFile(outputDir+`/${prefix}-3mf-summary.json`,JSON.stringify({
+    fixture:sharedMesh ? 'two instances of ONE synthetic 12-triangle cube mesh, 60 mm apart in X'
+                       : 'two separate synthetic 12-triangle cube meshes, translated 60 mm in X',
+    sharedInputMesh:sharedMesh,
     engine:'OrcaSlicer v2.5.0 isolated Chrome WASM candidate',
     source:'WASM-generated project, NOT desktop-authored 3MF',
     archiveBytes:archive.length, sha256,
-    initialObjects:report.initialObjects,initialInstances:report.initialInstances,
-    reimportedObjects:report.importedObjects,reimportedInstances:report.importedInstances,
+    initialObjects:report.initialObjects,initialMeshes:report.initialMeshes,
+    initialInstances:report.initialInstances, reimportedObjects:report.importedObjects,
+    reimportedMeshes:report.importedMeshes,reimportedInstances:report.importedInstances,
     flattenedTriangles:report.stlTriangles,
     measuredGapBetweenTriangleClustersMm:report.splitGapMm,
     verifiedPerObjectPlacedBoundsMm:report.placedBoundsMm,
     absolutePlacementVerified:report.absolutePlacementVerified,
-    multiObjectRoundTripSupported:report.importedInstances === 2 && report.importedObjects === 2 && report.stlTriangles === 24,
+    nativeHierarchyRetained:hierarchyRetained,
+    multiObjectRoundTripSupported:hierarchyRetained && report.stlTriangles === 24,
     limitations:'No desktop-authored 3MF, edit-and-resave transform, face-ID mesh preview, metadata parity or printer safety validated'
   },null,2)+'\n');
-  return {bytes:archive.length,sha256,placementVerified:report.absolutePlacementVerified,instances:report.importedInstances,
-    triangles:report.stlTriangles, supported:report.importedInstances === 2 &&
-    report.importedObjects === 2 && report.stlTriangles === 24};
+  return {bytes:archive.length,sha256,placementVerified:report.absolutePlacementVerified,
+    initialMeshes:report.initialMeshes,instances:report.importedInstances,
+    reimportedMeshes:report.importedMeshes,triangles:report.stlTriangles,
+    supported:hierarchyRetained && report.stlTriangles === 24};
 }
