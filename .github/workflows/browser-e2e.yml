@@ -1,6 +1,13 @@
 name: Browser Prepare end-to-end smoke
 
 on:
+  pull_request:
+    paths:
+      - "index.html"
+      - "app.js"
+      - "styles.css"
+      - "scripts/test-browser-ui.mjs"
+      - ".github/workflows/browser-e2e.yml"
   push:
     branches: [main]
     paths:
