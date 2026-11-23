@@ -33,6 +33,10 @@ const affine=matrix=>{
 export function auditNative3mfRelations(manifest) {
   if(!manifest || !['plates','meshes','objects','instances'].every(k=>Array.isArray(manifest[k])))
     return unavailable;
+  // Empty domains cannot establish valid references or instance transforms.
+  // Do not let Array.every([]) turn an incomplete export into a false PASS.
+  if(['plates','meshes','objects','instances'].some(k=>manifest[k].length===0))
+    return unavailable;
   const sets={};
   let idStatus='unique';
   for(const domain of ['plates','meshes','objects','instances']) {
@@ -54,7 +58,10 @@ export function auditNative3mfRelations(manifest) {
       manifest.instances.every(i=>sets.objects.has(i.objectId) && sets.plates.has(i.plateId))
         ? 'valid' : 'broken';
   }
-  const allMatrices=manifest.instances.every(i=>i?.transform && 'matrix' in i.transform);
+  // A malformed bridge response may expose a primitive transform; avoid
+  // throwing from the `in` operator and report missing evidence instead.
+  const allMatrices=manifest.instances.every(i=>i?.transform &&
+    typeof i.transform==='object' && 'matrix' in i.transform);
   const affineMatrices=!allMatrices ? 'unavailable' :
     manifest.instances.every(i=>affine(i.transform.matrix)) ? 'valid' : 'invalid';
   return Object.freeze({ids:idStatus,references,affineMatrices});
