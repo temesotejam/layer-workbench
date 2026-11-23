@@ -328,6 +328,17 @@ jobs:
             --input parity-output/wasm-multiobject-3mf.3mf \
             --stl parity-output/wasm-multiobject-converted.stl \
             --report parity-output/browser-multiobject-3mf-stl-comparison.json
+          # Shared-input mesh with two placed native instances. Record BOTH
+          # effective geometry and exported Core 3MF hierarchy; matching
+          # triangle counts alone cannot prove preservation of instancing.
+          python3 scripts/audit_3mf_scene.py \
+            --input parity-output/wasm-sharedmesh-3mf.3mf \
+            --min-triangles 24 \
+            --report parity-output/browser-sharedmesh-3mf-scene.json
+          python3 scripts/check_3mf_stl_bounds.py \
+            --input parity-output/wasm-sharedmesh-3mf.3mf \
+            --stl parity-output/wasm-sharedmesh-converted.stl \
+            --report parity-output/browser-sharedmesh-3mf-stl-comparison.json
       - name: Archive actual WASM G-code diagnostic output
         if: always()
         uses: actions/upload-artifact@v4
