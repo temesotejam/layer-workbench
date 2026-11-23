@@ -7,6 +7,7 @@ on:
       - "app.js"
       - "styles.css"
       - "scripts/test-browser-ui.mjs"
+      - "scripts/make_3mf_two_build_fixture.py"
       - "scripts/prepare-viewer-transform-history.mjs"
       - "scripts/test-prepare-viewer-transform-history.mjs"
       - ".github/workflows/browser-e2e.yml"
@@ -17,6 +18,7 @@ on:
       - "app.js"
       - "styles.css"
       - "scripts/test-browser-ui.mjs"
+      - "scripts/make_3mf_two_build_fixture.py"
       - "scripts/prepare-viewer-transform-history.mjs"
       - "scripts/test-prepare-viewer-transform-history.mjs"
       - ".github/workflows/browser-e2e.yml"
@@ -44,18 +46,24 @@ jobs:
           set -euo pipefail
           command -v google-chrome
           google-chrome --version
+      - name: Generate source-independent synthetic two-build 3MF
+        run: python3 scripts/make_3mf_two_build_fixture.py --output browser-test-artifacts/viewer-two-build.3mf
       - name: Serve local site and run actual browser smoke
         shell: bash
         run: |
           set -euo pipefail
           python3 -m http.server 8765 --bind 127.0.0.1 > /tmp/layer-workbench-http.log 2>&1 &
           server_pid=$!
-          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          python3 scripts/serve-isolated.py --port 8766 > /tmp/layer-workbench-isolated.log 2>&1 &
+          isolated_pid=$!
+          trap 'kill "$server_pid" "$isolated_pid" 2>/dev/null || true' EXIT
           for attempt in {1..20}; do
-            if curl -fsS http://127.0.0.1:8765/ >/dev/null; then break; fi
+            if curl -fsS http://127.0.0.1:8765/ >/dev/null &&
+               curl -fsS http://127.0.0.1:8766/ >/dev/null; then break; fi
             sleep 1
           done
           node scripts/test-browser-ui.mjs
+          UI_TEST_URL='http://127.0.0.1:8766/?engineLab=1' node scripts/test-browser-ui.mjs
       - name: Retain visual evidence
         if: always()
         uses: actions/upload-artifact@v4
