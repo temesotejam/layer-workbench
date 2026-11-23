@@ -1,5 +1,5 @@
 // Viewer-only transform history; this does not edit native 3MF projects.
-// Structural changes (import, duplicate, delete) must clear the stack.
+// Imports and deletions clear history; loose STL/OBJ duplication is reversible.
 const COMPONENTS = ["position", "quaternion", "scale"];
 
 function cloneSnapshot(snapshot) {
@@ -55,16 +55,24 @@ export function createViewerTransformHistory(limit = 50) {
       redoStack.length = 0;
       return true;
     },
+    recordDuplicate(id) {
+      if (typeof id !== "string" || !id) throw new TypeError("Missing duplicate id");
+      undoStack.push({kind: "duplicate", id});
+      if (undoStack.length > limit) undoStack.shift();
+      redoStack.length = 0;
+    },
     undo() {
       const item = undoStack.pop();
       if (!item) return null;
       redoStack.push(item);
+      if (item.kind === "duplicate") return {id: item.id, duplicateAction: "remove"};
       return { id: item.id, snapshot: cloneSnapshot(item.before) };
     },
     redo() {
       const item = redoStack.pop();
       if (!item) return null;
       undoStack.push(item);
+      if (item.kind === "duplicate") return {id: item.id, duplicateAction: "restore"};
       return { id: item.id, snapshot: cloneSnapshot(item.after) };
     },
   };

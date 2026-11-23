@@ -47,6 +47,9 @@ let pointerDown = null;
 let rendererReady = false;
 let currentView = "3d";
 const viewerHistory = createViewerTransformHistory(50);
+// Keep a detached duplicate only while the matching Redo action is reachable.
+// No native 3MF or source file is ever modified by this viewer-only cache.
+const detachedViewerDuplicates = new Map();
 let dragStart = null;
 
 const world = new THREE.Scene();
@@ -206,23 +209,69 @@ function selectEntry(id) {
   updateTransformStatus();
 }
 
-// Undo/redo only changes viewer transforms, never source files or native 3MF.
+// Undo/redo applies viewer transforms and loose STL/OBJ duplication only;
+// it never changes source files or native 3MF projects.
 function updateViewerHistoryButtons() {
   undoButton.disabled = !viewerHistory.canUndo();
   redoButton.disabled = !viewerHistory.canRedo();
 }
 function clearViewerHistory() {
   viewerHistory.clear();
+  detachedViewerDuplicates.clear();
   dragStart = null;
   updateViewerHistoryButtons();
 }
 function recordViewerEdit(entry, before) {
   if (!entry || !before) return;
-  viewerHistory.record({id: entry.id, before, after: captureViewerTransform(entry)});
+  const changed = viewerHistory.record({id: entry.id, before, after: captureViewerTransform(entry)});
+  // A new edit invalidates Redo, including any detached duplicate it owned.
+  if (changed) detachedViewerDuplicates.clear();
   updateViewerHistoryButtons();
+}
+function updateViewerProjectHeader() {
+  emptyHint.hidden = entries.length > 0;
+  projectLabel.textContent = entries.length === 0 ? "Untitled project" :
+    entries.length === 1 ? entries[0].name : entries.length + " objects";
+  sceneFile.textContent = entries.length === 0 ? "No model loaded" :
+    entries.length + " model(s) loaded";
 }
 function restoreViewerHistory(step) {
   if (!step) return;
+  if (step.duplicateAction) {
+    if (step.duplicateAction === "remove") {
+      const index = entries.findIndex(item => item.id === step.id);
+      const duplicate = entries[index];
+      if (!duplicate || duplicate.sourceRoot || !["stl","obj"].includes(duplicate.format)) {
+        clearViewerHistory();
+        return;
+      }
+      transformControls?.detach();
+      world.remove(duplicate.object);
+      entries.splice(index, 1);
+      detachedViewerDuplicates.set(duplicate.id, {entry: duplicate, index});
+      selectEntry(entries.at(-1)?.id ?? null);
+      status.textContent = "Undid browser-only duplication of " + duplicate.name +
+        " (original file unchanged)";
+    } else if (step.duplicateAction === "restore") {
+      const saved = detachedViewerDuplicates.get(step.id);
+      if (!saved || entries.some(item => item.id === step.id)) {
+        clearViewerHistory();
+        return;
+      }
+      entries.splice(Math.min(saved.index, entries.length), 0, saved.entry);
+      world.add(saved.entry.object);
+      detachedViewerDuplicates.delete(step.id);
+      selectEntry(saved.entry.id);
+      status.textContent = "Redid browser-only duplication of " + saved.entry.name +
+        " (original file unchanged)";
+    } else {
+      clearViewerHistory();
+      return;
+    }
+    updateViewerProjectHeader();
+    updateViewerHistoryButtons();
+    return;
+  }
   const entry = entries.find(item => item.id === step.id);
   if (!entry) {
     clearViewerHistory();
@@ -342,6 +391,8 @@ duplicateButton?.addEventListener("click", () => {
   world.add(copy);
   entries.push(duplicate);
   selectEntry(duplicate.id);
+  viewerHistory.recordDuplicate(duplicate.id);
+  updateViewerHistoryButtons();
   projectLabel.textContent = entries.length + " objects";
   sceneFile.textContent = entries.length + " model(s) loaded";
   status.textContent = "Duplicated " + source.name +

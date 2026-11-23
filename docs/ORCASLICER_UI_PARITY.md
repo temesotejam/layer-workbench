@@ -49,8 +49,12 @@ The public Prepare workspace now provides bounded (50-step) Undo / Redo for
 **browser transforms only**: numeric position/Z rotation/XYZ scale edits,
 TransformControls drag gestures and Drop to bed. It restores position,
 quaternion, scale and the viewer-modified flag. New edits invalidate redo.
-Importing, duplicating and deleting clear the transform stack because these
-structural operations are **not undoable**. Ctrl+Z, Ctrl+Shift+Z and Ctrl+Y work
+Importing and deleting clear the transform stack. Loose STL/OBJ duplication
+clears earlier transform history but creates a reversible structural action:
+Undo removes only the copy from the viewport and Redo restores the *same*
+copy, including its independently cloned materials and transforms. Editing
+after an undone duplication discards that Redo. 3MF duplication remains
+disabled; native 3MF instance or project history is **not** supported. Ctrl+Z, Ctrl+Shift+Z and Ctrl+Y work
 outside editable fields; input elements keep native text editing shortcuts.
 
 These controls never rewrite source STL/OBJ/3MF files or native projects.

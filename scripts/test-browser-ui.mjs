@@ -138,10 +138,20 @@ try {
   const originalY = Number(await page.locator('#transform-y').inputValue());
   await duplicateButton.click();
   await page.locator('#object-count').getByText('2 objects').waitFor();
-  assert.equal(await undoButton.isDisabled(), true,
-    'duplication changes topology and clears history');
+  assert.equal(await undoButton.isEnabled(), true,
+    'loose mesh duplication must be undoable');
+  await undoButton.click();
+  await page.locator('#object-count').getByText('1 object').waitFor();
+  assert.equal(await page.locator('#project-label').innerText(), 'test-cube.stl');
+  assert.equal(Number(await page.locator('#transform-x').inputValue()), originalX,
+    'undoing duplication must leave the original placement unchanged');
+  assert.equal(await redoButton.isEnabled(), true);
+  await redoButton.click();
+  await page.locator('#object-count').getByText('2 objects').waitFor();
   assert.equal(await page.locator('#object-tree [data-object-id]').count(), 2);
-  assert.match(await page.locator('#file-status').innerText(), /browser viewport only/);
+  assert.ok(Math.abs(Number(await page.locator('#transform-x').inputValue()) - originalX - 20) < 0.001,
+    'redo must restore the same independent duplicate');
+  assert.match(await page.locator('#file-status').innerText(), /browser-only duplication/);
   assert.ok(Math.abs(Number(await page.locator('#transform-x').inputValue()) - originalX - 20) < 0.001);
   assert.ok(Math.abs(Number(await page.locator('#transform-y').inputValue()) - originalY - 20) < 0.001);
   const duplicateX = Number(await page.locator('#transform-x').inputValue());
