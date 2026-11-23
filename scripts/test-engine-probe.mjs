@@ -294,6 +294,60 @@ try {
     });
     assert.notEqual(multiHash,transformedHash,'Adding second native model must change G-code');
     console.log('PASS: two Prepare STL objects → one native plate → distinct WASM G-code');
+    // Browser-only duplicate/drop-to-bed editing must also reach the real
+    // local WASM one-plate manifest, not merely change a Three.js object.
+    // Keep the existing two-independent-file test above, and restore two
+    // objects afterwards so all later process-profile cases remain unchanged.
+    const sourceX=Number(await prepare.locator('#transform-x').inputValue());
+    const sourceY=Number(await prepare.locator('#transform-y').inputValue());
+    const sourceZ=Number(await prepare.locator('#transform-z').inputValue());
+    assert.equal(await prepare.locator('#duplicate-object').isEnabled(),true);
+    const twoModelGcode=await prepare.locator('#lab-download').evaluate(async link=>
+      (await fetch(link.href)).text());
+    await prepare.locator('#duplicate-object').click();
+    await prepare.locator('#object-count').getByText('3 objects').waitFor({timeout:30000});
+    assert.ok(Math.abs(Number(await prepare.locator('#transform-x').inputValue())-sourceX-20)<0.001);
+    assert.ok(Math.abs(Number(await prepare.locator('#transform-y').inputValue())-sourceY-20)<0.001);
+    await prepare.locator('#transform-z').fill('31');
+    await prepare.locator('#transform-z').press('Tab');
+    await prepare.locator('#drop-to-bed').click();
+    assert.ok(Math.abs(Number(await prepare.locator('#transform-z').inputValue())-sourceZ)<0.001,
+      'Drop to bed must restore the duplicated cube to its original physical Z');
+    assert.equal(await prepare.locator('#lab-slice').isEnabled(),true);
+    await prepare.locator('#lab-slice').click();
+    await prepare.waitForFunction(()=>{
+      const state=document.querySelector('#lab-status')?.textContent||'';
+      return state.startsWith('PASS:')||state.startsWith('FAILED');
+    },null,{timeout:120000});
+    const clonedStatus=await prepare.locator('#lab-status').innerText();
+    assert.match(clonedStatus,/^PASS: 3 STL model\(s\)/);
+    const threeModelGcode=await prepare.locator('#lab-download').evaluate(async link=>
+      (await fetch(link.href)).text());
+    // Compare actual deposited XY extents above the initial skirt/layer:
+    // the duplicate is offset +20 mm in X and Y, so its toolpaths must
+    // expand both envelopes. Headers, mesh counts and G-code hashes alone
+    // are insufficient evidence that the third object was really sliced.
+    const upperDepositionEnvelope=code=>{
+      const paths=parseGcodeToolpaths(code).layers.flatMap(layer=>layer.segments)
+        .filter(s=>s.extrusion && Number.isFinite(s.z2) &&
+          s.z2>2 && s.z2<18 &&
+          [s.x1,s.y1,s.x2,s.y2].every(Number.isFinite));
+      assert.ok(paths.length>50,'Insufficient upper-layer XY deposition for duplication witness');
+      return paths.reduce((out,s)=>({
+        x:Math.max(out.x,s.x1,s.x2), y:Math.max(out.y,s.y1,s.y2),
+      }),{x:-Infinity,y:-Infinity});
+    };
+    const beforeClone=upperDepositionEnvelope(twoModelGcode);
+    const afterClone=upperDepositionEnvelope(threeModelGcode);
+    assert.ok(afterClone.x>beforeClone.x+8 && afterClone.y>beforeClone.y+8,
+      'Duplicated STL must expand real WASM deposition XY extents; '+
+      JSON.stringify({beforeClone,afterClone}));
+    await prepare.locator('#remove-object').click();
+    await prepare.locator('#object-count').getByText('2 objects').waitFor({timeout:30000});
+    assert.ok(Math.abs(Number(await prepare.locator('#transform-x').inputValue())-sourceX)<0.001,
+      'Deleting duplicate must preserve the source STL transform');
+    assert.equal(await prepare.locator('#lab-slice').isEnabled(),true);
+    console.log('PASS: Prepare duplicate + Drop to bed → 3 real native WASM STL instances, expanded deposited XY, source preserved');
     // Process override must be applied through the actual one-slicer-api
     // profile operation, not merely reflected in the DOM.
     await prepare.locator('#lab-process').setInputFiles({
