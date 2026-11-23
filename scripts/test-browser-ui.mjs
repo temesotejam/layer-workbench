@@ -90,6 +90,26 @@ try {
   assert.equal(await threeDButton.getAttribute('aria-pressed'), 'true');
   assert.equal(await frontButton.getAttribute('aria-pressed'), 'false');
 
+  // Browser transforms can be undone, redone, or replaced with a new edit.
+  const undoButton = page.locator('#undo-viewer');
+  const redoButton = page.locator('#redo-viewer');
+  assert.equal(await undoButton.isDisabled(), true);
+  assert.equal(await redoButton.isDisabled(), true);
+  const xBeforeEdit = Number(await page.locator('#transform-x').inputValue());
+  await page.locator('#transform-x').fill(String(xBeforeEdit + 13));
+  await page.locator('#transform-x').press('Tab');
+  assert.equal(await undoButton.isEnabled(), true);
+  await undoButton.click();
+  assert.equal(Number(await page.locator('#transform-x').inputValue()), xBeforeEdit);
+  await redoButton.click();
+  assert.equal(Number(await page.locator('#transform-x').inputValue()), xBeforeEdit + 13);
+  await undoButton.click();
+  await page.locator('#transform-x').fill(String(xBeforeEdit + 7));
+  await page.locator('#transform-x').press('Tab');
+  assert.equal(await redoButton.isDisabled(), true, 'new edits must invalidate redo');
+  await undoButton.click();
+  assert.equal(Number(await page.locator('#transform-x').inputValue()), xBeforeEdit);
+
   // Dropping onto the logical plate must use actual transformed geometry
   // rather than resetting Z blindly. This is a browser-only layout operation.
   const dropToBedButton = page.locator('#drop-to-bed');
@@ -100,6 +120,12 @@ try {
   await dropToBedButton.click();
   assert.ok(Math.abs(Number(await page.locator('#transform-z').inputValue()) - originalZ) < 0.001,
     'drop-to-bed must return translated cube to its physical bed height');
+  await undoButton.click();
+  assert.equal(Number(await page.locator('#transform-z').inputValue()), 25,
+    'drop-to-bed must be undoable');
+  await redoButton.click();
+  assert.ok(Math.abs(Number(await page.locator('#transform-z').inputValue()) - originalZ) < 0.001,
+    'redo must restore drop-to-bed');
   assert.equal(await page.locator('#transform-x').inputValue(), modelX,
     'drop-to-bed must preserve horizontal placement');
   assert.match(await page.locator('#file-status').innerText(), /viewer bed Z=0/);
@@ -112,6 +138,8 @@ try {
   const originalY = Number(await page.locator('#transform-y').inputValue());
   await duplicateButton.click();
   await page.locator('#object-count').getByText('2 objects').waitFor();
+  assert.equal(await undoButton.isDisabled(), true,
+    'duplication changes topology and clears history');
   assert.equal(await page.locator('#object-tree [data-object-id]').count(), 2);
   assert.match(await page.locator('#file-status').innerText(), /browser viewport only/);
   assert.ok(Math.abs(Number(await page.locator('#transform-x').inputValue()) - originalX - 20) < 0.001);
@@ -128,6 +156,10 @@ try {
   await page.locator('#transform-x').fill('57');
   await page.locator('#transform-x').press('Tab');
   assert.equal(Number(await page.locator('#transform-x').inputValue()), 57);
+  await undoButton.click();
+  assert.equal(Number(await page.locator('#transform-x').inputValue()), duplicateX);
+  await redoButton.click();
+  assert.equal(Number(await page.locator('#transform-x').inputValue()), 57);
   await page.locator('#object-tree [data-object-id]').first().click();
   assert.ok(Math.abs(Number(await page.locator('#transform-x').inputValue()) - originalX) < 0.001,
     'editing the duplicated object must not move its source');
@@ -142,6 +174,8 @@ try {
 
   await page.locator('#remove-object').click();
   await page.locator('#object-count').getByText('1 object').waitFor();
+  assert.equal(await undoButton.isDisabled(), true,
+    'deletion must clear stale transform history');
   assert.equal(await page.locator('#project-label').innerText(), 'test-cube.stl');
   assert.ok(Math.abs(Number(await page.locator('#transform-x').inputValue()) - originalX) < 0.001,
     'deleting the duplicate must retain its source geometry and transform');
@@ -150,7 +184,7 @@ try {
   assert.equal(await page.locator('[data-transform="translate"]').isDisabled(), true);
   assert.equal(await duplicateButton.isDisabled(), true);
   assert.equal(await dropToBedButton.isDisabled(), true);
-  console.log('PASS: WebGL canvas, STL rendering, camera views, drop to bed, independent duplication and deletion');
+  console.log('PASS: WebGL canvas, STL rendering, camera views, transform history, drop to bed, duplication and deletion');
 } catch (error) {
   await mkdir('browser-test-artifacts', { recursive: true });
   await page.screenshot({ path: 'browser-test-artifacts/prepare-failure.png', fullPage: true }).catch(() => {});
