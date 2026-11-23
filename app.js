@@ -5,6 +5,7 @@ import { STLLoader } from "three/addons/loaders/STLLoader.js";
 import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
 import { ThreeMFLoader } from "three/addons/loaders/3MFLoader.js";
 import { get3mfViewportBuildItems } from "./scripts/three-mf-viewport-items.mjs";
+import { captureViewerTransform, createViewerTransformHistory } from "./scripts/prepare-viewer-transform-history.mjs";
 
 const picker = document.querySelector("#model-file");
 const status = document.querySelector("#file-status");
@@ -19,6 +20,8 @@ const transformButtons = [...document.querySelectorAll("[data-transform]")];
 const deleteButton = document.querySelector("#remove-object");
 const duplicateButton = document.querySelector("#duplicate-object");
 const dropToBedButton = document.querySelector("#drop-to-bed");
+const undoButton = document.querySelector("#undo-viewer");
+const redoButton = document.querySelector("#redo-viewer");
 const fitButton = document.querySelector("#fit-view");
 const viewButtons = [...document.querySelectorAll("[data-view-orientation]")];
 const transformStatus = document.querySelector("#transform-status");
@@ -43,6 +46,8 @@ const pointer = new THREE.Vector2();
 let pointerDown = null;
 let rendererReady = false;
 let currentView = "3d";
+const viewerHistory = createViewerTransformHistory(50);
+let dragStart = null;
 
 const world = new THREE.Scene();
 world.background = new THREE.Color("#20252c");
@@ -97,7 +102,14 @@ try {
   world.add(transformControls.getHelper());
   transformControls.addEventListener("dragging-changed", event => {
     controls.enabled = !event.value;
-    if (!event.value) updateTransformStatus();
+    const entry = entries.find(item => item.id === selectedId);
+    if (event.value) {
+      dragStart = entry ? {id: entry.id, before: captureViewerTransform(entry)} : null;
+    } else {
+      if (entry && dragStart?.id === entry.id) recordViewerEdit(entry, dragStart.before);
+      dragStart = null;
+      updateTransformStatus();
+    }
   });
   transformControls.addEventListener("objectChange", () => {
     const entry = entries.find(item => item.id === selectedId);
@@ -194,6 +206,41 @@ function selectEntry(id) {
   updateTransformStatus();
 }
 
+// Undo/redo only changes viewer transforms, never source files or native 3MF.
+function updateViewerHistoryButtons() {
+  undoButton.disabled = !viewerHistory.canUndo();
+  redoButton.disabled = !viewerHistory.canRedo();
+}
+function clearViewerHistory() {
+  viewerHistory.clear();
+  dragStart = null;
+  updateViewerHistoryButtons();
+}
+function recordViewerEdit(entry, before) {
+  if (!entry || !before) return;
+  viewerHistory.record({id: entry.id, before, after: captureViewerTransform(entry)});
+  updateViewerHistoryButtons();
+}
+function restoreViewerHistory(step) {
+  if (!step) return;
+  const entry = entries.find(item => item.id === step.id);
+  if (!entry) {
+    clearViewerHistory();
+    return;
+  }
+  entry.object.position.fromArray(step.snapshot.position);
+  entry.object.quaternion.fromArray(step.snapshot.quaternion);
+  entry.object.scale.fromArray(step.snapshot.scale);
+  entry.object.updateMatrixWorld(true);
+  entry.modified = step.snapshot.modified;
+  selectEntry(entry.id);
+  updateViewerHistoryButtons();
+  status.textContent = "Restored viewer-only transform for " + entry.name +
+    " (original file unchanged)";
+}
+undoButton?.addEventListener("click", () => restoreViewerHistory(viewerHistory.undo()));
+redoButton?.addEventListener("click", () => restoreViewerHistory(viewerHistory.redo()));
+
 function updateTransformStatus() {
   const entry = entries.find(item => item.id === selectedId);
   Object.values(transformInputs).forEach(input => { input.disabled = !entry; });
@@ -225,11 +272,13 @@ for (const [key, input] of Object.entries(transformInputs)) {
       updateTransformStatus();
       return;
     }
+    const before = captureViewerTransform(entry);
     if (["x","y","z"].includes(key)) entry.object.position[key] = value;
     if (key === "rz") entry.object.rotation.z = THREE.MathUtils.degToRad(value);
     if (["sx","sy","sz"].includes(key)) entry.object.scale[key.slice(1)] = value;
     entry.object.updateMatrixWorld(true);
     entry.modified = true;
+    recordViewerEdit(entry, before);
     updateTransformStatus();
   });
 }
@@ -246,6 +295,7 @@ deleteButton?.addEventListener("click", () => {
   const index = entries.findIndex(item => item.id === selectedId);
   if (index < 0) return;
   const entry = entries[index];
+  clearViewerHistory();
   transformControls?.detach();
   if (entry.sourceRoot) {
     entry.object.removeFromParent();
@@ -272,6 +322,7 @@ deleteButton?.addEventListener("click", () => {
 duplicateButton?.addEventListener("click", () => {
   const source = entries.find(item => item.id === selectedId);
   if (!rendererReady || !source || source.sourceRoot || !["stl", "obj"].includes(source.format)) return;
+  clearViewerHistory();
   const copy = source.object.clone(true);
   copy.traverse(node => {
     if (!node.isMesh) return;
@@ -314,9 +365,15 @@ dropToBedButton?.addEventListener("click", () => {
     status.textContent = "Cannot place model: vertical correction is out of bounds.";
     return;
   }
+  if (Math.abs(dz) < 1e-9) {
+    status.textContent = entry.name + " already touches viewer bed Z=0";
+    return;
+  }
+  const before = captureViewerTransform(entry);
   entry.object.position.z += dz;
   entry.object.updateMatrixWorld(true);
   entry.modified = true;
+  recordViewerEdit(entry, before);
   updateTransformStatus();
   status.textContent = "Dropped " + entry.name +
     " to viewer bed Z=0 (browser only; original file unchanged)";
@@ -345,8 +402,23 @@ fitButton?.addEventListener("click", () => {
   else placeCamera(new THREE.Vector3(0, 0, 35), 420);
 });
 document.addEventListener("keydown", event => {
-  if (event.ctrlKey || event.metaKey || event.altKey) return;
-  if (["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) return;
+  const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName) ||
+    document.activeElement?.isContentEditable;
+  if ((event.ctrlKey || event.metaKey) && !event.altKey && !typing) {
+    const key = event.key.toLowerCase();
+    if (key === "z") {
+      event.preventDefault();
+      if (event.shiftKey) redoButton.click();
+      else undoButton.click();
+      return;
+    }
+    if (key === "y" && !event.shiftKey) {
+      event.preventDefault();
+      redoButton.click();
+      return;
+    }
+  }
+  if (event.ctrlKey || event.metaKey || event.altKey || typing) return;
   if (event.key.toLowerCase() === "g") setTransformMode("translate");
   if (event.key.toLowerCase() === "r") setTransformMode("rotate");
   if (event.key.toLowerCase() === "s") setTransformMode("scale");
@@ -442,6 +514,8 @@ async function addFiles(selected) {
     try {
       const object = await parseModel(file);
       prepareMaterials(object);
+      // Imported geometry changes the selection/scene topology; do not replay old edits.
+      clearViewerHistory();
       if (extension === "3mf" && isolated3mfViewportLab) {
         // ThreeMFLoader r180 creates one root child per 3MF <build> item.
         // Preserve its nested component transforms and original archive bytes.
