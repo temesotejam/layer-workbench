@@ -823,5 +823,35 @@ class ComparatorTests(unittest.TestCase):
                          ['wasm_minus_native_setpoint_c'], '1')
 
 
+    def test_chamber_heater_setpoints_are_distinct_from_bed_and_nozzle(self):
+        # Marlin M141 sets chamber heat; M191 sets and waits.
+        native = 'M141 S40\nM191 R45\nM140 S60\nG1 X1 E1\n'
+        wasm = 'M141 S45\nM191 R40\nM140 S60\nG1 X1 E1\n'
+        report = self.run_compare(native, wasm)
+        self.assertFalse(report['match'])
+        self.assertEqual(report['native_heater_setpoint_events'], 3)
+        self.assertEqual(report['heater_setpoint_difference_count'], 2)
+        first, second = report['first_heater_setpoint_differences']
+        self.assertEqual(first['native']['heater'], 'chamber')
+        self.assertEqual(first['native']['command'], 'M141')
+        self.assertEqual(first['wasm_minus_native_setpoint_c'], '5')
+        self.assertEqual(second['native']['heater'], 'chamber')
+        self.assertEqual(second['native']['command'], 'M191')
+        self.assertEqual(second['native']['mode'], 'R')
+        self.assertEqual(second['wasm_minus_native_setpoint_c'], '-5')
+
+    def test_unsupported_heater_dialects_are_unknown_not_zero_difference(self):
+        # R is only a waiting command mode in this Marlin-bounded parser;
+        # extra chamber indices/tools cannot be guessed from plain M141/M191.
+        unsupported = ('M104 R200', 'M140 R60', 'M141 R40',
+                       'M141 P1 S40', 'M191 T0 S40', 'M191S40')
+        for command in unsupported:
+            with self.subTest(command=command):
+                report = self.run_compare(command + '\nG1 X1 E1\n',
+                                          command + '\nG1 X1 E1\n')
+                self.assertIsNone(report['heater_setpoint_difference_count'])
+                self.assertIsNone(report['first_heater_setpoint_differences'])
+
+
 if __name__ == '__main__':
     unittest.main()

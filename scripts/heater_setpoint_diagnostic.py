@@ -1,4 +1,4 @@
-"""Read-only nozzle/bed setpoint comparison for native/WASM G-code diagnostics.
+"""Read-only nozzle/bed/chamber setpoint comparison for native/WASM G-code diagnostics.
 
 This reports explicit G-code requests, not measured temperatures, printer
 profile equality, or independently validated machine safety.
@@ -6,7 +6,7 @@ profile equality, or independently validated machine safety.
 from decimal import Decimal
 import re
 
-HEATER = re.compile(r'^M0*(104|109|140|190)(?:\.0+)?$', re.I)
+HEATER = re.compile(r'^M0*(104|109|140|141|190|191)(?:\.0+)?$', re.I)
 PARAM = re.compile(r'^([A-Za-z])([+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)$')
 
 
@@ -22,7 +22,7 @@ def extract_heater_events(commands):
         opcode = words[0].upper()
         match = HEATER.fullmatch(opcode)
         if match is None:
-            if re.match(r'^M0*(?:104|109|140|190)(?=[A-Za-z.]|$)', opcode):
+            if re.match(r'^M0*(?:104|109|140|141|190|191)(?=[A-Za-z.]|$)', opcode):
                 return None  # Unknown compact/alternate heater syntax.
             continue
         code = int(match[1])
@@ -37,7 +37,11 @@ def extract_heater_events(commands):
             values[key] = Decimal(parameter[2])
         if ('S' in values) == ('R' in values):
             return None
-        if code in (140, 190) and 'T' in values:
+        # Marlin's non-waiting setpoint commands take S only. A foreign
+        # dialect's R/extra selector is not safely interpretable here.
+        if code in (104, 140, 141) and 'R' in values:
+            return None
+        if code in (140, 141, 190, 191) and 'T' in values:
             return None
         mode = 'S' if 'S' in values else 'R'
         target = values[mode]
@@ -49,7 +53,8 @@ def extract_heater_events(commands):
                                  not 0 <= tool <= 254):
             return None
         events.append({
-            'heater': 'nozzle' if code in (104, 109) else 'bed',
+            'heater': ('nozzle' if code in (104, 109) else
+                       'bed' if code in (140, 190) else 'chamber'),
             'command': 'M' + str(code),
             'mode': mode,
             'setpoint_c': format(target.normalize(), 'f'),
