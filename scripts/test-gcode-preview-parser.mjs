@@ -539,3 +539,36 @@ const harmlessDwell=parseGcodeToolpaths(
 assert.deepEqual(harmlessDwell.layers.flatMap(l=>l.segments).map(s=>[s.x1,s.x2]),
   [[0,10],[10,20]]);
 console.log("PASS: opaque coordinate G commands/probing invalidate uncertain XYZ continuity, dwell remains connected");
+
+ 
+// G4 is non-modal: a slicer may omit G1 on its next move. Both P (ms)
+// and S (seconds) must preserve the last unambiguous linear mode; no dwell
+// segment is drawn or counted as extrusion.
+const modalAfterDwell=parseGcodeToolpaths([
+  "G90","M82","G1 X10 Y0 Z0.2 E1 F1200",
+  "G4 P250","X20 E2","G4 S0.25","N17X30E3",
+  "G0 X35","G4 P0","X40","G1 X45 E4"
+].join("\n"));
+assert.deepEqual(modalAfterDwell.layers.flatMap(l=>l.segments).map(s=>[s.x1,s.x2]),
+  [[0,10],[10,20],[20,30],[30,35],[35,40],[40,45]]);
+assert.equal(modalAfterDwell.extrusions,4);
+assert.equal(modalAfterDwell.travels,2);
+assert.equal(modalAfterDwell.skippedMalformedMotion,0);
+assert.deepEqual(modalAfterDwell.layers[0].segments.map(s=>s.feedrateMmMin),
+  [1200,1200,1200,1200,1200,1200]);
+
+// A G4 with motion axes or malformed parameters is not a verified dwell;
+// discard modal continuity rather than guessing a line from stale XYZ.
+const invalidDwell=parseGcodeToolpaths([
+  "G90","M82","G1 X10 Y0 Z0.2 E1",
+  "G4 X999","X20 E2","G1 X30 Y0 Z0.2 E3","X40 E4"
+].join("\n"));
+assert.deepEqual(invalidDwell.layers.flatMap(l=>l.segments).map(s=>[s.x1,s.x2]),
+  [[0,10],[30,40]]);
+assert.equal(invalidDwell.skippedMalformedMotion,1);
+assert.equal(invalidDwell.skippedUnlocatedMotions,1);
+const negativeDwell=parseGcodeToolpaths("G1 X10 Y0 Z0.2 E1\\nG4 P-1\\nX20 E2\\nG1 X30 E3");
+assert.deepEqual(negativeDwell.layers.flatMap(l=>l.segments).map(s=>[s.x1,s.x2]),
+  [[0,10],[10,30]]);
+assert.equal(negativeDwell.skippedMalformedMotion,1);
+console.log("PASS: validated G4 dwell preserves linear modal commands; malformed dwell fails closed");
