@@ -41,3 +41,20 @@ Navigation now reflects the v2.5 desktop page families: Home, optional Design, P
 ## Important technical constraint
 
 The native UI is implemented with wxWidgets, GLCanvas3D, native event loops and platform integrations. Those widgets cannot simply be displayed in a browser by compiling the current headless WASM engine. A browser-native UI can reproduce the layout and behavior, but pixel-perfect matching and full behavioral parity require a substantial, staged frontend port. Do not claim completion based on a similar-looking mockup.
+
+
+## 2026-11-23: viewer-only transform Undo / Redo
+
+The public Prepare workspace now provides bounded (50-step) Undo / Redo for
+**browser transforms only**: numeric position/Z rotation/XYZ scale edits,
+TransformControls drag gestures and Drop to bed. It restores position,
+quaternion, scale and the viewer-modified flag. New edits invalidate redo.
+Importing, duplicating and deleting clear the transform stack because these
+structural operations are **not undoable**. Ctrl+Z, Ctrl+Shift+Z and Ctrl+Y work
+outside editable fields; input elements keep native text editing shortcuts.
+
+These controls never rewrite source STL/OBJ/3MF files or native projects.
+The pure history unit tests and real Chrome UI tests run in
+`browser-e2e.yml`. This does not reproduce the native OrcaSlicer command
+history, restore deleted/imported objects, or certify native 3MF editing.
+The public WASM slicing function remains disabled.
