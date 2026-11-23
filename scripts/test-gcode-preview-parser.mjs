@@ -512,7 +512,30 @@ const implicitGuard=parseGcodeToolpaths([
   "G1 X5 E1","X10E2","G1 Xbad E3","X500 E4","G1 X15 E3"
 ].join("\n"));
 assert.deepEqual(implicitGuard.layers.flatMap(layer=>layer.segments).map(s=>[s.x1,s.x2]),
-  [[0,10],[10,20],[0,5],[5,10],[10,15]]);
+  [[0,10],[0,5],[5,10],[10,15]]);
 assert.equal(implicitGuard.skippedMalformedMotion,1);
 console.log("PASS: bounded explicit G0/G1 modal moves, F-only words and fail-closed modal invalidation");
 
+
+// Unsupported motion commands may move the head even when the next line
+// explicitly says G1. Do not draw a fictitious chord from stale coordinates.
+// The first fully specified absolute motion re-anchors XYZ (and absolute E).
+const opaqueMotion=parseGcodeToolpaths([
+  "G90","M82","G1 X10 Y0 Z0.2 E1 F1200",
+  "G5 X100 Y10 E2","G1 X20 Y0 Z0.2 E3","G1 X30 E4",
+  "G29","G1 X40 Y0 Z0.2 E5","G1 X50 E6"
+].join("\n"));
+assert.deepEqual(opaqueMotion.layers.flatMap(layer=>layer.segments).map(s=>[s.x1,s.x2]),
+  [[0,10],[20,30],[40,50]]);
+assert.equal(opaqueMotion.skippedUnlocatedMotions,2);
+// A coordinate-bearing unknown G mode must also break continuity; a plain
+// dwell (G4) does not affect XYZ or the G1 modal positioning state.
+const opaqueUnknown=parseGcodeToolpaths(
+  "G90\nM82\nG1 X10 Y0 Z0.2 E1\nG99 X100\nG1 X20 Y0 Z0.2 E2\nG1 X30 E3");
+assert.deepEqual(opaqueUnknown.layers.flatMap(l=>l.segments).map(s=>[s.x1,s.x2]),
+  [[0,10],[20,30]]);
+const harmlessDwell=parseGcodeToolpaths(
+  "G90\nM82\nG1 X10 Y0 Z0.2 E1\nG4 P1000\nG1 X20 E2");
+assert.deepEqual(harmlessDwell.layers.flatMap(l=>l.segments).map(s=>[s.x1,s.x2]),
+  [[0,10],[10,20]]);
+console.log("PASS: opaque coordinate G commands/probing invalidate uncertain XYZ continuity, dwell remains connected");

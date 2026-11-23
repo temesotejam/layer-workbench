@@ -190,7 +190,20 @@ export function parseGcodeToolpaths(source, options={}) {
     if(["G17","G18","G19"].includes(cmd)){state.plane=cmd;continue;}
     const isArc=cmd==="G2"||cmd==="G3";
     if(!isArc && !["G0","G1","G92"].includes(cmd)){
-      if(cmd.startsWith("G"))modalLinear=null;
+      if(cmd.startsWith("G")){
+        modalLinear=null;
+        // An unsupported G command with coordinate words may itself move the
+        // tool. Discard the previous XYZ origin instead of drawing a phantom
+        // connecting stroke when a later explicit G0/G1 resumes. Common
+        // probing/gantry operations also move without explicit XYZ words.
+        // G4 dwell and other non-motion G commands without XYZ are unaffected.
+        if(/[XYZ]/.test(movementArgs) || /^G(?:5|29|30|32|34|35|38(?:\.\d+)?)$/.test(cmd)){
+          knownXYZ.x=false;knownXYZ.y=false;knownXYZ.z=false;
+        }
+        // Opaque E changes cannot safely be classified as deposited material
+        // until the next absolute E word or G92 E re-anchors the register.
+        if(/E/.test(movementArgs))knownE=false;
+      }
       continue;
     }
     if(isArc)modalLinear=null;
