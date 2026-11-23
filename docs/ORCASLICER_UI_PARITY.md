@@ -24,7 +24,7 @@ Source: `src/slic3r/GUI/Plater.cpp` and `GUI_ObjectList.cpp`.
 
 ## Browser implementation status
 
-The current browser page is an early layout scaffold. It has a three-column Prepare-like frame, a build-plate visual placeholder, a local file list, and a settings panel shell. It does not parse geometry, display imported meshes, share state with the C++ engine, or expose native editing operations. Controls remain disabled when their underlying operation is not implemented.
+The published Prepare page has a Three.js WebGL viewport with local STL, OBJ and 3MF loading, model selection/picking, a transform gizmo, XYZ/rotation/scale inputs, deletion, Fit, and **working 3D/Top/Front camera views** (Z-up; the Front view looks along +Y from the -Y side). The camera buttons adjust only the viewport; they do not modify model transforms or invoke a native project operation. These remain **browser-only edits**, not native OrcaSlicer project edits or a desktop-accurate viewport. Slice, profile selection and unsupported tabs remain disabled on the public page. A separate explicit isolated-localhost lab exercises the WASM candidate without publishing that engine.
 
 Navigation now reflects the v2.5 desktop page families: Home, optional Design, Prepare, Preview, Device, Multi-device, Project and Calibration. Unsupported pages remain disabled rather than pretending to work.
 
@@ -32,7 +32,7 @@ Navigation now reflects the v2.5 desktop page families: Home, optional Design, P
 
 1. Compare reference screenshots from the official v2.5.0 desktop app at fixed window size, scale factor, and dark/light theme. Record panel widths, toolbar height, spacing, typography, icons, and tab order.
 2. Recreate the native top-level hierarchy: app/menu and toolbar, workspace notebook, Plater toolbars, plate strip, object tree, parameter sidebar and status area.
-3. Implement a real WebGL viewport and STL/OBJ/3MF geometry loading; remove the decorative build-plate-only placeholder.
+3. Extend the existing WebGL viewport and STL/OBJ/3MF import beyond basic camera, object picking and transform tools to match native scene hierarchy and view behavior.
 4. Connect the engine session, project manifest, native transforms, arrange/auto-orient, profiles and slicing.
 5. Implement Preview with layer/toolpath visualization and G-code controls.
 6. Implement device, calibration, project and optional plugin workflows only where their browser permissions/backends exist.

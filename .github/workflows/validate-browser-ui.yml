@@ -1,6 +1,12 @@
 name: Validate browser Prepare workspace
 
 on:
+  pull_request:
+    paths:
+      - "index.html"
+      - "app.js"
+      - "styles.css"
+      - ".github/workflows/validate-browser-ui.yml"
   push:
     branches: [main]
     paths:

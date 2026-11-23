@@ -65,6 +65,32 @@ try {
   await page.locator('[data-transform="translate"]').click();
   await page.locator('#fit-view').click();
 
+  // Top and Front must visibly change the real WebGL camera without touching
+  // the model transform, selecting an engine, or changing the original STL.
+  const modelX = await page.locator('#transform-x').inputValue();
+  const topButton = page.locator('[data-view-orientation="top"]');
+  const frontButton = page.locator('[data-view-orientation="front"]');
+  const threeDButton = page.locator('[data-view-orientation="3d"]');
+  assert.equal(await topButton.isEnabled(), true);
+  assert.equal(await frontButton.isEnabled(), true);
+  await topButton.click();
+  await page.locator('#fit-view').click();
+  assert.equal(await topButton.getAttribute('aria-pressed'), 'true');
+  assert.equal(await threeDButton.getAttribute('aria-pressed'), 'false');
+  const topView = await page.locator('#viewport-canvas canvas').screenshot();
+  await frontButton.click();
+  await page.locator('#fit-view').click();
+  assert.equal(await frontButton.getAttribute('aria-pressed'), 'true');
+  const frontView = await page.locator('#viewport-canvas canvas').screenshot();
+  assert.equal(topView.equals(frontView), false,
+    'Top and Front must render different camera directions');
+  assert.equal(await page.locator('#transform-x').inputValue(), modelX,
+    'switching views must not edit the selected model');
+  await threeDButton.click();
+  assert.equal(await threeDButton.getAttribute('aria-pressed'), 'true');
+  assert.equal(await frontButton.getAttribute('aria-pressed'), 'false');
+
+
   await mkdir('browser-test-artifacts', { recursive: true });
   await page.screenshot({ path: 'browser-test-artifacts/prepare-loaded.png', fullPage: true });
   assert.equal(errors.length, 0, 'Uncaught browser errors: ' + errors.join('; '));
