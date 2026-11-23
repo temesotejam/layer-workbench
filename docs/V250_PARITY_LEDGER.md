@@ -1110,3 +1110,7 @@ G-code matching, compare actual heater readings, establish profile parity,
 interpret other firmware heater commands or certify printing safety.
 Synthetic comparator regression tests alone are not the still-missing
 official v2.5.0 native-versus-WASM **same STL/full profile** G-code comparison.
+
+## 2026-11-23: Marlin chamber heater requests in G-code diagnostics
+
+The bounded, read-only native/WASM heater comparison now recognizes explicit Marlin-style `M141 S...` (set chamber target without waiting) and `M191 S...`/`M191 R...` (set target and wait), in addition to nozzle (`M104`/`M109`) and bed (`M140`/`M190`) commands. Chamber requests are reported with `heater: chamber`; command type and S/R waiting mode are preserved rather than treating a set and a wait as interchangeable. `M104`, `M140` and `M141` with an `R` word are now **unknown** instead of inferred as supported requests. Extra heater selectors (`P`, `H`, chamber `T`), compact forms, macros and firmware-specific semantics remain unsupported and cause unknown diagnostics, not a fabricated temperature delta of zero. Sources: [Marlin M141](https://marlinfw.org/docs/gcode/M141.html) and [Marlin M191](https://marlinfw.org/docs/gcode/M191.html). This compares commanded targets only, not actual temperatures, correctness of printed G-code or native/WASM equivalence. Comparator equality remains strict and independent of this optional diagnostic.
