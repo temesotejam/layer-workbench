@@ -50,6 +50,8 @@ const viewerHistory = createViewerTransformHistory(50);
 // Keep a detached duplicate only while the matching Redo action is reachable.
 // No native 3MF or source file is ever modified by this viewer-only cache.
 const detachedViewerDuplicates = new Map();
+// A removed loose STL/OBJ entry stays here only while its delete action is undoable.
+const detachedViewerDeletions = new Map();
 let dragStart = null;
 
 const world = new THREE.Scene();
@@ -209,7 +211,7 @@ function selectEntry(id) {
   updateTransformStatus();
 }
 
-// Undo/redo applies viewer transforms and loose STL/OBJ duplication only;
+// Undo/redo applies viewer transforms and loose STL/OBJ duplicate/delete only;
 // it never changes source files or native 3MF projects.
 function updateViewerHistoryButtons() {
   undoButton.disabled = !viewerHistory.canUndo();
@@ -218,6 +220,7 @@ function updateViewerHistoryButtons() {
 function clearViewerHistory() {
   viewerHistory.clear();
   detachedViewerDuplicates.clear();
+  detachedViewerDeletions.clear();
   dragStart = null;
   updateViewerHistoryButtons();
 }
@@ -225,6 +228,7 @@ function recordViewerEdit(entry, before) {
   if (!entry || !before) return;
   const changed = viewerHistory.record({id: entry.id, before, after: captureViewerTransform(entry)});
   // A new edit invalidates Redo, including any detached duplicate it owned.
+  // Keep deleted objects: an earlier deletion may still be reachable via Undo.
   if (changed) detachedViewerDuplicates.clear();
   updateViewerHistoryButtons();
 }
@@ -237,6 +241,41 @@ function updateViewerProjectHeader() {
 }
 function restoreViewerHistory(step) {
   if (!step) return;
+  if (step.deleteAction) {
+    if (step.deleteAction === "restore") {
+      const saved = detachedViewerDeletions.get(step.id);
+      if (!saved || entries.some(item => item.id === step.id)) {
+        clearViewerHistory();
+        return;
+      }
+      entries.splice(Math.min(saved.index, entries.length), 0, saved.entry);
+      world.add(saved.entry.object);
+      detachedViewerDeletions.delete(step.id);
+      selectEntry(saved.entry.id);
+      status.textContent = "Undid browser-only deletion of " + saved.entry.name +
+        " (original file unchanged)";
+    } else if (step.deleteAction === "remove") {
+      const index = entries.findIndex(item => item.id === step.id);
+      const entry = entries[index];
+      if (!entry || entry.sourceRoot || !["stl", "obj"].includes(entry.format)) {
+        clearViewerHistory();
+        return;
+      }
+      transformControls?.detach();
+      world.remove(entry.object);
+      entries.splice(index, 1);
+      detachedViewerDeletions.set(entry.id, {entry, index});
+      selectEntry(entries.at(-1)?.id ?? null);
+      status.textContent = "Redid browser-only deletion of " + entry.name +
+        " (original file unchanged)";
+    } else {
+      clearViewerHistory();
+      return;
+    }
+    updateViewerProjectHeader();
+    updateViewerHistoryButtons();
+    return;
+  }
   if (step.duplicateAction) {
     if (step.duplicateAction === "remove") {
       const index = entries.findIndex(item => item.id === step.id);
@@ -344,6 +383,9 @@ deleteButton?.addEventListener("click", () => {
   const index = entries.findIndex(item => item.id === selectedId);
   if (index < 0) return;
   const entry = entries[index];
+  // Preserve the deleted loose mesh for Undo; native 3MF build-item deletion
+  // remains irreversible until native project semantics are available.
+  const reversible = !entry.sourceRoot && ["stl", "obj"].includes(entry.format);
   clearViewerHistory();
   transformControls?.detach();
   if (entry.sourceRoot) {
@@ -354,16 +396,15 @@ deleteButton?.addEventListener("click", () => {
       world.remove(entry.sourceRoot);
   } else world.remove(entry.object);
   entries.splice(index, 1);
-  selectEntry(entries.at(-1)?.id || null);
-  if (!entries.length) {
-    emptyHint.hidden = false;
-    sceneFile.textContent = "No model loaded";
-    projectLabel.textContent = "Untitled project";
-  } else {
-    projectLabel.textContent = entries.length === 1 ? entries[0].name : entries.length + " objects";
-    sceneFile.textContent = entries.length + " model(s) loaded";
+  if (reversible) {
+    detachedViewerDeletions.set(entry.id, {entry, index});
+    viewerHistory.recordDelete(entry.id);
   }
-  status.textContent = "Removed " + entry.name + " from the browser viewport (original file unchanged)";
+  selectEntry(entries.at(-1)?.id || null);
+  updateViewerProjectHeader();
+  updateViewerHistoryButtons();
+  status.textContent = "Removed " + entry.name + " from the browser viewport (original file unchanged)" +
+    (reversible ? " · Undo available" : " · 3MF deletion cannot be undone");
 });
 // Clone a loose STL/OBJ scene entry for local layout experiments only.
 // Share immutable mesh buffers for efficiency, but keep material instances
