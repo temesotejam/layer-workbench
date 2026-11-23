@@ -101,3 +101,31 @@ test("capture extracts independently owned Three.js-compatible arrays", () => {
   a.position[0] = 100;
   assert.equal(captureViewerTransform(entry).position[0], 1);
 });
+
+
+test("loose mesh deletion can be undone and redone independently of a later transform", () => {
+  const h = createViewerTransformHistory();
+  h.recordDelete("loose");
+  assert.deepEqual(h.undo(), {id:"loose", deleteAction:"restore"});
+  assert.deepEqual(h.redo(), {id:"loose", deleteAction:"remove"});
+  h.record({id:"other", before:snapshot(0), after:snapshot(2, true)});
+  assert.deepEqual(h.undo(), {id:"other", snapshot:snapshot(0)});
+  assert.deepEqual(h.undo(), {id:"loose", deleteAction:"restore"});
+  assert.deepEqual(h.redo(), {id:"loose", deleteAction:"remove"});
+});
+
+test("deleted object actions reject invalid ids and stale redo is discarded", () => {
+  const h = createViewerTransformHistory(2);
+  assert.throws(() => h.recordDelete(""), TypeError);
+  h.recordDelete("a");
+  assert.deepEqual(h.undo(), {id:"a", deleteAction:"restore"});
+  h.record({id:"b",before:snapshot(0),after:snapshot(1,true)});
+  assert.equal(h.canRedo(), false);
+  h.recordDelete("b");
+  h.recordDelete("c");
+  assert.deepEqual(h.undo(), {id:"c",deleteAction:"restore"});
+  assert.deepEqual(h.undo(), {id:"b",deleteAction:"restore"});
+  assert.equal(h.undo(), null);
+  h.clear();
+  assert.equal(h.canRedo(), false);
+});

@@ -184,17 +184,32 @@ try {
 
   await page.locator('#remove-object').click();
   await page.locator('#object-count').getByText('1 object').waitFor();
-  assert.equal(await undoButton.isDisabled(), true,
-    'deletion must clear stale transform history');
+  assert.equal(await undoButton.isEnabled(), true,
+    'loose mesh deletion must be undoable without reviving previous transforms');
   assert.equal(await page.locator('#project-label').innerText(), 'test-cube.stl');
   assert.ok(Math.abs(Number(await page.locator('#transform-x').inputValue()) - originalX) < 0.001,
     'deleting the duplicate must retain its source geometry and transform');
+  await undoButton.click();
+  await page.locator('#object-count').getByText('2 objects').waitFor();
+  assert.equal(Number(await page.locator('#transform-x').inputValue()), 57,
+    'undo deletion must restore the exact independently edited copy');
+  await redoButton.click();
+  await page.locator('#object-count').getByText('1 object').waitFor();
+  assert.ok(Math.abs(Number(await page.locator('#transform-x').inputValue()) - originalX) < 0.001);
   await page.locator('#remove-object').click();
   await page.locator('#object-count').getByText('0 objects').waitFor();
   assert.equal(await page.locator('[data-transform="translate"]').isDisabled(), true);
   assert.equal(await duplicateButton.isDisabled(), true);
   assert.equal(await dropToBedButton.isDisabled(), true);
-  console.log('PASS: WebGL canvas, STL rendering, camera views, transform history, drop to bed, duplication and deletion');
+  assert.equal(await undoButton.isEnabled(), true,
+    'deleting the final loose STL must remain reversible');
+  await undoButton.click();
+  await page.locator('#object-count').getByText('1 object').waitFor();
+  assert.ok(Math.abs(Number(await page.locator('#transform-x').inputValue()) - originalX) < 0.001);
+  await redoButton.click();
+  await page.locator('#object-count').getByText('0 objects').waitFor();
+  assert.equal(await undoButton.isEnabled(), true);
+  console.log('PASS: WebGL canvas, STL rendering, camera views, transform history, drop to bed, duplication and reversible deletion');
 } catch (error) {
   await mkdir('browser-test-artifacts', { recursive: true });
   await page.screenshot({ path: 'browser-test-artifacts/prepare-failure.png', fullPage: true }).catch(() => {});

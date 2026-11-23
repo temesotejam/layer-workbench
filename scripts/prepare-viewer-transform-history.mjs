@@ -1,5 +1,5 @@
 // Viewer-only transform history; this does not edit native 3MF projects.
-// Imports and deletions clear history; loose STL/OBJ duplication is reversible.
+// Imports and native 3MF deletions clear history; loose STL/OBJ duplication and deletion are reversible.
 const COMPONENTS = ["position", "quaternion", "scale"];
 
 function cloneSnapshot(snapshot) {
@@ -61,11 +61,18 @@ export function createViewerTransformHistory(limit = 50) {
       if (undoStack.length > limit) undoStack.shift();
       redoStack.length = 0;
     },
+    recordDelete(id) {
+      if (typeof id !== "string" || !id) throw new TypeError("Missing deleted object id");
+      undoStack.push({kind: "delete", id});
+      if (undoStack.length > limit) undoStack.shift();
+      redoStack.length = 0;
+    },
     undo() {
       const item = undoStack.pop();
       if (!item) return null;
       redoStack.push(item);
       if (item.kind === "duplicate") return {id: item.id, duplicateAction: "remove"};
+      if (item.kind === "delete") return {id: item.id, deleteAction: "restore"};
       return { id: item.id, snapshot: cloneSnapshot(item.before) };
     },
     redo() {
@@ -73,6 +80,7 @@ export function createViewerTransformHistory(limit = 50) {
       if (!item) return null;
       undoStack.push(item);
       if (item.kind === "duplicate") return {id: item.id, duplicateAction: "restore"};
+      if (item.kind === "delete") return {id: item.id, deleteAction: "remove"};
       return { id: item.id, snapshot: cloneSnapshot(item.after) };
     },
   };
