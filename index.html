@@ -34,8 +34,8 @@
         <input id="model-file" type="file" accept=".stl,.3mf,.obj" multiple hidden>
         <button class="tool-button" disabled title="Save is not connected">Save project</button>
         <span class="toolbar-divider"></span>
-        <button class="tool-button" disabled title="Undo is not connected">↶</button>
-        <button class="tool-button" disabled title="Redo is not connected">↷</button>
+        <button class="tool-button" id="undo-viewer" disabled title="Undo viewer transform only (Ctrl+Z); cannot undo imports, duplicates or deletes">↶</button>
+        <button class="tool-button" id="redo-viewer" disabled title="Redo viewer transform only (Ctrl+Shift+Z or Ctrl+Y)">↷</button>
         <span class="toolbar-divider"></span>
         <button class="tool-button edit-mode active-tool" data-transform="translate" disabled title="Move the selected model (G)">Move</button>
         <button class="tool-button edit-mode" data-transform="rotate" disabled title="Rotate the selected model (R)">Rotate</button>
