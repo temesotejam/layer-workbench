@@ -540,7 +540,7 @@ assert.deepEqual(harmlessDwell.layers.flatMap(l=>l.segments).map(s=>[s.x1,s.x2])
   [[0,10],[10,20]]);
 console.log("PASS: opaque coordinate G commands/probing invalidate uncertain XYZ continuity, dwell remains connected");
 
- 
+
 // G4 is non-modal: a slicer may omit G1 on its next move. Both P (ms)
 // and S (seconds) must preserve the last unambiguous linear mode; no dwell
 // segment is drawn or counted as extrusion.
@@ -567,7 +567,7 @@ assert.deepEqual(invalidDwell.layers.flatMap(l=>l.segments).map(s=>[s.x1,s.x2]),
   [[0,10],[30,40]]);
 assert.equal(invalidDwell.skippedMalformedMotion,1);
 assert.equal(invalidDwell.skippedUnlocatedMotions,1);
-const negativeDwell=parseGcodeToolpaths("G1 X10 Y0 Z0.2 E1\\nG4 P-1\\nX20 E2\\nG1 X30 E3");
+const negativeDwell=parseGcodeToolpaths(["G1 X10 Y0 Z0.2 E1","G4 P-1","X20 E2","G1 X30 E3"].join("\n"));
 assert.deepEqual(negativeDwell.layers.flatMap(l=>l.segments).map(s=>[s.x1,s.x2]),
   [[0,10],[10,30]]);
 assert.equal(negativeDwell.skippedMalformedMotion,1);
