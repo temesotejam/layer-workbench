@@ -174,6 +174,22 @@ def feature_z_deposition_deltas(native, wasm):
 
 MOTION = re.compile(r'^G0*[0123](?:\.0+)?$', re.I)
 
+# Only the fixture deposition metrics interpret padded modal aliases.
+# Original command spellings remain untouched for strict comparison.
+FIXTURE_MODAL = re.compile(r'^G0*(17|18|19|20|21|90|91|92)(?:\.0+)?$', re.I)
+FIXTURE_ARC_CENTER_MODAL = re.compile(r'^G0*(90|91)\.1$', re.I)
+
+
+def fixture_modal_opcode(opcode):
+    mode = FIXTURE_MODAL.fullmatch(opcode)
+    if mode:
+        return 'G' + mode[1]
+    arc_center = FIXTURE_ARC_CENTER_MODAL.fullmatch(opcode)
+    if arc_center:
+        return 'G' + arc_center[1] + '.1'
+    return opcode
+
+
 def count_motion(commands):
     """Minimal fixture sanity check; NOT a printer-safety or parity proof."""
     count = 0
@@ -281,34 +297,35 @@ def extrusion_move_metrics(commands, feature_context=None, feature_stats=None,
         if re.fullmatch(r'M0*83(?:\.0+)?', opcode):
             absolute_e = False
             continue
-        if opcode == 'G90':
+        modal = fixture_modal_opcode(opcode)
+        if modal == 'G90':
             absolute_xyz = True
             continue
-        if opcode == 'G91':
+        if modal == 'G91':
             absolute_xyz = False
             continue
-        if opcode in ('G17', 'G18', 'G19'):
-            plane = opcode
+        if modal in ('G17', 'G18', 'G19'):
+            plane = modal
             continue
-        if opcode == 'G90.1':
+        if modal == 'G90.1':
             absolute_arc_centers = True
             continue
-        if opcode == 'G91.1':
+        if modal == 'G91.1':
             absolute_arc_centers = False
             continue
-        if opcode == 'G20':
+        if modal == 'G20':
             units = Decimal('25.4')
             continue
-        if opcode == 'G21':
+        if modal == 'G21':
             units = Decimal(1)
             continue
         words = {}
-        stateful = opcode == 'G92' or bool(MOTION.fullmatch(opcode))
+        stateful = modal == 'G92' or bool(MOTION.fullmatch(opcode))
         # The numeric diagnostic is not a firmware interpreter. Reject extra
         # motion axes and vendor parameters rather than silently counting a
         # plausible XY/E path with different actual modal semantics.
         if stateful:
-            if opcode == 'G92':
+            if modal == 'G92':
                 allowed_stateful_words = frozenset('XYZE')
             elif int(Decimal(opcode[1:])) in (0, 1):
                 allowed_stateful_words = frozenset('XYZEF')
@@ -328,7 +345,7 @@ def extrusion_move_metrics(commands, feature_context=None, feature_stats=None,
                 # firmware-dependent meaning; never infer deposition from them.
                 return 0, None, None, 0, None, None, None
             words[letter] = Decimal(match[2])
-        if opcode == 'G92':
+        if modal == 'G92':
             for axis in xy:
                 if axis in words:
                     xy[axis] = words[axis] * units
