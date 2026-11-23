@@ -853,5 +853,43 @@ class ComparatorTests(unittest.TestCase):
                 self.assertIsNone(report['first_heater_setpoint_differences'])
 
 
+    def test_padded_xyz_mode_commands_preserve_observed_path_length(self):
+        code = ('M83\nG090\nG1 X10 E1\nG091\nG1 X-10 E1\n'
+                'G090\nG1 X20 E1\n')
+        report = self.run_compare(code, code, min_extrusion_moves=3)
+        self.assertTrue(report['match'], report)
+        self.assertEqual(report['native_counted_linear_xy_mm'], '40')
+        self.assertEqual(report['native_extrusion_moves'], 3)
+
+    def test_padded_units_switch_preserves_g20_g21_geometry(self):
+        code = 'M83\nG020\nG1 X1 E0.1\nG021\nG1 X10 E0.1\n'
+        report = self.run_compare(code, code, min_extrusion_moves=2)
+        self.assertTrue(report['match'], report)
+        self.assertEqual(report['native_counted_linear_xy_mm'], '40.8')
+        self.assertEqual(report['native_counted_positive_e_mm'], '2.64')
+
+    def test_padded_g92_reset_reanchors_absolute_e(self):
+        code = 'M82\nG1 X1 E1\nG092 E0\nG1 X2 E0.5\n'
+        report = self.run_compare(code, code, min_extrusion_moves=2)
+        self.assertTrue(report['match'], report)
+        self.assertEqual(report['native_extrusion_moves'], 2)
+        self.assertEqual(report['native_counted_positive_e_mm'], '1.5')
+
+    def test_padded_absolute_and_relative_arc_center_modes(self):
+        code = ('M83\nG0 X2 Y0\nG090.1\nG2 X0 Y2 I0 J0 E1\n'
+                'G091.1\nG3 X2 Y0 I1 J-1 E1\n')
+        report = self.run_compare(code, code, min_extrusion_moves=2)
+        self.assertTrue(report['match'], report)
+        self.assertEqual(report['native_extrusion_moves'], 2)
+
+    def test_padded_modes_are_not_silently_equalized_in_strict_comparison(self):
+        native = 'M83\nG091\nG1 X1 E1\n'
+        wasm = 'M83\nG91\nG1 X1 E1\n'
+        report = self.run_compare(native, wasm, min_extrusion_moves=1)
+        self.assertFalse(report['match'])
+        self.assertEqual(report['mismatched_commands'], 1)
+        self.assertEqual(report['counted_linear_xy_delta_mm'], '0')
+
+
 if __name__ == '__main__':
     unittest.main()
