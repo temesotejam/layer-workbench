@@ -18,6 +18,7 @@ const emptyHint = document.querySelector("#scene-empty");
 const transformButtons = [...document.querySelectorAll("[data-transform]")];
 const deleteButton = document.querySelector("#remove-object");
 const fitButton = document.querySelector("#fit-view");
+const viewButtons = [...document.querySelectorAll("[data-view-orientation]")];
 const transformStatus = document.querySelector("#transform-status");
 const objectCount = document.querySelector("#object-count");
 const transformInputs = Object.fromEntries(["x","y","z","rz","sx","sy","sz"].map(key =>
@@ -39,6 +40,7 @@ const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 let pointerDown = null;
 let rendererReady = false;
+let currentView = "3d";
 
 const world = new THREE.Scene();
 world.background = new THREE.Color("#20252c");
@@ -257,14 +259,28 @@ deleteButton?.addEventListener("click", () => {
   }
   status.textContent = "Removed " + entry.name + " from the browser viewport (original file unchanged)";
 });
-fitButton?.addEventListener("click", () => {
+// These are real browser-camera controls, independent of the experimental WASM
+// engine. They change only the view; they never change object coordinates.
+function showView(mode) {
+  if (!rendererReady || !["3d", "top", "front"].includes(mode)) return;
+  currentView = mode;
+  viewButtons.forEach(button => {
+    const active = button.dataset.viewOrientation === mode;
+    button.classList.toggle("selected", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
   const entry = entries.find(item => item.id === selectedId);
   if (entry) fitCameraToObject(entry.object);
-  else {
-    controls.target.set(0, 0, 35);
-    camera.position.set(330, -420, 310);
-    controls.update();
-  }
+  else placeCamera(new THREE.Vector3(0, 0, 35), 420);
+}
+viewButtons.forEach(button =>
+  button.addEventListener("click", () => showView(button.dataset.viewOrientation))
+);
+fitButton?.addEventListener("click", () => {
+  if (!rendererReady) return;
+  const entry = entries.find(item => item.id === selectedId);
+  if (entry) fitCameraToObject(entry.object);
+  else placeCamera(new THREE.Vector3(0, 0, 35), 420);
 });
 document.addEventListener("keydown", event => {
   if (event.ctrlKey || event.metaKey || event.altKey) return;
@@ -275,18 +291,44 @@ document.addEventListener("keydown", event => {
   if (event.key === "Delete" && !deleteButton.disabled) deleteButton.click();
 });
 
-function fitCameraToObject(object) {
-  const bounds = new THREE.Box3().setFromObject(object);
-  const size = bounds.getSize(new THREE.Vector3());
-  const center = bounds.getCenter(new THREE.Vector3());
-  const maxDim = Math.max(size.x, size.y, size.z, 1);
-  const distance = Math.max(260, maxDim * 2.35);
+function placeCamera(center, distance) {
   controls.target.copy(center);
-  camera.position.set(center.x + distance * 0.78, center.y - distance, center.z + distance * 0.72);
+  if (currentView === "top") {
+    // Z is vertical in the build plate; use +Y as the screen-up direction.
+    camera.up.set(0, 1, 0);
+    camera.position.set(center.x, center.y, center.z + distance);
+  } else if (currentView === "front") {
+    camera.up.set(0, 0, 1);
+    camera.position.set(center.x, center.y - distance, center.z);
+  } else {
+    camera.up.set(0, 0, 1);
+    camera.position.set(center.x + distance * 0.78,
+                        center.y - distance, center.z + distance * 0.72);
+  }
   camera.near = Math.max(0.1, distance / 500);
   camera.far = Math.max(5000, distance * 20);
   camera.updateProjectionMatrix();
+  camera.lookAt(center);
   controls.update();
+}
+function fitCameraToObject(object) {
+  if (!rendererReady) return;
+  const bounds = new THREE.Box3().setFromObject(object);
+  if (bounds.isEmpty()) return;
+  const size = bounds.getSize(new THREE.Vector3());
+  const center = bounds.getCenter(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z, 1);
+  if (currentView === "3d") {
+    placeCamera(center, Math.max(260, maxDim * 2.35));
+    return;
+  }
+  const width = size.x;
+  const height = currentView === "top" ? size.y : size.z;
+  const fov = THREE.MathUtils.degToRad(camera.fov);
+  const aspect = Math.max(0.2, camera.aspect);
+  const distance = Math.max(120,
+    Math.max(height, width / aspect, 1) * 1.25 / (2 * Math.tan(fov / 2)));
+  placeCamera(center, distance);
 }
 function centerAndFit(object) {
   const bounds = new THREE.Box3().setFromObject(object);
