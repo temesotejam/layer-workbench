@@ -24,9 +24,24 @@ const invalid=fixture();invalid.instances[0].transform.matrix[12]=1;
 assert.equal(auditNative3mfRelations(invalid).affineMatrices,'invalid');
 const nan=fixture();nan.instances[0].transform.matrix[0]=NaN;
 assert.equal(auditNative3mfRelations(nan).affineMatrices,'invalid');
+// A finite 4x4 affine matrix can still be non-invertible, silently
+// collapsing a native mesh and breaking round-trip editing.
+const flat=fixture();flat.instances[0].transform.matrix[0]=0;
+assert.equal(auditNative3mfRelations(flat).affineMatrices,'invalid');
+const almostFlat=fixture();
+almostFlat.instances[0].transform.matrix.splice(4,3,1,1e-12,0);
+assert.equal(auditNative3mfRelations(almostFlat).affineMatrices,'invalid');
+// Scale-relative determinant testing must permit small but invertible
+// geometry and legal mirrored/negative-determinant transforms.
+const tiny=fixture();tiny.instances[0].transform.matrix[0]=1e-8;
+assert.equal(auditNative3mfRelations(tiny).affineMatrices,'valid');
+const mirrored=fixture();mirrored.instances[0].transform.matrix[0]=-1;
+assert.equal(auditNative3mfRelations(mirrored).affineMatrices,'valid');
+const shear=fixture();shear.instances[0].transform.matrix.splice(4,3,1,1e-6,0);
+assert.equal(auditNative3mfRelations(shear).affineMatrices,'valid');
 const absentId=fixture();delete absentId.instances[0].id;
 assert.deepEqual(auditNative3mfRelations(absentId),{
   ids:'unavailable',references:'unverified',affineMatrices:'valid'});
 assert.deepEqual(auditNative3mfRelations(null),{
   ids:'unavailable',references:'unavailable',affineMatrices:'unavailable'});
-console.log('PASS: native manifest ID uniqueness, references, affine shape, privacy, opaque fields');
+console.log('PASS: native manifest IDs, references, invertible affine transforms, privacy, opaque fields');
