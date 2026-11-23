@@ -8,7 +8,26 @@ import {createHash} from 'node:crypto';
 
 export async function checkBrowserMultiObject3mf(page, cubeBytes, outputDir='parity-output', {requireExactPlacement=false, sharedMesh=false}={}) {
   assert.ok(cubeBytes instanceof Uint8Array && cubeBytes.byteLength >= 134);
-  const report = await page.evaluate(async ({input,requireExactPlacement,sharedMesh}) => {
+  // The separate-resource case must use GEOMETRICALLY DISTINCT source STLs.
+  // Two byte-identical cubes cannot reveal an exporter which duplicates one
+  // resource while silently discarding the other. Retain the original cube
+  // unchanged for the shared-mesh / multiple-instance comparison.
+  let secondSource=null;
+  if(!sharedMesh){
+    secondSource=Uint8Array.from(cubeBytes);
+    const view=new DataView(secondSource.buffer,secondSource.byteOffset,secondSource.byteLength);
+    const triangles=view.getUint32(80,true);
+    assert.equal(secondSource.byteLength,84+50*triangles,'Expected binary STL source');
+    assert.equal(triangles,12,'Distinct-resource fixture must be the verified cube');
+    for(let i=0;i<triangles;i++)for(let vertex=0;vertex<3;vertex++){
+      const zOffset=84+50*i+12+12*vertex+8;
+      const z=view.getFloat32(zOffset,true);
+      assert.ok(Number.isFinite(z),'Nonfinite source cube vertex');
+      view.setFloat32(zOffset,z/2,true);
+    }
+    assert.notDeepEqual(secondSource,cubeBytes,'Independent source STL must have different vertex geometry');
+  }
+  const report = await page.evaluate(async ({input,secondInput,requireExactPlacement,sharedMesh}) => {
     if (!globalThis.crossOriginIsolated) throw new Error('Isolated Chrome required');
     const engine = globalThis.__layerDiagnosticEngine?.engine;
     if (!engine || typeof engine.createSession !== 'function')
@@ -16,7 +35,12 @@ export async function checkBrowserMultiObject3mf(page, cubeBytes, outputDir='par
     const cube = new Uint8Array(input);
     const combined = new Uint8Array(cube.length * (sharedMesh ? 1 : 2));
     combined.set(cube);
-    if (!sharedMesh) combined.set(cube, cube.length);
+    if (!sharedMesh) {
+      const second=new Uint8Array(secondInput);
+      if(second.length!==cube.length || second.every((byte,index)=>byte===cube[index]))
+        throw new Error('Separate mesh fixture must have independently different STL vertices');
+      combined.set(second,cube.length);
+    }
     const matrix = (x, y) => [1,0,0,x, 0,1,0,y, 0,0,1,0, 0,0,0,1];
     const project = {
       schemaVersion:'0.7.0',
@@ -113,7 +137,7 @@ export async function checkBrowserMultiObject3mf(page, cubeBytes, outputDir='par
         throw new Error('Expected two spatially separated 3MF mesh clusters');
       const expected=[
         {min:[90,90,0],max:[110,110,20]},
-        {min:[150,90,0],max:[170,110,20]}
+        {min:[150,90,0],max:[170,110,sharedMesh ? 20 : 10]}
       ];
       absolutePlacementVerified=true;
       for(let i=0;i<2;i++) {
@@ -137,7 +161,8 @@ export async function checkBrowserMultiObject3mf(page, cubeBytes, outputDir='par
       stlTriangles:convertedCount, splitGapMm, placedBoundsMm,
       absolutePlacementVerified
     };
-  }, {input:Array.from(cubeBytes),requireExactPlacement,sharedMesh});
+  }, {input:Array.from(cubeBytes),secondInput:secondSource ? Array.from(secondSource) : [],
+    requireExactPlacement,sharedMesh});
   assert.equal(report.initialInstances, 2);
   assert.equal(report.initialObjects, sharedMesh ? 1 : 2);
   assert.equal(report.initialMeshes, sharedMesh ? 1 : 2);
@@ -154,8 +179,9 @@ export async function checkBrowserMultiObject3mf(page, cubeBytes, outputDir='par
   const sha256=createHash('sha256').update(archive).digest('hex');
   await writeFile(outputDir+`/${prefix}-3mf-summary.json`,JSON.stringify({
     fixture:sharedMesh ? 'two instances of ONE synthetic 12-triangle cube mesh, 60 mm apart in X'
-                       : 'two separate synthetic 12-triangle cube meshes, translated 60 mm in X',
+                       : 'two DISTINCT synthetic 12-triangle meshes (20 mm and 10 mm height), 60 mm apart in X',
     sharedInputMesh:sharedMesh,
+    distinctInputGeometry:!sharedMesh,
     engine:'OrcaSlicer v2.5.0 isolated Chrome WASM candidate',
     source:'WASM-generated project, NOT desktop-authored 3MF',
     archiveBytes:archive.length, sha256,
@@ -167,11 +193,13 @@ export async function checkBrowserMultiObject3mf(page, cubeBytes, outputDir='par
     verifiedPerObjectPlacedBoundsMm:report.placedBoundsMm,
     absolutePlacementVerified:report.absolutePlacementVerified,
     nativeHierarchyRetained:hierarchyRetained,
-    multiObjectRoundTripSupported:hierarchyRetained && report.stlTriangles === 24,
+    multiObjectRoundTripSupported:hierarchyRetained && report.absolutePlacementVerified &&
+      report.stlTriangles === 24,
     limitations:'No desktop-authored 3MF, edit-and-resave transform, face-ID mesh preview, metadata parity or printer safety validated'
   },null,2)+'\n');
   return {bytes:archive.length,sha256,placementVerified:report.absolutePlacementVerified,
     initialMeshes:report.initialMeshes,instances:report.importedInstances,
     reimportedMeshes:report.importedMeshes,triangles:report.stlTriangles,
-    supported:hierarchyRetained && report.stlTriangles === 24};
+    supported:hierarchyRetained && report.absolutePlacementVerified &&
+      report.stlTriangles === 24};
 }
