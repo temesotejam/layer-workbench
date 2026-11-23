@@ -493,7 +493,7 @@ const implicitLinear=parseGcodeToolpaths([
   "G90","M82","G1 X10 Y0 Z0.2 E1 F1200",
   "X20 E2","N15X30E3","F900","Y10 E4",
   "G0 X40","X45","G92 E0","G1 X50 E1"
-].join("\\n"));
+].join("\n"));
 assert.equal(implicitLinear.extrusions,5);
 assert.equal(implicitLinear.travels,2);
 assert.deepEqual(
@@ -510,7 +510,7 @@ const implicitGuard=parseGcodeToolpaths([
   "X100 E100","G1 X10 E1","G5 X100","X200 E2",
   "G1 X20 E2","G28","X300 E3","G92 X0 Y0 Z0.2 E0",
   "G1 X5 E1","X10E2","G1 Xbad E3","X500 E4","G1 X15 E3"
-].join("\\n"));
+].join("\n"));
 assert.deepEqual(implicitGuard.layers[0].segments.map(s=>[s.x1,s.x2]),
   [[0,10],[10,20],[0,5],[5,10],[10,15]]);
 assert.equal(implicitGuard.skippedMalformedMotion,1);
