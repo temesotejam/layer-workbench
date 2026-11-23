@@ -48,6 +48,8 @@ on:
       # not merely after merging to main.
       - "scripts/test-browser-3mf-roundtrip.mjs"
       - "scripts/test-browser-3mf-multiobject.mjs"
+      - "scripts/classify_3mf_hierarchy_gap.py"
+      - "scripts/test_classify_3mf_hierarchy_gap.py"
       - "scripts/test_make_3mf_two_build_fixture.py"
       - "scripts/export_core_fixture_facets.py"
       - "scripts/test_export_core_fixture_facets.py"
@@ -155,6 +157,8 @@ on:
       - "scripts/test-surface-skin-diagnostic.mjs"
       - "scripts/test-browser-3mf-roundtrip.mjs"
       - "scripts/test-browser-3mf-multiobject.mjs"
+      - "scripts/classify_3mf_hierarchy_gap.py"
+      - "scripts/test_classify_3mf_hierarchy_gap.py"
       - "scripts/three-mf-viewport-items.mjs"
       - "scripts/test-3mf-viewport-items.mjs"
       - "scripts/make_3mf_two_build_fixture.py"
@@ -239,6 +243,7 @@ jobs:
           node --check scripts/test-engine-probe.mjs
           node --check scripts/test-browser-3mf-roundtrip.mjs
           node --check scripts/test-browser-3mf-multiobject.mjs
+          python3 -m unittest discover -s scripts -p test_classify_3mf_hierarchy_gap.py -v
           python3 -m unittest discover -s scripts -p test_check_3mf_stl_bounds.py -v
           python3 scripts/test_make_3mf_two_build_fixture.py -v
           python3 scripts/test_export_core_fixture_facets.py -v
@@ -332,6 +337,12 @@ jobs:
             --input parity-output/wasm-multiobject-3mf.3mf \
             --stl parity-output/wasm-multiobject-converted.stl \
             --report parity-output/browser-multiobject-3mf-stl-comparison.json
+          # Separate loss on export (Core XML) from loss on reimport (API manifest).
+          # A diagnostic outcome does not turn an existing parity gap into PASS.
+          python3 scripts/classify_3mf_hierarchy_gap.py \
+            --summary parity-output/wasm-multiobject-3mf-summary.json \
+            --scene parity-output/browser-multiobject-3mf-scene.json \
+            --report parity-output/browser-multiobject-hierarchy-stage.json
           # Shared-input mesh with two placed native instances. Record BOTH
           # effective geometry and exported Core 3MF hierarchy; matching
           # triangle counts alone cannot prove preservation of instancing.
@@ -343,6 +354,10 @@ jobs:
             --input parity-output/wasm-sharedmesh-3mf.3mf \
             --stl parity-output/wasm-sharedmesh-converted.stl \
             --report parity-output/browser-sharedmesh-3mf-stl-comparison.json
+          python3 scripts/classify_3mf_hierarchy_gap.py \
+            --summary parity-output/wasm-sharedmesh-3mf-summary.json \
+            --scene parity-output/browser-sharedmesh-3mf-scene.json \
+            --report parity-output/browser-sharedmesh-hierarchy-stage.json
       - name: Archive actual WASM G-code diagnostic output
         if: always()
         uses: actions/upload-artifact@v4
