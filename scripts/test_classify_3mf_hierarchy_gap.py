@@ -52,6 +52,52 @@ class HierarchyGapTests(unittest.TestCase):
         self.assertEqual(classify_hierarchy_gap(s, a)['firstObservedGap'],
                          'inconclusive-geometry-mismatch')
 
+    def test_component_wrapper_is_not_an_extra_native_object(self):
+        s, a = evidence(shared=True)
+        a.update(totalObjects=2, scenes=[{
+            'buildItems': [{'objectId': '2'}, {'objectId': '2'}],
+            'resolvedMeshInstances': [
+                {'buildItemIndex': i, 'objectId': '1', 'objectPath': ['2', '1']}
+                for i in range(2)
+            ],
+        }])
+        report = classify_hierarchy_gap(s, a)
+        self.assertEqual(report['firstObservedGap'], 'counts-retained-placement-unverified')
+        self.assertEqual(report['exportedCore']['Objects'], 2)
+        self.assertEqual(report['exportedCore']['DistinctBuildRoots'], 1)
+        self.assertEqual(report['exportedCore']['DistinctResolvedMeshResources'], 1)
+        self.assertFalse(report['isNativeParity'])
+        s.update(reimportedObjects=2, reimportedMeshes=2)
+        self.assertEqual(classify_hierarchy_gap(s, a)['firstObservedGap'],
+                         'inconclusive-manifest-expansion')
+
+    def test_distinct_roots_with_distinct_meshes_do_not_count_wrappers(self):
+        s, a = evidence()
+        a.update(totalObjects=4, scenes=[{
+            'buildItems': [{'objectId': '3'}, {'objectId': '4'}],
+            'resolvedMeshInstances': [
+                {'buildItemIndex': 0, 'objectId': '1', 'objectPath': ['3', '1']},
+                {'buildItemIndex': 1, 'objectId': '2', 'objectPath': ['4', '2']},
+            ],
+        }])
+        self.assertEqual(classify_hierarchy_gap(s, a)['firstObservedGap'],
+                         'counts-retained-placement-unverified')
+        a['scenes'][0]['resolvedMeshInstances'][1].update(objectId='1', objectPath=['4', '1'])
+        self.assertEqual(classify_hierarchy_gap(s, a)['firstObservedGap'],
+                         'exported-core-hierarchy-lost')
+
+    def test_reject_inconsistent_detailed_scene(self):
+        s, a = evidence(shared=True)
+        a['scenes'] = [{'buildItems': [{'objectId': '2'}, {'objectId': '2'}],
+                        'resolvedMeshInstances': []}]
+        with self.assertRaises(ValueError):
+            classify_hierarchy_gap(s, a)
+        a['scenes'][0]['resolvedMeshInstances'] = [
+            {'buildItemIndex': i, 'objectId': '1', 'objectPath': ['wrong', '1']}
+            for i in range(2)]
+        with self.assertRaises(ValueError):
+            classify_hierarchy_gap(s, a)
+
     def test_refuse_empty_and_malformed_counts(self):
         for bad in (0, -1, True, 1.5, None, '2'):
             s, a = evidence()
