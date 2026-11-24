@@ -61,5 +61,48 @@ class LexicalAttributionTests(unittest.TestCase):
                 self.assertEqual(compare_lexical(a, b)["status"], "command-limit")
 
 
+
+    def test_feed_projection_distinguishes_added_and_inline_feed(self):
+        a = ["G1 F6E+2", "G1 X1 E2 F900", "G1 Z3"]
+        b = ["G1 F600", "G1 F800", "G1 X1 E2", "G1 Z3 F100"]
+        report = summarize(a, b)
+        g = report["g1_feed_projection"]
+        self.assertTrue(g["projection_complete"])
+        self.assertTrue(g["ordered_g1_without_f_equal"])
+        self.assertEqual(g["native"]["feed_only"], 1)
+        self.assertEqual(g["wasm"]["feed_only"], 2)
+        self.assertEqual(g["native"]["coordinate_with_feed"], 1)
+        self.assertFalse(report["motion_subsequence_equal"])
+        self.assertFalse(g["semantic_equivalence_verified"])
+
+    def test_feed_projection_exposes_xyz_and_e_differences(self):
+        g = summarize(["G1 X1 Y2 E3", "G1 X4 E5"],
+                      ["G1 X2 Y2 E3 F900", "G1 X4 E6"])["g1_feed_projection"]
+        self.assertFalse(g["ordered_g1_without_f_equal"])
+        for axis in ("X", "E"):
+            self.assertEqual(g["coordinate_word_diagnostics"][axis]["positional_word_mismatches"], 1)
+        self.assertTrue(g["coordinate_word_diagnostics"]["Y"]["ordered_words_equal"])
+
+    def test_feed_projection_does_not_equate_reassociated_words(self):
+        g = summarize(["G1 X1 Y2", "G1 X3"], ["G1 X1", "G1 X3 Y2"])["g1_feed_projection"]
+        self.assertFalse(g["ordered_g1_without_f_equal"])
+        self.assertTrue(g["coordinate_word_diagnostics"]["Y"]["ordered_words_equal"])
+
+    def test_feed_projection_rejects_opaque_and_duplicate_words(self):
+        for line in ("N10 G1 X1 F2", "G1 X1 X2 F3", "G1 X1 Q2", "G1 secret/path"):
+            with self.subTest(line=line):
+                g = summarize([line], [line])["g1_feed_projection"]
+                self.assertEqual(g["native"]["opaque"], 1)
+                self.assertFalse(g["projection_complete"])
+                self.assertIsNone(g["ordered_g1_without_f_equal"])
+                self.assertIsNone(g["coordinate_word_diagnostics"])
+                self.assertNotIn("secret", str(g))
+
+    def test_feed_projection_unequal_coordinate_count(self):
+        g = summarize(["G1 X1"], ["G1 X1", "G1 X2"])["g1_feed_projection"]
+        self.assertFalse(g["ordered_g1_without_f_equal"])
+        self.assertIsNone(g["coordinate_word_diagnostics"]["X"]["positional_word_mismatches"])
+
+
 if __name__ == "__main__":
     unittest.main()
