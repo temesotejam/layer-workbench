@@ -16,6 +16,50 @@ def _count(data, name):
     return value
 
 
+def _single_mesh_build_counts(scene, model_parts, build_items, mesh_instances):
+    """Use build roots, not component wrapper resources, for simple scenes.
+
+    Only one same-part mesh occurrence per build item is comparable to the
+    one-mesh-per-object manifest fixtures. Other layouts stay inconclusive.
+    """
+    if model_parts != 1 or 'scenes' not in scene:
+        return None
+    scenes = scene['scenes']
+    if not isinstance(scenes, list) or len(scenes) != 1 or not isinstance(scenes[0], dict):
+        raise ValueError("Invalid Core scene detail")
+    items = scenes[0].get('buildItems')
+    resolved = scenes[0].get('resolvedMeshInstances')
+    if not isinstance(items, list) or not isinstance(resolved, list) or \
+            len(items) != build_items or len(resolved) != mesh_instances:
+        raise ValueError("Core scene detail disagrees with aggregate counts")
+    if build_items != mesh_instances:
+        return None
+    roots = []
+    for item in items:
+        root = item.get('objectId') if isinstance(item, dict) else None
+        if not isinstance(root, str) or not root:
+            raise ValueError("Invalid Core build root")
+        roots.append(root)
+    leaves = set()
+    seen = set()
+    for instance in resolved:
+        if not isinstance(instance, dict):
+            raise ValueError("Invalid resolved Core instance")
+        index = instance.get('buildItemIndex')
+        leaf = instance.get('objectId')
+        path = instance.get('objectPath')
+        if type(index) is not int or not 0 <= index < build_items or \
+                not isinstance(leaf, str) or not leaf or \
+                not isinstance(path, list) or not path or \
+                path[0] != roots[index] or path[-1] != leaf:
+            raise ValueError("Invalid resolved Core instance identity")
+        if index in seen:
+            return None  # Multiple mesh occurrences in one build are not comparable.
+        seen.add(index)
+        leaves.add(leaf)
+    return len(set(roots)), len(leaves)
+
+
 def classify_hierarchy_gap(summary, scene):
     """Locate loss at native export or subsequent native reimport.
 
@@ -41,12 +85,20 @@ def classify_hierarchy_gap(summary, scene):
             not all(imported.values()) or not all(archive.values()) or \
             not triangles or not stl_triangles:
         raise ValueError("Empty evidence is not a valid hierarchy diagnostic")
+    simple_counts = _single_mesh_build_counts(
+        scene, model_parts, build_items, archive['Instances'])
+    # A component wrapper and its mesh leaf are two XML resources but may
+    # represent just one native object. Keep raw inventory in the report.
+    comparable_objects = simple_counts[0] if simple_counts else archive['Objects']
+    comparable_meshes = simple_counts[1] if simple_counts else None
     if triangles != stl_triangles:
         stage = 'inconclusive-geometry-mismatch'
-    elif archive['Objects'] < initial['Objects'] or \
+    elif comparable_objects < initial['Objects'] or \
+            (comparable_meshes is not None and comparable_meshes < initial['Meshes']) or \
             archive['Instances'] < initial['Instances']:
         stage = 'exported-core-hierarchy-lost'
-    elif archive['Objects'] > initial['Objects'] or \
+    elif comparable_objects > initial['Objects'] or \
+            (comparable_meshes is not None and comparable_meshes > initial['Meshes']) or \
             archive['Instances'] > initial['Instances']:
         stage = 'inconclusive-core-expansion'
     elif any(imported[name] < initial[name] for name in initial):
@@ -63,6 +115,8 @@ def classify_hierarchy_gap(summary, scene):
         'exportedCore': {'Objects': archive['Objects'],
                          'ResolvedMeshInstances': archive['Instances'],
                          'BuildItems': build_items,
+                         'DistinctBuildRoots': simple_counts[0] if simple_counts else None,
+                         'DistinctResolvedMeshResources': comparable_meshes,
                          'ResolvedTriangleInstances': triangles},
         'nativeReimport': imported,
         'convertedStlTriangles': stl_triangles,
