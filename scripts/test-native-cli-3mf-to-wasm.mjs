@@ -4,7 +4,7 @@
 // C ABI manifest mutation, not persistent Slic3r::Model or metadata preservation.
 // No G-code generation, printing, or production engine activation.
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
+import {readFile,writeFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {chromium} from 'playwright';
 import {auditNative3mfWorldFacetGroups,auditNative3mfWorldFacetWinding}
@@ -134,7 +134,8 @@ try {
         meshes:manifest?.meshes?.length,
         instances:manifest?.instances?.length,
         plates:manifest?.plates?.length
-      },untouchedByteIdentical,strictRejected,manifestOnlyTargetChanged};
+      },untouchedByteIdentical,strictRejected,manifestOnlyTargetChanged,
+        privateEditedArchive:privateEdit?Array.from(geometrySource):null};
     } finally { await session.dispose(); }
   },{encoded:Array.from(source),privateEdit,delta});
   const stl=new Uint8Array(result.stl);
@@ -157,6 +158,13 @@ try {
   if(privateEdit){
     assert.equal(result.strictRejected,true);
     assert.equal(result.manifestOnlyTargetChanged,true);
+    // CI-generated synthetic project only; pass the exact audited bytes to
+    // the official desktop CLI in this disposable runner. Never publish it.
+    const editedArchive=Buffer.from(result.privateEditedArchive);
+    assert.ok(editedArchive.length>300 && editedArchive.length<=4_000_000);
+    assert.equal(editedArchive.readUInt32LE(0),0x04034b50);
+    await writeFile('native-cli-output/wasm-private-edited.3mf',editedArchive,{flag:'wx'});
+    console.log('WASM_PRIVATE_EDITED_SHA256 '+createHash('sha256').update(editedArchive).digest('hex'));
     console.log('PASS: private in-session manifest translation of official CLI project -> best-effort 3MF reimport and oriented geometry; strict preservation rejected; not persistent native Model mutation or metadata parity');
   }else{
     console.log('PASS: '+(translated?'offline-translated native CLI project':'untouched native CLI project')+
