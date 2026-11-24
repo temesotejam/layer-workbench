@@ -11,6 +11,9 @@ on:
       - "scripts/test-audit-native-3mf-world-facets.mjs"
       - "scripts/verify_native_exported_stl.py"
       - "scripts/compare_native_3mf_world_facets.py"
+      - "scripts/compare_3mf_metadata.py"
+      - "scripts/audit_native_3mf_metadata_loss.py"
+      - "scripts/test_audit_native_3mf_metadata_loss.py"
       - "scripts/test-native-cli-3mf-to-wasm.mjs"
       - ".github/workflows/verify-native-cli-3mf-to-wasm.yml"
   push:
@@ -24,6 +27,9 @@ on:
       - "scripts/test-audit-native-3mf-world-facets.mjs"
       - "scripts/verify_native_exported_stl.py"
       - "scripts/compare_native_3mf_world_facets.py"
+      - "scripts/compare_3mf_metadata.py"
+      - "scripts/audit_native_3mf_metadata_loss.py"
+      - "scripts/test_audit_native_3mf_metadata_loss.py"
       - "scripts/test-native-cli-3mf-to-wasm.mjs"
       - ".github/workflows/verify-native-cli-3mf-to-wasm.yml"
 permissions:
@@ -46,6 +52,7 @@ jobs:
           python3 -m unittest discover -s scripts -p test_edit_native_3mf_build_transform.py -v
           python3 -m unittest discover -s scripts -p test_verify_native_3mf_edit_effect.py -v
           python3 -m unittest discover -s scripts -p test_compare_native_3mf_world_facets.py -v
+          python3 -m unittest discover -s scripts -p test_audit_native_3mf_metadata_loss.py -v
           npm install --no-save --no-package-lock playwright@1.56.1
       - name: Download the official v2.5.0 Linux AppImage only inside CI
         shell: bash
@@ -163,6 +170,23 @@ jobs:
           node scripts/test-native-cli-3mf-to-wasm.mjs
           node scripts/test-native-cli-3mf-to-wasm.mjs --translated
           node scripts/test-native-cli-3mf-to-wasm.mjs --private-edit
+
+      - name: Quantify native config and package loss without printing settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Positive control: the independent offline translation preserved
+          # metadata member bytes. Do not lower this gate for WASM.
+          python3 scripts/audit_native_3mf_metadata_loss.py \
+            --baseline native-cli-output/native-v250-project.3mf \
+            --candidate native-cli-output/native-v250-project-translated.3mf \
+            --require-identical-config
+          # Best effort intentionally allows metadata loss. Report counts
+          # even when the candidate has no native config members. Geometry
+          # acceptance and strict preservation rejection remain separate.
+          python3 scripts/audit_native_3mf_metadata_loss.py \
+            --baseline native-cli-output/native-v250-project.3mf \
+            --candidate native-cli-output/wasm-private-edited.3mf
 
       - name: Reopen WASM-edited 3MF in official native v2.5.0 CLI
         shell: bash
