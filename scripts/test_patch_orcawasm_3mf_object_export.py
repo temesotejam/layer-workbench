@@ -9,7 +9,13 @@ module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
 FUNCTION_ANCHORS = (
-    "static oneslicer_status_t build_project_plate_model(\n"
+    module.CONSTRUCTOR_OLD + "\n"
+    "    std::map<std::string, std::vector<Slic3r::ModelObject*>> native_objects_by_id;\n"
+    + module.STAGE_MESH + "\n"
+    + module.INSTANCE_TRANSFORM
+    + "    native_objects_by_id[object_input->id].push_back(object);\n"
+    "}\n"
+    "static oneslicer_status_t slice_project_model(\n"
     "static oneslicer_status_t write_project_model_3mf(\n"
 )
 
@@ -26,6 +32,21 @@ class PatchTests(unittest.TestCase):
         self.assertNotIn("write_single_mesh_3mf(", updated)
         self.assertNotIn("build_project_export_mesh(*session", updated)
         self.assertEqual(updated.count("for (const auto& plate_id : manifest.plate_ids)"), 1)
+
+    def test_reuse_is_opt_in_only_and_before_stl_staging(self):
+        updated = module.apply_patch(self.original)
+        self.assertIn("bool reuse_manifest_objects = false", updated)
+        self.assertIn("native_model, error, true", updated)
+        self.assertIn("native_objects_by_id.find(object_input->id)", updated)
+        self.assertLess(updated.index(module.INSTANCE_TRANSFORM), updated.index(module.REUSE_OBJECT))
+        self.assertLess(updated.index(module.REUSE_OBJECT), updated.index(module.STAGE_MESH))
+        self.assertEqual(updated.count(module.INSTANCE_TRANSFORM), 1)
+
+    def test_rejects_constructor_drift(self):
+        for anchor in (module.CONSTRUCTOR_OLD, module.STAGE_MESH, module.INSTANCE_TRANSFORM):
+            with self.subTest(anchor=anchor[:40]):
+                with self.assertRaises(ValueError):
+                    module.apply_patch(self.original.replace(anchor, anchor + anchor))
 
     def test_rejects_unrecognized_or_duplicate_original(self):
         with self.assertRaisesRegex(ValueError, "missing, duplicated"):

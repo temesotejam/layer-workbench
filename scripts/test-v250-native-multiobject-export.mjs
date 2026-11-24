@@ -2,6 +2,7 @@
 // objects and two build placements. This does NOT certify desktop 3MF parity
 // or printer-safe G-code. Runs after rebuilding the experimental WASM bridge.
 import assert from 'node:assert/strict';
+import {mkdir,writeFile} from 'node:fs/promises';
 import { loadEngineArtifact, trianglesToStl } from '../orcawasm/scripts/lib/engine-harness.mjs';
 
 const vertices = [
@@ -73,6 +74,49 @@ try {
   centroids.sort((a,b)=>a-b);
   assert.ok(centroids[12]-centroids[11]>30,'both placed geometry clusters must remain separate');
   console.log('PASS: rebuilt candidate preserves two native 3MF objects, two instances, 24 STL triangles');
+  // Exercise the same object ID twice (not two equal meshes with different IDs).
+  await reopened.dispose(); reopened = undefined;
+  await first.dispose(); first = undefined;
+  first = await engine.createSession();
+  await first.init(new TextEncoder().encode(JSON.stringify(config)));
+  const sharedManifest = {
+    ...manifest, meshes:[manifest.meshes[0]], objects:[manifest.objects[0]],
+    instances:manifest.instances.map(i=>({...i,objectId:'object-0'})),
+  };
+  await first.setObjects(cube,sharedManifest);
+  const shared = await first.getManifest();
+  assert.equal(shared.objects?.length,1);
+  assert.equal(shared.meshes?.length,1);
+  assert.equal(shared.instances?.length,2);
+  const sharedDescriptor = await first.export('project.3mf', {
+    schemaVersion:'0.7.0',preservation:'best-effort',includeSliceArtifacts:false,
+  });
+  const sharedArchive = await first.getAsset(sharedDescriptor.asset.id);
+  const sharedStl = await engine.threeMfToStl(sharedArchive);
+  assert.equal(sharedStl.byteLength,84+50*24);
+  const sharedView = new DataView(sharedStl.buffer,sharedStl.byteOffset,sharedStl.byteLength);
+  assert.equal(sharedView.getUint32(80,true),24);
+  const bounds = [0,1].map(()=>({min:[Infinity,Infinity,Infinity],max:[-Infinity,-Infinity,-Infinity],count:0}));
+  for(let i=0;i<24;i++){
+    const points=[0,1,2].map(v=>[0,1,2].map(a=>sharedView.getFloat32(84+i*50+12+v*12+a*4,true)));
+    assert.ok(points.flat().every(Number.isFinite));
+    const region=bounds[points.reduce((s,p)=>s+p[0],0)/3<130?0:1];
+    region.count++;
+    for(const p of points)for(let a=0;a<3;a++){
+      region.min[a]=Math.min(region.min[a],p[a]);region.max[a]=Math.max(region.max[a],p[a]);
+    }
+  }
+  for(let i=0;i<2;i++){
+    assert.equal(bounds[i].count,12);
+    const expectedMin=[90+60*i,90,0],expectedMax=[110+60*i,110,20];
+    for(let a=0;a<3;a++){
+      assert.ok(Math.abs(bounds[i].min[a]-expectedMin[a])<0.05,'shared mesh minimum');
+      assert.ok(Math.abs(bounds[i].max[a]-expectedMax[a])<0.05,'shared mesh maximum');
+    }
+  }
+  await mkdir('parity-output',{recursive:true});
+  await writeFile('parity-output/rebuilt-shared-object.3mf',sharedArchive);
+  console.log('PASS: shared-object export retained two world geometry placements; Core identity audit follows');
 } finally {
   if(reopened)await reopened.dispose();
   if(first)await first.dispose();

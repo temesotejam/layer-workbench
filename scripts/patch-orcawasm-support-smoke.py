@@ -23,7 +23,9 @@ OLD = """function runSupportModifierSmoke(module, session, configureSession = ()
 NEW = """function runSupportModifierSmoke(module, session, configureSession = () => {
   initSession(module, session, JSON.stringify({
     ...BASE_CONFIG,
-    support_enable: 1,
+    // OrcaSlicer v2.5.0 PrintConfig.cpp defines enable_support, not support_enable.
+    // The compatibility initializer silently skips unknown keys.
+    enable_support: 1,
     support_type: 'normal(auto)',
     // Low overhang threshold deliberately exercises the support-blocker gate.
     // A 45-degree sphere slice previously generated identical G-code with/without blocker.
@@ -69,6 +71,7 @@ LOOP_NEW = """  for (const modifier of cases) {
       // Manual baseline exercises the enforcer; automatic baseline exercises
       // the blocker. Both must actually change sliced G-code (not just metadata).
       applyProfileOnce(module, session, {
+        enable_support: 1,
         support_type: modifier.role === 'support-enforcer' ? 'normal(manual)' : 'normal(auto)',
       }, 'orca.native-json')
       projectSetObjectsOnce(module, session, baseline.blob, baseline.manifest)
