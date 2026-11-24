@@ -76,6 +76,15 @@ try {
       sharedMesh:true,affineShared:true,requireExactPlacement:false
     });
     console.log('DIAGNOSTIC: accepted shared-mesh affine export '+JSON.stringify(affine));
+    // Non-right-angle rotation exposes errors hidden by orthogonal cube bounds.
+    const oblique = await checkBrowserMultiObject3mf(page,cube,'parity-output',{
+      sharedMesh:true,obliqueShared:true,requireExactPlacement:false
+    });
+    console.log('DIAGNOSTIC: accepted shared-mesh oblique export '+JSON.stringify(oblique));
+    assert.equal(oblique.supported,true,'Oblique shared export lost hierarchy or placement');
+    assert.deepEqual(oblique.sourceFacetAudit,{
+      partition:'separable',comparedBuilds:2,comparedTriangles:24
+    },'Oblique shared export differs from original transformed STL facets');
   }
   const edited = await checkNativeManifestEditRoundTrip(page,cube);
   assert.equal(edited.triangles,24);
