@@ -3,7 +3,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from gcode_lexical_attribution import compare_lexical, summarize
+from gcode_lexical_attribution import (compare_lexical, summarize,
+                                       unique_insertion_index, numeric_word_delta_buckets)
 
 
 class LexicalAttributionTests(unittest.TestCase):
@@ -140,6 +141,40 @@ class LexicalAttributionTests(unittest.TestCase):
         self.assertNotIn("ordinal_comparison", g)
         self.assertNotIn("secret", str(g))
 
+
+    def test_unique_insertion_refuses_ambiguous_and_changed_windows(self):
+        self.assertEqual(unique_insertion_index(["a", "b"], ["a", "c", "b"]), 1)
+        self.assertEqual(unique_insertion_index([], ["a"]), 0)
+        self.assertIsNone(unique_insertion_index(["a"], ["a", "a"]))
+        self.assertIsNone(unique_insertion_index(["a"], ["b", "c"]))
+        self.assertIsNone(unique_insertion_index(["a"], ["a"]))
+
+    def test_anchor_word_magnitude_buckets(self):
+        a = ["G1 X0 E1", "G1 X1 E1", "G1 X2 E1", "G1 X3 E1", "G1 X4 E1"]
+        b = ["G1 X0 E1", "G1 X1.001 E1", "G1 X1.99 E1", "G1 X3.1 E1", "G1 X4.2 E1"]
+        g = summarize(a, b)["g1_e_anchor_diagnostics"]["ordinal_comparison"]
+        self.assertEqual(g["e_word_axis_counts"]["X"]["absolute_word_delta_buckets"],
+                         {"equal": 1, "le_0_001": 1, "le_0_01": 1,
+                          "le_0_1": 1, "gt_0_1": 1})
+        self.assertIsNone(numeric_word_delta_buckets([("1E+99", "2")]))
+        self.assertIsNone(numeric_word_delta_buckets([("1E-99", "2")]))
+
+    def test_source_comment_attribution_is_bounded_and_exact(self):
+        with tempfile.TemporaryDirectory() as directory:
+            a, b = Path(directory) / "a", Path(directory) / "b"
+            a.write_text("G1 E1\nG1 X1 Y2 Z3\nG1 E2\nG1 X2 Y3 Z4\nG1 E3\n")
+            b.write_text("G1 E1\nG1 X1 Y2 Z3\nG1 X1 Y2 Z4 ; restore layer Z\n"
+                         "G1 E2\nG1 X9 Y9 Z9 ; secret/path\nG1 X8 Y8 Z8\nG1 E3\n")
+            report = compare_lexical(a, b)
+            g = report["g1_e_anchor_diagnostics"]["single_extra_window_attribution"]
+            self.assertEqual(g["windows"], 2)
+            self.assertEqual(g["exact_unique_insertion_windows"], 1)
+            self.assertEqual(g["unresolved_windows"], 1)
+            self.assertEqual(g["uniquely_inserted_comment_labels"], {"restore-layer": 1})
+            self.assertEqual(g["all_wasm_xyz_only_labels_in_these_windows"],
+                             {"absent": 2, "other": 1, "restore-layer": 1})
+            self.assertNotIn("secret", str(report))
+            self.assertFalse(report["semantic_equivalence_verified"])
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Bounded lexical command attribution; does not change the strict parity gate."""
 from collections import Counter
+from decimal import Decimal, DecimalException
 import re
 
 from compare_gcode import canonical
@@ -97,18 +98,80 @@ def summarize_g1_feed_projection(native, wasm):
 
 
 
-def summarize_g1_e_anchors(native, wasm):
+# Fixed labels from the pinned upstream GCodeWriter.cpp. Never log raw
+# comments, and never treat a missing comment as proof of absent Z-hop.
+LIFT_COMMENTS = {
+    "lift Z": "lift",
+    "normal lift Z": "normal-lift",
+    "spiral lift Z": "spiral-lift",
+    "restore layer Z": "restore-layer",
+}
+
+def bounded_comment_labels(path, commands):
+    raw = path.read_text(encoding="utf-8-sig", errors="strict").splitlines()
+    result = []
+    for line_no, _ in commands:
+        _, sep, comment = raw[line_no - 1].partition(";")
+        label = comment.strip()
+        result.append(LIFT_COMMENTS.get(label, "other") if sep and label else "absent")
+    return result
+
+
+def numeric_word_delta_buckets(pairs):
+    """Magnitude of lexical word differences, not modal or physical displacement."""
+    counts = dict.fromkeys(("equal", "le_0_001", "le_0_01", "le_0_1",
+                            "gt_0_1"), 0)
+    try:
+        for x, y in pairs:
+            if x is None or y is None:
+                continue
+            if len(x) > 64 or len(y) > 64:
+                return None
+            a, b = Decimal(x), Decimal(y)
+            if any(not d.is_finite() or abs(d.adjusted()) > 12
+                   or abs(d.as_tuple().exponent) > 24 for d in (a, b)):
+                return None
+            delta = abs(b - a)
+            key = ("equal" if not delta else "le_0_001" if delta <= Decimal("0.001")
+                   else "le_0_01" if delta <= Decimal("0.01")
+                   else "le_0_1" if delta <= Decimal("0.1") else "gt_0_1")
+            counts[key] += 1
+    except DecimalException:
+        return None
+    return counts
+
+
+def unique_insertion_index(a, b):
+    """Return the sole exact deletion that restores a, or None if ambiguous.
+
+    Prefix/suffix overlap computes all admissible deletion positions in O(n).
+    This does not align windows whose other commands also differ.
+    """
+    if len(b) != len(a) + 1:
+        return None
+    prefix = 0
+    while prefix < len(a) and a[prefix] == b[prefix]:
+        prefix += 1
+    suffix = 0
+    while suffix < len(a) and a[-1 - suffix] == b[-1 - suffix]:
+        suffix += 1
+    first = len(a) - suffix
+    return prefix if first == prefix else None
+
+
+def summarize_g1_e_anchors(native, wasm, native_labels=None, wasm_labels=None):
     """Count explicit word masks and compare G1 windows by E-word ordinal.
 
     E is a lexical anchor, not necessarily extrusion: it can be a retract,
     reset-relative value, or prime. No modal positions or firmware state
     are inferred. Even matching windows do not establish path equivalence.
     """
-    def collect(lines):
+    def collect(lines, labels):
         masks = Counter()
         anchors = []
         windows = [[]]
-        for command in lines:
+        comments = [[]]
+        for index, command in enumerate(lines):
             if category(command) != "G1":
                 continue
             words = command.split()
@@ -122,18 +185,20 @@ def summarize_g1_e_anchors(native, wasm):
             if "E" in values:
                 anchors.append((mask, values))
                 windows.append([])
+                comments.append([])
             elif any(axis in values for axis in "XYZ"):
                 # Include F and all explicit coordinates in this comparison.
                 windows[-1].append(command)
-        return masks, anchors, windows
+                comments[-1].append(labels[index] if labels is not None else "unavailable")
+        return masks, anchors, windows, comments
 
-    a, b = collect(native), collect(wasm)
+    a, b = collect(native, native_labels), collect(wasm, wasm_labels)
     result = {"projection_complete": a is not None and b is not None,
               "semantic_equivalence_verified": False}
     if a is None or b is None:
         return result
-    na, ea, wa = a
-    nb, eb, wb = b
+    na, ea, wa, ca = a
+    nb, eb, wb, cb = b
     result["word_mask_deltas"] = [
         {"mask": k, "native": na[k], "wasm": nb[k]}
         for k in sorted(na.keys() | nb.keys()) if na[k] != nb[k]]
@@ -152,7 +217,37 @@ def summarize_g1_e_anchors(native, wasm):
             "presence_mismatches": sum((x is None) != (y is None) for x, y in pairs),
             "value_mismatches_when_present_in_both": sum(
                 x is not None and y is not None and x != y for x, y in pairs),
+            "absolute_word_delta_buckets": numeric_word_delta_buckets(pairs),
         }
+    # Attribute only unambiguous exact one-insertion windows. For windows
+    # with other changes, summarize all XYZ-only labels without claiming
+    # which command was inserted.
+    inserted = Counter()
+    longer_native_xyz = Counter()
+    longer_wasm_xyz = Counter()
+    single_extra = exact_unique = 0
+    for x, y, nx, wy in zip(wa, wb, ca, cb):
+        if len(y) != len(x) + 1:
+            continue
+        single_extra += 1
+        for commands, labels, counts in ((x, nx, longer_native_xyz),
+                                          (y, wy, longer_wasm_xyz)):
+            for command, label in zip(commands, labels):
+                words = command.split()[1:]
+                if {word[0] for word in words} == set("XYZ"):
+                    counts[label] += 1
+        index = unique_insertion_index(x, y)
+        if index is not None:
+            exact_unique += 1
+            inserted[wy[index]] += 1
+    result["single_extra_window_attribution"] = {
+        "windows": single_extra,
+        "exact_unique_insertion_windows": exact_unique,
+        "unresolved_windows": single_extra - exact_unique,
+        "uniquely_inserted_comment_labels": dict(sorted(inserted.items())),
+        "all_native_xyz_only_labels_in_these_windows": dict(sorted(longer_native_xyz.items())),
+        "all_wasm_xyz_only_labels_in_these_windows": dict(sorted(longer_wasm_xyz.items())),
+    }
     result["ordinal_comparison"] = {
         "e_word_mask_mismatches": mismatched_masks,
         "e_word_axis_counts": axis_counts,
@@ -167,7 +262,7 @@ def summarize_g1_e_anchors(native, wasm):
     return result
 
 
-def summarize(native, wasm):
+def summarize(native, wasm, native_labels=None, wasm_labels=None):
     """Compare canonical lines exactly; do not infer firmware semantics.
 
     Multiset overlap is order-independent, and therefore cannot prove
@@ -218,7 +313,8 @@ def summarize(native, wasm):
         "nonmotion_subsequence_equal": nonmotion(native) == nonmotion(wasm),
         "category_deltas": rows,
         "g1_feed_projection": summarize_g1_feed_projection(native, wasm),
-        "g1_e_anchor_diagnostics": summarize_g1_e_anchors(native, wasm),
+        "g1_e_anchor_diagnostics": summarize_g1_e_anchors(
+            native, wasm, native_labels, wasm_labels),
         "semantic_equivalence_verified": False,
     }
 
@@ -226,5 +322,8 @@ def summarize(native, wasm):
 def compare_lexical(native, wasm):
     if any(p.stat().st_size > MAX_BYTES for p in (native, wasm)):
         return {"status": "byte-limit"}
-    return summarize([c for _, c in canonical(native)],
-                     [c for _, c in canonical(wasm)])
+    a, b = canonical(native), canonical(wasm)
+    if max(len(a), len(b)) > MAX_COMMANDS:
+        return {"status": "command-limit"}
+    return summarize([c for _, c in a], [c for _, c in b],
+                     bounded_comment_labels(native, a), bounded_comment_labels(wasm, b))
