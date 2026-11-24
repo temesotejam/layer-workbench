@@ -88,8 +88,8 @@ def audit(baseline, candidate):
 
 
 
-def _model_xml(path, members):
-    """Bounded, order-sensitive parsed XML inventory; not a native config interpreter.
+def _model_xml(path, members, *, by_object_id=True):
+    """Bounded parsed XML inventory; not a native config interpreter.
 
     Upstream bbs_3mf.cpp::_add_model_config_file_to_archive serializes object,
     part, plate and model_instance separately. identify_id can be generated
@@ -111,6 +111,7 @@ def _model_xml(path, members):
     groups = {key: {} for key in ("object", "part", "plate", "instance",
                                    "instance_identity", "other")}
     count = 0
+    object_ids = set()
 
     def walk(node, path_key, group, parent_tag=None):
         nonlocal count
@@ -133,7 +134,21 @@ def _model_xml(path, members):
         tail = node.tail if node.tail and node.tail.strip() else ""
         groups[group][path_key] = (node.tag, tuple(sorted(node.attrib.items())), text, tail)
         for i, child in enumerate(node):
-            walk(child, (*path_key, i), group, node.tag)
+            key = i
+            if node is root and child.tag == "object":
+                # Pinned v2.5.0 bbs_3mf.cpp uses std::map<ModelObject const *,
+                # ObjectData> for export order. Pointer ordering is not object
+                # identity. Match only unique serialized IDs; do not renumber
+                # objects, reorder their children, or ignore any attributes.
+                object_id = child.get("id", "")
+                if (not object_id.isascii() or not object_id.isdecimal() or
+                        len(object_id) > 10 or int(object_id) < 1 or
+                        object_id != str(int(object_id)) or object_id in object_ids):
+                    raise ValueError("Invalid or duplicate native object ID")
+                object_ids.add(object_id)
+                if by_object_id:
+                    key = ("object", object_id)
+            walk(child, (*path_key, key), group, node.tag)
 
     walk(root, (), "other")
     if not all(groups[k] for k in ("object", "part", "plate", "instance")):
@@ -141,9 +156,9 @@ def _model_xml(path, members):
     return groups
 
 
-def model_xml_audit(baseline, candidate):
-    before = _model_xml(baseline, inventory(baseline))
-    after = _model_xml(candidate, inventory(candidate))
+def model_xml_audit(baseline, candidate, *, by_object_id=True):
+    before = _model_xml(baseline, inventory(baseline), by_object_id=by_object_id)
+    after = _model_xml(candidate, inventory(candidate), by_object_id=by_object_id)
     return {group: _counts(before[group], after[group]) for group in before}
 
 
@@ -158,12 +173,16 @@ def main():
     parser.add_argument("--compare-model-xml", action="store_true",
                         help="Report parsed model XML node differences by scope")
     parser.add_argument("--require-identical-object-part-xml", action="store_true",
-                        help="Require exact ordered object and part XML nodes; report all other scopes")
+                        help="Require exact object-ID-matched XML nodes and ordered children; report all scopes")
     args = parser.parse_args()
     try:
         result = audit(args.baseline, args.candidate)
         if args.compare_model_xml or args.require_identical_object_part_xml:
             result["model_xml"] = model_xml_audit(args.baseline, args.candidate)
+            # Keep the former positional comparison visible as a separate
+            # witness. An ID-matched pass is not a byte or order match.
+            result["model_xml_positional"] = model_xml_audit(
+                args.baseline, args.candidate, by_object_id=False)
             if args.require_identical_object_part_xml and any(
                     result["model_xml"][group][key]
                     for group in ("object", "part")

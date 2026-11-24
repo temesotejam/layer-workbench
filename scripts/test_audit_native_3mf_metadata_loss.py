@@ -142,5 +142,50 @@ class MetadataLossTests(unittest.TestCase):
             self.assertEqual(run(bad), 2)
 
 
+    def test_native_pointer_order_is_not_object_identity(self):
+        first = ('<object id="1"><metadata key="name" value="first"/>'
+                 '<part id="2" subtype="normal_part"><metadata key="wall_loops" value="2"/>'
+                 '<metadata key="speed" value="30"/></part></object>')
+        second = ('<object id="3"><metadata key="name" value="second"/>'
+                  '<part id="4" subtype="normal_part"><metadata key="wall_loops" value="4"/>'
+                  '</part></object>')
+        plate = ('<plate><model_instance><metadata key="object_id" value="1"/>'
+                 '</model_instance></plate>')
+        config = '{"speed":"20"}'
+        def xml(a, b):
+            return '<config>' + a + b + plate + '</config>'
+        make(self.a, config, model=xml(first, second))
+        make(self.b, config, model=xml(second, first))
+        by_id = model_xml_audit(self.a, self.b)
+        by_pos = model_xml_audit(self.a, self.b, by_object_id=False)
+        for group in ("object", "part"):
+            self.assertEqual(sum(by_id[group][k] for k in ("changed", "missing", "added")), 0)
+            self.assertGreater(sum(by_pos[group][k] for k in ("changed", "missing", "added")), 0)
+
+        args = ["audit", "--baseline", str(self.a), "--candidate", str(self.b),
+                "--require-identical-object-part-xml"]
+        def run():
+            out, err = StringIO(), StringIO()
+            with patch("sys.argv", args), redirect_stdout(out), redirect_stderr(err):
+                code = main()
+            self.assertNotIn("wall_loops", out.getvalue() + err.getvalue())
+            if code == 0:
+                self.assertIn("model_xml_positional", out.getvalue())
+            return code
+        self.assertEqual(run(), 0)
+        # Real setting, child order and identity changes must still fail.
+        for edited in (
+            first.replace('value="2"', 'value="9"'),
+            first.replace('<metadata key="wall_loops" value="2"/><metadata key="speed" value="30"/>',
+                          '<metadata key="speed" value="30"/><metadata key="wall_loops" value="2"/>'),
+            first.replace('object id="1"', 'object id="5"'),
+            first.replace('object id="1"', 'object id="3"'),
+            first.replace('object id="1"', 'object id="01"'),
+            first.replace(' id="1"', ''),
+        ):
+            make(self.b, config, model=xml(second, edited))
+            self.assertEqual(run(), 2)
+
+
 if __name__ == "__main__":
     unittest.main()
