@@ -14,6 +14,9 @@ on:
       - "scripts/compare_3mf_metadata.py"
       - "scripts/audit_native_3mf_metadata_loss.py"
       - "scripts/test_audit_native_3mf_metadata_loss.py"
+      - "scripts/compare_gcode.py"
+      - "scripts/verify_native_gcode_repeatability.py"
+      - "scripts/test_verify_native_gcode_repeatability.py"
       - "scripts/preserve-native-source-translation.mjs"
       - "scripts/preflight-3mf-zip.mjs"
       - "scripts/test-native-cli-3mf-to-wasm.mjs"
@@ -32,6 +35,9 @@ on:
       - "scripts/compare_3mf_metadata.py"
       - "scripts/audit_native_3mf_metadata_loss.py"
       - "scripts/test_audit_native_3mf_metadata_loss.py"
+      - "scripts/compare_gcode.py"
+      - "scripts/verify_native_gcode_repeatability.py"
+      - "scripts/test_verify_native_gcode_repeatability.py"
       - "scripts/preserve-native-source-translation.mjs"
       - "scripts/preflight-3mf-zip.mjs"
       - "scripts/test-native-cli-3mf-to-wasm.mjs"
@@ -58,6 +64,7 @@ jobs:
           python3 -m unittest discover -s scripts -p test_verify_native_3mf_edit_effect.py -v
           python3 -m unittest discover -s scripts -p test_compare_native_3mf_world_facets.py -v
           python3 -m unittest discover -s scripts -p test_audit_native_3mf_metadata_loss.py -v
+          python3 -m unittest discover -s scripts -p test_verify_native_gcode_repeatability.py -v
           npm install --no-save --no-package-lock playwright@1.56.1 fflate@0.8.2
       - name: Download the official v2.5.0 Linux AppImage only inside CI
         shell: bash
@@ -350,3 +357,65 @@ jobs:
           echo "PASS: native re-exported object and part XML matches independent translated control"
           # This is a bounded ordered XML comparison, not full metadata
           # semantics. Plate/instance/assembly scopes are diagnostic only.
+
+      - name: Compare actual native slices of both re-exported projects
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="${RUNNER_TEMP}/OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.5.0.AppImage"
+          # Use the embedded project settings only. Injecting replacement
+          # profiles would hide a round-trip setting or import discrepancy.
+          # Slice the independent control twice to distinguish reproducibility
+          # failures from browser-specific differences.
+          for variant in control control-repeat browser; do
+            case "${variant}" in
+              control|control-repeat) input=native-v250-project-translated-native-reexport ;;
+              browser) input=browser-source-preserving-edited-native-reexport ;;
+            esac
+            out="${PWD}/native-cli-output/roundtrip-slice-${variant}"
+            mkdir "${out}"
+            timeout 180s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
+              "${PWD}/native-cli-output/${input}.3mf" \
+              --arrange 0 --slice 0 --outputdir "${out}" \
+              > "${out}/native-slice.log" 2>&1 || {
+                echo "Native round-trip slice failed: ${variant}"
+                exit 1
+              }
+            test -s "${out}/plate_1.gcode"
+          done
+          # Reuse the tested strict ordered-command comparator and require
+          # nontrivial XY deposition. Do not log raw commands, settings,
+          # mismatch excerpts, or upload the generated G-code.
+          python3 - <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, 'scripts')
+          from verify_native_gcode_repeatability import audit
+          root = Path('native-cli-output')
+          def output(variant):
+              folder = root / ('roundtrip-slice-' + variant)
+              files = sorted(folder.rglob('*.gcode'))
+              if files != [folder / 'plate_1.gcode']:
+                  raise SystemExit('Expected exactly one native plate G-code')
+              return files[0]
+          failed = False
+          for label, variant in [('native-control-repeat', 'control-repeat'),
+                                 ('native-browser-roundtrip', 'browser')]:
+              r = audit(output('control'), output(variant), minimum_extrusion=100)
+              fields = ('pass', 'ordered_command_sha256_equal', 'raw_sha256_equal',
+                        'first_command_count', 'repeat_command_count',
+                        'first_positive_xy_extrusion_moves',
+                        'repeat_positive_xy_extrusion_moves',
+                        'ordered_command_mismatches', 'minimum_extrusion_moves')
+              summary = {key: r[key] for key in fields}
+              summary.update(comparison=label, input_issue_count=len(r['input_issues']),
+                             native_vs_wasm_compared=False, usable_for_printing=False)
+              print('NATIVE_3MF_ROUNDTRIP_SLICE ' + json.dumps(summary, sort_keys=True))
+              failed |= not r['pass']
+          if failed:
+              raise SystemExit('Native command repeatability or round-trip comparison failed')
+          print('PASS: official native slices match ordered commands for the tested 3MF round-trip')
+          PY
+          # This is native-vs-native after a browser edit, NOT native-vs-WASM
+          # slicing parity. The original project and all G-code stay in CI.
