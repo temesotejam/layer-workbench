@@ -1,0 +1,133 @@
+name: Verify official native CLI 3MF in isolated WASM Chrome
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "scripts/test-native-cli-3mf-to-wasm.mjs"
+      - ".github/workflows/verify-native-cli-3mf-to-wasm.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/test-native-cli-3mf-to-wasm.mjs"
+      - ".github/workflows/verify-native-cli-3mf-to-wasm.yml"
+permissions:
+  contents: read
+  actions: read
+jobs:
+  native-project-browser:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate browser test and matching regressions
+        run: |
+          node --check scripts/test-native-cli-3mf-to-wasm.mjs
+          node scripts/test-audit-native-3mf-world-facets.mjs
+          python3 -m unittest discover -s scripts -p test_compare_native_3mf_world_facets.py -v
+          npm install --no-save --no-package-lock playwright@1.56.1
+      - name: Download the official v2.5.0 Linux AppImage only inside CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p native-cli-output
+          asset="OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.5.0.AppImage"
+          url="https://github.com/OrcaSlicer/OrcaSlicer/releases/download/v2.5.0/${asset}"
+          curl --fail --location --show-error --silent --retry 3 \
+            --retry-all-errors --max-time 360 --max-filesize 800000000 \
+            "${url}" -o "${RUNNER_TEMP}/${asset}"
+          test "$(wc -c < "${RUNNER_TEMP}/${asset}")" -gt 50000000
+          file "${RUNNER_TEMP}/${asset}" | tee native-cli-output/appimage-format.txt
+          grep -q 'ELF' native-cli-output/appimage-format.txt
+          sha256sum "${RUNNER_TEMP}/${asset}" | tee native-cli-output/official-v250-appimage.sha256
+          # Observed on the official release asset in two independent PR CI downloads.
+          actual="$(sha256sum "${RUNNER_TEMP}/${asset}" | cut -d ' ' -f1)"
+          test "${actual}" = "d13eb0a9cd618ed080ab6b82c64c0a60c4501aac91e88d5ac2c3b526fb141a7c"
+          chmod +x "${RUNNER_TEMP}/${asset}"
+      - name: Install the host libraries required by the official AppImage
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Hosted runners sometimes select a very slow regional EC2
+          # Ubuntu mirror; the last two PR probes reached the job timeout
+          # while downloading ordinary dependencies. Change only that mirror
+          # on this ephemeral runner, retaining Ubuntu's signed repositories
+          # and its separate security source.
+          for source in /etc/apt/apt-mirrors.txt /etc/apt/sources.list.d/ubuntu.sources; do
+            if [ -f "${source}" ] && grep -Eq '([a-z0-9-]+\.)?ec2\.archive\.ubuntu\.com' "${source}"; then
+              sudo sed -i -E 's@https?://[a-z0-9.-]+\.ec2\.archive\.ubuntu\.com/ubuntu@http://archive.ubuntu.com/ubuntu@g' "${source}"
+              echo "Switched regional EC2 archive mirror to standard Ubuntu archive in ${source}"
+            fi
+          done
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 install -y --no-install-recommends \
+            libopengl0 libwebkit2gtk-4.1-0 libjavascriptcoregtk-4.1-0 libglu1-mesa
+      - name: Prepare pinned full native v2.5.0 machine, process and filament presets
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/test-prepare-native-v250-presets.mjs
+          # Upstream JSON stays ephemeral on the runner. Source revision is
+          # pinned in the fetcher and asserted again during materialization.
+          python3 scripts/fetch-upstream-v250-fixture.py
+          node scripts/prepare-native-v250-presets.mjs \
+            upstream-v250-creality-fixture.json upstream-v250-filament-fixture.json \
+            native-cli-output/native-profiles
+          # Preserve only the provenance and digest manifest in CI artifacts.
+          cp native-cli-output/native-profiles/manifest.json native-cli-output/native-profiles-manifest.log
+
+      - name: Generate official native multipart project in CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="${RUNNER_TEMP}/OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.5.0.AppImage"
+          python3 scripts/make_3mf_two_build_fixture.py --output native-cli-output/two-build-items.3mf
+          project="${PWD}/native-cli-output/native-v250-project.3mf"
+          timeout 180s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
+            native-cli-output/two-build-items.3mf \
+            --load-settings "native-cli-output/native-profiles/process.json;native-cli-output/native-profiles/machine.json" \
+            --load-filaments native-cli-output/native-profiles/filament.json \
+            --arrange 0 --export-3mf "${project}" \
+            > native-cli-output/native-project-export.log 2>&1 || {
+              tail -n 120 native-cli-output/native-project-export.log
+              exit 1
+            }
+          test -s "${project}"
+          python3 scripts/verify_native_3mf_package.py --input "${project}"
+          # Independently compose Core build and external-component transforms.
+          # Keep the original oriented facets private to this disposable runner.
+          python3 - <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, 'scripts')
+          from compare_native_3mf_world_facets import _world_facets
+          rows = _world_facets('native-cli-output/native-v250-project.3mf')
+          if [row['triangle_count'] for row in rows] != [12, 12]:
+              raise SystemExit('Unexpected native fixture facet counts')
+          Path('native-cli-output/native-world-facets.json').write_text(
+              json.dumps([row['oriented_facets'] for row in rows]))
+          PY
+      - name: Fetch accepted WASM candidate (no rebuild)
+        uses: actions/download-artifact@v4
+        with:
+          name: layer-workbench-orcaslicer-v2.5.0-wasm
+          repository: temesotejam/layer-workbench
+          run-id: 45284215349
+          github-token: ${{ github.token }}
+          path: engine-test-artifacts
+      - name: Native CLI project to isolated Chrome WASM
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/serve-isolated.py --port 8766 > /tmp/isolated-layer-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..25}; do
+            if curl -fsS http://127.0.0.1:8766/engine-probe.html >/dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/test-native-cli-3mf-to-wasm.mjs
