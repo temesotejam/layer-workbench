@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Bounded lexical command attribution; does not change the strict parity gate."""
 from collections import Counter
-from decimal import Decimal, DecimalException
+from decimal import Decimal, DecimalException, localcontext
 import re
 
 from compare_gcode import canonical
@@ -159,6 +159,66 @@ def unique_insertion_index(a, b):
     return prefix if first == prefix else None
 
 
+def summarize_xy_anchor_offsets(ea, eb):
+    """Compare explicit XY words, not modal positions or physical strokes.
+
+    Count exact endpoint overlap independent of ordinal order, and repeated
+    translation vectors by ordinal. Never emit coordinates or vector values.
+    A dominant vector can suggest a placement/order difference, but cannot
+    establish a physical object mapping or permit a parity PASS.
+    """
+    def point(values):
+        if not all(axis in values for axis in "XY"):
+            return None
+        result = []
+        for axis in "XY":
+            token = values[axis]
+            if len(token) > 64:
+                raise ValueError("numeric bound")
+            value = Decimal(token)
+            if (not value.is_finite() or abs(value.adjusted()) > 12
+                    or abs(value.as_tuple().exponent) > 24):
+                raise ValueError("numeric bound")
+            result.append(value)
+        return tuple(result)
+
+    try:
+        with localcontext() as ctx:
+            ctx.prec = 80
+            a = [point(values) for _, values in ea]
+            b = [point(values) for _, values in eb]
+            offsets = Counter()
+            longest = current = 0
+            previous = None
+            for x, y in zip(a, b):
+                if x is None or y is None:
+                    previous, current = None, 0
+                    continue
+                delta = tuple(v - u for u, v in zip(x, y))
+                offsets[delta] += 1
+                current = (current + 1 if delta == previous else 1)
+                if any(delta):
+                    longest = max(longest, current)
+                previous = delta
+            ca = Counter(p for p in a if p is not None)
+            cb = Counter(p for p in b if p is not None)
+            nonzero = [count for delta, count in offsets.items() if any(delta)]
+            return {
+                "status": "measured" if offsets else "unavailable",
+                "native_explicit_xy_anchors": sum(ca.values()),
+                "wasm_explicit_xy_anchors": sum(cb.values()),
+                "exact_xy_endpoint_multiset_overlap": sum((ca & cb).values()),
+                "paired_explicit_xy_anchors": sum(offsets.values()),
+                "ordinal_equal_xy": offsets.get((Decimal(0), Decimal(0)), 0),
+                "distinct_nonzero_ordinal_offsets": len(nonzero),
+                "largest_nonzero_offset_group": max(nonzero, default=0),
+                "longest_consecutive_same_nonzero_offset": longest,
+                "semantic_equivalence_verified": False,
+            }
+    except (DecimalException, ValueError):
+        return {"status": "numeric-bound", "semantic_equivalence_verified": False}
+
+
 def summarize_g1_e_anchors(native, wasm, native_labels=None, wasm_labels=None):
     """Count explicit word masks and compare G1 windows by E-word ordinal.
 
@@ -240,8 +300,12 @@ def summarize_g1_e_anchors(native, wasm, native_labels=None, wasm_labels=None):
         if index is not None:
             exact_unique += 1
             inserted[wy[index]] += 1
+    result["xy_anchor_offset_diagnostics"] = summarize_xy_anchor_offsets(ea, eb)
     result["single_extra_window_attribution"] = {
         "windows": single_extra,
+        "empty_native_windows": sum(not x and len(y) == 1 for x, y in zip(wa, wb)),
+        "nonempty_native_windows": sum(bool(x) and len(y) == len(x) + 1
+                                       for x, y in zip(wa, wb)),
         "exact_unique_insertion_windows": exact_unique,
         "unresolved_windows": single_extra - exact_unique,
         "uniquely_inserted_comment_labels": dict(sorted(inserted.items())),

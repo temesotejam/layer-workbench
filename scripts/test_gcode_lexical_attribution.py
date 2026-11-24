@@ -176,5 +176,37 @@ class LexicalAttributionTests(unittest.TestCase):
             self.assertNotIn("secret", str(report))
             self.assertFalse(report["semantic_equivalence_verified"])
 
+    def test_xy_anchor_offsets_distinguish_translation_and_reordering(self):
+        a = ["G1 X1 Y2 E1", "G1 X3 Y4 E1", "G1 X5 Y6 E1"]
+        b = ["G1 X11 Y22 E1", "G1 X13 Y24 E1", "G1 X15 Y26 E1"]
+        g = summarize(a, b)["g1_e_anchor_diagnostics"]["xy_anchor_offset_diagnostics"]
+        self.assertEqual(g["exact_xy_endpoint_multiset_overlap"], 0)
+        self.assertEqual(g["largest_nonzero_offset_group"], 3)
+        self.assertEqual(g["longest_consecutive_same_nonzero_offset"], 3)
+        self.assertFalse(g["semantic_equivalence_verified"])
+        g = summarize(a, list(reversed(a)))["g1_e_anchor_diagnostics"]["xy_anchor_offset_diagnostics"]
+        self.assertEqual(g["exact_xy_endpoint_multiset_overlap"], 3)
+        self.assertEqual(g["ordinal_equal_xy"], 1)
+        self.assertEqual(g["distinct_nonzero_ordinal_offsets"], 2)
+
+    def test_xy_anchor_offset_runs_break_at_missing_xy_and_bound_numbers(self):
+        a = ["G1 X1 Y2 E1", "G1 E-1", "G1 X3 Y4 E1"]
+        b = ["G1 X11 Y22 E1", "G1 E-1", "G1 X13 Y24 E1"]
+        g = summarize(a, b)["g1_e_anchor_diagnostics"]["xy_anchor_offset_diagnostics"]
+        self.assertEqual(g["largest_nonzero_offset_group"], 2)
+        self.assertEqual(g["longest_consecutive_same_nonzero_offset"], 1)
+        g = summarize(["G1 X1E+99 Y2 E1"], ["G1 X1 Y2 E1"])
+        self.assertEqual(g["g1_e_anchor_diagnostics"]["xy_anchor_offset_diagnostics"]["status"],
+                         "numeric-bound")
+
+    def test_extra_windows_distinguish_empty_native_from_changed_travel(self):
+        a = ["G1 E1", "G1 E2", "G1 Z2", "G1 E3"]
+        b = ["G1 E1", "G1 X1 Y2 Z3", "G1 E2", "G1 Z3",
+             "G1 X2 Y3 Z4", "G1 E3"]
+        g = summarize(a, b)["g1_e_anchor_diagnostics"]["single_extra_window_attribution"]
+        self.assertEqual(g["empty_native_windows"], 1)
+        self.assertEqual(g["nonempty_native_windows"], 1)
+        self.assertEqual(g["exact_unique_insertion_windows"], 1)
+
 if __name__ == "__main__":
     unittest.main()
