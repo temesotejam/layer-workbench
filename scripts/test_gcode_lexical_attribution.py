@@ -245,5 +245,48 @@ class LexicalAttributionTests(unittest.TestCase):
             self.assertNotIn("exact_directed_overlap", g)
 
 
+
+    def test_collinear_coverage_handles_split_reverse_and_multiplicity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            a, b = Path(directory) / "a", Path(directory) / "b"
+            a.write_text("G90\nM83\nG1 Z1\n;TYPE:Outer wall\nG1 X1 Y1\nG1 X5 Y5 E2\n")
+            b.write_text("G90\nM83\nG1 Z1\n;TYPE:Outer wall\nG1 X5 Y5\nG1 X3 Y3 E1\nG1 X1 Y1 E1\n")
+            g = compare_lexical(a, b)["planar_stroke_diagnostics"]
+            self.assertEqual(g["exact_undirected_overlap"], 0)
+            c = g["collinear_coverage"]
+            self.assertEqual(c["planes_with_different_coverage"], 0)
+            self.assertEqual(c["by_feature"]["outer wall"]["different_line_groups"], 0)
+            self.assertAlmostEqual(c["by_feature"]["outer wall"]["shared_mm"], 5.656854)
+            with b.open("a") as f:
+                f.write("G1 X3 Y3 E1\n")
+            c = compare_lexical(a, b)["planar_stroke_diagnostics"]["collinear_coverage"]
+            self.assertEqual(c["planes_with_different_coverage"], 1)
+            self.assertAlmostEqual(c["by_feature"]["outer wall"]["wasm_unmatched_mm"], 2.828427)
+
+    def test_collinear_coverage_does_not_hide_parallel_shift_or_tag_change(self):
+        with tempfile.TemporaryDirectory() as directory:
+            a, b = Path(directory) / "a", Path(directory) / "b"
+            a.write_text("G90\nM83\nG1 Z1\n;TYPE:Outer wall\nG1 X1 Y1\nG1 X5 Y1 E2\n")
+            b.write_text("G90\nM83\nG1 Z1\n;TYPE:Outer wall\nG1 X1 Y2\nG1 X5 Y2 E2\n")
+            c = compare_lexical(a, b)["planar_stroke_diagnostics"]["collinear_coverage"]
+            self.assertEqual(c["by_feature"]["outer wall"]["different_line_groups"], 2)
+            self.assertEqual(c["by_feature"]["outer wall"]["native_unmatched_mm"], 4)
+            self.assertEqual(c["by_feature"]["outer wall"]["wasm_unmatched_mm"], 4)
+            b.write_text(a.read_text().replace("Outer wall", "Inner wall"))
+            c = compare_lexical(a, b)["planar_stroke_diagnostics"]["collinear_coverage"]
+            self.assertEqual(c["by_feature"]["outer wall"]["native_unmatched_mm"], 4)
+            self.assertEqual(c["by_feature"]["inner wall"]["wasm_unmatched_mm"], 4)
+            self.assertFalse(c["semantic_equivalence_verified"])
+
+    def test_collinear_coverage_rejects_off_lattice_coordinates(self):
+        with tempfile.TemporaryDirectory() as directory:
+            a, b = Path(directory) / "a", Path(directory) / "b"
+            a.write_text("G90\nM83\nG1 X1 Y1 E1\n")
+            b.write_text("G90\nM83\nG1 X1.0000001 Y1 E1\n")
+            c = compare_lexical(a, b)["planar_stroke_diagnostics"]["collinear_coverage"]
+            self.assertEqual(c["status"], "unsupported-coordinate-lattice")
+            self.assertNotIn("by_feature", c)
+
+
 if __name__ == "__main__":
     unittest.main()

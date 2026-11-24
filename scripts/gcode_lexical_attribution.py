@@ -3,6 +3,7 @@
 from collections import Counter
 from decimal import Decimal, DecimalException, localcontext
 import re
+import math
 
 from compare_gcode import canonical, extrusion_move_metrics, gcode_feature_context
 
@@ -383,6 +384,87 @@ def summarize(native, wasm, native_labels=None, wasm_labels=None):
     }
 
 
+
+def compare_collinear_coverage(a, b):
+    """Exact planar line coverage with multiplicity, independent of splitting.
+
+    Group by exact Z, recognized feature tag and infinite supporting line.
+    Integer micrometre/1000 lattice (1e-6 mm), no tolerance or rounding of
+    endpoints. Reject off-lattice coordinates rather than snap them. The
+    interval sweep compares deposition traversal counts, not deposited volume
+    or firmware semantics. Lengths are rounded only for the numeric report.
+    """
+    scale = 1_000_000
+    def lattice(value):
+        if not value.is_finite() or abs(value) > 1_000_000:
+            raise ValueError("coordinate-bound")
+        # Guard against huge exponents before converting to integer ratios.
+        if value and value.adjusted() < -6:
+            raise ValueError("coordinate-precision")
+        n, d = value.as_integer_ratio()
+        q, rem = divmod(n * scale, d)
+        if rem:
+            raise ValueError("coordinate-precision")
+        return q
+
+    groups = {}
+    try:
+        for side, strokes in enumerate((a, b)):
+            for z, label, start, end, _ in strokes:
+                z = lattice(z)
+                x, y = map(lattice, start)
+                xx, yy = map(lattice, end)
+                dx, dy = xx - x, yy - y
+                g = math.gcd(dx, dy)
+                if not g:
+                    raise ValueError("zero-stroke")
+                u, v = dx // g, dy // g
+                if u < 0 or (u == 0 and v < 0):
+                    u, v = -u, -v
+                # Cross-product fixes the supporting line, dot-product
+                # provides an integer interval coordinate on that line.
+                key = (z, label, u, v, u * y - v * x)
+                lo, hi = sorted((u * x + v * y, u * xx + v * yy))
+                events = groups.setdefault(key, {})
+                for t, delta in ((lo, 1), (hi, -1)):
+                    events.setdefault(t, [0, 0])[side] += delta
+    except ValueError:
+        return {"status": "unsupported-coordinate-lattice",
+                "semantic_equivalence_verified": False}
+
+    by_feature = {}
+    changed_planes = set()
+    for (z, label, u, v, _), events in groups.items():
+        row = by_feature.setdefault(label, {
+            "line_groups": 0, "different_line_groups": 0,
+            "native_unmatched_mm": 0.0, "wasm_unmatched_mm": 0.0,
+            "shared_mm": 0.0})
+        row["line_groups"] += 1
+        active = [0, 0]
+        previous = None
+        changed = False
+        denominator = math.hypot(u, v) * scale
+        for t, deltas in sorted(events.items()):
+            if previous is not None:
+                distance = (t - previous) / denominator
+                row["shared_mm"] += min(active) * distance
+                row["native_unmatched_mm"] += max(0, active[0] - active[1]) * distance
+                row["wasm_unmatched_mm"] += max(0, active[1] - active[0]) * distance
+                changed |= active[0] != active[1]
+            active[0] += deltas[0]
+            active[1] += deltas[1]
+            previous = t
+        if changed:
+            row["different_line_groups"] += 1
+            changed_planes.add(z)
+    for row in by_feature.values():
+        for key in ("native_unmatched_mm", "wasm_unmatched_mm", "shared_mm"):
+            row[key] = round(row[key], 6)
+    return {"status": "measured", "planes_with_different_coverage": len(changed_planes),
+            "by_feature": dict(sorted(by_feature.items())),
+            "semantic_equivalence_verified": False}
+
+
 def compare_planar_strokes(native_path, wasm_path, native_commands, wasm_commands):
     """Count exact directed/undirected G1 positive-E strokes, including Z.
 
@@ -432,6 +514,7 @@ def compare_planar_strokes(native_path, wasm_path, native_commands, wasm_command
         "exact_undirected_overlap": sum(common.values()),
         "exact_directed_with_e_and_feature_overlap": shared(lambda s: s),
         "ordered_directed_equal": list(map(directed, a)) == list(map(directed, b)),
+        "collinear_coverage": compare_collinear_coverage(a, b),
         "observed_z_planes": len(layers),
         "planes_with_different_undirected_multisets": sum(
             layer_shared[z] != layer_a[z] or layer_shared[z] != layer_b[z]
