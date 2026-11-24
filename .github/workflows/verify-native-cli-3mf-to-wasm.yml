@@ -158,3 +158,4 @@ jobs:
           done
           node scripts/test-native-cli-3mf-to-wasm.mjs
           node scripts/test-native-cli-3mf-to-wasm.mjs --translated
+          node scripts/test-native-cli-3mf-to-wasm.mjs --private-edit
