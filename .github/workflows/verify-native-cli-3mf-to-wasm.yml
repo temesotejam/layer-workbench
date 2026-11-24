@@ -218,35 +218,39 @@ jobs:
             --candidate native-cli-output/browser-source-preserving-edited.3mf \
             --require-identical-config
 
-      - name: Reopen WASM-edited 3MF in official native v2.5.0 CLI
+      - name: Reopen both browser-edited 3MF variants in official native v2.5.0 CLI
         shell: bash
         run: |
           set -euo pipefail
           app="${RUNNER_TEMP}/OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.5.0.AppImage"
-          edited="native-cli-output/wasm-private-edited.3mf"
+          for variant in wasm-private-edited browser-source-preserving-edited; do
+          export REOPEN_VARIANT="${variant}"
+          edited="native-cli-output/${variant}.3mf"
           test -s "${edited}"
           sha256sum "${edited}"
-          mkdir native-cli-output/wasm-edited-native-stl
+          mkdir "native-cli-output/${variant}-native-stl"
           # Do not inject replacement profiles: this is a geometry import
-          # test of the actual best-effort archive, not metadata parity.
+          # test of both actual browser-produced archives, not metadata parity.
           timeout 120s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
             "${edited}" --arrange 0 --export-stl \
-            --outputdir native-cli-output/wasm-edited-native-stl \
-            > native-cli-output/wasm-edited-native-reopen.log 2>&1 || {
-              tail -n 100 native-cli-output/wasm-edited-native-reopen.log
+            --outputdir "native-cli-output/${variant}-native-stl" \
+            > "native-cli-output/${variant}-native-reopen.log" 2>&1 || {
+              tail -n 100 "native-cli-output/${variant}-native-reopen.log"
               exit 1
             }
           # The existing independent STL reader accepts ASCII or binary.
           # Normalize only the STL container to binary for the facet oracle.
           python3 - <<'PY'
           import math
+          import os
           import struct
           import sys
           from pathlib import Path
           sys.path.insert(0, 'scripts')
           from verify_native_exported_stl import read_triangles
           root = Path('native-cli-output')
-          paths = sorted(p for p in (root / 'wasm-edited-native-stl').rglob('*')
+          variant = os.environ['REOPEN_VARIANT']
+          paths = sorted(p for p in (root / (variant + '-native-stl')).rglob('*')
                          if p.is_file() and p.suffix.lower() == '.stl')
           if not 1 <= len(paths) <= 2:
               raise SystemExit('Expected one combined or two individual native STLs')
@@ -261,7 +265,7 @@ jobs:
               # Normals are intentionally ignored; vertex order is unchanged.
               data.extend(struct.pack('<12fH', 0, 0, 0,
                                       *(v for p in face for v in p), 0))
-          (root / 'wasm-edited-native-world.stl').write_bytes(data)
+          (root / (variant + '-native-world.stl')).write_bytes(data)
           PY
           node --input-type=module <<'JS'
           import assert from 'node:assert/strict';
@@ -279,13 +283,16 @@ jobs:
           assert.ok(maxX(groups[0])+12<minX(groups[1]));
           const expected=groups.map((g,i)=>g.map(f=>f.map(([x,y,z])=>
             i===0?[x+12,y-7,z]:[x,y,z])));
-          const stl=await readFile(root+'wasm-edited-native-world.stl');
+          const variant=process.env.REOPEN_VARIANT;
+          assert.ok(['wasm-private-edited','browser-source-preserving-edited'].includes(variant));
+          const stl=await readFile(root+variant+'-native-world.stl');
           const geometry=auditNative3mfWorldFacetGroups(stl,expected,0.05);
           const winding=auditNative3mfWorldFacetWinding(stl,expected.flat(),0.05);
-          console.log('WASM_EDIT_TO_NATIVE_CLI '+JSON.stringify({geometry,winding,
+          console.log('WASM_EDIT_TO_NATIVE_CLI '+JSON.stringify({variant,geometry,winding,
             toleranceMm:0.05,metadataParity:false,printSafety:false}));
           assert.deepEqual(geometry,{partition:'separable',comparedBuilds:2,comparedTriangles:24});
           assert.deepEqual(winding,{winding:'consistent',comparedTriangles:24});
-          console.log('PASS: official native CLI reopened WASM-edited 3MF with expected oriented geometry');
+          console.log('PASS: official native CLI reopened '+variant+' with expected oriented geometry');
           JS
+          done
           # No 3MF, STL, official presets or G-code are uploaded.
