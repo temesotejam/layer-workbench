@@ -82,6 +82,25 @@ class MetadataLossTests(unittest.TestCase):
         self.assertEqual(run(False), 0)
         self.assertEqual(run(True), 2)
 
+    def test_strict_project_json_native_reexport(self):
+        args = ["audit", "--baseline", str(self.a), "--candidate", str(self.b),
+                "--require-identical-project-json"]
+        def run(raw):
+            make(self.b, raw)
+            out, err = StringIO(), StringIO()
+            with patch("sys.argv", args), redirect_stdout(out), redirect_stderr(err):
+                code = main()
+            self.assertNotIn("hidden-value", out.getvalue() + err.getvalue())
+            return code
+
+        # Native serialization may reorder keys or alter whitespace.
+        self.assertEqual(run('{"secret":"hidden-value", "flags":[1,2], "speed":"20"}'), 0)
+        for raw in (None, '{"speed":20,"flags":[1,2],"secret":"hidden-value"}',
+                    '{"speed":"20","flags":[2,1],"secret":"hidden-value"}',
+                    '{"speed":"20","flags":[1,2]}',
+                    '{"speed":"20","flags":[1,2],"secret":"hidden-value","extra":true}'):
+            self.assertEqual(run(raw), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

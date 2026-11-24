@@ -92,9 +92,16 @@ def main():
     parser.add_argument("--candidate", required=True, type=Path)
     parser.add_argument("--require-identical-config", action="store_true",
                         help="Positive control: require all metadata member bytes unchanged")
+    parser.add_argument("--require-identical-project-json", action="store_true",
+                        help="Require nonempty typed project settings to match after native re-export")
     args = parser.parse_args()
     try:
         result = audit(args.baseline, args.candidate)
+        if args.require_identical_project_json:
+            project = result["project_json"]
+            if (project["status"] != "present" or not project["baseline"] or
+                    any(project[k] for k in ("missing", "added", "changed"))):
+                raise ValueError("Native re-export project JSON differs")
         if args.require_identical_config:
             meta = result["members"]["metadata"]
             if any(meta[k] for k in ("missing", "added", "changed")):
