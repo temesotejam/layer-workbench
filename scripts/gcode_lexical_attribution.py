@@ -96,6 +96,77 @@ def summarize_g1_feed_projection(native, wasm):
     }
 
 
+
+def summarize_g1_e_anchors(native, wasm):
+    """Count explicit word masks and compare G1 windows by E-word ordinal.
+
+    E is a lexical anchor, not necessarily extrusion: it can be a retract,
+    reset-relative value, or prime. No modal positions or firmware state
+    are inferred. Even matching windows do not establish path equivalence.
+    """
+    def collect(lines):
+        masks = Counter()
+        anchors = []
+        windows = [[]]
+        for command in lines:
+            if category(command) != "G1":
+                continue
+            words = command.split()
+            parsed = [G1_WORD.fullmatch(word) for word in words[1:]]
+            if (words[0] != "G1" or not parsed or not all(parsed)
+                    or len({m[1] for m in parsed}) != len(parsed)):
+                return None
+            values = {m[1]: m[2] for m in parsed}
+            mask = "".join(axis for axis in "XYZEF" if axis in values)
+            masks[mask] += 1
+            if "E" in values:
+                anchors.append((mask, values))
+                windows.append([])
+            elif any(axis in values for axis in "XYZ"):
+                # Include F and all explicit coordinates in this comparison.
+                windows[-1].append(command)
+        return masks, anchors, windows
+
+    a, b = collect(native), collect(wasm)
+    result = {"projection_complete": a is not None and b is not None,
+              "semantic_equivalence_verified": False}
+    if a is None or b is None:
+        return result
+    na, ea, wa = a
+    nb, eb, wb = b
+    result["word_mask_deltas"] = [
+        {"mask": k, "native": na[k], "wasm": nb[k]}
+        for k in sorted(na.keys() | nb.keys()) if na[k] != nb[k]]
+    result["native_e_word_commands"] = len(ea)
+    result["wasm_e_word_commands"] = len(eb)
+    result["ordinal_comparison"] = None
+    if len(ea) != len(eb) or not ea:
+        return result
+    # Equal counts do not prove the anchors refer to the same physical move.
+    # An ordinal comparison is strictly diagnostic and never a parity gate.
+    mismatched_masks = sum(x[0] != y[0] for x, y in zip(ea, eb))
+    axis_counts = {}
+    for axis in "XYZEF":
+        pairs = [(x[1].get(axis), y[1].get(axis)) for x, y in zip(ea, eb)]
+        axis_counts[axis] = {
+            "presence_mismatches": sum((x is None) != (y is None) for x, y in pairs),
+            "value_mismatches_when_present_in_both": sum(
+                x is not None and y is not None and x != y for x, y in pairs),
+        }
+    result["ordinal_comparison"] = {
+        "e_word_mask_mismatches": mismatched_masks,
+        "e_word_axis_counts": axis_counts,
+        "non_e_coordinate_windows": len(wa),
+        "window_count_mismatches": sum(len(x) != len(y) for x, y in zip(wa, wb)),
+        "windows_with_more_wasm_commands": sum(len(x) < len(y) for x, y in zip(wa, wb)),
+        "windows_with_more_native_commands": sum(len(x) > len(y) for x, y in zip(wa, wb)),
+        "exact_window_mismatches": sum(x != y for x, y in zip(wa, wb)),
+        "max_wasm_extra_commands_in_one_window": max(
+            0, max(len(y) - len(x) for x, y in zip(wa, wb))),
+    }
+    return result
+
+
 def summarize(native, wasm):
     """Compare canonical lines exactly; do not infer firmware semantics.
 
@@ -147,6 +218,7 @@ def summarize(native, wasm):
         "nonmotion_subsequence_equal": nonmotion(native) == nonmotion(wasm),
         "category_deltas": rows,
         "g1_feed_projection": summarize_g1_feed_projection(native, wasm),
+        "g1_e_anchor_diagnostics": summarize_g1_e_anchors(native, wasm),
         "semantic_equivalence_verified": False,
     }
 

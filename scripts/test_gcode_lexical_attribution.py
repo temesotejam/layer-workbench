@@ -104,5 +104,42 @@ class LexicalAttributionTests(unittest.TestCase):
         self.assertIsNone(g["coordinate_word_diagnostics"]["X"]["positional_word_mismatches"])
 
 
+
+    def test_e_anchor_diagnostic_localizes_extra_xyz_windows(self):
+        a = ["G1 X0 Y0 Z1 F900", "G1 X1 E1", "G1 X2 E2", "G1 Z2"]
+        b = ["G1 X0 Y0 Z1 F900", "G1 X1 E1", "G1 X1 Y0 Z2",
+             "G1 X2 E3", "G1 Z2"]
+        g = summarize(a, b)["g1_e_anchor_diagnostics"]
+        self.assertEqual(g["word_mask_deltas"], [
+            {"mask": "XYZ", "native": 0, "wasm": 1}])
+        o = g["ordinal_comparison"]
+        self.assertEqual(o["e_word_axis_counts"]["E"]["value_mismatches_when_present_in_both"], 1)
+        self.assertEqual(o["window_count_mismatches"], 1)
+        self.assertEqual(o["windows_with_more_wasm_commands"], 1)
+        self.assertEqual(o["max_wasm_extra_commands_in_one_window"], 1)
+        self.assertFalse(g["semantic_equivalence_verified"])
+
+    def test_e_anchor_detects_equal_length_different_windows_and_masks(self):
+        g = summarize(["G1 E1", "G1 Z2", "G1 X1 E2"],
+                      ["G1 E1", "G1 Z3", "G1 Y1 E2"])["g1_e_anchor_diagnostics"]
+        o = g["ordinal_comparison"]
+        self.assertEqual(o["window_count_mismatches"], 0)
+        self.assertEqual(o["exact_window_mismatches"], 1)
+        self.assertEqual(o["e_word_mask_mismatches"], 1)
+        self.assertEqual(o["e_word_axis_counts"]["X"]["presence_mismatches"], 1)
+
+    def test_e_anchor_refuses_unaligned_or_empty_anchors(self):
+        for a, b in ((["G1 E1"], ["G1 E1", "G1 E2"]),
+                     (["G1 X1"], ["G1 X2"])):
+            g = summarize(a, b)["g1_e_anchor_diagnostics"]
+            self.assertIsNone(g["ordinal_comparison"])
+
+    def test_e_anchor_does_not_leak_opaque_commands(self):
+        g = summarize(["G1 E1"], ["G1 E1 secret/path"])["g1_e_anchor_diagnostics"]
+        self.assertFalse(g["projection_complete"])
+        self.assertNotIn("ordinal_comparison", g)
+        self.assertNotIn("secret", str(g))
+
+
 if __name__ == "__main__":
     unittest.main()
