@@ -14,6 +14,8 @@ on:
       - "scripts/compare_3mf_metadata.py"
       - "scripts/audit_native_3mf_metadata_loss.py"
       - "scripts/test_audit_native_3mf_metadata_loss.py"
+      - "scripts/preserve-native-source-translation.mjs"
+      - "scripts/preflight-3mf-zip.mjs"
       - "scripts/test-native-cli-3mf-to-wasm.mjs"
       - ".github/workflows/verify-native-cli-3mf-to-wasm.yml"
   push:
@@ -30,6 +32,8 @@ on:
       - "scripts/compare_3mf_metadata.py"
       - "scripts/audit_native_3mf_metadata_loss.py"
       - "scripts/test_audit_native_3mf_metadata_loss.py"
+      - "scripts/preserve-native-source-translation.mjs"
+      - "scripts/preflight-3mf-zip.mjs"
       - "scripts/test-native-cli-3mf-to-wasm.mjs"
       - ".github/workflows/verify-native-cli-3mf-to-wasm.yml"
 permissions:
@@ -48,12 +52,13 @@ jobs:
       - name: Validate browser test and matching regressions
         run: |
           node --check scripts/test-native-cli-3mf-to-wasm.mjs
+          node --check scripts/preserve-native-source-translation.mjs
           node scripts/test-audit-native-3mf-world-facets.mjs
           python3 -m unittest discover -s scripts -p test_edit_native_3mf_build_transform.py -v
           python3 -m unittest discover -s scripts -p test_verify_native_3mf_edit_effect.py -v
           python3 -m unittest discover -s scripts -p test_compare_native_3mf_world_facets.py -v
           python3 -m unittest discover -s scripts -p test_audit_native_3mf_metadata_loss.py -v
-          npm install --no-save --no-package-lock playwright@1.56.1
+          npm install --no-save --no-package-lock playwright@1.56.1 fflate@0.8.2
       - name: Download the official v2.5.0 Linux AppImage only inside CI
         shell: bash
         run: |
@@ -187,6 +192,31 @@ jobs:
           python3 scripts/audit_native_3mf_metadata_loss.py \
             --baseline native-cli-output/native-v250-project.3mf \
             --candidate native-cli-output/wasm-private-edited.3mf
+
+      - name: Require source-preserving browser edit to keep every non-target member
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Select the left-hand original build independently from Core facets.
+          index="$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+          groups=json.loads(Path('native-cli-output/native-world-facets.json').read_text())
+          assert len(groups)==2
+          bounds=[(min(p[0] for f in g for p in f),max(p[0] for f in g for p in f)) for g in groups]
+          index=min(range(2),key=lambda i:bounds[i][0])
+          assert bounds[index][1]+12<bounds[1-index][0]
+          print(index)
+          PY
+          )"
+          python3 scripts/verify_native_3mf_edit_effect.py \
+            --baseline native-cli-output/native-v250-project.3mf \
+            --candidate native-cli-output/browser-source-preserving-edited.3mf \
+            --build-index "${index}" --translate-mm 12 -7 0
+          python3 scripts/audit_native_3mf_metadata_loss.py \
+            --baseline native-cli-output/native-v250-project.3mf \
+            --candidate native-cli-output/browser-source-preserving-edited.3mf \
+            --require-identical-config
 
       - name: Reopen WASM-edited 3MF in official native v2.5.0 CLI
         shell: bash
