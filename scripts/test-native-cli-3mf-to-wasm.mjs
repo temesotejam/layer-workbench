@@ -62,7 +62,7 @@ try {
   assert.equal(capability.engine.version,'2.5.0');
   assert.equal(capability.api.version,'0.7.0');
   // Keep geometry conversion and untouched archive preservation independent.
-  const result=await page.evaluate(async ({encoded,privateEdit,delta})=>{
+  const result=await page.evaluate(async ({encoded,privateEdit,delta,editedIndex})=>{
     const source=new Uint8Array(encoded);
     const engine=globalThis.__layerDiagnosticEngine?.engine;
     if(!crossOriginIsolated||!engine?.createSession||!engine?.threeMfToStl)
@@ -79,6 +79,7 @@ try {
         preserved.length===source.length && preserved.every((value,i)=>value===source[i]);
       if(!untouchedByteIdentical)throw new Error('Untouched source bytes changed');
       let geometrySource=source, strictRejected=false, manifestOnlyTargetChanged=false;
+      let sourcePreservingArchive=null,sourcePreservingStl=null;
       if(privateEdit){
         if(manifest.instances?.length!==2||manifest.objects?.length!==2||manifest.meshes?.length!==2)
           throw new Error('Unexpected private edit fixture hierarchy');
@@ -106,6 +107,27 @@ try {
         expected.instances.find(i=>i.id===target.id).transform.matrix=changed;
         manifestOnlyTargetChanged=JSON.stringify(await session.getManifest())===JSON.stringify(expected);
         if(!manifestOnlyTargetChanged)throw new Error('Private transform changed unrelated manifest fields');
+        const {preserveNativeSourceTranslation}=await import('./scripts/preserve-native-source-translation.mjs');
+        const observed=(await session.getManifest()).instances.find(i=>i.id===target.id).transform.matrix;
+        const options={index:editedIndex,before:target.transform.matrix,after:observed,optIn:true};
+        // Invalid/non-translation requests and absent explicit opt-in must fail.
+        for(const invalid of [{...options,optIn:false},{...options,after:options.before},
+          {...options,after:options.after.map((v,i)=>i===0?v+1:v)}]){
+          let refused=false;
+          try {await preserveNativeSourceTranslation(source,invalid);}catch(_){refused=true;}
+          if(!refused)throw new Error('Unsafe source-preserving translation accepted');
+        }
+        sourcePreservingArchive=await preserveNativeSourceTranslation(source,options);
+        const preservingSession=await engine.createSession();
+        try {
+          await preservingSession.initProfile('project.3mf',sourcePreservingArchive);
+          const m=await preservingSession.getManifest();
+          if(m.objects?.length!==2||m.meshes?.length!==2||m.instances?.length!==2||m.plates?.length!==1)
+            throw new Error('Source-preserving project reimport changed hierarchy');
+        }finally{await preservingSession.dispose();}
+        sourcePreservingStl=await engine.threeMfToStl(sourcePreservingArchive);
+        if(!(sourcePreservingStl instanceof Uint8Array)||sourcePreservingStl.length!==84+50*24)
+          throw new Error('Expected source-preserving 24-face STL');
         try {await session.export('project.3mf',{
           schemaVersion:'0.7.0',preservation:'require',includeSliceArtifacts:false
         });}catch(_){strictRejected=true;}
@@ -135,9 +157,11 @@ try {
         instances:manifest?.instances?.length,
         plates:manifest?.plates?.length
       },untouchedByteIdentical,strictRejected,manifestOnlyTargetChanged,
-        privateEditedArchive:privateEdit?Array.from(geometrySource):null};
+        privateEditedArchive:privateEdit?Array.from(geometrySource):null,
+        sourcePreservingArchive:privateEdit?Array.from(sourcePreservingArchive):null,
+        sourcePreservingStl:privateEdit?Array.from(sourcePreservingStl):null};
     } finally { await session.dispose(); }
-  },{encoded:Array.from(source),privateEdit,delta});
+  },{encoded:Array.from(source),privateEdit,delta,editedIndex});
   const stl=new Uint8Array(result.stl);
   const geometry=auditNative3mfWorldFacetGroups(stl,groups,0.05);
   const winding=auditNative3mfWorldFacetWinding(stl,groups.flat(),0.05);
@@ -160,6 +184,16 @@ try {
     assert.equal(result.manifestOnlyTargetChanged,true);
     // CI-generated synthetic project only; pass the exact audited bytes to
     // the official desktop CLI in this disposable runner. Never publish it.
+    const preservingStl=new Uint8Array(result.sourcePreservingStl);
+    assert.deepEqual(auditNative3mfWorldFacetGroups(preservingStl,groups,0.05),
+      {partition:'separable',comparedBuilds:2,comparedTriangles:24});
+    assert.deepEqual(auditNative3mfWorldFacetWinding(preservingStl,groups.flat(),0.05),
+      {winding:'consistent',comparedTriangles:24});
+    const preservingArchive=Buffer.from(result.sourcePreservingArchive);
+    assert.ok(preservingArchive.length>300&&preservingArchive.length<=4_000_000);
+    await writeFile('native-cli-output/browser-source-preserving-edited.3mf',preservingArchive,{flag:'wx'});
+    console.log('BROWSER_SOURCE_PRESERVING_TRANSLATION '+JSON.stringify({buildIndex:editedIndex,
+      geometry:'pass',winding:'pass',nativeExportApi:false,metadataSemanticParity:false}));
     const editedArchive=Buffer.from(result.privateEditedArchive);
     assert.ok(editedArchive.length>300 && editedArchive.length<=4_000_000);
     assert.equal(editedArchive.readUInt32LE(0),0x04034b50);
