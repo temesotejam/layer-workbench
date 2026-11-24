@@ -94,6 +94,7 @@ jobs:
           node --check scripts/test-browser-3mf-independent-core-import.mjs
           python3 -m py_compile scripts/compare_3mf_build_preservation.py
           python3 -m unittest discover -s scripts -p test_compare_3mf_build_preservation.py -v
+          python3 -m unittest discover -s scripts -p test_classify_3mf_hierarchy_gap.py -v
           node --check scripts/native-manifest-edit.mjs
           node scripts/test-native-manifest-edit.mjs
       - name: Assert each cube's own XYZ placement in isolated Chrome
@@ -159,7 +160,7 @@ jobs:
             --stl parity-output/wasm-multiobject-converted.stl \
             --report parity-output/accepted-candidate-3mf-stl-comparison.json
           # Require the rebuilt exporter to preserve the shared Core resource
-          # and both world placements. Reimport normalization is a separate gap.
+          # and both world placements, including the proven native reimport counts.
           python3 scripts/audit_3mf_scene.py \
             --input parity-output/wasm-sharedmesh-3mf.3mf \
             --expected-build-items 2 --min-triangles 12 \
@@ -182,12 +183,22 @@ jobs:
           if summary['absolutePlacementVerified'] is not True or summary['flattenedTriangles'] != 24:
               raise SystemExit('Shared-object world placement failed')
           print('PASS: real isolated Chrome export retained a shared Core root, 12 stored and 24 placed triangles, and exact XYZ bounds')
-          print('DIAGNOSTIC: native reimport mesh count =', summary['reimportedMeshes'])
+          if (summary['reimportedObjects'], summary['reimportedMeshes'], summary['reimportedInstances']) != (1, 1, 2) or summary['nativeHierarchyRetained'] is not True:
+              raise SystemExit('Native reimport lost the shared-object manifest counts')
+          print('PASS: reimport retained one object, one mesh and two instances')
           PY
           python3 scripts/classify_3mf_hierarchy_gap.py \
             --summary parity-output/wasm-sharedmesh-3mf-summary.json \
             --scene parity-output/accepted-sharedmesh-scene.json \
             --report parity-output/accepted-sharedmesh-hierarchy-stage.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path('parity-output/accepted-sharedmesh-hierarchy-stage.json').read_text())
+          core = report['exportedCore']
+          if (core['DistinctBuildRoots'], core['DistinctResolvedMeshResources']) != (1, 1) or report['firstObservedGap'] != 'counts-retained-placement-unverified':
+              raise SystemExit('Wrapper-aware Core hierarchy count diagnostic disagrees with the strict fixture')
+          PY
       - name: Retain diagnostic evidence only
         if: always()
         uses: actions/upload-artifact@v4
