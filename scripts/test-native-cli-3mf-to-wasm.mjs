@@ -1,6 +1,7 @@
 // Isolated acceptance: official native v2.5.0 CLI project -> WASM.
 // The fixture and full profiles are generated on this runner only.
-// No G-code generation, edits, printing, or production engine activation.
+// Optional translated fixture is edited offline, not via a WASM mutation API.
+// No G-code generation, printing, or production engine activation.
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
@@ -8,11 +9,20 @@ import {chromium} from 'playwright';
 import {auditNative3mfWorldFacetGroups,auditNative3mfWorldFacetWinding}
   from './audit-native-3mf-world-facets.mjs';
 
-const source=await readFile('native-cli-output/native-v250-project.3mf');
+const args=process.argv.slice(2);
+assert.ok(args.length===0||(args.length===1&&args[0]==='--translated'));
+const translated=args.length===1;
+const source=await readFile('native-cli-output/'+
+  (translated?'native-v250-project-translated.3mf':'native-v250-project.3mf'));
 assert.ok(source.length>300 && source.length<=4_000_000);
 assert.equal(source.readUInt32LE(0),0x04034b50);
-const groups=JSON.parse(await readFile('native-cli-output/native-world-facets.json','utf8'));
-assert.deepEqual(groups.map(group=>group.length),[12,12]);
+const baselineGroups=JSON.parse(await readFile('native-cli-output/native-world-facets.json','utf8'));
+assert.deepEqual(baselineGroups.map(group=>group.length),[12,12]);
+// Independent oracle: translate only the first original world-facet group.
+// Do not derive the expected geometry from the edited archive or the WASM.
+const delta=[12,-7,0];
+const groups=baselineGroups.map((group,index)=>group.map(facet=>
+  facet.map(vertex=>vertex.map((value,axis)=>value+(translated&&index===0?delta[axis]:0)))));
 const browser=await chromium.launch({channel:'chrome',headless:true,
   args:['--no-sandbox','--disable-dev-shm-usage']});
 try {
@@ -70,6 +80,7 @@ try {
   const geometry=auditNative3mfWorldFacetGroups(stl,groups,0.05);
   const winding=auditNative3mfWorldFacetWinding(stl,groups.flat(),0.05);
   console.log('NATIVE_CLI_TO_WASM_3MF '+JSON.stringify({
+    fixture:translated?'offline-first-build-translation':'untouched-native',
     sourceSha256:createHash('sha256').update(source).digest('hex'),
     manifest:result.manifest,geometry,winding,
     untouchedByteIdentical:result.untouchedByteIdentical
@@ -77,6 +88,8 @@ try {
   assert.deepEqual(geometry,{partition:'separable',comparedBuilds:2,comparedTriangles:24});
   assert.equal(result.manifest.schemaVersion,'0.7.0');
   assert.equal(result.manifest.instances,2);
+  assert.deepEqual(winding,{winding:'consistent',comparedTriangles:24});
   assert.equal(result.untouchedByteIdentical,true);
-  console.log('PASS: native CLI-authored multipart project -> isolated WASM geometry and untouched byte preservation; not edited project parity');
+  console.log('PASS: '+(translated?'offline-translated native CLI project':'untouched native CLI project')+
+    ' -> isolated WASM geometry and byte preservation; not in-session edit or desktop metadata parity');
 } finally {await browser.close();}
