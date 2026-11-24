@@ -332,3 +332,21 @@ jobs:
           # This tests serialized settings, not effective slicing or complete
           # object metadata semantics. Keep all files on the disposable runner.
 
+
+      - name: Compare native re-exported object and part settings XML
+        shell: bash
+        run: |
+          set -euo pipefail
+          # First log all scope counts (including plate and runtime instance
+          # identity); then fail closed if the object or part nodes differ.
+          python3 scripts/audit_native_3mf_metadata_loss.py \
+            --baseline native-cli-output/native-v250-project-translated-native-reexport.3mf \
+            --candidate native-cli-output/browser-source-preserving-edited-native-reexport.3mf \
+            --compare-model-xml
+          python3 scripts/audit_native_3mf_metadata_loss.py \
+            --baseline native-cli-output/native-v250-project-translated-native-reexport.3mf \
+            --candidate native-cli-output/browser-source-preserving-edited-native-reexport.3mf \
+            --require-identical-object-part-xml
+          echo "PASS: native re-exported object and part XML matches independent translated control"
+          # This is a bounded ordered XML comparison, not full metadata
+          # semantics. Plate/instance/assembly scopes are diagnostic only.

@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 import sys
 import zipfile
+import xml.etree.ElementTree as ET
 
 from compare_3mf_metadata import inventory
 
@@ -86,6 +87,81 @@ def audit(baseline, candidate):
             "print_safety_verified": False}
 
 
+
+def _model_xml(path, members, *, by_object_id=True):
+    """Bounded parsed XML inventory; not a native config interpreter.
+
+    Upstream bbs_3mf.cpp::_add_model_config_file_to_archive serializes object,
+    part, plate and model_instance separately. identify_id can be generated
+    from the runtime ModelInstance id; report it separately, never discard it.
+    """
+    if MODEL not in members or members[MODEL]["bytes"] > MAX_CONFIG:
+        raise ValueError("Missing or oversized model settings XML")
+    with zipfile.ZipFile(path) as archive:
+        raw = archive.read(MODEL).decode("utf-8-sig")
+    # No DTD, entities, CDATA or other declarations in this bounded fixture.
+    if "<!" in raw:
+        raise ValueError("Unsupported model settings XML declaration")
+    try:
+        root = ET.fromstring(raw)
+    except ET.ParseError as exc:
+        raise ValueError("Invalid model settings XML") from exc
+    if root.tag != "config":
+        raise ValueError("Expected native model config root")
+    groups = {key: {} for key in ("object", "part", "plate", "instance",
+                                   "instance_identity", "other")}
+    count = 0
+    object_ids = set()
+
+    def walk(node, path_key, group, parent_tag=None):
+        nonlocal count
+        count += 1
+        if count > 20000 or len(path_key) > 32:
+            raise ValueError("Model settings XML exceeds node or depth limit")
+        if parent_tag == "config" and node.tag in ("object", "plate"):
+            group = node.tag
+        elif parent_tag == "object" and node.tag == "part":
+            group = "part"
+        elif parent_tag == "plate" and node.tag == "model_instance":
+            group = "instance"
+        elif (parent_tag == "model_instance" and group == "instance" and
+              node.tag == "metadata" and node.get("key") == "identify_id" and
+              set(node.attrib) == {"key", "value"} and not len(node)):
+            group = "instance_identity"
+        # Ignore formatting-only indentation and attribute order; retain all
+        # nonblank text, attribute values, node order and unknown elements.
+        text = node.text if node.text and node.text.strip() else ""
+        tail = node.tail if node.tail and node.tail.strip() else ""
+        groups[group][path_key] = (node.tag, tuple(sorted(node.attrib.items())), text, tail)
+        for i, child in enumerate(node):
+            key = i
+            if node is root and child.tag == "object":
+                # Pinned v2.5.0 bbs_3mf.cpp uses std::map<ModelObject const *,
+                # ObjectData> for export order. Pointer ordering is not object
+                # identity. Match only unique serialized IDs; do not renumber
+                # objects, reorder their children, or ignore any attributes.
+                object_id = child.get("id", "")
+                if (not object_id.isascii() or not object_id.isdecimal() or
+                        len(object_id) > 10 or int(object_id) < 1 or
+                        object_id != str(int(object_id)) or object_id in object_ids):
+                    raise ValueError("Invalid or duplicate native object ID")
+                object_ids.add(object_id)
+                if by_object_id:
+                    key = ("object", object_id)
+            walk(child, (*path_key, key), group, node.tag)
+
+    walk(root, (), "other")
+    if not all(groups[k] for k in ("object", "part", "plate", "instance")):
+        raise ValueError("Expected nonempty native object/part/plate/instance fixture")
+    return groups
+
+
+def model_xml_audit(baseline, candidate, *, by_object_id=True):
+    before = _model_xml(baseline, inventory(baseline), by_object_id=by_object_id)
+    after = _model_xml(candidate, inventory(candidate), by_object_id=by_object_id)
+    return {group: _counts(before[group], after[group]) for group in before}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--baseline", required=True, type=Path)
@@ -94,9 +170,24 @@ def main():
                         help="Positive control: require all metadata member bytes unchanged")
     parser.add_argument("--require-identical-project-json", action="store_true",
                         help="Require nonempty typed project settings to match after native re-export")
+    parser.add_argument("--compare-model-xml", action="store_true",
+                        help="Report parsed model XML node differences by scope")
+    parser.add_argument("--require-identical-object-part-xml", action="store_true",
+                        help="Require exact object-ID-matched XML nodes and ordered children; report all scopes")
     args = parser.parse_args()
     try:
         result = audit(args.baseline, args.candidate)
+        if args.compare_model_xml or args.require_identical_object_part_xml:
+            result["model_xml"] = model_xml_audit(args.baseline, args.candidate)
+            # Keep the former positional comparison visible as a separate
+            # witness. An ID-matched pass is not a byte or order match.
+            result["model_xml_positional"] = model_xml_audit(
+                args.baseline, args.candidate, by_object_id=False)
+            if args.require_identical_object_part_xml and any(
+                    result["model_xml"][group][key]
+                    for group in ("object", "part")
+                    for key in ("missing", "added", "changed")):
+                raise ValueError("Native object or part XML differs")
         if args.require_identical_project_json:
             project = result["project_json"]
             if (project["status"] != "present" or not project["baseline"] or

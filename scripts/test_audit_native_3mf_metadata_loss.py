@@ -4,7 +4,7 @@ import tempfile
 import unittest
 import zipfile
 
-from audit_native_3mf_metadata_loss import audit, main, PROJECT, MODEL
+from audit_native_3mf_metadata_loss import audit, main, PROJECT, MODEL, model_xml_audit
 from unittest.mock import patch
 from contextlib import redirect_stdout, redirect_stderr
 from io import StringIO
@@ -17,7 +17,7 @@ def make(path, config, model=True, extras=None):
         if config is not None:
             z.writestr(PROJECT, config)
         if model:
-            z.writestr(MODEL, "<config/>")
+            z.writestr(MODEL, model if isinstance(model, str) else "<config/>")
         for name, value in (extras or {}).items():
             z.writestr(name, value)
 
@@ -100,6 +100,91 @@ class MetadataLossTests(unittest.TestCase):
                     '{"speed":"20","flags":[1,2]}',
                     '{"speed":"20","flags":[1,2],"secret":"hidden-value","extra":true}'):
             self.assertEqual(run(raw), 2)
+
+
+    def test_model_xml_scopes_and_strict_gate(self):
+        model = ('<config><object id="1"><metadata key="wall_loops" value="2"/>'
+                 '<part id="2" subtype="normal_part"><metadata key="secret" value="hidden-value"/>'
+                 '</part></object><plate><metadata key="plater_id" value="1"/>'
+                 '<model_instance><metadata key="object_id" value="1"/>'
+                 '<metadata key="instance_id" value="0"/><metadata key="identify_id" value="4"/>'
+                 '</model_instance></plate><assemble/></config>')
+        config = '{"speed":"20"}'
+        make(self.a, config, model=model)
+        def run(xml):
+            make(self.b, config, model=xml)
+            out, err = StringIO(), StringIO()
+            args = ["audit", "--baseline", str(self.a), "--candidate", str(self.b),
+                    "--require-identical-object-part-xml"]
+            with patch("sys.argv", args), redirect_stdout(out), redirect_stderr(err):
+                code = main()
+            self.assertNotIn("hidden-value", out.getvalue() + err.getvalue())
+            self.assertNotIn("wall_loops", out.getvalue() + err.getvalue())
+            return code
+
+        # Whitespace indentation and attribute order are not settings changes.
+        formatted = model.replace('<part id="2" subtype="normal_part">',
+                                  '\n <part subtype="normal_part" id="2">\n')
+        self.assertEqual(run(formatted), 0)
+        self.assertEqual(model_xml_audit(self.a, self.b)["part"]["changed"], 0)
+        # Runtime identity remains visible in a separate count, not a dropped field.
+        self.assertEqual(run(model.replace('value="4"', 'value="5"')), 0)
+        self.assertEqual(model_xml_audit(self.a, self.b)["instance_identity"]["changed"], 1)
+        self.assertEqual(run(model.replace('key="instance_id" value="0"',
+                                           'key="instance_id" value="1"')), 0)
+        self.assertEqual(model_xml_audit(self.a, self.b)["instance"]["changed"], 1)
+        self.assertEqual(run(model.replace('key="wall_loops" value="2"',
+                                           'key="wall_loops" value="3"')), 2)
+        self.assertEqual(run(model.replace('subtype="normal_part"', 'subtype="modifier"')), 2)
+        self.assertEqual(run(model.replace('<metadata key="secret" value="hidden-value"/>', '')), 2)
+        for bad in (False, "<config/>", "<config>", "<!DOCTYPE config>"+model,
+                    model.replace('<assemble/>', '<x>'*34+'</x>'*34)):
+            self.assertEqual(run(bad), 2)
+
+
+    def test_native_pointer_order_is_not_object_identity(self):
+        first = ('<object id="1"><metadata key="name" value="first"/>'
+                 '<part id="2" subtype="normal_part"><metadata key="wall_loops" value="2"/>'
+                 '<metadata key="speed" value="30"/></part></object>')
+        second = ('<object id="3"><metadata key="name" value="second"/>'
+                  '<part id="4" subtype="normal_part"><metadata key="wall_loops" value="4"/>'
+                  '</part></object>')
+        plate = ('<plate><model_instance><metadata key="object_id" value="1"/>'
+                 '</model_instance></plate>')
+        config = '{"speed":"20"}'
+        def xml(a, b):
+            return '<config>' + a + b + plate + '</config>'
+        make(self.a, config, model=xml(first, second))
+        make(self.b, config, model=xml(second, first))
+        by_id = model_xml_audit(self.a, self.b)
+        by_pos = model_xml_audit(self.a, self.b, by_object_id=False)
+        for group in ("object", "part"):
+            self.assertEqual(sum(by_id[group][k] for k in ("changed", "missing", "added")), 0)
+            self.assertGreater(sum(by_pos[group][k] for k in ("changed", "missing", "added")), 0)
+
+        args = ["audit", "--baseline", str(self.a), "--candidate", str(self.b),
+                "--require-identical-object-part-xml"]
+        def run():
+            out, err = StringIO(), StringIO()
+            with patch("sys.argv", args), redirect_stdout(out), redirect_stderr(err):
+                code = main()
+            self.assertNotIn("wall_loops", out.getvalue() + err.getvalue())
+            if code == 0:
+                self.assertIn("model_xml_positional", out.getvalue())
+            return code
+        self.assertEqual(run(), 0)
+        # Real setting, child order and identity changes must still fail.
+        for edited in (
+            first.replace('value="2"', 'value="9"'),
+            first.replace('<metadata key="wall_loops" value="2"/><metadata key="speed" value="30"/>',
+                          '<metadata key="speed" value="30"/><metadata key="wall_loops" value="2"/>'),
+            first.replace('object id="1"', 'object id="5"'),
+            first.replace('object id="1"', 'object id="3"'),
+            first.replace('object id="1"', 'object id="01"'),
+            first.replace(' id="1"', ''),
+        ):
+            make(self.b, config, model=xml(second, edited))
+            self.assertEqual(run(), 2)
 
 
 if __name__ == "__main__":
