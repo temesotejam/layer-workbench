@@ -70,6 +70,12 @@ try {
       sharedMesh:true,requireExactPlacement:false
     });
     console.log('DIAGNOSTIC: accepted shared-mesh export '+JSON.stringify(shared));
+    // The same resource must support distinct per-instance linear transforms.
+    // Keep the evidence even if the new, stricter affine gate fails in CI.
+    const affine = await checkBrowserMultiObject3mf(page,cube,'parity-output',{
+      sharedMesh:true,affineShared:true,requireExactPlacement:false
+    });
+    console.log('DIAGNOSTIC: accepted shared-mesh affine export '+JSON.stringify(affine));
   }
   const edited = await checkNativeManifestEditRoundTrip(page,cube);
   assert.equal(edited.triangles,24);
