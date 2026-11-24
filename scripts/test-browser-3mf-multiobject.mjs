@@ -5,10 +5,12 @@
 import assert from 'node:assert/strict';
 import {mkdir, writeFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
+import {auditNative3mfWorldFacetGroups} from './audit-native-3mf-world-facets.mjs';
 
-export async function checkBrowserMultiObject3mf(page, cubeBytes, outputDir='parity-output', {requireExactPlacement=false, sharedMesh=false, affineShared=false}={}) {
+export async function checkBrowserMultiObject3mf(page, cubeBytes, outputDir='parity-output', {requireExactPlacement=false, sharedMesh=false, affineShared=false, obliqueShared=false}={}) {
   assert.ok(cubeBytes instanceof Uint8Array && cubeBytes.byteLength >= 134);
-  if (affineShared && !sharedMesh) throw new Error('Affine fixture requires a shared mesh');
+  if ((affineShared || obliqueShared) && !sharedMesh) throw new Error('Affine fixture requires a shared mesh');
+  if (affineShared && obliqueShared) throw new Error('Choose exactly one affine fixture');
   // The separate-resource case must use GEOMETRICALLY DISTINCT source STLs.
   // Two byte-identical cubes cannot reveal an exporter which duplicates one
   // resource while silently discarding the other. Retain the original cube
@@ -29,7 +31,7 @@ export async function checkBrowserMultiObject3mf(page, cubeBytes, outputDir='par
     assert.notEqual(Buffer.compare(Buffer.from(secondSource),Buffer.from(cubeBytes)),0,
       'Independent source STL must have different vertex geometry');
   }
-  const report = await page.evaluate(async ({input,secondInput,requireExactPlacement,sharedMesh,affineShared}) => {
+  const report = await page.evaluate(async ({input,secondInput,requireExactPlacement,sharedMesh,affineShared,obliqueShared}) => {
     if (!globalThis.crossOriginIsolated) throw new Error('Isolated Chrome required');
     const engine = globalThis.__layerDiagnosticEngine?.engine;
     if (!engine || typeof engine.createSession !== 'function')
@@ -59,7 +61,8 @@ export async function checkBrowserMultiObject3mf(page, cubeBytes, outputDir='par
         {id:'instance-0',objectId:'object-0',plateId:'plate-0',
           transform:{matrix:matrix(90,90)}},
         {id:'instance-1',objectId:sharedMesh ? 'object-0' : 'object-1',plateId:'plate-0',
-          transform:{matrix:affineShared ? [0,-0.5,0,170, 1.5,0,0,90, 0,0,0.5,0, 0,0,0,1] : matrix(150,90)}}
+          transform:{matrix:obliqueShared ? [0.9,-0.4,0,170, 1.2,0.3,0,90, 0,0,0.5,0, 0,0,0,1] :
+            affineShared ? [0,-0.5,0,170, 1.5,0,0,90, 0,0,0.5,0, 0,0,0,1] : matrix(150,90)}}
       ],
       modifierVolumes:[]
     };
@@ -139,7 +142,8 @@ export async function checkBrowserMultiObject3mf(page, cubeBytes, outputDir='par
         throw new Error('Expected two spatially separated 3MF mesh clusters');
       const expected=[
         {min:[90,90,0],max:[110,110,20]},
-        affineShared ? {min:[160,90,0],max:[170,120,10]} :
+        obliqueShared ? {min:[162,90,0],max:[188,120,10]} :
+          affineShared ? {min:[160,90,0],max:[170,120,10]} :
           {min:[150,90,0],max:[170,110,sharedMesh ? 20 : 10]}
       ];
       absolutePlacementVerified=true;
@@ -165,7 +169,7 @@ export async function checkBrowserMultiObject3mf(page, cubeBytes, outputDir='par
       absolutePlacementVerified
     };
   }, {input:Array.from(cubeBytes),secondInput:secondSource ? Array.from(secondSource) : [],
-    requireExactPlacement,sharedMesh,affineShared});
+    requireExactPlacement,sharedMesh,affineShared,obliqueShared});
   assert.equal(report.initialInstances, 2);
   assert.equal(report.initialObjects, sharedMesh ? 1 : 2);
   assert.equal(report.initialMeshes, sharedMesh ? 1 : 2);
@@ -173,18 +177,37 @@ export async function checkBrowserMultiObject3mf(page, cubeBytes, outputDir='par
   assert.ok(report.splitGapMm >= 30);
   const archive=Buffer.from(report.archive), stl=Buffer.from(report.stl);
   await mkdir(outputDir,{recursive:true});
-  const prefix=affineShared ? 'wasm-sharedmesh-affine' : sharedMesh ? 'wasm-sharedmesh' : 'wasm-multiobject';
+  const prefix=obliqueShared ? 'wasm-sharedmesh-oblique' : affineShared ? 'wasm-sharedmesh-affine' : sharedMesh ? 'wasm-sharedmesh' : 'wasm-multiobject';
   await writeFile(outputDir+`/${prefix}-3mf.3mf`,archive);
   await writeFile(outputDir+`/${prefix}-converted.stl`,stl);
+  // Independent source-geometry witness: compare to the original STL,
+  // not the exported XML (which could repeat the same transform error).
+  // The rational 3-4-5 rotation is atan2(4,3) with local scale (1.5,.5,.5).
+  // Full facet matching ignores face order and winding, not XYZ correspondence.
+  let sourceFacetAudit=null;
+  if (obliqueShared) {
+    const input=new DataView(cubeBytes.buffer,cubeBytes.byteOffset,cubeBytes.byteLength);
+    assert.equal(input.getUint32(80,true),12);
+    assert.equal(cubeBytes.byteLength,84+50*12);
+    const source=Array.from({length:12},(_,face)=>Array.from({length:3},(_,vertex)=>
+      [0,1,2].map(axis=>input.getFloat32(84+face*50+12+vertex*12+axis*4,true))));
+    const first=source.map(face=>face.map(([x,y,z])=>[90+x,90+y,z]));
+    const second=source.map(face=>face.map(([x,y,z])=>[
+      170+(3/5)*(1.5*x)-(4/5)*(0.5*y),
+      90+(4/5)*(1.5*x)+(3/5)*(0.5*y),0.5*z]));
+    sourceFacetAudit=auditNative3mfWorldFacetGroups(stl,[first,second]);
+  }
   const expectedResources=sharedMesh ? 1 : 2;
   const hierarchyRetained=report.importedInstances===2 &&
     report.importedObjects===expectedResources && report.importedMeshes===expectedResources;
   const sha256=createHash('sha256').update(archive).digest('hex');
   await writeFile(outputDir+`/${prefix}-3mf-summary.json`,JSON.stringify({
-    fixture:affineShared ? 'shared cube with independent +90 degree Z rotation and local scale (1.5, 0.5, 0.5) on second instance' : sharedMesh ? 'two instances of ONE synthetic 12-triangle cube mesh, 60 mm apart in X'
+    fixture:obliqueShared ? 'shared cube with independent Z atan2(4,3) rotation and local scale (1.5, 0.5, 0.5)' : affineShared ? 'shared cube with independent +90 degree Z rotation and local scale (1.5, 0.5, 0.5) on second instance' : sharedMesh ? 'two instances of ONE synthetic 12-triangle cube mesh, 60 mm apart in X'
                        : 'two DISTINCT synthetic 12-triangle meshes (20 mm and 10 mm height), 60 mm apart in X',
     sharedInputMesh:sharedMesh,
     affineSharedFixture:affineShared,
+    obliqueSharedFixture:obliqueShared,
+    sourceFacetAudit,
     distinctInputGeometry:!sharedMesh,
     engine:'OrcaSlicer v2.5.0 isolated Chrome WASM candidate',
     source:'WASM-generated project, NOT desktop-authored 3MF',
@@ -203,7 +226,7 @@ export async function checkBrowserMultiObject3mf(page, cubeBytes, outputDir='par
   },null,2)+'\n');
   return {bytes:archive.length,sha256,placementVerified:report.absolutePlacementVerified,
     initialMeshes:report.initialMeshes,instances:report.importedInstances,
-    reimportedMeshes:report.importedMeshes,triangles:report.stlTriangles,
+    reimportedMeshes:report.importedMeshes,triangles:report.stlTriangles,sourceFacetAudit,
     supported:hierarchyRetained && report.absolutePlacementVerified &&
       report.stlTriangles === 24};
 }
