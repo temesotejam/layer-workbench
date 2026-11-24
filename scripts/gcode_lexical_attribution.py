@@ -4,7 +4,7 @@ from collections import Counter
 from decimal import Decimal, DecimalException, localcontext
 import re
 
-from compare_gcode import canonical
+from compare_gcode import canonical, extrusion_move_metrics, gcode_feature_context
 
 # Fixed vocabulary: arbitrary vendor macros, comments, and paths never leave
 # this diagnostic. Unknown commands still participate in exact comparisons.
@@ -383,11 +383,70 @@ def summarize(native, wasm, native_labels=None, wasm_labels=None):
     }
 
 
+def compare_planar_strokes(native_path, wasm_path, native_commands, wasm_commands):
+    """Count exact directed/undirected G1 positive-E strokes, including Z.
+
+    Reuse the existing fixture modal parser rather than infer segments from
+    adjacent E words (travel, G92 and primes intervene). Emit counts only.
+    Arcs, nonplanar moves, timing, travel, homing and vendor-specific state
+    are outside this projection. It cannot establish firmware equivalence.
+    """
+    traces = []
+    for path, commands in ((native_path, native_commands), (wasm_path, wasm_commands)):
+        strokes = []
+        metrics = extrusion_move_metrics(
+            commands, gcode_feature_context(path), planar_strokes=strokes)
+        if metrics[1] is None:
+            return {"status": "invalid-fixture-motion", "semantic_equivalence_verified": False}
+        traces.append((strokes, metrics[0] - len(strokes)))
+    (a, excluded_a), (b, excluded_b) = traces
+    if not a or not b:
+        return {"status": "no-planar-strokes", "semantic_equivalence_verified": False}
+
+    def directed(s):
+        z, _, start, end, _ = s
+        return z, start, end
+
+    def undirected(s):
+        z, _, start, end, _ = s
+        return z, *sorted((start, end))
+
+    def shared(key):
+        return sum((Counter(map(key, a)) & Counter(map(key, b))).values())
+
+    # Multiset multiplicity matters; none of these projections is a PASS.
+    ca, cb = Counter(map(undirected, a)), Counter(map(undirected, b))
+    common = ca & cb
+    layer_a = Counter(s[0] for s in a)
+    layer_b = Counter(s[0] for s in b)
+    layer_shared = Counter()
+    for key, count in common.items():
+        layer_shared[key[0]] += count
+    layers = layer_a.keys() | layer_b.keys()
+    return {
+        "status": "measured",
+        "native_planar_strokes": len(a), "wasm_planar_strokes": len(b),
+        "native_other_counted_deposition": excluded_a,
+        "wasm_other_counted_deposition": excluded_b,
+        "exact_directed_overlap": shared(directed),
+        "exact_undirected_overlap": sum(common.values()),
+        "exact_directed_with_e_and_feature_overlap": shared(lambda s: s),
+        "ordered_directed_equal": list(map(directed, a)) == list(map(directed, b)),
+        "observed_z_planes": len(layers),
+        "planes_with_different_undirected_multisets": sum(
+            layer_shared[z] != layer_a[z] or layer_shared[z] != layer_b[z]
+            for z in layers),
+        "semantic_equivalence_verified": False,
+    }
+
+
 def compare_lexical(native, wasm):
     if any(p.stat().st_size > MAX_BYTES for p in (native, wasm)):
         return {"status": "byte-limit"}
     a, b = canonical(native), canonical(wasm)
     if max(len(a), len(b)) > MAX_COMMANDS:
         return {"status": "command-limit"}
-    return summarize([c for _, c in a], [c for _, c in b],
-                     bounded_comment_labels(native, a), bounded_comment_labels(wasm, b))
+    result = summarize([c for _, c in a], [c for _, c in b],
+                       bounded_comment_labels(native, a), bounded_comment_labels(wasm, b))
+    result['planar_stroke_diagnostics'] = compare_planar_strokes(native, wasm, a, b)
+    return result

@@ -208,5 +208,42 @@ class LexicalAttributionTests(unittest.TestCase):
         self.assertEqual(g["nonempty_native_windows"], 1)
         self.assertEqual(g["exact_unique_insertion_windows"], 1)
 
+    def test_planar_stroke_reordering_and_direction_are_separate(self):
+        with tempfile.TemporaryDirectory() as directory:
+            a, b = Path(directory) / "a", Path(directory) / "b"
+            a.write_text("G90\nM83\nG1 Z1\nG1 X1 Y1\nG1 X2 Y1 E1\n"
+                         "G1 X3 Y1\nG1 X4 Y1 E1\n")
+            b.write_text("G90\nM83\nG1 Z1\nG1 X4 Y1\nG1 X3 Y1 E1\n"
+                         "G1 X1 Y1\nG1 X2 Y1 E1\n")
+            g = compare_lexical(a, b)["planar_stroke_diagnostics"]
+            self.assertEqual(g["native_planar_strokes"], 2)
+            self.assertEqual(g["exact_undirected_overlap"], 2)
+            self.assertEqual(g["exact_directed_overlap"], 1)
+            self.assertEqual(g["planes_with_different_undirected_multisets"], 0)
+            self.assertFalse(g["ordered_directed_equal"])
+            self.assertFalse(g["semantic_equivalence_verified"])
+
+    def test_planar_stroke_layer_and_extrusion_changes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            a, b = Path(directory) / "a", Path(directory) / "b"
+            a.write_text("G90\nM83\nG1 Z1\nG1 X1 Y1 E1\n"
+                         "G1 Z2\nG1 X2 Y1 E1\n")
+            b.write_text("G90\nM83\nG1 Z1\nG1 X1 Y1 E2\n"
+                         "G1 Z3\nG1 X2 Y1 E1\n")
+            g = compare_lexical(a, b)["planar_stroke_diagnostics"]
+            self.assertEqual(g["exact_directed_overlap"], 1)
+            self.assertEqual(g["exact_directed_with_e_and_feature_overlap"], 0)
+            self.assertEqual(g["planes_with_different_undirected_multisets"], 2)
+
+    def test_planar_stroke_invalid_fixture_discards_partial_trace(self):
+        with tempfile.TemporaryDirectory() as directory:
+            a, b = Path(directory) / "a", Path(directory) / "b"
+            a.write_text("M83\nG1 X1 E1\n")
+            b.write_text("M83\nG1 X1 E1\nG1 X2 X3 E1\n")
+            g = compare_lexical(a, b)["planar_stroke_diagnostics"]
+            self.assertEqual(g["status"], "invalid-fixture-motion")
+            self.assertNotIn("exact_directed_overlap", g)
+
+
 if __name__ == "__main__":
     unittest.main()
