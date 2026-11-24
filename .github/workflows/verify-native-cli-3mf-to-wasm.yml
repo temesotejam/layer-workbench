@@ -419,3 +419,63 @@ jobs:
           PY
           # This is native-vs-native after a browser edit, NOT native-vs-WASM
           # slicing parity. The original project and all G-code stay in CI.
+
+      - name: Slice exactly the same browser-edited native project with both engines
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="${RUNNER_TEMP}/OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.5.0.AppImage"
+          input="${PWD}/native-cli-output/browser-source-preserving-edited.3mf"
+          test -s "${input}"
+          sha256sum "${input}"
+          out="${PWD}/native-cli-output/same-archive-native"
+          mkdir "${out}"
+          timeout 180s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
+            "${input}" --arrange 0 --slice 0 --outputdir "${out}" \
+            > "${out}/native-slice.log" 2>&1 || {
+              echo 'Native same-archive slice failed'
+              exit 1
+            }
+          test -s "${out}/plate_1.gcode"
+          python3 scripts/serve-isolated.py --port 8766 > /tmp/isolated-layer-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..25}; do
+            if curl -fsS http://127.0.0.1:8766/engine-probe.html >/dev/null; then break; fi
+            sleep 1
+          done
+          timeout 240s node scripts/test-native-cli-3mf-to-wasm.mjs --slice-embedded
+          # Strict comparator unchanged; no raw G-code or settings in the log.
+          # A mismatch is a parity FAIL, not evidence that the harness failed.
+          # Do not merge a failed gate or activate the engine on Pages.
+          python3 - <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, 'scripts')
+          from compare_gcode import compare
+          root = Path('native-cli-output')
+          folder = root / 'same-archive-native'
+          native = folder / 'plate_1.gcode'
+          wasm = root / 'same-archive-wasm.gcode'
+          if sorted(folder.rglob('*.gcode')) != [native]:
+              raise SystemExit('Expected exactly one native plate G-code')
+          if not all(1024 <= p.stat().st_size <= 12_000_000 for p in (native, wasm)):
+              raise SystemExit('Same-archive G-code outside diagnostic bounds')
+          r = compare(native, wasm, min_extrusion_moves=100)
+          fields = ('match', 'mismatched_commands', 'native_commands', 'wasm_commands',
+                    'native_extrusion_moves', 'wasm_extrusion_moves',
+                    'native_counted_linear_xy_mm', 'wasm_counted_linear_xy_mm',
+                    'native_counted_planar_z_levels', 'wasm_counted_planar_z_levels',
+                    'counted_positive_e_delta_mm', 'feature_category_deltas')
+          summary = {k: r[k] for k in fields}
+          summary.update(input_issue_count=len(r['input_issues']),
+                         identical_source_archive=True, replacement_profiles=False,
+                         effective_full_profile_equivalence_verified=False,
+                         parity_pass=False, usable_for_printing=False)
+          print('NATIVE_WASM_SAME_ARCHIVE ' + json.dumps(summary, sort_keys=True))
+          if not r['match']:
+              raise SystemExit('Same-archive strict ordered G-code comparison FAIL')
+          print('PASS: ordered commands for this single archive; effective profiles remain unverified')
+          PY
+          # All input archives and raw output G-code remain on this runner.
