@@ -199,6 +199,38 @@ jobs:
           if (core['DistinctBuildRoots'], core['DistinctResolvedMeshResources']) != (1, 1) or report['firstObservedGap'] != 'counts-retained-placement-unverified':
               raise SystemExit('Wrapper-aware Core hierarchy count diagnostic disagrees with the strict fixture')
           PY
+          # Separate from the translation-only gate: the second shared
+          # instance uses a +90 degree Z rotation and nonuniform local scale.
+          python3 scripts/audit_3mf_scene.py \
+            --input parity-output/wasm-sharedmesh-affine-3mf.3mf \
+            --expected-build-items 2 --min-triangles 12 \
+            --report parity-output/accepted-sharedmesh-affine-scene.json
+          python3 scripts/check_3mf_stl_bounds.py \
+            --input parity-output/wasm-sharedmesh-affine-3mf.3mf \
+            --stl parity-output/wasm-sharedmesh-affine-converted.stl \
+            --report parity-output/accepted-sharedmesh-affine-stl-comparison.json
+          python3 scripts/classify_3mf_hierarchy_gap.py \
+            --summary parity-output/wasm-sharedmesh-affine-3mf-summary.json \
+            --scene parity-output/accepted-sharedmesh-affine-scene.json \
+            --report parity-output/accepted-sharedmesh-affine-hierarchy-stage.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path('parity-output')
+          summary = json.loads((root / 'wasm-sharedmesh-affine-3mf-summary.json').read_text())
+          scene = json.loads((root / 'accepted-sharedmesh-affine-scene.json').read_text())
+          hierarchy = json.loads((root / 'accepted-sharedmesh-affine-hierarchy-stage.json').read_text())
+          core = hierarchy['exportedCore']
+          if summary['affineSharedFixture'] is not True or summary['absolutePlacementVerified'] is not True:
+              raise SystemExit('Shared affine fixture changed either instance world bounds')
+          if (scene['totalBuildItems'], scene['totalMeshTriangles'], scene['totalResolvedTriangleInstances']) != (2, 12, 24):
+              raise SystemExit('Shared affine fixture lost Core mesh sharing')
+          if (core['DistinctBuildRoots'], core['DistinctResolvedMeshResources']) != (1, 1):
+              raise SystemExit('Shared affine fixture has distinct Core resources')
+          if (summary['reimportedObjects'], summary['reimportedMeshes'], summary['reimportedInstances']) != (1, 1, 2):
+              raise SystemExit('Shared affine fixture lost native reimport hierarchy')
+          print('PASS: two independently transformed instances retain one shared resource and expected XYZ bounds')
+          PY
       - name: Retain diagnostic evidence only
         if: always()
         uses: actions/upload-artifact@v4
