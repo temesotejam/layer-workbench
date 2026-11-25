@@ -87,7 +87,7 @@ try {
   assert.equal(await page.locator('#transform-x').inputValue(), modelX,
     'switching views must not edit the selected model');
   const directionTransforms = await Promise.all(
-    ['x','y','z','rz','sx','sy','sz'].map(k => page.locator('#transform-'+k).inputValue()));
+    ['x','y','z','rx','ry','rz','sx','sy','sz'].map(k => page.locator('#transform-'+k).inputValue()));
   for (const [mode,label] of [['left','Left'],['right','Right'],['rear','Rear'],['bottom','Bottom']]) {
     const button = page.locator('[data-view-orientation="'+mode+'"]');
     await button.click();
@@ -96,7 +96,7 @@ try {
     assert.equal(await page.locator('#view-direction-label').innerText(), label);
     await page.locator('#fit-all-view').click();
     assert.deepEqual(await Promise.all(
-      ['x','y','z','rz','sx','sy','sz'].map(k => page.locator('#transform-'+k).inputValue())),
+      ['x','y','z','rx','ry','rz','sx','sy','sz'].map(k => page.locator('#transform-'+k).inputValue())),
       directionTransforms, 'camera direction must not edit transforms');
   }
   // The bed used to be double-sided and would obscure the entire cube from
@@ -146,7 +146,7 @@ try {
   assert.equal(await page.locator('#projection-label').innerText(), 'Perspective');
   await threeDButton.click();
   assert.deepEqual(await Promise.all(
-    ['x','y','z','rz','sx','sy','sz'].map(k => page.locator('#transform-'+k).inputValue())),
+    ['x','y','z','rx','ry','rz','sx','sy','sz'].map(k => page.locator('#transform-'+k).inputValue())),
     directionTransforms, 'projection changes must not edit transforms');
 
   // Automatic projection is opt-in (matching desktop's default preference).
@@ -170,7 +170,7 @@ try {
   assert.equal(await page.locator('#projection-label').innerText(), 'Perspective');
   await threeDButton.click();
   assert.deepEqual(await Promise.all(
-    ['x','y','z','rz','sx','sy','sz'].map(k => page.locator('#transform-'+k).inputValue())),
+    ['x','y','z','rx','ry','rz','sx','sy','sz'].map(k => page.locator('#transform-'+k).inputValue())),
     directionTransforms, 'auto projection must not edit transforms');
 
   // Browser transforms can be undone, redone, or replaced with a new edit.
@@ -265,7 +265,7 @@ try {
   // and must not move the source or create history for an already centered model.
   const centerButton = page.locator('#center-on-bed');
   assert.equal(await centerButton.isEnabled(), true);
-  const centerKeys = ['x','y','z','rz','sx','sy','sz'];
+  const centerKeys = ['x','y','z','rx','ry','rz','sx','sy','sz'];
   const readCenterTransforms = () => Promise.all(centerKeys.map(k =>
     page.locator('#transform-'+k).inputValue()));
   const beforeCenter = await readCenterTransforms();
@@ -291,7 +291,7 @@ try {
   // Framing all visible objects must differ from framing only the selected
   // displaced duplicate, and must not change selection, placement or history.
   const transformsBeforeFit = await Promise.all(
-    ['x','y','z','rz','sx','sy','sz'].map(k => page.locator('#transform-'+k).inputValue()));
+    ['x','y','z','rx','ry','rz','sx','sy','sz'].map(k => page.locator('#transform-'+k).inputValue()));
   const historyBeforeFit = [await undoButton.isEnabled(), await redoButton.isEnabled()];
   await topButton.click();
   await page.locator('#fit-view').click();
@@ -301,7 +301,7 @@ try {
   assert.equal(selectedFrame.equals(allFrame), false,
     'Fit all must reframe the displaced source and duplicate together');
   assert.deepEqual(await Promise.all(
-    ['x','y','z','rz','sx','sy','sz'].map(k => page.locator('#transform-'+k).inputValue())),
+    ['x','y','z','rx','ry','rz','sx','sy','sz'].map(k => page.locator('#transform-'+k).inputValue())),
     transformsBeforeFit, 'Fit all must not change selected transforms');
   assert.deepEqual([await undoButton.isEnabled(), await redoButton.isEnabled()], historyBeforeFit);
   assert.equal(await page.locator('#object-count').innerText(), '2 objects');
@@ -344,6 +344,48 @@ try {
   await page.locator('#fit-all-view').click();
   assert.equal(await page.locator('#object-count').innerText(), '0 objects');
 
+  // A sloped tetrahedron has no vertex at the local AABB's (y=0,z=0)
+  // corner. With +45° X rotation its exact minimum Z is 20/sqrt(2).
+  // The cached-box fast path would wrongly report zero and leave it floating.
+  await page.locator('#model-file').setInputFiles({
+    name: 'sloped-tetra.obj',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('v 0 0 20\nv 20 0 20\nv 0 20 0\nv 0 20 20\nf 1 3 2\nf 1 2 4\nf 1 4 3\nf 2 3 4\n'),
+  });
+  await page.locator('#object-count').getByText('1 object').waitFor();
+  const rx = page.locator('#transform-rx'), ry = page.locator('#transform-ry');
+  assert.equal(await rx.isEnabled(), true);
+  assert.equal(await ry.isEnabled(), true);
+  await rx.fill('45'); await rx.press('Tab');
+  assert.equal(Number(await rx.inputValue()), 45);
+  await ry.fill('20'); await ry.press('Tab');
+  assert.equal(Number(await ry.inputValue()), 20);
+  await undoButton.click();
+  assert.equal(Number(await rx.inputValue()), 45);
+  assert.equal(Number(await ry.inputValue()), 0);
+  await redoButton.click();
+  assert.equal(Number(await ry.inputValue()), 20);
+  await undoButton.click();
+  assert.equal(Number(await ry.inputValue()), 0);
+  const tetraBefore = await readCenterTransforms();
+  assert.equal(Number(tetraBefore[2]), 0);
+  await dropToBedButton.click();
+  const tetraAfter = await readCenterTransforms();
+  assert.ok(Math.abs(Number(tetraAfter[2]) + 20 / Math.sqrt(2)) < 0.001,
+    'drop must place rotated actual vertices on Z=0, not cached box corners');
+  assert.deepEqual(tetraAfter.slice(0,2), tetraBefore.slice(0,2));
+  assert.deepEqual(tetraAfter.slice(3), tetraBefore.slice(3));
+  await dropToBedButton.click();
+  assert.match(await page.locator('#file-status').innerText(), /already touches/);
+  await undoButton.click();
+  assert.deepEqual(await readCenterTransforms(), tetraBefore);
+  await redoButton.click();
+  assert.deepEqual(await readCenterTransforms(), tetraAfter);
+  await page.locator('#remove-object').click();
+  await page.locator('#object-count').getByText('0 objects').waitFor();
+  assert.equal(await rx.isDisabled(), true);
+  assert.equal(await ry.isDisabled(), true);
+
   // Reversible deletion must also preserve 3MF scene roots. The normal
   // public viewport treats a Core 3MF as one viewer item; the explicitly
   // opted-in isolated lab exposes its two build items independently.
@@ -360,6 +402,8 @@ try {
   assert.equal(await duplicateButton.isDisabled(), true, '3MF duplication remains unsupported');
   assert.equal(await dropToBedButton.isDisabled(), true, 'native 3MF bed editing remains unsupported');
   assert.equal(await centerButton.isDisabled(), true, 'native 3MF centering remains unsupported');
+  assert.equal(await rx.isDisabled(), true, 'new numeric X rotation is loose-mesh only');
+  assert.equal(await ry.isDisabled(), true, 'new numeric Y rotation is loose-mesh only');
   assert.equal(await undoButton.isDisabled(), true, 'import must clear preceding STL history');
   await page.locator('#remove-object').click();
   await page.locator('#object-count').getByText((expected3mfCount-1) + (expected3mfCount-1 === 1 ? ' object' : ' objects')).waitFor();
