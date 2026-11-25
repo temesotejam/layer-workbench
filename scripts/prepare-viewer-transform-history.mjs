@@ -55,6 +55,22 @@ export function createViewerTransformHistory(limit = 50) {
       redoStack.length = 0;
       return true;
     },
+    recordBatch(edits) {
+      if (!Array.isArray(edits) || edits.length < 1 || edits.length > 64)
+        throw new RangeError("Expected 1 to 64 viewer edits");
+      const ids = new Set();
+      const changes = edits.map(({id,before,after}) => {
+        if (typeof id !== "string" || !id || ids.has(id))
+          throw new TypeError("Missing or duplicate object id");
+        ids.add(id);
+        return {id, before:cloneSnapshot(before), after:cloneSnapshot(after)};
+      }).filter(change => !equivalent(change.before, change.after));
+      if (!changes.length) return false;
+      undoStack.push({kind:"batch", changes});
+      if (undoStack.length > limit) undoStack.shift();
+      redoStack.length = 0;
+      return true;
+    },
     recordDuplicate(id) {
       if (typeof id !== "string" || !id) throw new TypeError("Missing duplicate id");
       undoStack.push({kind: "duplicate", id});
@@ -73,6 +89,7 @@ export function createViewerTransformHistory(limit = 50) {
       redoStack.push(item);
       if (item.kind === "duplicate") return {id: item.id, duplicateAction: "remove"};
       if (item.kind === "delete") return {id: item.id, deleteAction: "restore"};
+      if (item.kind === "batch") return {batch: item.changes.map(c => ({id:c.id,snapshot:cloneSnapshot(c.before)}))};
       return { id: item.id, snapshot: cloneSnapshot(item.before) };
     },
     redo() {
@@ -81,6 +98,7 @@ export function createViewerTransformHistory(limit = 50) {
       undoStack.push(item);
       if (item.kind === "duplicate") return {id: item.id, duplicateAction: "restore"};
       if (item.kind === "delete") return {id: item.id, deleteAction: "remove"};
+      if (item.kind === "batch") return {batch: item.changes.map(c => ({id:c.id,snapshot:cloneSnapshot(c.after)}))};
       return { id: item.id, snapshot: cloneSnapshot(item.after) };
     },
   };

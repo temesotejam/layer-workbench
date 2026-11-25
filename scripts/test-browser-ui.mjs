@@ -3,7 +3,7 @@
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
 import { mkdir, readFile } from 'node:fs/promises';
-import { findViewerSpace } from './prepare-find-space.mjs';
+import { findViewerSpace, arrangeViewerSpaces } from './prepare-find-space.mjs';
 
 // Pure geometry regressions run before starting Chrome.
 const testPlate = [-128,-128,128,128];
@@ -14,6 +14,14 @@ assert.equal(findViewerSpace([0,0,250,250], [], testPlate), null);
 assert.equal(findViewerSpace([0,0,20,20], [testPlate], testPlate), null);
 assert.throws(() => findViewerSpace([0,0,NaN,20], [], testPlate), RangeError);
 console.log('PASS: viewer free-space geometry regressions (6)');
+const packBoxes = [[0,0,20,20],[0,0,20,20],[0,0,30,30]];
+const packMoves = arrangeViewerSpaces(packBoxes,testPlate);
+assert.ok(packMoves);
+const packed = packBoxes.map((b,i) => b.map((v,j)=>v+(j%2?packMoves[i].dy:packMoves[i].dx)));
+assert.deepEqual(arrangeViewerSpaces(packed,testPlate),packed.map(()=>({dx:0,dy:0})));
+assert.equal(arrangeViewerSpaces([[0,0,240,240],[0,0,240,240]],testPlate),null);
+assert.throws(()=>arrangeViewerSpaces([[0,0,NaN,20]],testPlate),RangeError);
+console.log('PASS: viewer batch placement geometry regressions');
 
 const site = process.env.UI_TEST_URL || 'http://127.0.0.1:8765/';
 const browser = await chromium.launch({
@@ -58,6 +66,8 @@ try {
   const placementButton = page.locator('#check-placement');
   const placementStatus = page.locator('#placement-status');
   const findSpaceButton = page.locator('#find-space');
+  const arrangeAllButton = page.locator('#arrange-all');
+  assert.equal(await arrangeAllButton.isDisabled(), true);
   assert.equal(await findSpaceButton.isDisabled(), true);
   assert.equal(await placementButton.isDisabled(), true);
   const initialStatus = await page.locator('#file-status').innerText();
@@ -336,6 +346,30 @@ try {
   assert.equal(Number(await page.locator('#transform-y').inputValue()), originalY);
   await page.locator('#object-tree [data-object-id]').last().click();
 
+  // Batch arrangement retains selection and uses one reversible action.
+  await centerButton.click();
+  const beforeBatch = await readCenterTransforms();
+  assert.equal(await arrangeAllButton.isEnabled(), true);
+  const selectedBeforeBatch = await page.locator('#object-tree .active').getAttribute('data-object-id');
+  await arrangeAllButton.click();
+  assert.match(await page.locator('#file-status').innerText(), /Arranged all loose meshes/);
+  const afterBatch = await readCenterTransforms();
+  assert.deepEqual(afterBatch.slice(2), beforeBatch.slice(2));
+  assert.equal(await page.locator('#object-tree .active').getAttribute('data-object-id'),selectedBeforeBatch);
+  await placementButton.click();
+  assert.match(await placementStatus.innerText(), /Within viewer plate XY.*overlaps: 0/);
+  await arrangeAllButton.click();
+  assert.match(await page.locator('#file-status').innerText(), /already have 5 mm/);
+  await undoButton.click();
+  assert.deepEqual(await readCenterTransforms(),beforeBatch);
+  await placementButton.click();
+  assert.match(await placementStatus.innerText(), /overlaps: 1/);
+  await redoButton.click();
+  assert.deepEqual(await readCenterTransforms(),afterBatch);
+  await undoButton.click();
+  await undoButton.click();
+  assert.deepEqual(await readCenterTransforms(),beforeCenter);
+
   // Framing all visible objects must differ from framing only the selected
   // displaced duplicate, and must not change selection, placement or history.
   const transformsBeforeFit = await Promise.all(
@@ -460,6 +494,7 @@ try {
   assert.equal(await centerButton.isDisabled(), true, 'native 3MF centering remains unsupported');
   assert.equal(await placementButton.isDisabled(), true, '3MF placement check remains unsupported');
   assert.equal(await findSpaceButton.isDisabled(), true, '3MF arrangement remains unsupported');
+  assert.equal(await arrangeAllButton.isDisabled(), true, '3MF batch arrangement remains unsupported');
   assert.equal(await rx.isDisabled(), true, 'new numeric X rotation is loose-mesh only');
   assert.equal(await ry.isDisabled(), true, 'new numeric Y rotation is loose-mesh only');
   assert.equal(await undoButton.isDisabled(), true, 'import must clear preceding STL history');

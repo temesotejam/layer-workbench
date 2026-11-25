@@ -7,7 +7,7 @@ import { ThreeMFLoader } from "three/addons/loaders/3MFLoader.js";
 import { automaticViewProjection, orthographicFitHalfHeight, perspectiveFitDistance, prepareViewOrientation } from "./scripts/prepare-camera-fit.mjs";
 import { get3mfViewportBuildItems } from "./scripts/three-mf-viewport-items.mjs";
 import { captureViewerTransform, createViewerTransformHistory } from "./scripts/prepare-viewer-transform-history.mjs";
-import { findViewerSpace } from "./scripts/prepare-find-space.mjs";
+import { findViewerSpace, arrangeViewerSpaces } from "./scripts/prepare-find-space.mjs";
 
 const picker = document.querySelector("#model-file");
 const status = document.querySelector("#file-status");
@@ -25,6 +25,7 @@ const dropToBedButton = document.querySelector("#drop-to-bed");
 const centerOnBedButton = document.querySelector("#center-on-bed");
 const checkPlacementButton = document.querySelector("#check-placement");
 const findSpaceButton = document.querySelector("#find-space");
+const arrangeAllButton = document.querySelector("#arrange-all");
 const placementStatus = document.querySelector("#placement-status");
 const undoButton = document.querySelector("#undo-viewer");
 const redoButton = document.querySelector("#redo-viewer");
@@ -219,6 +220,8 @@ function selectEntry(id) {
   checkPlacementButton.disabled = dropToBedButton.disabled;
   findSpaceButton.disabled = dropToBedButton.disabled || entries.length > 64 ||
     !entries.every(item => !item.sourceRoot && ["stl", "obj"].includes(item.format));
+  arrangeAllButton.disabled = entries.length < 2 || entries.length > 64 ||
+    !entries.every(item => !item.sourceRoot && ["stl", "obj"].includes(item.format));
   entries.forEach(item => item.object?.traverse(node => {
     if (!node.isMesh) return;
     const materials = Array.isArray(node.material) ? node.material : [node.material];
@@ -367,6 +370,25 @@ function restoreViewerHistory(step) {
     }
     updateViewerProjectHeader();
     updateViewerHistoryButtons();
+    return;
+  }
+  if (step.batch) {
+    const targets = step.batch.map(s => entries.find(item => item.id === s.id));
+    if (targets.some(item => !item || item.sourceRoot || !["stl","obj"].includes(item.format))) {
+      clearViewerHistory();
+      return;
+    }
+    step.batch.forEach(({snapshot}, i) => {
+      const entry = targets[i];
+      entry.object.position.fromArray(snapshot.position);
+      entry.object.quaternion.fromArray(snapshot.quaternion);
+      entry.object.scale.fromArray(snapshot.scale);
+      entry.object.updateMatrixWorld(true);
+      entry.modified = snapshot.modified;
+    });
+    updateTransformStatus();
+    updateViewerHistoryButtons();
+    status.textContent = "Restored viewer-only arrangement (original files unchanged)";
     return;
   }
   const entry = entries.find(item => item.id === step.id);
@@ -628,6 +650,51 @@ findSpaceButton.addEventListener("click", () => {
     status.textContent = "Moved selected mesh to free viewer AABB space (5 mm clearance; not printability).";
   } catch (error) {
     status.textContent = "Find space unavailable: " + error.message;
+  }
+});
+// Plan all loose-mesh translations first; a failed plan leaves the entire scene unchanged.
+arrangeAllButton.addEventListener("click", () => {
+  if (!rendererReady || transformControls.dragging || arrangeAllButton.disabled) return;
+  try {
+    const bounds = entries.map(item => {
+      item.object.updateWorldMatrix(true, true);
+      const b = new THREE.Box3().setFromObject(item.object, true);
+      return [b.min.x, b.min.y, b.max.x, b.max.y];
+    });
+    const hx = plate.geometry.parameters.width / 2, hy = plate.geometry.parameters.height / 2;
+    const moves = arrangeViewerSpaces(bounds,
+      [plate.position.x-hx, plate.position.y-hy, plate.position.x+hx, plate.position.y+hy]);
+    if (!moves) {
+      status.textContent = "No complete greedy viewer arrangement; nothing moved.";
+      return;
+    }
+    const edits = [];
+    for (const [i, {dx,dy}] of moves.entries()) {
+      if (Math.abs(dx) < 1e-9 && Math.abs(dy) < 1e-9) continue;
+      const entry = entries[i], before = captureViewerTransform(entry);
+      const position = [before.position[0]+dx, before.position[1]+dy, before.position[2]];
+      if (![dx,dy,...position.slice(0,2)].every(v => Number.isFinite(v) && Math.abs(v)<=5000)) {
+        status.textContent = "Arrangement correction out of bounds; nothing moved.";
+        return;
+      }
+      edits.push({id:entry.id,before,after:{...before,position,modified:true},entry});
+    }
+    if (!edits.length) {
+      status.textContent = "All meshes already have 5 mm viewer AABB clearance.";
+      return;
+    }
+    viewerHistory.recordBatch(edits);
+    detachedViewerDuplicates.clear();
+    for (const {entry,after} of edits) {
+      entry.object.position.fromArray(after.position);
+      entry.object.updateMatrixWorld(true);
+      entry.modified = true;
+    }
+    updateTransformStatus();
+    updateViewerHistoryButtons();
+    status.textContent = "Arranged all loose meshes (5 mm viewer AABB clearance; not printability).";
+  } catch (error) {
+    status.textContent = "Arrange all unavailable: " + error.message;
   }
 });
 // These are real browser-camera controls, independent of the experimental WASM

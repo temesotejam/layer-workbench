@@ -42,3 +42,28 @@ export function findViewerSpace(own, obstacles, plate, gap = 5) {
   }
   return best;
 }
+
+// Plan all moves without mutating inputs. Larger footprints first; ties use
+// original order. This greedy pass is not a complete packing search.
+export function arrangeViewerSpaces(boxes, plate, gap = 5) {
+  if (!Array.isArray(boxes) || boxes.length < 1 || boxes.length > 64 ||
+      !boxes.every(valid) || !valid(plate) ||
+      !Number.isFinite(gap) || gap < 0 || gap > 1000)
+    throw new RangeError("Invalid viewer arrangement bounds");
+  // An already-clear layout should never be unnecessarily rearranged.
+  if (boxes.every((box, i) => {
+    const move = findViewerSpace(box, boxes.filter((_, j) => i !== j), plate, gap);
+    return move && Math.abs(move.dx) < EPS && Math.abs(move.dy) < EPS;
+  })) return boxes.map(() => ({dx:0,dy:0}));
+  const area = b => (b[2]-b[0])*(b[3]-b[1]);
+  const order = boxes.map((_, i) => i).sort((a,b) => area(boxes[b])-area(boxes[a]) || a-b);
+  const placed = [], moves = Array(boxes.length);
+  for (const i of order) {
+    const box = boxes[i];
+    const move = findViewerSpace(box, placed, plate, gap);
+    if (!move) return null;
+    moves[i] = move;
+    placed.push(box.map((v,j) => v + (j%2 ? move.dy : move.dx)));
+  }
+  return moves;
+}
