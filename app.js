@@ -33,7 +33,7 @@ const autoProjectionButton = document.querySelector("#auto-projection");
 const projectionLabel = document.querySelector("#projection-label");
 const transformStatus = document.querySelector("#transform-status");
 const objectCount = document.querySelector("#object-count");
-const transformInputs = Object.fromEntries(["x","y","z","rz","sx","sy","sz"].map(key =>
+const transformInputs = Object.fromEntries(["x","y","z","rx","ry","rz","sx","sy","sz"].map(key =>
   [key, document.querySelector("#transform-" + key)]
 ));
 const MAX_FILE_BYTES = 200 * 1024 * 1024;
@@ -382,10 +382,13 @@ redoButton?.addEventListener("click", () => restoreViewerHistory(viewerHistory.r
 
 function updateTransformStatus() {
   const entry = entries.find(item => item.id === selectedId);
-  Object.values(transformInputs).forEach(input => { input.disabled = !entry; });
+  const looseMesh = entry && !entry.sourceRoot && ["stl", "obj"].includes(entry.format);
+  for (const [key, input] of Object.entries(transformInputs)) {
+    input.disabled = !entry || (["rx", "ry"].includes(key) && !looseMesh);
+  }
   if (entry) {
     const p = entry.object.position, r = entry.object.rotation, sc = entry.object.scale;
-    const values = {x:p.x, y:p.y, z:p.z, rz:THREE.MathUtils.radToDeg(r.z), sx:sc.x, sy:sc.y, sz:sc.z};
+    const values = {x:p.x, y:p.y, z:p.z, rx:THREE.MathUtils.radToDeg(r.x), ry:THREE.MathUtils.radToDeg(r.y), rz:THREE.MathUtils.radToDeg(r.z), sx:sc.x, sy:sc.y, sz:sc.z};
     for (const [key, input] of Object.entries(transformInputs)) {
       if (document.activeElement !== input) input.value = String(Math.round(values[key] * 1000) / 1000);
     }
@@ -413,7 +416,10 @@ for (const [key, input] of Object.entries(transformInputs)) {
     }
     const before = captureViewerTransform(entry);
     if (["x","y","z"].includes(key)) entry.object.position[key] = value;
-    if (key === "rz") entry.object.rotation.z = THREE.MathUtils.degToRad(value);
+    if (["rx","ry","rz"].includes(key)) {
+      if (input.disabled) return;
+      entry.object.rotation[key.slice(1)] = THREE.MathUtils.degToRad(value);
+    }
     if (["sx","sy","sz"].includes(key)) entry.object.scale[key.slice(1)] = value;
     entry.object.updateMatrixWorld(true);
     entry.modified = true;
@@ -489,9 +495,10 @@ duplicateButton?.addEventListener("click", () => {
 // 3MF items remain unavailable until native project placement is supported.
 dropToBedButton?.addEventListener("click", () => {
   const entry = entries.find(item => item.id === selectedId);
-  if (!rendererReady || !entry || entry.sourceRoot || !["stl", "obj"].includes(entry.format)) return;
+  if (!rendererReady || transformControls.dragging || !entry || entry.sourceRoot || !["stl", "obj"].includes(entry.format)) return;
   entry.object.updateMatrixWorld(true);
-  const bounds = new THREE.Box3().setFromObject(entry.object);
+  // Transform actual geometry vertices, not the corners of the cached local AABB.
+  const bounds = new THREE.Box3().setFromObject(entry.object, true);
   if (bounds.isEmpty() || !Number.isFinite(bounds.min.z)) {
     status.textContent = "Cannot place model: its geometry bounds are invalid.";
     return;
