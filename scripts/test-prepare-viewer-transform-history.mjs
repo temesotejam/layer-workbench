@@ -129,3 +129,19 @@ test("deleted object actions reject invalid ids and stale redo is discarded", ()
   h.clear();
   assert.equal(h.canRedo(), false);
 });
+
+test("batch edits restore all snapshots in one step; no-op and invalid batches are atomic", () => {
+  const h = createViewerTransformHistory();
+  const edit = id => ({id,before:snapshot(0),after:snapshot(20,true)});
+  assert.equal(h.recordBatch([edit("a"), edit("b")]), true);
+  assert.deepEqual(h.undo(), {batch:["a","b"].map(id => ({id,snapshot:snapshot(0)}))});
+  assert.equal(h.canUndo(), false);
+  assert.equal(h.recordBatch([{id:"a",before:snapshot(0),after:snapshot(0)}]), false);
+  assert.throws(() => h.recordBatch([edit("a"),edit("a")]), TypeError);
+  assert.equal(h.canRedo(), true);
+  const redo = h.redo();
+  assert.deepEqual(redo, {batch:["a","b"].map(id => ({id,snapshot:snapshot(20,true)}))});
+  redo.batch[0].snapshot.position[0] = 99;
+  h.undo();
+  assert.equal(h.redo().batch[0].snapshot.position[0], 20);
+});
