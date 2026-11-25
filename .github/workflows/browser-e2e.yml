@@ -9,6 +9,7 @@ on:
       - "scripts/test-browser-ui.mjs"
       - "scripts/prepare-camera-fit.mjs"
       - "scripts/prepare-find-space.mjs"
+      - "scripts/test-prepare-find-space.mjs"
       - "scripts/test-prepare-camera-fit.mjs"
       - "scripts/make_3mf_two_build_fixture.py"
       - "scripts/prepare-viewer-transform-history.mjs"
@@ -23,6 +24,7 @@ on:
       - "scripts/test-browser-ui.mjs"
       - "scripts/prepare-camera-fit.mjs"
       - "scripts/prepare-find-space.mjs"
+      - "scripts/test-prepare-find-space.mjs"
       - "scripts/test-prepare-camera-fit.mjs"
       - "scripts/make_3mf_two_build_fixture.py"
       - "scripts/prepare-viewer-transform-history.mjs"
@@ -46,6 +48,8 @@ jobs:
         run: node --test scripts/test-prepare-viewer-transform-history.mjs
       - name: Test perspective camera framing
         run: node --test scripts/test-prepare-camera-fit.mjs
+      - name: Test bounded viewer arrangement
+        run: node --test scripts/test-prepare-find-space.mjs
       - name: Install browser test driver
         run: npm install --no-save --no-package-lock playwright@1.56.1
       - name: Check installed Chrome
