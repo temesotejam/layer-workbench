@@ -42,3 +42,11 @@ test('side framing exchanges horizontal width and depth, rear matches front', ()
     assert.equal(perspectiveFitDistance(s,mode,38,aspect), frontEquivalent);
   assert.equal(perspectiveFitDistance(s,'rear',38,aspect), perspectiveFitDistance(s,'front',38,aspect));
 });
+
+
+test('Bottom follows the native negative Z and negative Y screen-up axes', () => {
+  assert.deepEqual(prepareViewOrientation('bottom'), {offset:[0,0,-1],up:[0,-1,0]});
+  const s = {x:80,y:200,z:400};
+  for (const aspect of [.25,1,2])
+    assert.equal(perspectiveFitDistance(s,'bottom',38,aspect), perspectiveFitDistance(s,'top',38,aspect));
+});

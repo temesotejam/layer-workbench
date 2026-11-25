@@ -88,7 +88,7 @@ try {
     'switching views must not edit the selected model');
   const directionTransforms = await Promise.all(
     ['x','y','z','rz','sx','sy','sz'].map(k => page.locator('#transform-'+k).inputValue()));
-  for (const [mode,label] of [['left','Left'],['right','Right'],['rear','Rear']]) {
+  for (const [mode,label] of [['left','Left'],['right','Right'],['rear','Rear'],['bottom','Bottom']]) {
     const button = page.locator('[data-view-orientation="'+mode+'"]');
     await button.click();
     assert.equal(await button.getAttribute('aria-pressed'), 'true');
@@ -99,6 +99,26 @@ try {
       ['x','y','z','rz','sx','sy','sz'].map(k => page.locator('#transform-'+k).inputValue())),
       directionTransforms, 'camera direction must not edit transforms');
   }
+  // The bed used to be double-sided and would obscure the entire cube from
+  // below. Check actual rendered pixels away from the central transform axes.
+  const underside = await page.locator('#viewport-canvas canvas').screenshot();
+  const contrast = await page.evaluate(async data => {
+    const img = new Image();
+    img.src = 'data:image/png;base64,' + data;
+    await img.decode();
+    const sample = document.createElement('canvas');
+    sample.width = img.width; sample.height = img.height;
+    const ctx = sample.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const luminance = (x,y) => {
+      const pixels = ctx.getImageData(Math.round(img.width*x)-3, Math.round(img.height*y)-3,7,7).data;
+      const values = [];
+      for (let i=0;i<pixels.length;i+=4) values.push((pixels[i]+pixels[i+1]+pixels[i+2])/3);
+      return values.sort((a,b)=>a-b)[24];
+    };
+    return luminance(.55,.55) - luminance(.75,.75);
+  }, underside.toString('base64'));
+  assert.ok(contrast > 12, `Bottom must reveal the cube instead of the opaque bed (contrast ${contrast})`);
   await threeDButton.click();
   assert.equal(await threeDButton.getAttribute('aria-pressed'), 'true');
   assert.equal(await frontButton.getAttribute('aria-pressed'), 'false');

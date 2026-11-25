@@ -73,7 +73,7 @@ world.add(fillLight);
 
 const plate = new THREE.Mesh(
   new THREE.PlaneGeometry(256, 256),
-  new THREE.MeshStandardMaterial({ color: "#353c45", roughness: 0.88, metalness: 0.05, side: THREE.DoubleSide })
+  new THREE.MeshStandardMaterial({ color: "#353c45", roughness: 0.88, metalness: 0.05, side: THREE.FrontSide })
 );
 plate.position.z = -0.8;
 world.add(plate);
@@ -163,6 +163,9 @@ try {
   const animate = () => {
     requestAnimationFrame(animate);
     controls.update();
+    // The opaque bed is front-facing only. Keep its outline from below, but
+    // do not draw the grid in front of the model underside.
+    grid.visible = camera.position.z >= grid.position.z;
     renderer.render(world, camera);
   };
   animate();
