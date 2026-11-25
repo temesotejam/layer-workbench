@@ -4,7 +4,7 @@ import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { STLLoader } from "three/addons/loaders/STLLoader.js";
 import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
 import { ThreeMFLoader } from "three/addons/loaders/3MFLoader.js";
-import { perspectiveFitDistance, prepareViewOrientation } from "./scripts/prepare-camera-fit.mjs";
+import { orthographicFitHalfHeight, perspectiveFitDistance, prepareViewOrientation } from "./scripts/prepare-camera-fit.mjs";
 import { get3mfViewportBuildItems } from "./scripts/three-mf-viewport-items.mjs";
 import { captureViewerTransform, createViewerTransformHistory } from "./scripts/prepare-viewer-transform-history.mjs";
 
@@ -27,6 +27,8 @@ const fitButton = document.querySelector("#fit-view");
 const fitAllButton = document.querySelector("#fit-all-view");
 const viewButtons = [...document.querySelectorAll("[data-view-orientation]")];
 const viewDirectionLabel = document.querySelector("#view-direction-label");
+const projectionButton = document.querySelector("#toggle-projection");
+const projectionLabel = document.querySelector("#projection-label");
 const transformStatus = document.querySelector("#transform-status");
 const objectCount = document.querySelector("#object-count");
 const transformInputs = Object.fromEntries(["x","y","z","rz","sx","sy","sz"].map(key =>
@@ -49,6 +51,10 @@ const pointer = new THREE.Vector2();
 let pointerDown = null;
 let rendererReady = false;
 let currentView = "3d";
+const perspectiveFov = 38;
+let canvasAspect = 1;
+let orthoHalfHeight = 100;
+let orthoFitAspect = 1;
 const viewerHistory = createViewerTransformHistory(50);
 // Keep a detached duplicate only while the matching Redo action is reachable.
 // No native 3MF or source file is ever modified by this viewer-only cache.
@@ -60,7 +66,7 @@ let dragStart = null;
 const world = new THREE.Scene();
 world.background = new THREE.Color("#20252c");
 world.fog = new THREE.Fog("#20252c", 900, 2200);
-camera = new THREE.PerspectiveCamera(38, 1, 0.1, 5000);
+camera = new THREE.PerspectiveCamera(perspectiveFov, 1, 0.1, 5000);
 camera.up.set(0, 0, 1);
 camera.position.set(330, -420, 310);
 world.add(new THREE.HemisphereLight(0xdce8f4, 0x343943, 2.1));
@@ -99,13 +105,7 @@ try {
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.15;
   canvasHost.appendChild(renderer.domElement);
-  controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.075;
-  controls.target.set(0, 0, 35);
-  controls.minDistance = 25;
-  controls.maxDistance = 1800;
-  controls.update();
+  controls = makeOrbitControls(new THREE.Vector3(0, 0, 35));
   transformControls = new TransformControls(camera, renderer.domElement);
   world.add(transformControls.getHelper());
   transformControls.addEventListener("dragging-changed", event => {
@@ -155,8 +155,8 @@ try {
     if (!rendererReady) return;
     const width = Math.max(1, canvasHost.clientWidth);
     const height = Math.max(1, canvasHost.clientHeight);
-    camera.aspect = width / height;
-    camera.updateProjectionMatrix();
+    canvasAspect = width / height;
+    updateCameraProjection();
     renderer.setSize(width, height);
   });
   resizeObserver.observe(canvasHost);
@@ -512,7 +512,7 @@ dropToBedButton?.addEventListener("click", () => {
 // These are real browser-camera controls, independent of the experimental WASM
 // engine. They change only the view; they never change object coordinates.
 function showView(mode) {
-  if (!rendererReady || !viewButtons.some(button => button.dataset.viewOrientation === mode)) return;
+  if (!rendererReady || transformControls.dragging || !viewButtons.some(button => button.dataset.viewOrientation === mode)) return;
   currentView = mode;
   viewDirectionLabel.textContent = viewButtons.find(button => button.dataset.viewOrientation === mode).textContent;
   viewButtons.forEach(button => {
@@ -532,6 +532,19 @@ fitButton?.addEventListener("click", () => {
   else placeCamera(new THREE.Vector3(0, 0, 35), 420);
 });
 fitAllButton?.addEventListener("click", fitCameraToAll);
+projectionButton?.addEventListener("click", () => {
+  if (!rendererReady || transformControls.dragging) return;
+  const ortho = !camera.isOrthographicCamera;
+  camera = ortho
+    ? new THREE.OrthographicCamera(-100, 100, 100, -100, 0.1, 5000)
+    : new THREE.PerspectiveCamera(perspectiveFov, canvasAspect, 0.1, 5000);
+  // The picker uses the active camera variable; the transform gizmo has its own
+  // camera property. Both must follow the renderer on a projection switch.
+  transformControls.camera = camera;
+  fitCameraToAll();
+  projectionButton.setAttribute("aria-pressed", String(ortho));
+  projectionLabel.textContent = ortho ? "Orthographic" : "Perspective";
+});
 document.addEventListener("keydown", event => {
   const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName) ||
     document.activeElement?.isContentEditable;
@@ -556,19 +569,61 @@ document.addEventListener("keydown", event => {
   if (event.key === "Delete" && !deleteButton.disabled) deleteButton.click();
 });
 
-function placeCamera(center, distance) {
-  controls.target.copy(center);
+function makeOrbitControls(center) {
+  // OrbitControls r180 caches the camera-up quaternion at construction.
+  // Recreate it for a different camera or up axis, not merely swap .object.
+  const position = camera.position.clone();
+  const orbit = new OrbitControls(camera, renderer.domElement);
+  camera.position.copy(position);
+  orbit.enableDamping = true;
+  orbit.dampingFactor = 0.075;
+  orbit.target.copy(center);
+  orbit.minDistance = 25;
+  orbit.maxDistance = Math.max(1800, position.distanceTo(center) * 1.1);
+  orbit.minZoom = 0.05;
+  orbit.maxZoom = 50;
+  orbit.update();
+  return orbit;
+}
+function updateCameraProjection() {
+  if (camera.isOrthographicCamera) {
+    // Keep both fitted axes visible if the viewport becomes narrower.
+    const h = orthoHalfHeight * Math.max(1, orthoFitAspect / canvasAspect);
+    camera.top = h;
+    camera.bottom = -h;
+    camera.left = -h * canvasAspect;
+    camera.right = h * canvasAspect;
+  } else {
+    camera.aspect = canvasAspect;
+  }
+  camera.updateProjectionMatrix();
+}
+function placeCamera(center, distance, halfHeight) {
+  if (transformControls.dragging) return;
   const {offset, up} = prepareViewOrientation(currentView);
-  camera.up.set(...up);
+  const nextUp = new THREE.Vector3(...up);
+  const replaceOrbit = controls.object !== camera || !camera.up.equals(nextUp);
+  camera.up.copy(nextUp);
   camera.position.set(center.x + distance * offset[0],
                       center.y + distance * offset[1],
                       center.z + distance * offset[2]);
-  controls.maxDistance = Math.max(1800, camera.position.distanceTo(center) * 1.1);
   camera.near = Math.max(0.1, distance / 500);
   camera.far = Math.max(5000, distance * 20);
-  camera.updateProjectionMatrix();
+  if (camera.isOrthographicCamera) {
+    orthoHalfHeight = halfHeight ?? orthographicFitHalfHeight({x:256,y:256,z:0}, currentView, canvasAspect);
+    orthoFitAspect = canvasAspect;
+    camera.zoom = 1;
+  }
+  updateCameraProjection();
   camera.lookAt(center);
-  controls.update();
+  if (replaceOrbit) {
+    controls.dispose();
+    controls = makeOrbitControls(center);
+  } else {
+    controls.target.copy(center);
+    controls.maxDistance = Math.max(1800, camera.position.distanceTo(center) * 1.1);
+    controls.update();
+  }
 }
 function fitCameraToObject(object) {
   if (!rendererReady) return;
@@ -587,8 +642,11 @@ function fitCameraToBounds(bounds) {
   if (bounds.isEmpty()) return;
   const size = bounds.getSize(new THREE.Vector3());
   const center = bounds.getCenter(new THREE.Vector3());
-  const distance = perspectiveFitDistance(size, currentView, camera.fov, camera.aspect);
-  placeCamera(center, distance);
+  const distance = perspectiveFitDistance(size, currentView, perspectiveFov, canvasAspect);
+  const halfHeight = camera.isOrthographicCamera
+    ? orthographicFitHalfHeight(size, currentView, canvasAspect)
+    : undefined;
+  placeCamera(center, distance, halfHeight);
 }
 function centerAndFit(object) {
   const bounds = new THREE.Box3().setFromObject(object);
