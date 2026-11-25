@@ -23,6 +23,7 @@ const dropToBedButton = document.querySelector("#drop-to-bed");
 const undoButton = document.querySelector("#undo-viewer");
 const redoButton = document.querySelector("#redo-viewer");
 const fitButton = document.querySelector("#fit-view");
+const fitAllButton = document.querySelector("#fit-all-view");
 const viewButtons = [...document.querySelectorAll("[data-view-orientation]")];
 const transformStatus = document.querySelector("#transform-status");
 const objectCount = document.querySelector("#object-count");
@@ -513,9 +514,7 @@ function showView(mode) {
     button.classList.toggle("selected", active);
     button.setAttribute("aria-pressed", String(active));
   });
-  const entry = entries.find(item => item.id === selectedId);
-  if (entry) fitCameraToObject(entry.object);
-  else placeCamera(new THREE.Vector3(0, 0, 35), 420);
+  fitCameraToAll();
 }
 viewButtons.forEach(button =>
   button.addEventListener("click", () => showView(button.dataset.viewOrientation))
@@ -526,6 +525,7 @@ fitButton?.addEventListener("click", () => {
   if (entry) fitCameraToObject(entry.object);
   else placeCamera(new THREE.Vector3(0, 0, 35), 420);
 });
+fitAllButton?.addEventListener("click", fitCameraToAll);
 document.addEventListener("keydown", event => {
   const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName) ||
     document.activeElement?.isContentEditable;
@@ -572,7 +572,18 @@ function placeCamera(center, distance) {
 }
 function fitCameraToObject(object) {
   if (!rendererReady) return;
-  const bounds = new THREE.Box3().setFromObject(object);
+  fitCameraToBounds(new THREE.Box3().setFromObject(object));
+}
+function fitCameraToAll() {
+  if (!rendererReady) return;
+  const bounds = new THREE.Box3();
+  for (const entry of entries) {
+    bounds.union(new THREE.Box3().setFromObject(entry.object));
+  }
+  if (bounds.isEmpty()) placeCamera(new THREE.Vector3(0, 0, 35), 420);
+  else fitCameraToBounds(bounds);
+}
+function fitCameraToBounds(bounds) {
   if (bounds.isEmpty()) return;
   const size = bounds.getSize(new THREE.Vector3());
   const center = bounds.getCenter(new THREE.Vector3());

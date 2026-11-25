@@ -178,6 +178,27 @@ try {
   assert.equal(Number(await page.locator('#transform-x').inputValue()), 57,
     'duplicate transform must persist when selection changes');
 
+  // Framing all visible objects must differ from framing only the selected
+  // displaced duplicate, and must not change selection, placement or history.
+  const transformsBeforeFit = await Promise.all(
+    ['x','y','z','rz','sx','sy','sz'].map(k => page.locator('#transform-'+k).inputValue()));
+  const historyBeforeFit = [await undoButton.isEnabled(), await redoButton.isEnabled()];
+  await topButton.click();
+  await page.locator('#fit-view').click();
+  const selectedFrame = await page.locator('#viewport-canvas canvas').screenshot();
+  await page.locator('#fit-all-view').click();
+  const allFrame = await page.locator('#viewport-canvas canvas').screenshot();
+  assert.equal(selectedFrame.equals(allFrame), false,
+    'Fit all must reframe the displaced source and duplicate together');
+  assert.deepEqual(await Promise.all(
+    ['x','y','z','rz','sx','sy','sz'].map(k => page.locator('#transform-'+k).inputValue())),
+    transformsBeforeFit, 'Fit all must not change selected transforms');
+  assert.deepEqual([await undoButton.isEnabled(), await redoButton.isEnabled()], historyBeforeFit);
+  assert.equal(await page.locator('#object-count').innerText(), '2 objects');
+  assert.equal(await page.locator('#object-tree [data-object-id]').last().evaluate(
+    el => el.classList.contains('active')), true);
+  await threeDButton.click();
+
   await mkdir('browser-test-artifacts', { recursive: true });
   await page.screenshot({ path: 'browser-test-artifacts/prepare-loaded.png', fullPage: true });
   assert.equal(errors.length, 0, 'Uncaught browser errors: ' + errors.join('; '));
@@ -209,6 +230,8 @@ try {
   await redoButton.click();
   await page.locator('#object-count').getByText('0 objects').waitFor();
   assert.equal(await undoButton.isEnabled(), true);
+  await page.locator('#fit-all-view').click();
+  assert.equal(await page.locator('#object-count').innerText(), '0 objects');
 
   // Reversible deletion must also preserve 3MF scene roots. The normal
   // public viewport treats a Core 3MF as one viewer item; the explicitly

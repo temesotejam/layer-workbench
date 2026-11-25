@@ -90,3 +90,8 @@ The browser CI generates an independent synthetic Core 3MF with two build items,
 tests deletion/Undo/Redo in regular Chrome and isolated Chrome, and checks that
 a final-child deletion can be reversed without losing the scene root. The
 public Pages deployment still does not enable unverified WASM features.
+
+
+## 2026-11-25: frame all visible Prepare models
+
+The v2.5.0 source-pinned [MainFrame.cpp](https://github.com/OrcaSlicer/OrcaSlicer/blob/40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19/src/slic3r/GUI/MainFrame.cpp) describes selecting a camera direction and zooming to all objects. [GLCanvas3D.cpp](https://github.com/OrcaSlicer/OrcaSlicer/blob/40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19/src/slic3r/GUI/GLCanvas3D.cpp) distinguishes volume and selection bounding boxes. In the browser, the 3D/Top/Front direction controls and the explicit Fit all button now frame the union of the current viewer entries' world-space bounding boxes, not merely the selected entry. Fit retains its selection-specific behavior; empty Fit all falls back to the plate view. This changes only the camera, never selection, history, geometry, source bytes, native state or WASM enablement. The existing real Chrome regression checks a displaced duplicate, selection/transform/history preservation and empty-scene behavior. This is an independent browser implementation, not pixel-level desktop camera parity or orthographic projection.
