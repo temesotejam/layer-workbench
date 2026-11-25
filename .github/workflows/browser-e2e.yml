@@ -7,6 +7,8 @@ on:
       - "app.js"
       - "styles.css"
       - "scripts/test-browser-ui.mjs"
+      - "scripts/prepare-camera-fit.mjs"
+      - "scripts/test-prepare-camera-fit.mjs"
       - "scripts/make_3mf_two_build_fixture.py"
       - "scripts/prepare-viewer-transform-history.mjs"
       - "scripts/test-prepare-viewer-transform-history.mjs"
@@ -18,6 +20,8 @@ on:
       - "app.js"
       - "styles.css"
       - "scripts/test-browser-ui.mjs"
+      - "scripts/prepare-camera-fit.mjs"
+      - "scripts/test-prepare-camera-fit.mjs"
       - "scripts/make_3mf_two_build_fixture.py"
       - "scripts/prepare-viewer-transform-history.mjs"
       - "scripts/test-prepare-viewer-transform-history.mjs"
@@ -38,6 +42,8 @@ jobs:
           node-version: 22
       - name: Test bounded transform history
         run: node --test scripts/test-prepare-viewer-transform-history.mjs
+      - name: Test perspective camera framing
+        run: node --test scripts/test-prepare-camera-fit.mjs
       - name: Install browser test driver
         run: npm install --no-save --no-package-lock playwright@1.56.1
       - name: Check installed Chrome
