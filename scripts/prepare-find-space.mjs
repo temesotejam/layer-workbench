@@ -18,6 +18,13 @@ export function findViewerSpace(own, obstacles, plate, gap = 5) {
   const ymin = plate[1] + gap, ymax = plate[3] - gap - h;
   if (xmin > xmax || ymin > ymax) return null;
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  const clear = (x, y) => !obstacles.some(b => x + w + gap > b[0] + EPS &&
+      x < b[2] + gap - EPS && y + h + gap > b[1] + EPS &&
+      y < b[3] + gap - EPS);
+  // Zero displacement is globally optimal. Avoid the candidate grid entirely
+  // for already-clear layouts (especially the all-object preflight).
+  if (own[0] >= xmin && own[0] <= xmax && own[1] >= ymin && own[1] <= ymax &&
+      clear(own[0], own[1])) return {dx: 0, dy: 0};
   const xs = new Set([xmin, xmax, clamp(own[0], xmin, xmax)]);
   const ys = new Set([ymin, ymax, clamp(own[1], ymin, ymax)]);
   for (const b of obstacles) {
@@ -29,9 +36,7 @@ export function findViewerSpace(own, obstacles, plate, gap = 5) {
   let best = null, bestDistance = Infinity;
   for (const x of [...xs].sort((a,b) => a-b)) {
     for (const y of [...ys].sort((a,b) => a-b)) {
-      if (obstacles.some(b => x + w + gap > b[0] + EPS &&
-          x < b[2] + gap - EPS && y + h + gap > b[1] + EPS &&
-          y < b[3] + gap - EPS)) continue;
+      if (!clear(x, y)) continue;
       const dx = x - own[0], dy = y - own[1];
       const distance = dx * dx + dy * dy;
       if (distance < bestDistance) {
@@ -44,7 +49,7 @@ export function findViewerSpace(own, obstacles, plate, gap = 5) {
 }
 
 // Plan all moves without mutating inputs. Larger footprints first; ties use
-// original order. This greedy pass is not a complete packing search.
+// original order, with bounded alternative orders on failure. Not a complete packing search.
 export function arrangeViewerSpaces(boxes, plate, gap = 5) {
   if (!Array.isArray(boxes) || boxes.length < 1 || boxes.length > 64 ||
       !boxes.every(valid) || !valid(plate) ||
@@ -55,15 +60,33 @@ export function arrangeViewerSpaces(boxes, plate, gap = 5) {
     const move = findViewerSpace(box, boxes.filter((_, j) => i !== j), plate, gap);
     return move && Math.abs(move.dx) < EPS && Math.abs(move.dy) < EPS;
   })) return boxes.map(() => ({dx:0,dy:0}));
-  const area = b => (b[2]-b[0])*(b[3]-b[1]);
-  const order = boxes.map((_, i) => i).sort((a,b) => area(boxes[b])-area(boxes[a]) || a-b);
-  const placed = [], moves = Array(boxes.length);
-  for (const i of order) {
-    const box = boxes[i];
-    const move = findViewerSpace(box, placed, plate, gap);
-    if (!move) return null;
-    moves[i] = move;
-    placed.push(box.map((v,j) => v + (j%2 ? move.dy : move.dx)));
+  const width = b => b[2]-b[0], height = b => b[3]-b[1];
+  const area = b => width(b)*height(b);
+  const indices = boxes.map((_, i) => i);
+  const orders = [
+    (a,b) => area(boxes[b])-area(boxes[a]) || a-b,
+    (a,b) => width(boxes[b])-width(boxes[a]) || height(boxes[b])-height(boxes[a]) || a-b,
+    (a,b) => height(boxes[b])-height(boxes[a]) || width(boxes[b])-width(boxes[a]) || a-b,
+  ];
+  const tried = new Set();
+  // Preserve the original area-first result whenever it succeeds. Only retry
+  // a failed plan with distinct width-first and height-first orders, starting
+  // from an empty temporary placement each time. No partial plan escapes.
+  for (const compare of orders) {
+    const order = [...indices].sort(compare);
+    const key = order.join(",");
+    if (tried.has(key)) continue;
+    tried.add(key);
+    const placed = [], moves = Array(boxes.length);
+    let failed = false;
+    for (const i of order) {
+      const box = boxes[i];
+      const move = findViewerSpace(box, placed, plate, gap);
+      if (!move) { failed = true; break; }
+      moves[i] = move;
+      placed.push(box.map((v,j) => v + (j%2 ? move.dy : move.dx)));
+    }
+    if (!failed) return moves;
   }
-  return moves;
+  return null;
 }
