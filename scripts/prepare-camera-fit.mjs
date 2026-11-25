@@ -55,3 +55,12 @@ export function orthographicFitHalfHeight(size, mode, aspect) {
   const height = mode === "3d" ? width : axialZ ? y : z;
   return Math.max(40, 1.25 * width / (2 * aspect), 1.25 * height / 2);
 }
+
+// Optional automatic projection follows the pinned desktop Camera::auto_type:
+// axial views always select orthographic and release a manual hold;
+// the oblique view selects perspective only when there is no manual hold.
+export function automaticViewProjection(mode, orthographic, hold) {
+  prepareViewOrientation(mode);
+  if (mode !== "3d") return {orthographic:true, hold:false};
+  return {orthographic:hold ? Boolean(orthographic) : false, hold:Boolean(hold)};
+}

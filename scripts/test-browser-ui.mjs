@@ -149,6 +149,30 @@ try {
     ['x','y','z','rz','sx','sy','sz'].map(k => page.locator('#transform-'+k).inputValue())),
     directionTransforms, 'projection changes must not edit transforms');
 
+  // Automatic projection is opt-in (matching desktop's default preference).
+  const autoProjection = page.locator('#auto-projection');
+  assert.equal(await autoProjection.getAttribute('aria-pressed'), 'false');
+  await autoProjection.click();
+  assert.equal(await autoProjection.getAttribute('aria-pressed'), 'true');
+  assert.equal(await page.locator('#projection-label').innerText(), 'Perspective');
+  await topButton.click();
+  assert.equal(await page.locator('#projection-label').innerText(), 'Orthographic');
+  await threeDButton.click();
+  assert.equal(await page.locator('#projection-label').innerText(), 'Perspective');
+  await projectionButton.click(); // manual orthographic holds in oblique view
+  await threeDButton.click();
+  assert.equal(await page.locator('#projection-label').innerText(), 'Orthographic');
+  await frontButton.click(); // axial view releases manual hold
+  await threeDButton.click();
+  assert.equal(await page.locator('#projection-label').innerText(), 'Perspective');
+  await autoProjection.click();
+  await topButton.click();
+  assert.equal(await page.locator('#projection-label').innerText(), 'Perspective');
+  await threeDButton.click();
+  assert.deepEqual(await Promise.all(
+    ['x','y','z','rz','sx','sy','sz'].map(k => page.locator('#transform-'+k).inputValue())),
+    directionTransforms, 'auto projection must not edit transforms');
+
   // Browser transforms can be undone, redone, or replaced with a new edit.
   const undoButton = page.locator('#undo-viewer');
   const redoButton = page.locator('#redo-viewer');
