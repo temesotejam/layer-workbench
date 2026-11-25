@@ -34,6 +34,31 @@ SECONDARY = OLD_SECONDARY.replace("[bucket, backwards]", "[bucket, backwards, &e
                 return end_index(l.intersection) < end_index(r.intersection);""",
 )
 
+# The original two distance loops infer direction from equality with lprev.
+# When both distances are identical, this tries the previous endpoint twice.
+# Keep previous-first tie order, but explicitly visit the other side on retry.
+DIRECTIONS = """[](double lprev, double lnext) {
+        return std::array<bool, 2>{lprev <= lnext, lprev > lnext};
+    }"""
+
+def stage_neighbor_fallback(src):
+    replacements = [
+        ("#include <algorithm>\n", "#include <algorithm>\n#include <array>\n"),
+        ("    struct Arc {\n", "    auto ordered_directions = " + DIRECTIONS + ";\n\n    struct Arc {\n"),
+        ("for (const double l : { std::min(lprev, lnext), std::max(lprev, lnext) }) {",
+         "for (const bool reversed : ordered_directions(lprev, lnext)) {\n                    const double l = reversed ? lprev : lnext;"),
+        ("end_index(l == lprev ? cp.prev_on_contour : cp.next_on_contour)",
+         "end_index(reversed ? cp.prev_on_contour : cp.next_on_contour)"),
+        ("for (double l : { std::min(lprev, lnext), std::max(lprev, lnext) }) {",
+         "for (const bool reversed : ordered_directions(lprev, lnext)) {\n                const double l = reversed ? lprev : lnext;"),
+        ("                bool      reversed      = l == lprev;\n", ""),
+    ]
+    for before, after in replacements:
+        if src.count(before) != 1:
+            raise ValueError("Pinned equal-neighbor fallback site drifted")
+        src = src.replace(before, after)
+    return src
+
 def stage(raw):
     if hashlib.sha1(b"blob " + str(len(raw)).encode("ascii") + b"\0" + raw).hexdigest() != UPSTREAM_BLOB:
         raise ValueError("Unexpected upstream FillBase.cpp blob")
@@ -42,9 +67,10 @@ def stage(raw):
     secondary = "std::sort(along_contour.begin(), along_contour.end(), " + OLD_SECONDARY + ");"
     if src.count(primary) != 1 or src.count(secondary) != 1:
         raise ValueError("Expected exactly one of each pinned sort")
-    return src.replace(primary, "std::sort(arches.begin(), arches.end(), " + PRIMARY + ");").replace(
+    src = src.replace(primary, "std::sort(arches.begin(), arches.end(), " + PRIMARY + ");").replace(
         secondary, "std::sort(along_contour.begin(), along_contour.end(), " + SECONDARY + ");"
     )
+    return stage_neighbor_fallback(src)
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
@@ -64,12 +90,13 @@ def main():
     (args.out / "FillBase.cpp").write_text(candidate, encoding="utf-8")
     # Compile the very same lambda bodies, not separately reimplemented tests.
     (args.out / "arc-order-comparators.inc").write_text(
-        "auto primary = " + PRIMARY + ";\nauto secondary = " + SECONDARY + ";\n",
+        "auto primary = " + PRIMARY + ";\nauto secondary = " + SECONDARY + ";\n"
+        + "auto ordered_directions = " + DIRECTIONS + ";\n",
         encoding="utf-8",
     )
     if args.source.read_bytes() != raw:
         raise AssertionError("Source changed")
-    print("PASS: exact pinned blob; two sort sites staged, original unchanged")
+    print("PASS: exact pinned blob; two sort sites and two equal-neighbor loops staged, original unchanged")
 
 if __name__ == "__main__":
     main()

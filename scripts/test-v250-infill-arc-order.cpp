@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <iostream>
 #include <numeric>
+#include <limits>
 #include <vector>
 
 struct Endpoint {
@@ -33,6 +34,27 @@ int main() {
     unsigned cases = 0;
     for (const bool backwards : {false, true}) {
 #include "arc-order-comparators.inc"
+        // Compile the exact staged direction selector and exercise the
+        // same retry condition as both upstream loops (already merged).
+        auto choose = [&](double prev, double next, bool prev_blocked, bool next_blocked) {
+            for (bool reversed : ordered_directions(prev, next)) {
+                const double length = reversed ? prev : next;
+                if (length > 10.0) break;
+                if (reversed ? prev_blocked : next_blocked) continue;
+                return reversed ? 1 : 2;
+            }
+            return 0;
+        };
+        assert(choose(4., 4., false, false) == 1);
+        assert(choose(4., 4., true, false) == 2);
+        assert(choose(4., 4., false, true) == 1);
+        assert(choose(4., 4., true, true) == 0);
+        assert(choose(4., 3., false, false) == 2);
+        assert(choose(3., 4., false, false) == 1);
+        assert(choose(4., 3., false, true) == 1);
+        assert(choose(3., 4., true, false) == 2);
+        assert(choose(11., 11., false, false) == 0);
+        assert(choose(std::numeric_limits<double>::max(), 3., false, true) == 0);
         for (const auto& l : input) for (const auto& r : input) {
             if (end_index(l.intersection) == end_index(r.intersection)) {
                 assert(!primary(l, r) && !secondary(l, r));
