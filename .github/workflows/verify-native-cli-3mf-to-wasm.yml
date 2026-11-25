@@ -15,6 +15,8 @@ on:
       - "scripts/audit_native_3mf_metadata_loss.py"
       - "scripts/test_audit_native_3mf_metadata_loss.py"
       - "scripts/compare_gcode.py"
+      - "scripts/audit_gcode_infill_config.py"
+      - "scripts/test_audit_gcode_infill_config.py"
       - "scripts/gcode_lexical_attribution.py"
       - "scripts/test_gcode_lexical_attribution.py"
       - "scripts/verify_native_gcode_repeatability.py"
@@ -38,6 +40,8 @@ on:
       - "scripts/audit_native_3mf_metadata_loss.py"
       - "scripts/test_audit_native_3mf_metadata_loss.py"
       - "scripts/compare_gcode.py"
+      - "scripts/audit_gcode_infill_config.py"
+      - "scripts/test_audit_gcode_infill_config.py"
       - "scripts/gcode_lexical_attribution.py"
       - "scripts/test_gcode_lexical_attribution.py"
       - "scripts/verify_native_gcode_repeatability.py"
@@ -70,6 +74,7 @@ jobs:
           python3 -m unittest discover -s scripts -p test_audit_native_3mf_metadata_loss.py -v
           python3 -m unittest discover -s scripts -p test_verify_native_gcode_repeatability.py -v
           python3 -m unittest discover -s scripts -p test_gcode_lexical_attribution.py -v
+          python3 -m unittest discover -s scripts -p test_audit_gcode_infill_config.py -v
           npm install --no-save --no-package-lock playwright@1.56.1 fflate@0.8.2
       - name: Download the official v2.5.0 Linux AppImage only inside CI
         shell: bash
@@ -460,6 +465,7 @@ jobs:
           sys.path.insert(0, 'scripts')
           from compare_gcode import compare
           from gcode_lexical_attribution import compare_lexical
+          from audit_gcode_infill_config import compare_infill_config
           root = Path('native-cli-output')
           folder = root / 'same-archive-native'
           native = folder / 'plate_1.gcode'
@@ -484,6 +490,8 @@ jobs:
               compare_lexical(native, wasm), sort_keys=True))
           print('NATIVE_WASM_HEATER_DIFFERENCE_COUNT ' + json.dumps(
               r['heater_setpoint_difference_count']))
+          print('NATIVE_WASM_INFILL_CONFIG ' + json.dumps(
+              compare_infill_config(native, wasm), sort_keys=True))
           if not r['match']:
               raise SystemExit('Same-archive strict ordered G-code comparison FAIL')
           print('PASS: ordered commands for this single archive; effective profiles remain unverified')

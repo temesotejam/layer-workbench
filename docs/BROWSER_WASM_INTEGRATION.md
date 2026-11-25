@@ -1855,3 +1855,8 @@ asserts the observed native cardinality and the fail-closed classification
 instead of labelling it a reframe hypothesis pass. Deriving an actual
 native-to-source mesh association remains open; no editing, printing or
 WASM production deployment was enabled.
+
+
+## 2026-11-25: same-archive serialized infill config diagnostic (PR only)
+
+The pinned upstream `src/libslic3r/GCode.cpp` emits a `CONFIG_BLOCK_START` / `CONFIG_BLOCK_END` section through `GCode::append_full_config`, based on `Print::full_print_config()` with some values adjusted or omitted. The pinned `PrintConfig.cpp` declares the 20 audited infill/layer/wall keys. The same-archive native/WASM CI now reports only allowlisted key names grouped by exact serialized equality, difference or absence; missing/duplicate/incomplete blocks are unavailable. No raw settings, arbitrary keys, G-code or filenames are reported. This does not inspect applied per-object/region settings, prove typed equivalence (e.g. 45 vs 45.0), or establish actual effective profile parity. The strict G-code comparison remains unchanged and still fails on mismatch; no public WASM activation or print safety claim. The next investigation is to use the observed difference/absence list to choose a specific effective-setting probe.
