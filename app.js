@@ -21,6 +21,7 @@ const transformButtons = [...document.querySelectorAll("[data-transform]")];
 const deleteButton = document.querySelector("#remove-object");
 const duplicateButton = document.querySelector("#duplicate-object");
 const dropToBedButton = document.querySelector("#drop-to-bed");
+const centerOnBedButton = document.querySelector("#center-on-bed");
 const undoButton = document.querySelector("#undo-viewer");
 const redoButton = document.querySelector("#redo-viewer");
 const fitButton = document.querySelector("#fit-view");
@@ -210,6 +211,7 @@ function selectEntry(id) {
   // Complex 3MF projects require native instance/volume semantics first.
   duplicateButton.disabled = !entry || !["stl", "obj"].includes(entry.format) || !!entry.sourceRoot;
   dropToBedButton.disabled = !entry || !["stl", "obj"].includes(entry.format) || !!entry.sourceRoot;
+  centerOnBedButton.disabled = dropToBedButton.disabled;
   entries.forEach(item => item.object?.traverse(node => {
     if (!node.isMesh) return;
     const materials = Array.isArray(node.material) ? node.material : [node.material];
@@ -511,6 +513,35 @@ dropToBedButton?.addEventListener("click", () => {
   updateTransformStatus();
   status.textContent = "Dropped " + entry.name +
     " to viewer bed Z=0 (browser only; original file unchanged)";
+});
+// Center the selected loose mesh's transformed world bounds in XY only.
+// The browser plate is centered at world (0,0); this is not collision-aware
+// arrangement, a native 3MF operation or a source-file edit.
+centerOnBedButton?.addEventListener("click", () => {
+  const entry = entries.find(item => item.id === selectedId);
+  if (!rendererReady || transformControls.dragging || !entry || entry.sourceRoot ||
+      !["stl", "obj"].includes(entry.format)) return;
+  entry.object.updateMatrixWorld(true);
+  const bounds = new THREE.Box3().setFromObject(entry.object, true);
+  const center = bounds.getCenter(new THREE.Vector3());
+  const dx = plate.position.x - center.x, dy = plate.position.y - center.y;
+  if (bounds.isEmpty() || ![dx,dy].every(v => Number.isFinite(v) && Math.abs(v) <= 5000)) {
+    status.textContent = "Cannot center model: its geometry bounds or correction are invalid.";
+    return;
+  }
+  if (Math.abs(dx) < 1e-9 && Math.abs(dy) < 1e-9) {
+    status.textContent = entry.name + " already centered on viewer plate";
+    return;
+  }
+  const before = captureViewerTransform(entry);
+  entry.object.position.x += dx;
+  entry.object.position.y += dy;
+  entry.object.updateMatrixWorld(true);
+  entry.modified = true;
+  recordViewerEdit(entry, before);
+  updateTransformStatus();
+  status.textContent = "Centered " + entry.name +
+    " in viewer plate XY (browser only; original file unchanged; overlaps not checked)";
 });
 // These are real browser-camera controls, independent of the experimental WASM
 // engine. They change only the view; they never change object coordinates.
