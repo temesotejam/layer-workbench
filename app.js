@@ -4,6 +4,7 @@ import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { STLLoader } from "three/addons/loaders/STLLoader.js";
 import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
 import { ThreeMFLoader } from "three/addons/loaders/3MFLoader.js";
+import { perspectiveFitDistance } from "./scripts/prepare-camera-fit.mjs";
 import { get3mfViewportBuildItems } from "./scripts/three-mf-viewport-items.mjs";
 import { captureViewerTransform, createViewerTransformHistory } from "./scripts/prepare-viewer-transform-history.mjs";
 
@@ -564,6 +565,7 @@ function placeCamera(center, distance) {
     camera.position.set(center.x + distance * 0.78,
                         center.y - distance, center.z + distance * 0.72);
   }
+  controls.maxDistance = Math.max(1800, camera.position.distanceTo(center) * 1.1);
   camera.near = Math.max(0.1, distance / 500);
   camera.far = Math.max(5000, distance * 20);
   camera.updateProjectionMatrix();
@@ -587,17 +589,7 @@ function fitCameraToBounds(bounds) {
   if (bounds.isEmpty()) return;
   const size = bounds.getSize(new THREE.Vector3());
   const center = bounds.getCenter(new THREE.Vector3());
-  const maxDim = Math.max(size.x, size.y, size.z, 1);
-  if (currentView === "3d") {
-    placeCamera(center, Math.max(260, maxDim * 2.35));
-    return;
-  }
-  const width = size.x;
-  const height = currentView === "top" ? size.y : size.z;
-  const fov = THREE.MathUtils.degToRad(camera.fov);
-  const aspect = Math.max(0.2, camera.aspect);
-  const distance = Math.max(120,
-    Math.max(height, width / aspect, 1) * 1.25 / (2 * Math.tan(fov / 2)));
+  const distance = perspectiveFitDistance(size, currentView, camera.fov, camera.aspect);
   placeCamera(center, distance);
 }
 function centerAndFit(object) {
