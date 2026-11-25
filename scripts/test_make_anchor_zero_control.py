@@ -41,3 +41,20 @@ class AnchorControlTests(unittest.TestCase):
             with self.subTest(value=value, include=include), tempfile.TemporaryDirectory() as folder:
                 with self.assertRaises(ValueError):
                     make_control(self.fixture(folder, value, include), Path(folder) / "control.3mf")
+
+    def test_max_intervention_is_independent_and_bounded(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source = self.fixture(folder)
+            first = Path(folder) / "anchor-zero.3mf"
+            second = Path(folder) / "both-zero.3mf"
+            make_control(source, first)
+            original = first.read_bytes()
+            make_control(first, second, "infill_anchor_max")
+            self.assertEqual(first.read_bytes(), original)
+            with zipfile.ZipFile(second) as archive:
+                self.assertEqual(json.loads(archive.read(PROJECT)),
+                                 {"infill_anchor": "0", "infill_anchor_max": "0", "other": ["x", "y"]})
+            with self.assertRaises(ValueError):
+                make_control(second, Path(folder) / "invalid.3mf", "infill_anchor_max")
+            with self.assertRaises(ValueError):
+                make_control(source, Path(folder) / "unsupported.3mf", "other")

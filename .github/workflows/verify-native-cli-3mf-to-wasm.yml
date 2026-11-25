@@ -472,6 +472,18 @@ jobs:
               exit 1
             }
           timeout 240s node scripts/test-native-cli-3mf-to-wasm.mjs --slice-anchor-zero
+          # Second one-setting intervention relative to the anchor-zero control.
+          # FillParams::dont_connect() is true at zero maximum for multiline Grid.
+          python3 scripts/make_anchor_zero_control.py native-cli-output/anchor-zero.3mf native-cli-output/both-zero.3mf --max-only
+          both="${PWD}/native-cli-output/both-zero-native"
+          mkdir "${both}"
+          timeout 180s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
+            "${PWD}/native-cli-output/both-zero.3mf" --arrange 0 --slice 0 --outputdir "${both}" \
+            > "${both}/native-slice.log" 2>&1 || {
+              echo 'Native both-zero slice failed'
+              exit 1
+            }
+          timeout 240s node scripts/test-native-cli-3mf-to-wasm.mjs --slice-both-zero
           # Strict comparator unchanged; no raw G-code or settings in the log.
           # A mismatch is a parity FAIL, not evidence that the harness failed.
           # Do not merge a failed gate or activate the engine on Pages.
@@ -543,7 +555,34 @@ jobs:
                                           control_result['wasm_extrusion_moves']],
               'effective_full_profile_equivalence_verified': False,
               'usable_for_printing': False}, sort_keys=True))
-          if not r['match'] or not control_result['match']:
+          bn = root / 'both-zero-native' / 'plate_1.gcode'
+          bw = root / 'both-zero-wasm.gcode'
+          if sorted(bn.parent.rglob('*.gcode')) != [bn]:
+              raise SystemExit('Expected exactly one both-zero control plate')
+          if not all(1024 <= p.stat().st_size <= 12_000_000 for p in (bn, bw)):
+              raise SystemExit('Both-zero G-code outside diagnostic bounds')
+          for base, control_file in ((cn, bn), (cw, bw)):
+              a, b = parse_config(base), parse_config(control_file)
+              if (a is None or b is None or 'infill_anchor_max' not in a or
+                      b.get('infill_anchor') not in ('0', '0%') or
+                      b.get('infill_anchor_max') not in ('0', '0%') or
+                      a.get('infill_anchor_max') in ('0', '0%') or
+                      a.keys() != b.keys() or
+                      {k for k in a if a[k] != b[k]} != {'infill_anchor_max'}):
+                  raise SystemExit('Maximum anchor intervention not verified in serialized output')
+          both_result = compare(bn, bw, min_extrusion_moves=100)
+          if both_result['input_issues']:
+              raise SystemExit('Invalid both-zero G-code')
+          print('ANCHOR_BOTH_ZERO_CONTROL ' + json.dumps({
+              'control_native_vs_wasm': sparse(bn, bw),
+              'native_max_intervention': sparse(cn, bn),
+              'wasm_max_intervention': sparse(cw, bw),
+              'control_ordered_match': both_result['match'],
+              'control_extrusion_moves': [both_result['native_extrusion_moves'],
+                                          both_result['wasm_extrusion_moves']],
+              'effective_full_profile_equivalence_verified': False,
+              'usable_for_printing': False}, sort_keys=True))
+          if not r['match'] or not control_result['match'] or not both_result['match']:
               raise SystemExit('Same-archive strict ordered G-code comparison FAIL')
           print('PASS: ordered commands for this single archive; effective profiles remain unverified')
           PY
