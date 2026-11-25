@@ -22,6 +22,8 @@ const deleteButton = document.querySelector("#remove-object");
 const duplicateButton = document.querySelector("#duplicate-object");
 const dropToBedButton = document.querySelector("#drop-to-bed");
 const centerOnBedButton = document.querySelector("#center-on-bed");
+const checkPlacementButton = document.querySelector("#check-placement");
+const placementStatus = document.querySelector("#placement-status");
 const undoButton = document.querySelector("#undo-viewer");
 const redoButton = document.querySelector("#redo-viewer");
 const fitButton = document.querySelector("#fit-view");
@@ -212,6 +214,7 @@ function selectEntry(id) {
   duplicateButton.disabled = !entry || !["stl", "obj"].includes(entry.format) || !!entry.sourceRoot;
   dropToBedButton.disabled = !entry || !["stl", "obj"].includes(entry.format) || !!entry.sourceRoot;
   centerOnBedButton.disabled = dropToBedButton.disabled;
+  checkPlacementButton.disabled = dropToBedButton.disabled;
   entries.forEach(item => item.object?.traverse(node => {
     if (!node.isMesh) return;
     const materials = Array.isArray(node.material) ? node.material : [node.material];
@@ -381,6 +384,7 @@ undoButton?.addEventListener("click", () => restoreViewerHistory(viewerHistory.u
 redoButton?.addEventListener("click", () => restoreViewerHistory(viewerHistory.redo()));
 
 function updateTransformStatus() {
+  placementStatus.textContent = "Check the selected mesh against the viewer plate and other mesh bounds.";
   const entry = entries.find(item => item.id === selectedId);
   const looseMesh = entry && !entry.sourceRoot && ["stl", "obj"].includes(entry.format);
   for (const [key, input] of Object.entries(transformInputs)) {
@@ -549,6 +553,38 @@ centerOnBedButton?.addEventListener("click", () => {
   updateTransformStatus();
   status.textContent = "Centered " + entry.name +
     " in viewer plate XY (browser only; original file unchanged; overlaps not checked)";
+});
+// Explicit, read-only layout check: no per-frame traversal or native state changes.
+// The fixed viewer plane is not a printer profile. AABB overlap is only a broad-phase hint.
+checkPlacementButton.addEventListener("click", () => {
+  const selected = entries.find(item => item.id === selectedId);
+  if (!rendererReady || transformControls.dragging || !selected || checkPlacementButton.disabled) return;
+  const loose = item => !item.sourceRoot && ["stl", "obj"].includes(item.format);
+  if (entries.length > 64 || !entries.every(loose)) {
+    placementStatus.textContent = "Check unavailable: only up to 64 loose STL/OBJ meshes are supported.";
+    return;
+  }
+  const boundsFor = item => {
+    item.object.updateWorldMatrix(true, true);
+    return new THREE.Box3().setFromObject(item.object, true);
+  };
+  const boxes = entries.map(boundsFor);
+  if (boxes.some(b => b.isEmpty() || ![...b.min.toArray(), ...b.max.toArray()].every(Number.isFinite))) {
+    placementStatus.textContent = "Check unavailable: invalid geometry bounds.";
+    return;
+  }
+  const own = boxes[entries.indexOf(selected)];
+  const eps = 1e-6;
+  const halfX = plate.geometry.parameters.width / 2, halfY = plate.geometry.parameters.height / 2;
+  const outside = own.min.x < plate.position.x - halfX - eps || own.max.x > plate.position.x + halfX + eps ||
+    own.min.y < plate.position.y - halfY - eps || own.max.y > plate.position.y + halfY + eps;
+  const overlap = boxes.filter(b => b !== own &&
+    Math.min(b.max.x, own.max.x) - Math.max(b.min.x, own.min.x) > eps &&
+    Math.min(b.max.y, own.max.y) - Math.max(b.min.y, own.min.y) > eps).length;
+  const z = own.min.z < -eps ? "below bed" : own.min.z > eps ? "above bed" : "touches bed";
+  placementStatus.textContent = (outside ? "Outside viewer plate" : "Within viewer plate XY") +
+    " · " + z + " · XY bounding-box overlaps: " + overlap +
+    " · Not a collision or printability check.";
 });
 // These are real browser-camera controls, independent of the experimental WASM
 // engine. They change only the view; they never change object coordinates.

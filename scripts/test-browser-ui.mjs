@@ -44,6 +44,9 @@ try {
   await page.goto(site, { waitUntil: 'domcontentloaded', timeout: 60000 });
   await page.locator('#viewport-canvas canvas').waitFor({ state: 'visible', timeout: 90000 });
   assert.equal(await page.title(), 'Layer Workbench');
+  const placementButton = page.locator('#check-placement');
+  const placementStatus = page.locator('#placement-status');
+  assert.equal(await placementButton.isDisabled(), true);
   const initialStatus = await page.locator('#file-status').innerText();
   assert.match(initialStatus, /Ready|No model/);
 
@@ -275,6 +278,11 @@ try {
   assert.ok(Math.abs(Number(centered[1]) - originalY) < 0.001);
   assert.deepEqual(centered.slice(2), beforeCenter.slice(2));
   assert.match(await page.locator('#file-status').innerText(), /overlaps not checked/);
+  const placementHistory = [await undoButton.isEnabled(), await redoButton.isEnabled()];
+  await placementButton.click();
+  assert.match(await placementStatus.innerText(), /Within viewer plate XY.*XY bounding-box overlaps: 1/);
+  assert.deepEqual(await readCenterTransforms(), centered);
+  assert.deepEqual([await undoButton.isEnabled(), await redoButton.isEnabled()], placementHistory);
   await centerButton.click();
   assert.match(await page.locator('#file-status').innerText(), /already centered/);
   await undoButton.click();
@@ -283,6 +291,9 @@ try {
   assert.deepEqual(await readCenterTransforms(), centered);
   await undoButton.click();
   assert.deepEqual(await readCenterTransforms(), beforeCenter);
+  assert.match(await placementStatus.innerText(), /Check the selected mesh/);
+  await placementButton.click();
+  assert.match(await placementStatus.innerText(), /XY bounding-box overlaps: 0/);
   await page.locator('#object-tree [data-object-id]').first().click();
   assert.equal(Number(await page.locator('#transform-x').inputValue()), originalX);
   assert.equal(Number(await page.locator('#transform-y').inputValue()), originalY);
@@ -381,6 +392,14 @@ try {
   assert.deepEqual(await readCenterTransforms(), tetraBefore);
   await redoButton.click();
   assert.deepEqual(await readCenterTransforms(), tetraAfter);
+  await placementButton.click();
+  assert.match(await placementStatus.innerText(), /Within viewer plate XY.*touches bed.*overlaps: 0/);
+  await page.locator('#transform-x').fill('150');
+  await page.locator('#transform-x').press('Tab');
+  await placementButton.click();
+  assert.match(await placementStatus.innerText(), /Outside viewer plate/);
+  await undoButton.click();
+  assert.deepEqual(await readCenterTransforms(), tetraAfter);
   await page.locator('#remove-object').click();
   await page.locator('#object-count').getByText('0 objects').waitFor();
   assert.equal(await rx.isDisabled(), true);
@@ -402,6 +421,7 @@ try {
   assert.equal(await duplicateButton.isDisabled(), true, '3MF duplication remains unsupported');
   assert.equal(await dropToBedButton.isDisabled(), true, 'native 3MF bed editing remains unsupported');
   assert.equal(await centerButton.isDisabled(), true, 'native 3MF centering remains unsupported');
+  assert.equal(await placementButton.isDisabled(), true, '3MF placement check remains unsupported');
   assert.equal(await rx.isDisabled(), true, 'new numeric X rotation is loose-mesh only');
   assert.equal(await ry.isDisabled(), true, 'new numeric Y rotation is loose-mesh only');
   assert.equal(await undoButton.isDisabled(), true, 'import must clear preceding STL history');
