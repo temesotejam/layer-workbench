@@ -4,6 +4,7 @@ export function prepareViewOrientation(mode) {
   switch (mode) {
     case "3d": return {offset:[0.78,-1,0.72], up:[0,0,1]};
     case "top": return {offset:[0,0,1], up:[0,1,0]};
+    case "bottom": return {offset:[0,0,-1], up:[0,-1,0]};
     case "front": return {offset:[0,-1,0], up:[0,0,1]};
     case "rear": return {offset:[0,1,0], up:[0,0,1]};
     case "left": return {offset:[-1,0,0], up:[0,0,1]};
@@ -30,8 +31,9 @@ export function perspectiveFitDistance(size, mode, fovDegrees, aspect) {
   prepareViewOrientation(mode); // Reject unknown directions.
   const side = mode === "left" || mode === "right";
   const width = side ? y : x;
-  const height = mode === "top" ? y : z;
-  const depth = mode === "top" ? z : side ? x : y;
+  const axialZ = mode === "top" || mode === "bottom";
+  const height = axialZ ? y : z;
+  const depth = axialZ ? z : side ? x : y;
   // Closest face, not the center, limits a perspective fit.
   return Math.max(120, depth / 2 + Math.max(1,
     margin * width / (2*tanX), margin * height / (2*tanY)));
