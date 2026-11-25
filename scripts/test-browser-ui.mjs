@@ -124,6 +124,31 @@ try {
   assert.equal(await frontButton.getAttribute('aria-pressed'), 'false');
   assert.equal(await page.locator('#view-direction-label').innerText(), '3D');
 
+  // Switch the real render camera, zoom it, and switch back without edits.
+  const projectionButton = page.locator('#toggle-projection');
+  await topButton.click();
+  const perspectiveTop = await page.locator('#viewport-canvas canvas').screenshot();
+  await projectionButton.click();
+  assert.equal(await projectionButton.getAttribute('aria-pressed'), 'true');
+  assert.equal(await page.locator('#projection-label').innerText(), 'Orthographic');
+  assert.equal(await topButton.getAttribute('aria-pressed'), 'true');
+  const orthoTop = await page.locator('#viewport-canvas canvas').screenshot();
+  assert.equal(perspectiveTop.equals(orthoTop), false, 'projection switch must change rendering');
+  await page.locator('#viewport-canvas canvas').hover();
+  await page.mouse.wheel(0, -400);
+  await page.waitForTimeout(300);
+  const zoomedOrtho = await page.locator('#viewport-canvas canvas').screenshot();
+  assert.equal(orthoTop.equals(zoomedOrtho), false, 'orthographic wheel zoom must change rendering');
+  await frontButton.click();
+  assert.equal(await page.locator('#projection-label').innerText(), 'Orthographic');
+  await projectionButton.click();
+  assert.equal(await projectionButton.getAttribute('aria-pressed'), 'false');
+  assert.equal(await page.locator('#projection-label').innerText(), 'Perspective');
+  await threeDButton.click();
+  assert.deepEqual(await Promise.all(
+    ['x','y','z','rz','sx','sy','sz'].map(k => page.locator('#transform-'+k).inputValue())),
+    directionTransforms, 'projection changes must not edit transforms');
+
   // Browser transforms can be undone, redone, or replaced with a new edit.
   const undoButton = page.locator('#undo-viewer');
   const redoButton = page.locator('#redo-viewer');

@@ -38,3 +38,20 @@ export function perspectiveFitDistance(size, mode, fovDegrees, aspect) {
   return Math.max(120, depth / 2 + Math.max(1,
     margin * width / (2*tanX), margin * height / (2*tanY)));
 }
+
+/** Vertical half-span in world units; independent of the camera distance.
+ *  Axial views fit the projected box. Oblique view uses an enclosing sphere
+ *  so that the bounds also fit after rotation. Keep tiny meshes navigable.
+ */
+export function orthographicFitHalfHeight(size, mode, aspect) {
+  const {x,y,z} = size;
+  if (![x,y,z].every(v => Number.isFinite(v) && v >= 0) ||
+      !Number.isFinite(aspect) || aspect <= 0)
+    throw new RangeError("Invalid camera fit bounds or projection");
+  prepareViewOrientation(mode);
+  const side = mode === "left" || mode === "right";
+  const axialZ = mode === "top" || mode === "bottom";
+  const width = mode === "3d" ? Math.hypot(x,y,z) : side ? y : x;
+  const height = mode === "3d" ? width : axialZ ? y : z;
+  return Math.max(40, 1.25 * width / (2 * aspect), 1.25 * height / 2);
+}

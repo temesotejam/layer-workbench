@@ -45,7 +45,7 @@
         <button class="tool-button" id="remove-object" disabled title="Remove selected model (Delete)">Delete</button>
       </div>
       <div class="tool-group view-tools">
-        <span class="toolbar-label">View</span><button class="tool-button selected" data-view-orientation="3d" aria-pressed="true" title="Perspective 3D view">3D</button><button class="tool-button" data-view-orientation="top" aria-pressed="false" title="View plate from +Z">Top</button><button class="tool-button" data-view-orientation="front" aria-pressed="false" title="View plate from −Y">Front</button>
+        <span class="toolbar-label">View</span><button class="tool-button selected" data-view-orientation="3d" aria-pressed="true" title="Oblique 3D view">3D</button><button class="tool-button" data-view-orientation="top" aria-pressed="false" title="View plate from +Z">Top</button><button class="tool-button" data-view-orientation="front" aria-pressed="false" title="View plate from −Y">Front</button>
       </div>
       <div class="tool-group"><span class="project-label" id="project-label">Untitled project</span></div>
     </section>
@@ -58,13 +58,13 @@
       </aside>
 
       <section class="viewport" aria-label="3D viewport">
-        <div class="viewport-top"><div class="plate-title"><span class="green-dot"></span> Plate 1 <span class="muted">· 256 × 256 mm</span></div><div class="viewport-controls"><button id="fit-view" title="Fit selected model or plate">Fit</button><button id="fit-all-view" title="Fit all visible models, or the empty plate">Fit all</button><button disabled title="View options">⚙</button></div></div>
+        <div class="viewport-top"><div class="plate-title"><span class="green-dot"></span> Plate 1 <span class="muted">· 256 × 256 mm</span></div><div class="viewport-controls"><button id="fit-view" title="Fit selected model or plate">Fit</button><button id="fit-all-view" title="Fit all visible models, or the empty plate">Fit all</button><button id="toggle-projection" aria-pressed="false" title="Switch perspective / orthographic and fit all models">Ortho</button></div></div>
         <div class="scene" id="scene">
           <div class="scene-watermark">PREPARE · 3D VIEWPORT</div>
           <div id="viewport-canvas" class="viewport-canvas" aria-label="Interactive 3D model viewport"></div>
           <div class="scene-empty" id="scene-empty"><div class="scene-cube">◇</div><strong>Build plate is empty</strong><span>Drop an STL, OBJ or 3MF file here.</span></div>
           <div class="view-cube" role="group" aria-label="Additional camera directions"><span id="view-direction-label">3D</span><div class="view-side-controls"><button class="tool-button" data-view-orientation="left" aria-pressed="false" title="View plate from −X">Left</button><button class="tool-button" data-view-orientation="right" aria-pressed="false" title="View plate from +X">Right</button><button class="tool-button" data-view-orientation="rear" aria-pressed="false" title="View plate from +Y">Rear</button><button class="tool-button" data-view-orientation="bottom" aria-pressed="false" title="View model underside from −Z">Bottom</button></div><small>X&nbsp; Y&nbsp; Z</small></div>
-          <div class="scene-footer"><span>Perspective</span><span>Units: mm</span><span id="scene-file">No model loaded</span></div>
+          <div class="scene-footer"><span id="projection-label">Perspective</span><span>Units: mm</span><span id="scene-file">No model loaded</span></div>
         </div>
       </section>
 
