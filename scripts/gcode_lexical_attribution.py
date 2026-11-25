@@ -450,6 +450,13 @@ def compare_collinear_coverage(a, b):
     buckets = ("direction_absent_mm", "parallel_line_absent_mm",
                "shared_line_coverage_mm")
     sparse = [dict.fromkeys(buckets, 0.0) for _ in (0, 1)]
+    # A shared supporting line can still have different spatial support or
+    # traversal multiplicity. Track these independently of the prior buckets.
+    shared_details = [dict.fromkeys(("exclusive_mm", "excess_traversal_mm"), 0.0)
+                      for _ in (0, 1)]
+    shared_group_counts = dict.fromkeys((
+        "equal_total_length", "native_longer", "wasm_longer",
+        "exclusive_only", "multiplicity_only", "mixed"), 0)
     by_feature = {}
     changed_planes = set()
     for key, events in groups.items():
@@ -469,6 +476,11 @@ def compare_collinear_coverage(a, b):
         active = [0, 0]
         previous = None
         changed = False
+        shared_sparse = classes is not None and all(presence[key])
+        # Compare total lengths in the exact integer dot-product coordinate
+        # of this single line, not rounded floating-point millimetres.
+        line_totals = [0, 0]
+        exclusive = multiplicity = False
         denominator = math.hypot(u, v) * scale
         for t, deltas in sorted(events.items()):
             if previous is not None:
@@ -480,6 +492,17 @@ def compare_collinear_coverage(a, b):
                     for side in (0, 1):
                         sparse[side][classes[side]] += (
                             max(0, active[side] - active[1 - side]) * distance)
+                if shared_sparse:
+                    for side in (0, 1):
+                        line_totals[side] += active[side] * (t - previous)
+                        excess = max(0, active[side] - active[1 - side])
+                        if excess:
+                            if active[1 - side] == 0:
+                                exclusive = True
+                                shared_details[side]["exclusive_mm"] += excess * distance
+                            else:
+                                multiplicity = True
+                                shared_details[side]["excess_traversal_mm"] += excess * distance
                 changed |= active[0] != active[1]
             active[0] += deltas[0]
             active[1] += deltas[1]
@@ -487,6 +510,14 @@ def compare_collinear_coverage(a, b):
         if changed:
             row["different_line_groups"] += 1
             changed_planes.add(z)
+            if shared_sparse:
+                length_class = ("equal_total_length" if line_totals[0] == line_totals[1]
+                                else "native_longer" if line_totals[0] > line_totals[1]
+                                else "wasm_longer")
+                shared_group_counts[length_class] += 1
+                coverage_class = ("mixed" if exclusive and multiplicity
+                                  else "exclusive_only" if exclusive else "multiplicity_only")
+                shared_group_counts[coverage_class] += 1
     for row in by_feature.values():
         for key in ("native_unmatched_mm", "wasm_unmatched_mm", "shared_mm"):
             row[key] = round(row[key], 6)
@@ -499,6 +530,11 @@ def compare_collinear_coverage(a, b):
                     d[0] for d in directions[0] ^ directions[1]}),
                 "native_unmatched": {k: round(v, 6) for k, v in sparse[0].items()},
                 "wasm_unmatched": {k: round(v, 6) for k, v in sparse[1].items()},
+                "shared_line_detail": {
+                    "native": {k: round(v, 6) for k, v in shared_details[0].items()},
+                    "wasm": {k: round(v, 6) for k, v in shared_details[1].items()},
+                    "changed_group_counts": shared_group_counts,
+                },
                 "semantic_equivalence_verified": False,
             },
             "semantic_equivalence_verified": False}

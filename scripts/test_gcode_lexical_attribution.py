@@ -337,5 +337,51 @@ class LexicalAttributionTests(unittest.TestCase):
             self.assertEqual(d["observed_planes"], 0)
 
 
+    def test_shared_sparse_lines_distinguish_spatial_support_and_multiplicity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            a, b = Path(directory) / "a", Path(directory) / "b"
+            prefix = "G90\nM83\nG1 Z1\n;TYPE:Sparse infill\n"
+            # Line Y1: equal total length, different support.
+            # Line Y2: same support, native traverses it twice.
+            # Line Y3: support and multiplicity both differ.
+            a.write_text(prefix + "G1 X1 Y1\nG1 X5 Y1 E1\n"
+                         "G1 X1 Y2\nG1 X5 Y2 E1\nG1 X1 Y2 E1\n"
+                         "G1 X1 Y3\nG1 X5 Y3 E1\nG1 X1 Y3 E1\n")
+            b.write_text(prefix + "G1 X3 Y1\nG1 X7 Y1 E1\n"
+                         "G1 X1 Y2\nG1 X5 Y2 E1\n"
+                         "G1 X3 Y3\nG1 X7 Y3 E1\n")
+            d = compare_lexical(a, b)["planar_stroke_diagnostics"][
+                "collinear_coverage"]["sparse_line_alignment"]
+            detail = d["shared_line_detail"]
+            self.assertEqual(detail["native"], {"exclusive_mm": 6, "excess_traversal_mm": 6})
+            self.assertEqual(detail["wasm"], {"exclusive_mm": 4, "excess_traversal_mm": 0})
+            self.assertEqual(detail["changed_group_counts"], {
+                "equal_total_length": 1, "native_longer": 2, "wasm_longer": 0,
+                "exclusive_only": 1, "multiplicity_only": 1, "mixed": 1})
+            for side in ("native", "wasm"):
+                self.assertAlmostEqual(sum(detail[side].values()),
+                                       d[side + "_unmatched"]["shared_line_coverage_mm"])
+            reverse = compare_lexical(b, a)["planar_stroke_diagnostics"][
+                "collinear_coverage"]["sparse_line_alignment"]["shared_line_detail"]
+            self.assertEqual(reverse["native"], detail["wasm"])
+            self.assertEqual(reverse["changed_group_counts"]["wasm_longer"], 2)
+
+    def test_shared_sparse_line_detail_ignores_unshared_and_equal_split_lines(self):
+        with tempfile.TemporaryDirectory() as directory:
+            a, b = Path(directory) / "a", Path(directory) / "b"
+            prefix = "G90\nM83\nG1 Z1\n;TYPE:Sparse infill\n"
+            a.write_text(prefix + "G1 X1 Y1\nG1 X5 Y1 E1\n"
+                         "G1 X1 Y2\nG1 X5 Y2 E1\n")
+            b.write_text(prefix + "G1 X5 Y1\nG1 X3 Y1 E1\nG1 X1 Y1 E1\n"
+                         "G1 X1 Y3\nG1 X5 Y3 E1\n")
+            d = compare_lexical(a, b)["planar_stroke_diagnostics"][
+                "collinear_coverage"]["sparse_line_alignment"]
+            self.assertEqual(d["native_unmatched"]["parallel_line_absent_mm"], 4)
+            detail = d["shared_line_detail"]
+            self.assertEqual(sum(detail["changed_group_counts"].values()), 0)
+            self.assertEqual(sum(detail["native"].values()), 0)
+            self.assertEqual(sum(detail["wasm"].values()), 0)
+
+
 if __name__ == "__main__":
     unittest.main()
