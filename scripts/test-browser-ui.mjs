@@ -3,6 +3,17 @@
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
 import { mkdir, readFile } from 'node:fs/promises';
+import { findViewerSpace } from './prepare-find-space.mjs';
+
+// Pure geometry regressions run before starting Chrome.
+const testPlate = [-128,-128,128,128];
+assert.deepEqual(findViewerSpace([0,0,20,20], [], testPlate), {dx:0,dy:0});
+assert.deepEqual(findViewerSpace([0,0,20,20], [[0,0,20,20]], testPlate), {dx:-25,dy:0});
+assert.deepEqual(findViewerSpace([120,0,140,20], [], testPlate), {dx:-17,dy:0});
+assert.equal(findViewerSpace([0,0,250,250], [], testPlate), null);
+assert.equal(findViewerSpace([0,0,20,20], [testPlate], testPlate), null);
+assert.throws(() => findViewerSpace([0,0,NaN,20], [], testPlate), RangeError);
+console.log('PASS: viewer free-space geometry regressions (6)');
 
 const site = process.env.UI_TEST_URL || 'http://127.0.0.1:8765/';
 const browser = await chromium.launch({
@@ -46,6 +57,8 @@ try {
   assert.equal(await page.title(), 'Layer Workbench');
   const placementButton = page.locator('#check-placement');
   const placementStatus = page.locator('#placement-status');
+  const findSpaceButton = page.locator('#find-space');
+  assert.equal(await findSpaceButton.isDisabled(), true);
   assert.equal(await placementButton.isDisabled(), true);
   const initialStatus = await page.locator('#file-status').innerText();
   assert.match(initialStatus, /Ready|No model/);
@@ -299,6 +312,30 @@ try {
   assert.equal(Number(await page.locator('#transform-y').inputValue()), originalY);
   await page.locator('#object-tree [data-object-id]').last().click();
 
+  // Resolve a real centered overlap while keeping the other object fixed.
+  await centerButton.click();
+  const overlapping = await readCenterTransforms();
+  await findSpaceButton.click();
+  assert.match(await page.locator('#file-status').innerText(), /free viewer AABB space/);
+  const separated = await readCenterTransforms();
+  assert.notDeepEqual(separated.slice(0,2), overlapping.slice(0,2));
+  assert.deepEqual(separated.slice(2), overlapping.slice(2));
+  await placementButton.click();
+  assert.match(await placementStatus.innerText(), /Within viewer plate XY.*overlaps: 0/);
+  await findSpaceButton.click();
+  assert.match(await page.locator('#file-status').innerText(), /already has 5 mm/);
+  await undoButton.click();
+  assert.deepEqual(await readCenterTransforms(), overlapping);
+  await redoButton.click();
+  assert.deepEqual(await readCenterTransforms(), separated);
+  await undoButton.click();
+  await undoButton.click();
+  assert.deepEqual(await readCenterTransforms(), beforeCenter);
+  await page.locator('#object-tree [data-object-id]').first().click();
+  assert.equal(Number(await page.locator('#transform-x').inputValue()), originalX);
+  assert.equal(Number(await page.locator('#transform-y').inputValue()), originalY);
+  await page.locator('#object-tree [data-object-id]').last().click();
+
   // Framing all visible objects must differ from framing only the selected
   // displaced duplicate, and must not change selection, placement or history.
   const transformsBeforeFit = await Promise.all(
@@ -422,6 +459,7 @@ try {
   assert.equal(await dropToBedButton.isDisabled(), true, 'native 3MF bed editing remains unsupported');
   assert.equal(await centerButton.isDisabled(), true, 'native 3MF centering remains unsupported');
   assert.equal(await placementButton.isDisabled(), true, '3MF placement check remains unsupported');
+  assert.equal(await findSpaceButton.isDisabled(), true, '3MF arrangement remains unsupported');
   assert.equal(await rx.isDisabled(), true, 'new numeric X rotation is loose-mesh only');
   assert.equal(await ry.isDisabled(), true, 'new numeric Y rotation is loose-mesh only');
   assert.equal(await undoButton.isDisabled(), true, 'import must clear preceding STL history');
