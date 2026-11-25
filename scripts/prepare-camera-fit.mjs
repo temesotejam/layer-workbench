@@ -1,4 +1,16 @@
-// Viewer-only camera framing. The 3D offset in placeCamera is not unit length.
+// Independent browser camera directions in the Z-up build-plate frame.
+// The 3D offset is not unit length.
+export function prepareViewOrientation(mode) {
+  switch (mode) {
+    case "3d": return {offset:[0.78,-1,0.72], up:[0,0,1]};
+    case "top": return {offset:[0,0,1], up:[0,1,0]};
+    case "front": return {offset:[0,-1,0], up:[0,0,1]};
+    case "rear": return {offset:[0,1,0], up:[0,0,1]};
+    case "left": return {offset:[-1,0,0], up:[0,0,1]};
+    case "right": return {offset:[1,0,0], up:[0,0,1]};
+    default: throw new RangeError("Unknown view");
+  }
+}
 export function perspectiveFitDistance(size, mode, fovDegrees, aspect) {
   const {x, y, z} = size;
   if (![x,y,z].every(v => Number.isFinite(v) && v >= 0) ||
@@ -15,10 +27,12 @@ export function perspectiveFitDistance(size, mode, fovDegrees, aspect) {
     return Math.max(260, Math.max(x,y,z,1)*2.35,
       margin * radius / Math.sin(halfAngle) / Math.hypot(0.78,1,0.72));
   }
-  if (mode !== "top" && mode !== "front") throw new RangeError("Unknown view");
+  prepareViewOrientation(mode); // Reject unknown directions.
+  const side = mode === "left" || mode === "right";
+  const width = side ? y : x;
   const height = mode === "top" ? y : z;
-  const depth = mode === "top" ? z : y;
+  const depth = mode === "top" ? z : side ? x : y;
   // Closest face, not the center, limits a perspective fit.
   return Math.max(120, depth / 2 + Math.max(1,
-    margin * x / (2*tanX), margin * height / (2*tanY)));
+    margin * width / (2*tanX), margin * height / (2*tanY)));
 }

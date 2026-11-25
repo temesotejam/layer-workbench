@@ -32,3 +32,9 @@
 .gcode-3d-preview output{display:block;margin:4px 0 8px;font-size:10px}
 #lab-3d-canvas{width:100%;aspect-ratio:1;overflow:hidden;border:1px solid #46535f;border-radius:5px;background:#171d24}
 #lab-3d-canvas canvas{display:block;width:100%;height:100%}
+
+/* Keep extra camera directions in the viewport, not the already crowded toolbar. */
+.view-cube{width:auto;height:auto;padding:6px;gap:4px}
+.view-side-controls{display:flex;gap:3px}
+.view-side-controls .tool-button{padding:3px 5px;font-size:10px;cursor:pointer}
+.view-cube small{margin-top:0}

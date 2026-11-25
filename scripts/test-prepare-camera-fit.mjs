@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { perspectiveFitDistance } from './prepare-camera-fit.mjs';
+import { perspectiveFitDistance, prepareViewOrientation } from './prepare-camera-fit.mjs';
 
 test('Top fits tall thin bounds using the nearest face', () => {
   const s = {x:20,y:20,z:500};
@@ -26,4 +26,19 @@ test('small boxes retain minimum distance; invalid input rejected', () => {
   assert.equal(perspectiveFitDistance({x:1,y:1,z:1},'3d',38,1),260);
   assert.throws(()=>perspectiveFitDistance({x:1,y:1,z:1},'front',38,0),RangeError);
   assert.throws(()=>perspectiveFitDistance({x:NaN,y:1,z:1},'top',38,1),RangeError);
+});
+
+test('side directions follow the source-pinned Z-up axes', () => {
+  assert.deepEqual(prepareViewOrientation('left'), {offset:[-1,0,0],up:[0,0,1]});
+  assert.deepEqual(prepareViewOrientation('right'), {offset:[1,0,0],up:[0,0,1]});
+  assert.deepEqual(prepareViewOrientation('rear'), {offset:[0,1,0],up:[0,0,1]});
+  assert.throws(()=>prepareViewOrientation('unknown'),RangeError);
+});
+test('side framing exchanges horizontal width and depth, rear matches front', () => {
+  const s = {x:400,y:200,z:20};
+  const aspect = .15;
+  const frontEquivalent = perspectiveFitDistance({x:s.y,y:s.x,z:s.z},'front',38,aspect);
+  for (const mode of ['left','right'])
+    assert.equal(perspectiveFitDistance(s,mode,38,aspect), frontEquivalent);
+  assert.equal(perspectiveFitDistance(s,'rear',38,aspect), perspectiveFitDistance(s,'front',38,aspect));
 });

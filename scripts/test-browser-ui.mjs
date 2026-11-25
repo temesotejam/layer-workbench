@@ -86,9 +86,23 @@ try {
     'Top and Front must render different camera directions');
   assert.equal(await page.locator('#transform-x').inputValue(), modelX,
     'switching views must not edit the selected model');
+  const directionTransforms = await Promise.all(
+    ['x','y','z','rz','sx','sy','sz'].map(k => page.locator('#transform-'+k).inputValue()));
+  for (const [mode,label] of [['left','Left'],['right','Right'],['rear','Rear']]) {
+    const button = page.locator('[data-view-orientation="'+mode+'"]');
+    await button.click();
+    assert.equal(await button.getAttribute('aria-pressed'), 'true');
+    assert.equal(await page.locator('[data-view-orientation][aria-pressed="true"]').count(), 1);
+    assert.equal(await page.locator('#view-direction-label').innerText(), label);
+    await page.locator('#fit-all-view').click();
+    assert.deepEqual(await Promise.all(
+      ['x','y','z','rz','sx','sy','sz'].map(k => page.locator('#transform-'+k).inputValue())),
+      directionTransforms, 'camera direction must not edit transforms');
+  }
   await threeDButton.click();
   assert.equal(await threeDButton.getAttribute('aria-pressed'), 'true');
   assert.equal(await frontButton.getAttribute('aria-pressed'), 'false');
+  assert.equal(await page.locator('#view-direction-label').innerText(), '3D');
 
   // Browser transforms can be undone, redone, or replaced with a new edit.
   const undoButton = page.locator('#undo-viewer');
