@@ -95,3 +95,10 @@ test("corner seed also fits transposed rectangles on a translated bed", () => {
   const placed = boxes.map((b,i)=>b.map((v,j)=>v+(j%2?moves[i].dy:moves[i].dx)));
   assert.deepEqual(arrangeViewerSpaces(placed,target,gap),[{dx:0,dy:0},{dx:0,dy:0}]);
 });
+
+test("oversized but valid footprints return null, including at coordinate cap", () => {
+  const boxes = [[-1e7,-1,1e7,1],[40,40,60,60]];
+  const original = structuredClone(boxes);
+  assert.equal(arrangeViewerSpaces(boxes,plate,gap),null);
+  assert.deepEqual(boxes,original);
+});

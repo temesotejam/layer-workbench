@@ -83,14 +83,21 @@ export function arrangeViewerSpaces(boxes, plate, gap = 5) {
       let failed = false;
       for (const i of order) {
         const box = boxes[i];
-        const corner = seedCorner && placed.length === 0
-          ? [plate[0] + gap - box[0], plate[1] + gap - box[1]] : [0, 0];
-        const preferred = box.map((v,j) => v + corner[j%2]);
-        const move = findViewerSpace(preferred, placed, plate, gap);
+        let move;
+        if (seedCorner && placed.length === 0) {
+          // Check fit using original bounds before translating; otherwise an
+          // oversized valid input can overflow the validator's coordinate cap.
+          if (plate[0] + gap > plate[2] - gap - width(box) ||
+              plate[1] + gap > plate[3] - gap - height(box)) {
+            failed = true; break;
+          }
+          move = {dx: plate[0] + gap - box[0], dy: plate[1] + gap - box[1]};
+        } else {
+          move = findViewerSpace(box, placed, plate, gap);
+        }
         if (!move) { failed = true; break; }
-        const total = {dx: move.dx + corner[0], dy: move.dy + corner[1]};
-        moves[i] = total;
-        placed.push(box.map((v,j) => v + (j%2 ? total.dy : total.dx)));
+        moves[i] = move;
+        placed.push(box.map((v,j) => v + (j%2 ? move.dy : move.dx)));
       }
       if (!failed) return moves;
     }
