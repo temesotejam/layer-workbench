@@ -1,9 +1,11 @@
 import json
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
-from audit_gcode_infill_config import compare_infill_config, parse_config
+from audit_gcode_infill_config import (compare_infill_config, parse_config,
+                                     embedded_skip_config_status)
 
 
 def block(*lines):
@@ -59,6 +61,69 @@ class InfillConfigTests(unittest.TestCase):
                 self.assertTrue(r["native_block_available"])
                 self.assertFalse(r["wasm_block_available"])
                 self.assertIsNone(r["equal_keys"])
+
+    def test_unavailable_reason_is_bounded(self):
+        good = block("; infill_direction = 45")
+        cases = (
+            ("; infill_direction = secret", "no-delimiters"),
+            (good + good, "repeated-start"),
+            ("; CONFIG_BLOCK_END", "unexpected-end"),
+            (good.replace("; CONFIG_BLOCK_END", ""), "missing-end"),
+            (block("; infill_direction = 45", "; infill_direction = 46"),
+             "duplicate-allowlisted-key"),
+            (block("; infill_direction = "), "invalid-allowlisted-value"),
+            (block("; infill_direction=secret"), "malformed-allowlisted-line"),
+            (block("G1 X1"), "noncomment-in-block"),
+            (block("; unknown = secret"), "no-allowlisted-values"),
+        )
+        for raw, status in cases:
+            with self.subTest(status=status):
+                r = self.compare(good, raw)
+                self.assertEqual(r["native_block_status"], "available")
+                self.assertEqual(r["wasm_block_status"], status)
+                self.assertIsNone(r["equal_keys"])
+                self.assertNotIn("secret", json.dumps(r))
+
+    def test_embedded_skip_flag_does_not_prove_effective_setting(self):
+        p = Path(self.tmp.name) / "fixture.3mf"
+        def fixture(raw):
+            with zipfile.ZipFile(p, "w") as z:
+                z.writestr("[Content_Types].xml", "<Types/>")
+                z.writestr("3D/3dmodel.model", "<model/>")
+                if raw is not None:
+                    z.writestr("Metadata/project_settings.config", raw)
+        for raw, expected in (
+            ('{"gcode_skip_config_block":"0"}', "explicit-disabled"),
+            ('{"gcode_skip_config_block":true}', "explicit-enabled"),
+            ('{"gcode_skip_config_block":"1"}', "explicit-enabled"),
+            ('{"gcode_skip_config_block":"secret"}', "unrecognized-value"),
+            ('{"other":"secret"}', "missing-key"),
+            (None, "missing-project-config"),
+            ('{"gcode_skip_config_block":"0","gcode_skip_config_block":"1"}',
+             "invalid-archive-or-config"),
+        ):
+            with self.subTest(expected=expected):
+                fixture(raw)
+                self.assertEqual(embedded_skip_config_status(p), expected)
+        fixture('{"gcode_skip_config_block":"0"}')
+        self.native.write_text("G1 X1", encoding="utf-8")
+        self.wasm.write_text("G1 X2", encoding="utf-8")
+        r = compare_infill_config(self.native, self.wasm, archive=p)
+        self.assertEqual(r["source_skip_config_block_status"], "explicit-disabled")
+        self.assertEqual(r["native_block_status"], "no-delimiters")
+        self.assertFalse(r["effective_full_profile_equivalence_verified"])
+        self.assertFalse(r["usable_for_printing"])
+
+    def test_new_infill_geometry_keys(self):
+        r = self.compare(block("; internal_solid_infill_pattern = monotonic",
+                               "; separated_infills = 0",
+                               "; align_infill_direction_to_model = 1"),
+                         block("; internal_solid_infill_pattern = rectilinear",
+                               "; separated_infills = 0",
+                               "; align_infill_direction_to_model = 0"))
+        self.assertEqual(r["different_keys"],
+                         ["align_infill_direction_to_model", "internal_solid_infill_pattern"])
+        self.assertEqual(r["equal_keys"], ["separated_infills"])
 
     def test_invalid_utf8_and_oversized_file(self):
         for raw in (b"\xff", b"x" * 12_000_001):

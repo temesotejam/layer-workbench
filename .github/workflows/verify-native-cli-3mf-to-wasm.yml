@@ -491,7 +491,7 @@ jobs:
           print('NATIVE_WASM_HEATER_DIFFERENCE_COUNT ' + json.dumps(
               r['heater_setpoint_difference_count']))
           print('NATIVE_WASM_INFILL_CONFIG ' + json.dumps(
-              compare_infill_config(native, wasm), sort_keys=True))
+              compare_infill_config(native, wasm, archive=root / 'browser-source-preserving-edited.3mf'), sort_keys=True))
           if not r['match']:
               raise SystemExit('Same-archive strict ordered G-code comparison FAIL')
           print('PASS: ordered commands for this single archive; effective profiles remain unverified')
