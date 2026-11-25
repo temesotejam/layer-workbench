@@ -70,3 +70,28 @@ test("impossible and invalid plans fail without mutating inputs", () => {
   assert.throws(()=>arrangeViewerSpaces([[0,0,0,1]],plate,gap),RangeError);
   assert.throws(()=>arrangeViewerSpaces(Array(65).fill([0,0,1,1]),plate,gap),RangeError);
 });
+
+// Every old sort order is identical for equal rectangles. Keeping the first
+// footprint centered blocks both sides even though a corner-seeded pack fits.
+test("corner-seeded fallback fits two equal tall rectangles", () => {
+  const boxes = [[30,10,70,90],[30,10,70,90]];
+  const original = structuredClone(boxes);
+  assert.deepEqual(findViewerSpace(boxes[0],[],plate,gap),{dx:0,dy:0});
+  assert.equal(findViewerSpace(boxes[1],[boxes[0]],plate,gap),null);
+  const moves = arrangeViewerSpaces(boxes,plate,gap);
+  assert.deepEqual(moves,[{dx:-25,dy:-5},{dx:20,dy:0}]);
+  assertLayout(boxes,moves);
+  assert.deepEqual(boxes,original);
+  assert.deepEqual(arrangeViewerSpaces(boxes,plate,gap),moves);
+});
+
+test("corner seed also fits transposed rectangles on a translated bed", () => {
+  const target = [-50,-50,50,50];
+  const boxes = [[-40,-20,40,20],[-40,-20,40,20]];
+  assert.equal(findViewerSpace(boxes[1],[boxes[0]],target,gap),null);
+  const moves = arrangeViewerSpaces(boxes,target,gap);
+  assert.deepEqual(moves,[{dx:-5,dy:-25},{dx:0,dy:20}]);
+  assertLayout(boxes,moves,target);
+  const placed = boxes.map((b,i)=>b.map((v,j)=>v+(j%2?moves[i].dy:moves[i].dx)));
+  assert.deepEqual(arrangeViewerSpaces(placed,target,gap),[{dx:0,dy:0},{dx:0,dy:0}]);
+});
