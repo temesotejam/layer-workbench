@@ -261,6 +261,33 @@ try {
   assert.equal(Number(await page.locator('#transform-x').inputValue()), 57,
     'duplicate transform must persist when selection changes');
 
+  // Center uses the actual transformed bounds, preserves Z and rotation/scale,
+  // and must not move the source or create history for an already centered model.
+  const centerButton = page.locator('#center-on-bed');
+  assert.equal(await centerButton.isEnabled(), true);
+  const centerKeys = ['x','y','z','rz','sx','sy','sz'];
+  const readCenterTransforms = () => Promise.all(centerKeys.map(k =>
+    page.locator('#transform-'+k).inputValue()));
+  const beforeCenter = await readCenterTransforms();
+  await centerButton.click();
+  const centered = await readCenterTransforms();
+  assert.ok(Math.abs(Number(centered[0]) - originalX) < 0.001);
+  assert.ok(Math.abs(Number(centered[1]) - originalY) < 0.001);
+  assert.deepEqual(centered.slice(2), beforeCenter.slice(2));
+  assert.match(await page.locator('#file-status').innerText(), /overlaps not checked/);
+  await centerButton.click();
+  assert.match(await page.locator('#file-status').innerText(), /already centered/);
+  await undoButton.click();
+  assert.deepEqual(await readCenterTransforms(), beforeCenter, 'centering must be undoable in one step');
+  await redoButton.click();
+  assert.deepEqual(await readCenterTransforms(), centered);
+  await undoButton.click();
+  assert.deepEqual(await readCenterTransforms(), beforeCenter);
+  await page.locator('#object-tree [data-object-id]').first().click();
+  assert.equal(Number(await page.locator('#transform-x').inputValue()), originalX);
+  assert.equal(Number(await page.locator('#transform-y').inputValue()), originalY);
+  await page.locator('#object-tree [data-object-id]').last().click();
+
   // Framing all visible objects must differ from framing only the selected
   // displaced duplicate, and must not change selection, placement or history.
   const transformsBeforeFit = await Promise.all(
@@ -305,6 +332,7 @@ try {
   assert.equal(await page.locator('[data-transform="translate"]').isDisabled(), true);
   assert.equal(await duplicateButton.isDisabled(), true);
   assert.equal(await dropToBedButton.isDisabled(), true);
+  assert.equal(await centerButton.isDisabled(), true);
   assert.equal(await undoButton.isEnabled(), true,
     'deleting the final loose STL must remain reversible');
   await undoButton.click();
@@ -331,6 +359,7 @@ try {
   await page.locator('#object-count').getByText(expected3mfCount + (expected3mfCount === 1 ? ' object' : ' objects')).waitFor();
   assert.equal(await duplicateButton.isDisabled(), true, '3MF duplication remains unsupported');
   assert.equal(await dropToBedButton.isDisabled(), true, 'native 3MF bed editing remains unsupported');
+  assert.equal(await centerButton.isDisabled(), true, 'native 3MF centering remains unsupported');
   assert.equal(await undoButton.isDisabled(), true, 'import must clear preceding STL history');
   await page.locator('#remove-object').click();
   await page.locator('#object-count').getByText((expected3mfCount-1) + (expected3mfCount-1 === 1 ? ' object' : ' objects')).waitFor();
