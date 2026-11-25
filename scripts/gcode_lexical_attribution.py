@@ -457,6 +457,12 @@ def compare_collinear_coverage(a, b):
     shared_group_counts = dict.fromkeys((
         "equal_total_length", "native_longer", "wasm_longer",
         "exclusive_only", "multiplicity_only", "mixed"), 0)
+    # For the axis-aligned cube fixture, grid strands are oblique (45 deg)
+    # and boundary connections are candidates for axis-aligned deposition.
+    # Report geometry only: no raw direction, layer height or coordinates.
+    exclusive_orientation = [dict.fromkeys(("axis_aligned_mm", "oblique_mm"), 0.0)
+                             for _ in (0, 1)]
+    axis_exclusive_by_plane = {}
     by_feature = {}
     changed_planes = set()
     for key, events in groups.items():
@@ -500,6 +506,14 @@ def compare_collinear_coverage(a, b):
                             if active[1 - side] == 0:
                                 exclusive = True
                                 shared_details[side]["exclusive_mm"] += excess * distance
+                                axis_aligned = u == 0 or v == 0
+                                orientation = "axis_aligned_mm" if axis_aligned else "oblique_mm"
+                                exclusive_orientation[side][orientation] += excess * distance
+                                if axis_aligned:
+                                    # Primitive axis direction has unit length.
+                                    # Exact lattice traversal, including multiplicity.
+                                    axis_exclusive_by_plane.setdefault(z, [0, 0])[side] += (
+                                        excess * (t - previous))
                             else:
                                 multiplicity = True
                                 shared_details[side]["excess_traversal_mm"] += excess * distance
@@ -534,6 +548,13 @@ def compare_collinear_coverage(a, b):
                     "native": {k: round(v, 6) for k, v in shared_details[0].items()},
                     "wasm": {k: round(v, 6) for k, v in shared_details[1].items()},
                     "changed_group_counts": shared_group_counts,
+                    "exclusive_orientation": {
+                        "native": {k: round(v, 6) for k, v in exclusive_orientation[0].items()},
+                        "wasm": {k: round(v, 6) for k, v in exclusive_orientation[1].items()},
+                        "planes_with_axis_exclusive": len(axis_exclusive_by_plane),
+                        "planes_with_balanced_axis_exclusive": sum(
+                            a == b for a, b in axis_exclusive_by_plane.values()),
+                    },
                 },
                 "semantic_equivalence_verified": False,
             },

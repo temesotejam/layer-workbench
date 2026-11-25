@@ -383,5 +383,38 @@ class LexicalAttributionTests(unittest.TestCase):
             self.assertEqual(sum(detail["wasm"].values()), 0)
 
 
+    def test_shared_sparse_exclusive_orientation_and_plane_balance(self):
+        with tempfile.TemporaryDirectory() as directory:
+            a, b = Path(directory) / "a", Path(directory) / "b"
+            prefix = "G90\nM83\nG1 Z1\n;TYPE:Sparse infill\n"
+            # Same shared lines: axis-aligned support is redistributed
+            # within Z1, but unbalanced on Z2. Oblique support also differs.
+            a.write_text(prefix + "G1 X1 Y1\nG1 X5 Y1 E1\n"
+                         "G1 X1 Y3\nG1 X3 Y3 E1\n"
+                         "G1 X10 Y10\nG1 X13 Y13 E1\n"
+                         "G1 Z2\nG1 X1 Y1\nG1 X5 Y1 E1\n")
+            b.write_text(prefix + "G1 X1 Y1\nG1 X3 Y1 E1\n"
+                         "G1 X1 Y3\nG1 X5 Y3 E1\n"
+                         "G1 X11 Y11\nG1 X13 Y13 E1\n"
+                         "G1 Z2\nG1 X1 Y1\nG1 X4 Y1 E1\n")
+            detail = compare_lexical(a, b)["planar_stroke_diagnostics"][
+                "collinear_coverage"]["sparse_line_alignment"]["shared_line_detail"]
+            o = detail["exclusive_orientation"]
+            self.assertEqual(o["native"]["axis_aligned_mm"], 3)
+            self.assertEqual(o["wasm"]["axis_aligned_mm"], 2)
+            self.assertAlmostEqual(o["native"]["oblique_mm"], 1.414214)
+            self.assertEqual(o["wasm"]["oblique_mm"], 0)
+            self.assertEqual(o["planes_with_axis_exclusive"], 2)
+            self.assertEqual(o["planes_with_balanced_axis_exclusive"], 1)
+            for side in ("native", "wasm"):
+                self.assertAlmostEqual(sum(o[side].values()), detail[side]["exclusive_mm"],
+                                       places=5)
+            reversed_o = compare_lexical(b, a)["planar_stroke_diagnostics"][
+                "collinear_coverage"]["sparse_line_alignment"]["shared_line_detail"][
+                "exclusive_orientation"]
+            self.assertEqual(reversed_o["native"], o["wasm"])
+            self.assertEqual(reversed_o["planes_with_balanced_axis_exclusive"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()
