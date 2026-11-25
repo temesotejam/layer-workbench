@@ -4,7 +4,7 @@ import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { STLLoader } from "three/addons/loaders/STLLoader.js";
 import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
 import { ThreeMFLoader } from "three/addons/loaders/3MFLoader.js";
-import { perspectiveFitDistance } from "./scripts/prepare-camera-fit.mjs";
+import { perspectiveFitDistance, prepareViewOrientation } from "./scripts/prepare-camera-fit.mjs";
 import { get3mfViewportBuildItems } from "./scripts/three-mf-viewport-items.mjs";
 import { captureViewerTransform, createViewerTransformHistory } from "./scripts/prepare-viewer-transform-history.mjs";
 
@@ -26,6 +26,7 @@ const redoButton = document.querySelector("#redo-viewer");
 const fitButton = document.querySelector("#fit-view");
 const fitAllButton = document.querySelector("#fit-all-view");
 const viewButtons = [...document.querySelectorAll("[data-view-orientation]")];
+const viewDirectionLabel = document.querySelector("#view-direction-label");
 const transformStatus = document.querySelector("#transform-status");
 const objectCount = document.querySelector("#object-count");
 const transformInputs = Object.fromEntries(["x","y","z","rz","sx","sy","sz"].map(key =>
@@ -508,8 +509,9 @@ dropToBedButton?.addEventListener("click", () => {
 // These are real browser-camera controls, independent of the experimental WASM
 // engine. They change only the view; they never change object coordinates.
 function showView(mode) {
-  if (!rendererReady || !["3d", "top", "front"].includes(mode)) return;
+  if (!rendererReady || !viewButtons.some(button => button.dataset.viewOrientation === mode)) return;
   currentView = mode;
+  viewDirectionLabel.textContent = viewButtons.find(button => button.dataset.viewOrientation === mode).textContent;
   viewButtons.forEach(button => {
     const active = button.dataset.viewOrientation === mode;
     button.classList.toggle("selected", active);
@@ -553,18 +555,11 @@ document.addEventListener("keydown", event => {
 
 function placeCamera(center, distance) {
   controls.target.copy(center);
-  if (currentView === "top") {
-    // Z is vertical in the build plate; use +Y as the screen-up direction.
-    camera.up.set(0, 1, 0);
-    camera.position.set(center.x, center.y, center.z + distance);
-  } else if (currentView === "front") {
-    camera.up.set(0, 0, 1);
-    camera.position.set(center.x, center.y - distance, center.z);
-  } else {
-    camera.up.set(0, 0, 1);
-    camera.position.set(center.x + distance * 0.78,
-                        center.y - distance, center.z + distance * 0.72);
-  }
+  const {offset, up} = prepareViewOrientation(currentView);
+  camera.up.set(...up);
+  camera.position.set(center.x + distance * offset[0],
+                      center.y + distance * offset[1],
+                      center.z + distance * offset[2]);
   controls.maxDistance = Math.max(1800, camera.position.distanceTo(center) * 1.1);
   camera.near = Math.max(0.1, distance / 500);
   camera.far = Math.max(5000, distance * 20);
