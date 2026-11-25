@@ -7,6 +7,7 @@ import { ThreeMFLoader } from "three/addons/loaders/3MFLoader.js";
 import { automaticViewProjection, orthographicFitHalfHeight, perspectiveFitDistance, prepareViewOrientation } from "./scripts/prepare-camera-fit.mjs";
 import { get3mfViewportBuildItems } from "./scripts/three-mf-viewport-items.mjs";
 import { captureViewerTransform, createViewerTransformHistory } from "./scripts/prepare-viewer-transform-history.mjs";
+import { findViewerSpace } from "./scripts/prepare-find-space.mjs";
 
 const picker = document.querySelector("#model-file");
 const status = document.querySelector("#file-status");
@@ -23,6 +24,7 @@ const duplicateButton = document.querySelector("#duplicate-object");
 const dropToBedButton = document.querySelector("#drop-to-bed");
 const centerOnBedButton = document.querySelector("#center-on-bed");
 const checkPlacementButton = document.querySelector("#check-placement");
+const findSpaceButton = document.querySelector("#find-space");
 const placementStatus = document.querySelector("#placement-status");
 const undoButton = document.querySelector("#undo-viewer");
 const redoButton = document.querySelector("#redo-viewer");
@@ -215,6 +217,8 @@ function selectEntry(id) {
   dropToBedButton.disabled = !entry || !["stl", "obj"].includes(entry.format) || !!entry.sourceRoot;
   centerOnBedButton.disabled = dropToBedButton.disabled;
   checkPlacementButton.disabled = dropToBedButton.disabled;
+  findSpaceButton.disabled = dropToBedButton.disabled || entries.length > 64 ||
+    !entries.every(item => !item.sourceRoot && ["stl", "obj"].includes(item.format));
   entries.forEach(item => item.object?.traverse(node => {
     if (!node.isMesh) return;
     const materials = Array.isArray(node.material) ? node.material : [node.material];
@@ -585,6 +589,46 @@ checkPlacementButton.addEventListener("click", () => {
   placementStatus.textContent = (outside ? "Outside viewer plate" : "Within viewer plate XY") +
     " · " + z + " · XY bounding-box overlaps: " + overlap +
     " · Not a collision or printability check.";
+});
+// Move only the selected loose mesh to the nearest free AABB location.
+findSpaceButton.addEventListener("click", () => {
+  const entry = entries.find(item => item.id === selectedId);
+  if (!rendererReady || transformControls.dragging || !entry || findSpaceButton.disabled) return;
+  try {
+    const bounds = entries.map(item => {
+      item.object.updateWorldMatrix(true, true);
+      const b = new THREE.Box3().setFromObject(item.object, true);
+      return [b.min.x, b.min.y, b.max.x, b.max.y];
+    });
+    const own = bounds.splice(entries.indexOf(entry), 1)[0];
+    const hx = plate.geometry.parameters.width / 2, hy = plate.geometry.parameters.height / 2;
+    const result = findViewerSpace(own, bounds,
+      [plate.position.x-hx, plate.position.y-hy, plate.position.x+hx, plate.position.y+hy]);
+    if (!result) {
+      status.textContent = "No free viewer AABB placement with 5 mm clearance; nothing moved.";
+      return;
+    }
+    const {dx,dy} = result;
+    if (![entry.object.position.x+dx, entry.object.position.y+dy, dx, dy]
+        .every(v => Number.isFinite(v) && Math.abs(v) <= 5000)) {
+      status.textContent = "Cannot move model: viewer correction out of bounds.";
+      return;
+    }
+    if (Math.abs(dx) < 1e-9 && Math.abs(dy) < 1e-9) {
+      status.textContent = "Selected mesh already has 5 mm viewer AABB clearance.";
+      return;
+    }
+    const before = captureViewerTransform(entry);
+    entry.object.position.x += dx;
+    entry.object.position.y += dy;
+    entry.object.updateMatrixWorld(true);
+    entry.modified = true;
+    recordViewerEdit(entry, before);
+    updateTransformStatus();
+    status.textContent = "Moved selected mesh to free viewer AABB space (5 mm clearance; not printability).";
+  } catch (error) {
+    status.textContent = "Find space unavailable: " + error.message;
+  }
 });
 // These are real browser-camera controls, independent of the experimental WASM
 // engine. They change only the view; they never change object coordinates.
