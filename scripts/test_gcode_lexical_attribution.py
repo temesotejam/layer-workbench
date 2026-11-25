@@ -288,5 +288,54 @@ class LexicalAttributionTests(unittest.TestCase):
             self.assertNotIn("by_feature", c)
 
 
+    def test_sparse_line_alignment_partitions_unmatched_length(self):
+        with tempfile.TemporaryDirectory() as directory:
+            a, b = Path(directory) / "a", Path(directory) / "b"
+            prefix = "G90\nM83\nG1 Z1\n;TYPE:Sparse infill\n"
+            a.write_text(prefix + "G1 X1 Y1\nG1 X5 Y1 E1\n"
+                         "G1 X1 Y3\nG1 X5 Y3 E1\n"
+                         "G1 X8 Y1\nG1 X8 Y5 E1\n")
+            b.write_text(prefix + "G1 X2 Y1\nG1 X6 Y1 E1\n"
+                         "G1 X1 Y4\nG1 X5 Y4 E1\n")
+            c = compare_lexical(a, b)["planar_stroke_diagnostics"]["collinear_coverage"]
+            d = c["sparse_line_alignment"]
+            self.assertEqual(d["status"], "measured")
+            self.assertEqual(d["observed_planes"], 1)
+            self.assertEqual(d["planes_with_different_direction_sets"], 1)
+            self.assertEqual(d["native_unmatched"], {
+                "direction_absent_mm": 4, "parallel_line_absent_mm": 4,
+                "shared_line_coverage_mm": 1})
+            self.assertEqual(d["wasm_unmatched"], {
+                "direction_absent_mm": 0, "parallel_line_absent_mm": 4,
+                "shared_line_coverage_mm": 1})
+            for side in ("native", "wasm"):
+                self.assertAlmostEqual(sum(d[side + "_unmatched"].values()),
+                                       c["by_feature"]["sparse infill"][side + "_unmatched_mm"])
+            self.assertFalse(d["semantic_equivalence_verified"])
+
+    def test_sparse_alignment_separates_layers_and_handles_split_reverse(self):
+        with tempfile.TemporaryDirectory() as directory:
+            a, b = Path(directory) / "a", Path(directory) / "b"
+            prefix = "G90\nM83\nG1 Z1\n;TYPE:Sparse infill\n"
+            a.write_text(prefix + "G1 X1 Y1\nG1 X5 Y1 E1\n"
+                         "G1 Z2\nG1 X1 Y2\nG1 X5 Y2 E1\n")
+            b.write_text(prefix + "G1 X5 Y1\nG1 X3 Y1 E1\nG1 X1 Y1 E1\n"
+                         "G1 Z3\nG1 X1 Y2\nG1 X5 Y2 E1\n")
+            d = compare_lexical(a, b)["planar_stroke_diagnostics"][
+                "collinear_coverage"]["sparse_line_alignment"]
+            self.assertEqual(d["observed_planes"], 3)
+            self.assertEqual(d["planes_with_different_direction_sets"], 2)
+            for side in ("native", "wasm"):
+                self.assertEqual(d[side + "_unmatched"], {
+                    "direction_absent_mm": 4, "parallel_line_absent_mm": 0,
+                    "shared_line_coverage_mm": 0})
+            for path in (a, b):
+                path.write_text(path.read_text().replace("Sparse infill", "Outer wall"))
+            d = compare_lexical(a, b)["planar_stroke_diagnostics"][
+                "collinear_coverage"]["sparse_line_alignment"]
+            self.assertEqual(d["status"], "no-sparse-infill")
+            self.assertEqual(d["observed_planes"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()

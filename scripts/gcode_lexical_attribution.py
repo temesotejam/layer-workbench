@@ -432,9 +432,35 @@ def compare_collinear_coverage(a, b):
         return {"status": "unsupported-coordinate-lattice",
                 "semantic_equivalence_verified": False}
 
+    # Exact sparse directions and supporting lines at each Z, not rounded
+    # angles or object identities. Missing parallel lines can have multiple
+    # causes (phase, clipping, quantization, object assignment).
+    directions = [set(), set()]
+    presence = {}
+    for key, events in groups.items():
+        z, label, u, v, _ = key
+        if label != "sparse infill":
+            continue
+        present = tuple(any(delta[side] > 0 for delta in events.values())
+                        for side in (0, 1))
+        presence[key] = present
+        for side in (0, 1):
+            if present[side]:
+                directions[side].add((z, u, v))
+    buckets = ("direction_absent_mm", "parallel_line_absent_mm",
+               "shared_line_coverage_mm")
+    sparse = [dict.fromkeys(buckets, 0.0) for _ in (0, 1)]
     by_feature = {}
     changed_planes = set()
-    for (z, label, u, v, _), events in groups.items():
+    for key, events in groups.items():
+        z, label, u, v, _ = key
+        classes = None
+        if label == "sparse infill":
+            classes = [
+                "shared_line_coverage_mm" if presence[key][1 - side] else
+                "parallel_line_absent_mm" if (z, u, v) in directions[1 - side]
+                else "direction_absent_mm"
+                for side in (0, 1)]
         row = by_feature.setdefault(label, {
             "line_groups": 0, "different_line_groups": 0,
             "native_unmatched_mm": 0.0, "wasm_unmatched_mm": 0.0,
@@ -450,6 +476,10 @@ def compare_collinear_coverage(a, b):
                 row["shared_mm"] += min(active) * distance
                 row["native_unmatched_mm"] += max(0, active[0] - active[1]) * distance
                 row["wasm_unmatched_mm"] += max(0, active[1] - active[0]) * distance
+                if classes is not None:
+                    for side in (0, 1):
+                        sparse[side][classes[side]] += (
+                            max(0, active[side] - active[1 - side]) * distance)
                 changed |= active[0] != active[1]
             active[0] += deltas[0]
             active[1] += deltas[1]
@@ -462,6 +492,15 @@ def compare_collinear_coverage(a, b):
             row[key] = round(row[key], 6)
     return {"status": "measured", "planes_with_different_coverage": len(changed_planes),
             "by_feature": dict(sorted(by_feature.items())),
+            "sparse_line_alignment": {
+                "status": "measured" if presence else "no-sparse-infill",
+                "observed_planes": len({d[0] for d in directions[0] | directions[1]}),
+                "planes_with_different_direction_sets": len({
+                    d[0] for d in directions[0] ^ directions[1]}),
+                "native_unmatched": {k: round(v, 6) for k, v in sparse[0].items()},
+                "wasm_unmatched": {k: round(v, 6) for k, v in sparse[1].items()},
+                "semantic_equivalence_verified": False,
+            },
             "semantic_equivalence_verified": False}
 
 
