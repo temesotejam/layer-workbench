@@ -11,12 +11,13 @@ import {auditNative3mfWorldFacetGroups,auditNative3mfWorldFacetWinding}
   from './audit-native-3mf-world-facets.mjs';
 
 const args=process.argv.slice(2);
-assert.ok(args.length===0||(args.length===1&&['--translated','--private-edit','--slice-embedded'].includes(args[0])));
+assert.ok(args.length===0||(args.length===1&&['--translated','--private-edit','--slice-embedded','--slice-anchor-zero'].includes(args[0])));
 const translated=args[0]==='--translated';
 const privateEdit=args[0]==='--private-edit';
-const embeddedSlice=args[0]==='--slice-embedded';
+const anchorZero=args[0]==='--slice-anchor-zero';
+const embeddedSlice=args[0]==='--slice-embedded'||anchorZero;
 const source=await readFile('native-cli-output/'+
-  (embeddedSlice?'browser-source-preserving-edited.3mf':translated?'native-v250-project-translated.3mf':'native-v250-project.3mf'));
+  (anchorZero?'anchor-zero.3mf':embeddedSlice?'browser-source-preserving-edited.3mf':translated?'native-v250-project-translated.3mf':'native-v250-project.3mf'));
 assert.ok(source.length>300 && source.length<=4_000_000);
 assert.equal(source.readUInt32LE(0),0x04034b50);
 const baselineGroups=JSON.parse(await readFile('native-cli-output/native-world-facets.json','utf8'));
@@ -93,10 +94,10 @@ try {
         return Array.from(data);
       } finally {await session.dispose();}
     },Array.from(source));
-    await writeFile('native-cli-output/same-archive-wasm.gcode',Buffer.from(bytes),{flag:'wx'});
+    await writeFile('native-cli-output/'+(anchorZero?'anchor-zero-wasm.gcode':'same-archive-wasm.gcode'),Buffer.from(bytes),{flag:'wx'});
     console.log('WASM_SAME_ARCHIVE_SLICE '+JSON.stringify({
       sourceSha256:createHash('sha256').update(source).digest('hex'),
-      bytes:bytes.length,embeddedProfileOnly:true,effectiveProfileParity:false,
+      bytes:bytes.length,anchorZeroControl:anchorZero,embeddedProfileOnly:true,effectiveProfileParity:false,
       printApproved:false
     }));
   }else{

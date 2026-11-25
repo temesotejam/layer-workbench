@@ -16,6 +16,8 @@ on:
       - "scripts/test_audit_native_3mf_metadata_loss.py"
       - "scripts/compare_gcode.py"
       - "scripts/audit_gcode_infill_config.py"
+      - "scripts/make_anchor_zero_control.py"
+      - "scripts/test_make_anchor_zero_control.py"
       - "scripts/test_audit_gcode_infill_config.py"
       - "scripts/gcode_lexical_attribution.py"
       - "scripts/test_gcode_lexical_attribution.py"
@@ -41,6 +43,8 @@ on:
       - "scripts/test_audit_native_3mf_metadata_loss.py"
       - "scripts/compare_gcode.py"
       - "scripts/audit_gcode_infill_config.py"
+      - "scripts/make_anchor_zero_control.py"
+      - "scripts/test_make_anchor_zero_control.py"
       - "scripts/test_audit_gcode_infill_config.py"
       - "scripts/gcode_lexical_attribution.py"
       - "scripts/test_gcode_lexical_attribution.py"
@@ -75,6 +79,7 @@ jobs:
           python3 -m unittest discover -s scripts -p test_verify_native_gcode_repeatability.py -v
           python3 -m unittest discover -s scripts -p test_gcode_lexical_attribution.py -v
           python3 -m unittest discover -s scripts -p test_audit_gcode_infill_config.py -v
+          python3 -m unittest discover -s scripts -p test_make_anchor_zero_control.py -v
           npm install --no-save --no-package-lock playwright@1.56.1 fflate@0.8.2
       - name: Download the official v2.5.0 Linux AppImage only inside CI
         shell: bash
@@ -455,6 +460,18 @@ jobs:
             sleep 1
           done
           timeout 240s node scripts/test-native-cli-3mf-to-wasm.mjs --slice-embedded
+          # One-setting intervention: disable single-ended anchors, retain max.
+          # Both engines receive exactly the same second archive, not an override.
+          python3 scripts/make_anchor_zero_control.py "${input}" native-cli-output/anchor-zero.3mf
+          control="${PWD}/native-cli-output/anchor-zero-native"
+          mkdir "${control}"
+          timeout 180s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
+            "${PWD}/native-cli-output/anchor-zero.3mf" --arrange 0 --slice 0 --outputdir "${control}" \
+            > "${control}/native-slice.log" 2>&1 || {
+              echo 'Native anchor-zero slice failed'
+              exit 1
+            }
+          timeout 240s node scripts/test-native-cli-3mf-to-wasm.mjs --slice-anchor-zero
           # Strict comparator unchanged; no raw G-code or settings in the log.
           # A mismatch is a parity FAIL, not evidence that the harness failed.
           # Do not merge a failed gate or activate the engine on Pages.
@@ -492,7 +509,41 @@ jobs:
               r['heater_setpoint_difference_count']))
           print('NATIVE_WASM_INFILL_CONFIG ' + json.dumps(
               compare_infill_config(native, wasm, archive=root / 'browser-source-preserving-edited.3mf'), sort_keys=True))
-          if not r['match']:
+          # Verify the intervention in both serialized output configurations.
+          from audit_gcode_infill_config import parse_config
+          cn = root / 'anchor-zero-native' / 'plate_1.gcode'
+          cw = root / 'anchor-zero-wasm.gcode'
+          if sorted(cn.parent.rglob('*.gcode')) != [cn]:
+              raise SystemExit('Expected exactly one control plate')
+          if not all(1024 <= p.stat().st_size <= 12_000_000 for p in (cn, cw)):
+              raise SystemExit('Control G-code outside diagnostic bounds')
+          for base, control_file in ((native, cn), (wasm, cw)):
+              a, b = parse_config(base), parse_config(control_file)
+              if (a is None or b is None or 'infill_anchor' not in a or
+                      b.get('infill_anchor') not in ('0', '0%') or
+                      a.get('infill_anchor') in ('0', '0%') or
+                      a.keys() != b.keys() or
+                      {k for k in a if a[k] != b[k]} != {'infill_anchor'}):
+                  raise SystemExit('Anchor intervention not verified in serialized output')
+          control_result = compare(cn, cw, min_extrusion_moves=100)
+          if control_result['input_issues']:
+              raise SystemExit('Invalid control G-code')
+          def sparse(a, b):
+              d = compare_lexical(a, b)['planar_stroke_diagnostics']
+              if d['status'] != 'measured':
+                  raise SystemExit('Unavailable control geometry')
+              return d['collinear_coverage']['by_feature']['sparse infill']
+          print('ANCHOR_ZERO_CONTROL ' + json.dumps({
+              'baseline_native_vs_wasm': sparse(native, wasm),
+              'control_native_vs_wasm': sparse(cn, cw),
+              'native_intervention': sparse(native, cn),
+              'wasm_intervention': sparse(wasm, cw),
+              'control_ordered_match': control_result['match'],
+              'control_extrusion_moves': [control_result['native_extrusion_moves'],
+                                          control_result['wasm_extrusion_moves']],
+              'effective_full_profile_equivalence_verified': False,
+              'usable_for_printing': False}, sort_keys=True))
+          if not r['match'] or not control_result['match']:
               raise SystemExit('Same-archive strict ordered G-code comparison FAIL')
           print('PASS: ordered commands for this single archive; effective profiles remain unverified')
           PY
