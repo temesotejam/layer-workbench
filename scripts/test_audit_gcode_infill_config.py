@@ -69,7 +69,7 @@ class InfillConfigTests(unittest.TestCase):
             (good + good, "repeated-start"),
             ("; CONFIG_BLOCK_END", "unexpected-end"),
             (good.replace("; CONFIG_BLOCK_END\n", ""), "missing-end"),
-            (good.replace("; CONFIG_BLOCK_END", ""), "noncomment-in-block"),
+            (good.replace("; CONFIG_BLOCK_END", ""), "missing-end"),
             (block("; infill_direction = 45", "; infill_direction = 46"),
              "duplicate-allowlisted-key"),
             (block("; infill_direction = "), "invalid-allowlisted-value"),
@@ -84,6 +84,32 @@ class InfillConfigTests(unittest.TestCase):
                 self.assertEqual(r["wasm_block_status"], status)
                 self.assertIsNone(r["equal_keys"])
                 self.assertNotIn("secret", json.dumps(r))
+
+    def test_physical_records_and_blank_lines(self):
+        good = block("; infill_direction = 45")
+        r = self.compare(good, block("", " \t", "; infill_direction = 45", ""))
+        self.assertEqual(r["wasm_block_status"], "available")
+        self.assertEqual(r["equal_keys"], ["infill_direction"])
+        # Unicode separators in unknown serialized values are not new
+        # LF-delimited config records or delimiters.
+        r = self.compare(good, block("; private_key = secret\u2028; infill_direction = 99",
+                                     "; infill_direction = 45").replace("\n", "\r\n"))
+        self.assertEqual(r["wasm_block_status"], "available")
+        self.assertEqual(r["equal_keys"], ["infill_direction"])
+        self.assertNotIn("secret", json.dumps(r))
+        for raw, status in (
+            (block("; infill_direction = 45", " \tG1 X1"), "noncomment-in-block"),
+            (block("; infill_direction = 45", "; unknown = a\rG1 X1"),
+             "embedded-carriage-return"),
+            (block("; private_key = x\u2028; infill_direction = 99"),
+             "no-allowlisted-values"),
+            (block("; infill_direction = 45", "", "; infill_direction = 45"),
+             "duplicate-allowlisted-key"),
+        ):
+            with self.subTest(status=status):
+                r = self.compare(good, raw)
+                self.assertEqual(r["wasm_block_status"], status)
+                self.assertIsNone(r["equal_keys"])
 
     def test_embedded_skip_flag_does_not_prove_effective_setting(self):
         p = Path(self.tmp.name) / "fixture.3mf"

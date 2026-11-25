@@ -32,7 +32,9 @@ def _parse_config(path):
             raw = f.read(MAX_BYTES + 1)
         if len(raw) > MAX_BYTES:
             return "too-large", None
-        lines = raw.decode("utf-8").splitlines()
+        # Orca writes LF-delimited records; splitlines() also splits on
+        # Unicode separators and control characters inside serialized strings.
+        lines = raw.decode("utf-8").split("\n")
     except OSError:
         return "read-error", None
     except UnicodeError:
@@ -40,6 +42,8 @@ def _parse_config(path):
     state = 0
     values = {}
     for line in lines:
+        # Accept CRLF, but not a bare CR embedded in a config record.
+        line = line.removesuffix("\r")
         if line == "; CONFIG_BLOCK_START":
             if state != 0:
                 return "repeated-start", None
@@ -49,6 +53,13 @@ def _parse_config(path):
                 return "unexpected-end", None
             state = 2
         elif state == 1:
+            if "\r" in line:
+                return "embedded-carriage-return", None
+            # Empty and horizontal-whitespace-only physical records carry
+            # neither a setting nor a machine command. Other noncomments
+            # still invalidate the entire block.
+            if not line.strip(" \t"):
+                continue
             if not line.startswith(";"):
                 return "noncomment-in-block", None
             match = KEY_LINE.fullmatch(line)
