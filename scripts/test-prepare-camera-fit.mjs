@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { orthographicFitHalfHeight, perspectiveFitDistance, prepareViewOrientation } from './prepare-camera-fit.mjs';
+import { automaticViewProjection, orthographicFitHalfHeight, perspectiveFitDistance, prepareViewOrientation } from './prepare-camera-fit.mjs';
 
 test('Top fits tall thin bounds using the nearest face', () => {
   const s = {x:20,y:20,z:500};
@@ -73,4 +73,17 @@ test('orthographic tiny and invalid bounds', () => {
   assert.throws(()=>orthographicFitHalfHeight({x:1,y:1,z:1},'front',0),RangeError);
   assert.throws(()=>orthographicFitHalfHeight({x:-1,y:1,z:1},'top',1),RangeError);
   assert.throws(()=>orthographicFitHalfHeight({x:1,y:1,z:1},'unknown',1),RangeError);
+});
+
+test('auto projection selects orthographic for every axial direction and releases hold', () => {
+  for (const mode of ['top','bottom','front','rear','left','right'])
+    assert.deepEqual(automaticViewProjection(mode,false,true),{orthographic:true,hold:false});
+  assert.deepEqual(automaticViewProjection('3d',true,false),{orthographic:false,hold:false});
+});
+test('manual projection holds in oblique view until an axial direction releases it', () => {
+  assert.deepEqual(automaticViewProjection('3d',true,true),{orthographic:true,hold:true});
+  assert.deepEqual(automaticViewProjection('3d',false,true),{orthographic:false,hold:true});
+  const axial = automaticViewProjection('top',true,true);
+  assert.deepEqual(automaticViewProjection('3d',axial.orthographic,axial.hold),{orthographic:false,hold:false});
+  assert.throws(()=>automaticViewProjection('unknown',false,false),RangeError);
 });

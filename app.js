@@ -4,7 +4,7 @@ import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { STLLoader } from "three/addons/loaders/STLLoader.js";
 import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
 import { ThreeMFLoader } from "three/addons/loaders/3MFLoader.js";
-import { orthographicFitHalfHeight, perspectiveFitDistance, prepareViewOrientation } from "./scripts/prepare-camera-fit.mjs";
+import { automaticViewProjection, orthographicFitHalfHeight, perspectiveFitDistance, prepareViewOrientation } from "./scripts/prepare-camera-fit.mjs";
 import { get3mfViewportBuildItems } from "./scripts/three-mf-viewport-items.mjs";
 import { captureViewerTransform, createViewerTransformHistory } from "./scripts/prepare-viewer-transform-history.mjs";
 
@@ -28,6 +28,7 @@ const fitAllButton = document.querySelector("#fit-all-view");
 const viewButtons = [...document.querySelectorAll("[data-view-orientation]")];
 const viewDirectionLabel = document.querySelector("#view-direction-label");
 const projectionButton = document.querySelector("#toggle-projection");
+const autoProjectionButton = document.querySelector("#auto-projection");
 const projectionLabel = document.querySelector("#projection-label");
 const transformStatus = document.querySelector("#transform-status");
 const objectCount = document.querySelector("#object-count");
@@ -51,6 +52,8 @@ const pointer = new THREE.Vector2();
 let pointerDown = null;
 let rendererReady = false;
 let currentView = "3d";
+let automaticProjection = false;
+let preventAutomaticPerspective = false;
 const perspectiveFov = 38;
 let canvasAspect = 1;
 let orthoHalfHeight = 100;
@@ -514,6 +517,11 @@ dropToBedButton?.addEventListener("click", () => {
 function showView(mode) {
   if (!rendererReady || transformControls.dragging || !viewButtons.some(button => button.dataset.viewOrientation === mode)) return;
   currentView = mode;
+  if (automaticProjection) {
+    const next = automaticViewProjection(mode, camera.isOrthographicCamera, preventAutomaticPerspective);
+    preventAutomaticPerspective = next.hold;
+    setCameraProjection(next.orthographic);
+  }
   viewDirectionLabel.textContent = viewButtons.find(button => button.dataset.viewOrientation === mode).textContent;
   viewButtons.forEach(button => {
     const active = button.dataset.viewOrientation === mode;
@@ -532,18 +540,29 @@ fitButton?.addEventListener("click", () => {
   else placeCamera(new THREE.Vector3(0, 0, 35), 420);
 });
 fitAllButton?.addEventListener("click", fitCameraToAll);
-projectionButton?.addEventListener("click", () => {
-  if (!rendererReady || transformControls.dragging) return;
-  const ortho = !camera.isOrthographicCamera;
+function setCameraProjection(ortho) {
+  if (Boolean(camera.isOrthographicCamera) === ortho) return;
   camera = ortho
     ? new THREE.OrthographicCamera(-100, 100, 100, -100, 0.1, 5000)
     : new THREE.PerspectiveCamera(perspectiveFov, canvasAspect, 0.1, 5000);
   // The picker uses the active camera variable; the transform gizmo has its own
   // camera property. Both must follow the renderer on a projection switch.
   transformControls.camera = camera;
-  fitCameraToAll();
   projectionButton.setAttribute("aria-pressed", String(ortho));
   projectionLabel.textContent = ortho ? "Orthographic" : "Perspective";
+}
+projectionButton?.addEventListener("click", () => {
+  if (!rendererReady || transformControls.dragging) return;
+  preventAutomaticPerspective = true;
+  setCameraProjection(!camera.isOrthographicCamera);
+  fitCameraToAll();
+});
+autoProjectionButton?.addEventListener("click", () => {
+  if (!rendererReady || transformControls.dragging) return;
+  automaticProjection = !automaticProjection;
+  autoProjectionButton.setAttribute("aria-pressed", String(automaticProjection));
+  // Like the desktop preference, this affects subsequent direction choices.
+  // Do not reframe, change selection or edit model state when toggling it.
 });
 document.addEventListener("keydown", event => {
   const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName) ||
