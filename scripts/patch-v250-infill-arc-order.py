@@ -44,7 +44,8 @@ DIRECTIONS = """[](double lprev, double lnext) {
 def stage_neighbor_fallback(src):
     replacements = [
         ("#include <algorithm>\n", "#include <algorithm>\n#include <array>\n"),
-        ("    struct Arc {\n", "    auto ordered_directions = " + DIRECTIONS + ";\n\n    struct Arc {\n"),
+        ("    struct Arc {\n        ContourIntersectionPoint    *intersection;\n        double                       arc_length;\n",
+         "    auto ordered_directions = " + DIRECTIONS + ";\n\n    struct Arc {\n        ContourIntersectionPoint    *intersection;\n        double                       arc_length;\n"),
         ("for (const double l : { std::min(lprev, lnext), std::max(lprev, lnext) }) {",
          "for (const bool reversed : ordered_directions(lprev, lnext)) {\n                    const double l = reversed ? lprev : lnext;"),
         ("end_index(l == lprev ? cp.prev_on_contour : cp.next_on_contour)",
