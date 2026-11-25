@@ -21,13 +21,10 @@ test("width-first fallback recovers a layout that area-first cannot pack", () =>
   const boxes = [[40,32.5,60,67.5],[37.5,10,62.5,90],[35,27.5,65,72.5]];
   const original = structuredClone(boxes);
   // Reproduce the area-first failure with the same primitive.
-  const placed = [];
-  for (const i of [1,2]) {
-    const b=boxes[i], m=findViewerSpace(b,placed,plate,gap);
-    assert.ok(m);
-    placed.push(b.map((v,j)=>v+(j%2?m.dy:m.dx)));
-  }
-  assert.equal(findViewerSpace(boxes[0],placed,plate,gap),null);
+  assert.deepEqual(findViewerSpace(boxes[1],[],plate,gap),{dx:0,dy:0});
+  // The tall, centered first rectangle leaves neither side wide enough
+  // for the second rectangle; the first attempt fails before item three.
+  assert.equal(findViewerSpace(boxes[2],[boxes[1]],plate,gap),null);
   const moves=arrangeViewerSpaces(boxes,plate,gap);
   assert.deepEqual(moves,[{dx:30,dy:0},{dx:-32.5,dy:0},{dx:0,dy:0}]);
   assertLayout(boxes,moves);
@@ -38,8 +35,10 @@ test("width-first fallback recovers a layout that area-first cannot pack", () =>
 test("transposed fixture exercises the height-first fallback", () => {
   const boxes = [[40,32.5,60,67.5],[37.5,10,62.5,90],[35,27.5,65,72.5]]
     .map(([x,y,X,Y])=>[y,x,Y,X]);
+  assert.deepEqual(findViewerSpace(boxes[1],[],plate,gap),{dx:0,dy:0});
+  assert.equal(findViewerSpace(boxes[2],[boxes[1]],plate,gap),null);
   const moves=arrangeViewerSpaces(boxes,plate,gap);
-  assert.ok(moves);
+  assert.deepEqual(moves,[{dx:0,dy:30},{dx:0,dy:-32.5},{dx:0,dy:0}]);
   assertLayout(boxes,moves);
   assert.deepEqual(arrangeViewerSpaces(boxes,plate,gap),moves);
 });
