@@ -14,6 +14,19 @@ class ComparatorTests(unittest.TestCase):
 
 
 
+    def test_numeric_canonicalization_does_not_round_distinct_words(self):
+        first = 'M900 K0.12345678901234567890123456781\n'
+        second = 'M900 K0.12345678901234567890123456782\n'
+        result = self.run_compare(first, second)
+        self.assertFalse(result['match'])
+        self.assertEqual(result['mismatched_commands'], 1)
+
+    def test_numeric_canonicalization_preserves_exact_aliases(self):
+        first = 'M900 K0.1234567890123456789012345678100\n'
+        second = 'M900 K12345678901234567890123456781e-29\n'
+        self.assertTrue(self.run_compare(first, second)['match'])
+        self.assertTrue(self.run_compare('M900 K-0.000\n', 'M900 K-0\n')['match'])
+
     def test_absolute_e_tool_change_requires_explicit_g92_reanchor(self):
         # Two identical files must not pass solely because a global absolute
         # E register was silently carried across distinct physical tools.
