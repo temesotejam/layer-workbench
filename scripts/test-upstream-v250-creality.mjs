@@ -284,3 +284,9 @@ for(const [key,expected] of [["infill_anchor","400%"],["infill_anchor_max","20"]
   assert.ok(!process.unsupported.includes(key));
 }
 console.log("PASS: pinned CR-10 anchor length 400% and maximum 20 mm independently forwarded");
+
+assert.equal(process.record.infill_combination,"0");
+assert.equal(process.settings.infill_combination,"0");
+assert.equal(combined.process.settings.infill_combination,"0");
+assert.ok(!process.unsupported.includes("infill_combination"));
+console.log("PASS: actual pinned CR-10 explicitly disables sparse infill combination");

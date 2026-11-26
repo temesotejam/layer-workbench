@@ -974,3 +974,19 @@ for(const [key,childValue,parentValue] of [["infill_anchor","400%","100%"],["inf
       ? {...rec,[key]:bad}:rec),selection),/Invalid|safe test range/);
 }
 console.log("PASS: native infill anchor lengths independently inherit without unit conversion");
+
+const combinationProfiles=profiles.map(rec=>rec.name==="fdm_process_common"
+  ? {...rec,infill_combination:"1"} : rec.name==="0.16mm Fine @TestPrinter"
+    ? {...rec,infill_combination:"0"} : rec);
+const combination=resolve(combinationProfiles,selection).process;
+assert.equal(combination.settings.infill_combination,"0");
+assert.ok(!combination.unsupported.includes("infill_combination"));
+assert.equal(resolve(combinationProfiles.map(rec=>{
+  if(rec.name!=="0.16mm Fine @TestPrinter")return rec;
+  const child={...rec};delete child.infill_combination;return child;
+}),selection).process.settings.infill_combination,"1");
+assert.equal(result.process.settings.infill_combination,undefined);
+for(const bad of [0,1,true,"2","true",["1"],null])
+  assert.throws(()=>resolve(combinationProfiles.map(rec=>rec.name==="0.16mm Fine @TestPrinter"
+    ? {...rec,infill_combination:bad}:rec),selection),/Invalid native process enum/);
+console.log("PASS: explicit disabled child overrides enabled inherited infill combination");

@@ -357,3 +357,10 @@ for(const key of ["infill_anchor","infill_anchor_max"]){
 assert.deepEqual(parseTestProcessOverrides({infill_anchor:"400%",infill_anchor_max:"20",sparse_infill_line_width:"0.45"}),
   {infill_anchor:"400%",infill_anchor_max:"20",sparse_infill_line_width:"0.45"});
 console.log("PASS: independent anchor length scalars preserve absolute mm and relative percent");
+
+ // Native infill combination is a serialized bool, not a layer count.
+for(const v of ["0","1"])
+  assert.deepEqual(parseTestProcessOverrides({infill_combination:v}),{infill_combination:v});
+for(const bad of [0,1,true,false,"true","false","2","1%"," 1 ",["1"],null,"1 G28"])
+  assert.throws(()=>parseTestProcessOverrides({infill_combination:bad}),/Unsupported native enum/);
+console.log("PASS: exact native sparse infill combination bool validation");
