@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { findViewerSpace, arrangeViewerSpaces, findViewerSpaceWithQuarterTurn, arrangeViewerSpacesWithQuarterTurns } from "./prepare-find-space.mjs";
+import { findViewerSpace, arrangeViewerSpaces, findViewerSpaceWithQuarterTurn, arrangeViewerSpacesWithQuarterTurns, viewerProjectedHull, viewerHullsSeparated } from "./prepare-find-space.mjs";
 
 const plate = [0, 0, 100, 100];
 const gap = 5;
@@ -166,4 +166,26 @@ test("batch rotation preserves ordinary plans and rejects blocked or invalid req
   assert.equal(arrangeViewerSpacesWithQuarterTurns(blocked,plate,Array(3).fill([50,50]),gap),null);
   assert.throws(()=>arrangeViewerSpacesWithQuarterTurns(boxes,plate,[[NaN,0],[0,0]]),RangeError);
   assert.throws(()=>arrangeViewerSpacesWithQuarterTurns(Array(7).fill(boxes[0]),plate,Array(7).fill(pivots[0])),RangeError);
+});
+
+test("projected hull separates overlapping AABBs without changing input", () => {
+  const a=[[0,0],[4,0],[0,4],[1,1],[0,0]], b=[[4,4],[4,1],[1,4]];
+  const original=structuredClone([a,b]);
+  const ha=viewerProjectedHull(a), hb=viewerProjectedHull(b);
+  assert.equal(ha.length,3);
+  assert.equal(viewerHullsSeparated(ha,hb),true);
+  assert.equal(viewerHullsSeparated(hb,ha),true);
+  assert.deepEqual([a,b],original);
+  const shift=p=>p.map(([x,y])=>[x-128,y+25]);
+  assert.equal(viewerHullsSeparated(viewerProjectedHull(shift(a)),viewerProjectedHull(shift(b))),true);
+});
+test("projected hull keeps overlap, containment and contact as candidates", () => {
+  const h=viewerProjectedHull([[0,0],[4,0],[0,4]]);
+  for (const pts of [[[0,0],[1,0],[0,1]],[[1,1],[5,1],[1,5]],[[4,0],[5,0],[4,1]],[[4+1e-8,0],[5,0],[5,1]]])
+    assert.equal(viewerHullsSeparated(h,viewerProjectedHull(pts)),false);
+});
+test("projected hull refuses degenerate, malformed and over-budget geometry", () => {
+  for (const pts of [[[0,0],[1,1],[2,2]],[[0,0],[0,1],[NaN,2]],Array(50001).fill([0,0]),Array.from({length:257},(_,i)=>[Math.cos(i*2*Math.PI/257),Math.sin(i*2*Math.PI/257)])])
+    assert.equal(viewerProjectedHull(pts),null);
+  assert.equal(viewerHullsSeparated(null,viewerProjectedHull([[0,0],[1,0],[0,1]])),null);
 });
