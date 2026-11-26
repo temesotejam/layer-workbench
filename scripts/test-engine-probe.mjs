@@ -1185,7 +1185,7 @@ try {
     });
     const areaOff=await sliceWithLineWidth('0','minimum_sparse_infill_area');
     const areaOn=await sliceWithLineWidth('10000','minimum_sparse_infill_area');
-    const areaWitness=code=>{
+    const areaWitness=(code,side='all')=>{
       const parsed=parseGcodeToolpaths(code);
       assert.equal(parsed.skippedArcs,0,'Sparse area witness cannot ignore arcs');
       assert.equal(parsed.skippedMalformedMotion,0,'Sparse area witness cannot ignore malformed motion');
@@ -1202,6 +1202,13 @@ try {
         if(Math.abs(seg.z2-seg.z1)>0.0005)continue;
         const length=Math.hypot(seg.x2-seg.x1,seg.y2-seg.y1);
         if(length<0.001)continue;
+        if(side!=='all'){
+          // The two original Prepare placements are separated by native X=165.
+          // Do not silently assign a stroke crossing that empty gap.
+          assert.ok(Math.max(seg.x1,seg.x2)<165||Math.min(seg.x1,seg.x2)>165,
+            'Selective area witness requires disjoint left/right deposition');
+          if((seg.x1>165?'right':'left')!==side)continue;
+        }
         const z=Math.round(seg.z2*1000)/1000;
         const counts=byZ.get(z)||{sparse:0,solid:0,sparse_mm:0,solid_mm:0};
         counts[role]++;
@@ -1234,6 +1241,57 @@ try {
     assert.ok(areaCandidate.sparse_mm<areaBaseline.sparse_mm&&
       areaCandidate.solid_mm>areaBaseline.solid_mm&&switchedZ.length>=2,
       'High area threshold must decrease sparse and increase internal solid XY deposition on multiple shared Z levels: '+JSON.stringify(areaReport));
+    // The official CR-10 process uses 10 mm². LayerRegion.cpp applies the
+    // threshold to post-perimeter ExPolygon area (<=), not STL XY area.
+    // Shrink only the second cube's XY dimensions to 4.6 mm, keep the large
+    // separated cube as a same-slice negative control, and fix two walls.
+    // This is a selective response witness, not an exact polygon-area audit.
+    await prepare.locator('#object-tree [data-object-id]').nth(1).click();
+    assert.equal(Number(await prepare.locator('#transform-x').inputValue()),45,
+      'The right-hand cube must be selected');
+    const setAreaScale=async(axis,value)=>{
+      const field=prepare.locator('#transform-s'+axis);
+      await field.fill(String(value));
+      await field.press('Tab');
+      assert.equal(Number(await field.inputValue()),Number(value));
+    };
+    const priorSx=await prepare.locator('#transform-sx').inputValue();
+    const priorSy=await prepare.locator('#transform-sy').inputValue();
+    const priorWalls=rawOrca[5].wall_loops;
+    try {
+      await setAreaScale('x',0.23);
+      await setAreaScale('y',0.23);
+      rawOrca[5].wall_loops='2';
+      const selectiveOff=await sliceWithLineWidth('0','minimum_sparse_infill_area');
+      const selectiveTen=await sliceWithLineWidth('10','minimum_sparse_infill_area');
+      const small0=areaWitness(selectiveOff,'right'),small10=areaWitness(selectiveTen,'right');
+      const large0=areaWitness(selectiveOff,'left'),large10=areaWitness(selectiveTen,'left');
+      const selectiveZ=[...small0.keys()].filter(z=>{
+        const a=small0.get(z),b=small10.get(z),c=large0.get(z),d=large10.get(z);
+        return b&&c&&d&&a.sparse_mm>0.1&&b.sparse_mm<0.001&&
+          b.solid_mm>a.solid_mm+0.1&&c.sparse_mm>1&&d.sparse_mm>1&&
+          Math.abs(d.sparse_mm-c.sparse_mm)<=Math.max(0.01,c.sparse_mm*0.01)&&
+          Math.abs(d.solid_mm-c.solid_mm)<=Math.max(0.01,c.solid_mm*0.01);
+      }).sort((a,b)=>a-b);
+      const selectiveReport={
+        fixture:'same large left cube and scaled 4.6 mm XY right cube; two walls; grid 35%',
+        native_key:'minimum_sparse_infill_area',baseline_mm2:0,candidate_mm2:10,
+        small_baseline:areaTotals(small0),small_candidate:areaTotals(small10),
+        large_baseline:areaTotals(large0),large_candidate:areaTotals(large10),
+        selective_switch_z_mm:selectiveZ,exact_region_area_verified:false,
+        desktop_native_parity:false,printer_ready:false
+      };
+      await writeFile(parityDir+'/minimum-sparse-infill-area-cr10-selectivity.json',
+        JSON.stringify(selectiveReport,null,2)+'\n');
+      console.log('WASM_MINIMUM_SPARSE_INFILL_AREA_CR10_SELECTIVITY '+JSON.stringify(selectiveReport));
+      assert.ok(selectiveZ.length>=2,
+        'At 10 mm² the small region must switch while the large control retains sparse deposition: '+JSON.stringify(selectiveReport));
+      console.log('PASS: 10 mm² native threshold selectively switches small-region WASM deposition');
+    } finally {
+      rawOrca[5].wall_loops=priorWalls;
+      await setAreaScale('x',priorSx);
+      await setAreaScale('y',priorSy);
+    }
     for(const key of ['minimum_sparse_infill_area','sparse_infill_pattern',
       'sparse_infill_density','top_shell_layers','bottom_shell_layers',
       'top_shell_thickness','bottom_shell_thickness'])delete rawOrca[4][key];
