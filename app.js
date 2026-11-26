@@ -7,7 +7,7 @@ import { ThreeMFLoader } from "three/addons/loaders/3MFLoader.js";
 import { automaticViewProjection, orthographicFitHalfHeight, perspectiveFitDistance, prepareViewOrientation } from "./scripts/prepare-camera-fit.mjs";
 import { get3mfViewportBuildItems } from "./scripts/three-mf-viewport-items.mjs";
 import { captureViewerTransform, createViewerTransformHistory } from "./scripts/prepare-viewer-transform-history.mjs";
-import { findViewerSpace, arrangeViewerSpaces, findViewerSpaceWithQuarterTurn, arrangeViewerSpacesWithQuarterTurns, viewerProjectedHull, viewerHullsSeparated, findViewerHullSpace } from "./scripts/prepare-find-space.mjs";
+import { findViewerSpace, arrangeViewerSpaces, findViewerSpaceWithQuarterTurn, arrangeViewerSpacesWithQuarterTurns, viewerProjectedHull, viewerHullsSeparated, findViewerHullSpace, arrangeViewerHullSpaces } from "./scripts/prepare-find-space.mjs";
 
 const picker = document.querySelector("#model-file");
 const status = document.querySelector("#file-status");
@@ -725,8 +725,14 @@ function arrangeAllViewerMeshes(allowRotation) {
     const hx = plate.geometry.parameters.width / 2, hy = plate.geometry.parameters.height / 2;
     const target = [plate.position.x-hx, plate.position.y-hy, plate.position.x+hx, plate.position.y+hy];
     if (allowRotation && entries.some(item=>item.object.parent !== world)) return;
-    const moves = allowRotation ? arrangeViewerSpacesWithQuarterTurns(bounds,target,
+    let moves = allowRotation ? arrangeViewerSpacesWithQuarterTurns(bounds,target,
       entries.map(item=>[item.object.position.x,item.object.position.y])) : arrangeViewerSpaces(bounds,target);
+    let hullFallback = false;
+    if (!moves && !allowRotation && entries.length <= 6 && entries.every(item=>item.object.parent === world)) {
+      const hullFor = boundedViewerHullReader();
+      moves = arrangeViewerHullSpaces(entries.map(hullFor),target);
+      hullFallback = !!moves;
+    }
     if (!moves) {
       status.textContent = allowRotation ? "No complete greedy viewer arrangement even with +90° turns; nothing moved." :
         "No complete greedy viewer arrangement; nothing moved.";
@@ -746,7 +752,8 @@ function arrangeAllViewerMeshes(allowRotation) {
       edits.push({id:entry.id,before,after:{...before,position,quaternion,modified:true},entry});
     }
     if (!edits.length) {
-      status.textContent = "All meshes already have 5 mm viewer AABB clearance.";
+      status.textContent = hullFallback ? "All meshes already have 5 mm viewer convex-hull clearance (not printability)." :
+        "All meshes already have 5 mm viewer AABB clearance.";
       return;
     }
     viewerHistory.recordBatch(edits);
@@ -760,6 +767,7 @@ function arrangeAllViewerMeshes(allowRotation) {
     updateTransformStatus();
     updateViewerHistoryButtons();
     status.textContent = moves.some(move=>move.quarterTurn) ? "Arranged all loose meshes with +90° turns (5 mm viewer AABB clearance; not printability)." :
+      hullFallback ? "Arranged all loose meshes (5 mm viewer convex-hull clearance; not printability)." :
       "Arranged all loose meshes (5 mm viewer AABB clearance; not printability).";
   } catch (error) {
     status.textContent = "Arrange all unavailable: " + error.message;
