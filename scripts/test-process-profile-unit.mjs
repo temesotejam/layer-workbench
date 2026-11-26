@@ -346,3 +346,14 @@ for(const [input,expected] of [[0,"0"],["10","10"],[" 0.25 ","0.25"],[10000,"100
 for(const bad of [-1,10000.01,"10%","10 mm2",["10"],null,true,NaN,Infinity,""])
   assert.throws(()=>parseTestProcessOverrides({minimum_sparse_infill_area:bad}),/Invalid|safe test range/);
 console.log("PASS: absolute sparse-infill area threshold validation");
+
+ // Both native anchor lengths are independent mm-or-percent scalars.
+for(const key of ["infill_anchor","infill_anchor_max"]){
+  for(const [input,expected] of [[0,"0"],["0%","0%"],["400%","400%"],[" 12.50% ","12.5%"],["20","20"],[1000,"1000"],["1000%","1000%"]])
+    assert.deepEqual(parseTestProcessOverrides({[key]:input}),{[key]:expected});
+  for(const bad of [-1,1000.01,"1000.01%","-1%","20mm","20%%","20% G28",["20"],null,true,NaN,Infinity,""])
+    assert.throws(()=>parseTestProcessOverrides({[key]:bad}),/Invalid|safe test range/);
+}
+assert.deepEqual(parseTestProcessOverrides({infill_anchor:"400%",infill_anchor_max:"20",sparse_infill_line_width:"0.45"}),
+  {infill_anchor:"400%",infill_anchor_max:"20",sparse_infill_line_width:"0.45"});
+console.log("PASS: independent anchor length scalars preserve absolute mm and relative percent");

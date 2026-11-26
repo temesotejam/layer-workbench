@@ -268,3 +268,24 @@ for(const bad of [-1,"10%",["10"],10001]){
     /Invalid|safe test range/);
   assert.equal(calls.length,0);
 }
+
+{
+  const preset={...selected,process:{settings:{
+    ...selected.process.settings,infill_anchor:"400%",infill_anchor_max:"20",sparse_infill_line_width:"0.45"
+  }}};
+  const {engine,calls}=mockedEngine();
+  await sliceMultiStlWithEngine(engine,items,null,null,preset);
+  const applied=calls.find(c=>c.name==="applyProfile");
+  assert.equal(applied.format,"orca.native-json");
+  assert.equal(applied.value.infill_anchor,"400%");
+  assert.equal(applied.value.infill_anchor_max,"20");
+  assert.equal(applied.value.sparse_infill_line_width,"0.45");
+}
+for(const key of ["infill_anchor","infill_anchor_max"]){
+  for(const bad of [-1,"1001%",["20"],null]){
+    const {engine,calls}=mockedEngine();
+    await assert.rejects(()=>sliceMultiStlWithEngine(engine,items,null,{[key]:bad}),/Invalid|safe test range/);
+    assert.equal(calls.length,0);
+  }
+}
+console.log("PASS: both anchor lengths reach native-json unchanged; bad overrides refuse session");

@@ -956,3 +956,21 @@ for(const bad of [-1,10000.01,"10%",["10"],null,true])
   assert.throws(()=>resolve(areaProfiles.map(rec=>rec.name==="0.16mm Fine @TestPrinter"
     ? {...rec,minimum_sparse_infill_area:bad}:rec),selection),/Invalid|safe test range/);
 console.log("PASS: native minimum sparse-infill area inheritance and rejection");
+
+const anchorProfiles=profiles.map(rec=>rec.name==="fdm_process_common"
+  ? {...rec,infill_anchor:"100%",infill_anchor_max:"10"} : rec.name==="0.16mm Fine @TestPrinter"
+    ? {...rec,infill_anchor:"400%",infill_anchor_max:"20"} : rec);
+const anchor=resolve(anchorProfiles,selection).process;
+for(const [key,childValue,parentValue] of [["infill_anchor","400%","100%"],["infill_anchor_max","20","10"]]){
+  assert.equal(anchor.settings[key],childValue);
+  assert.ok(!anchor.unsupported.includes(key));
+  assert.equal(resolve(anchorProfiles.map(rec=>{
+    if(rec.name!=="0.16mm Fine @TestPrinter")return rec;
+    const child={...rec};delete child[key];return child;
+  }),selection).process.settings[key],parentValue);
+  assert.equal(result.process.settings[key],undefined);
+  for(const bad of [-1,"1001%","20mm",["20"],null,true])
+    assert.throws(()=>resolve(anchorProfiles.map(rec=>rec.name==="0.16mm Fine @TestPrinter"
+      ? {...rec,[key]:bad}:rec),selection),/Invalid|safe test range/);
+}
+console.log("PASS: native infill anchor lengths independently inherit without unit conversion");
