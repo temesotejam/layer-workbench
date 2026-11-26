@@ -721,6 +721,40 @@ try {
   }
   console.log('PASS: batch convex-hull fallback and atomic undo/redo');
 
+  await page.locator('#model-file').setInputFiles([
+    {name:'batch-hull-turn-a.obj',mimeType:'text/plain',buffer:Buffer.from(
+      'v 0 200 0\nv 0 0 0\nv 200 200 0\nv 0 200 20\n'+
+      'f 1 3 2\nf 1 2 4\nf 1 4 3\nf 2 3 4\n')},
+    triFixture('batch-hull-turn-b.obj',true),
+  ]);
+  await page.locator('#object-count').getByText('2 objects').waitFor();
+  const batchHullTurnBefore=await readAllTransforms();
+  await arrangeAllButton.click();
+  assert.match(await page.locator('#file-status').innerText(),/No complete greedy viewer arrangement/);
+  assert.deepEqual(await readAllTransforms(),batchHullTurnBefore);
+  assert.equal(await undoButton.isDisabled(),true);
+  await arrangeAllRotateButton.click();
+  assert.match(await page.locator('#file-status').innerText(),/Arranged all loose meshes with \+90° turns \(5 mm viewer convex-hull clearance/);
+  const batchHullTurnAfter=await readAllTransforms();
+  assert.deepEqual(batchHullTurnAfter.map(s=>Number(s[5])),[90,0]);
+  assert.deepEqual(batchHullTurnAfter.map(s=>[s[2],...s.slice(6)]),batchHullTurnBefore.map(s=>[s[2],...s.slice(6)]));
+  for (const name of ['batch-hull-turn-a.obj','batch-hull-turn-b.obj']) {
+    await page.getByRole('button',{name}).click();
+    await placementButton.click();
+    assert.match(await placementStatus.innerText(),/Within viewer plate XY.*XY bounding-box overlaps: 1.*XY convex-hull candidates: 0; unavailable: 0/);
+  }
+  await arrangeAllRotateButton.click();
+  assert.match(await page.locator('#file-status').innerText(),/already have 5 mm viewer convex-hull clearance/);
+  await undoButton.click();
+  assert.deepEqual(await readAllTransforms(),batchHullTurnBefore);
+  await redoButton.click();
+  assert.deepEqual(await readAllTransforms(),batchHullTurnAfter);
+  for(let remaining=1;remaining>=0;remaining--){
+    await page.locator('#remove-object').click();
+    await page.locator('#object-count').getByText(remaining+' object'+(remaining===1?'':'s'),{exact:true}).waitFor();
+  }
+  console.log('PASS: batch convex-hull quarter turns and atomic undo/redo');
+
   // Reversible deletion must also preserve 3MF scene roots. The normal
   // public viewport treats a Core 3MF as one viewer item; the explicitly
   // opted-in isolated lab exposes its two build items independently.

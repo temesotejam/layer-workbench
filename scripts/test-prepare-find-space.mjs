@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { findViewerSpace, arrangeViewerSpaces, findViewerSpaceWithQuarterTurn, arrangeViewerSpacesWithQuarterTurns, viewerProjectedHull, viewerHullsSeparated, findViewerHullSpace, arrangeViewerHullSpaces, findViewerHullSpaceWithQuarterTurn } from "./prepare-find-space.mjs";
+import { findViewerSpace, arrangeViewerSpaces, findViewerSpaceWithQuarterTurn, arrangeViewerSpacesWithQuarterTurns, viewerProjectedHull, viewerHullsSeparated, findViewerHullSpace, arrangeViewerHullSpaces, findViewerHullSpaceWithQuarterTurn, arrangeViewerHullSpacesWithQuarterTurns } from "./prepare-find-space.mjs";
 
 const plate = [0, 0, 100, 100];
 const gap = 5;
@@ -261,4 +261,38 @@ test("selected hull quarter turn fits where AABB and translation fail, about a t
     assert.equal(findViewerHullSpaceWithQuarterTurn(own,[fixed],bed,[NaN,py]),null);
     assert.equal(findViewerHullSpaceWithQuarterTurn(own,[fixed],[0,0,50,50],[px,py]),null);
   }
+});
+
+
+test("batch hull quarter turns fit complementary shapes and preserve input", () => {
+  for (const [px,py] of [[0,0],[31,-47]]) {
+    const shapes=[[[-100,100],[-100,-100],[100,100]],[[100,100],[-100,100],[100,-100]]]
+      .map(h=>h.map(([x,y])=>[x+px,y+py]));
+    const bed=[-128+px,-128+py,128+px,128+py], pivots=shapes.map(()=>[px,py]);
+    const box=[-100+px,-100+py,100+px,100+py];
+    const before=structuredClone([shapes,pivots]);
+    assert.equal(arrangeViewerSpacesWithQuarterTurns([box,box],bed,pivots),null);
+    assert.equal(arrangeViewerHullSpaces(shapes,bed),null);
+    const moves=arrangeViewerHullSpacesWithQuarterTurns(shapes,bed,pivots);
+    assert.ok(moves);
+    assert.deepEqual(moves.map(m=>m.quarterTurn),[true,false]);
+    const placed=shapes.map((h,i)=>h.map(([x,y])=>moves[i].quarterTurn ?
+      [px-(y-py)+moves[i].dx,py+(x-px)+moves[i].dy] : [x+moves[i].dx,y+moves[i].dy]));
+    assert.ok(placed.flat().every(([x,y])=>x>=bed[0]+5-1e-8&&x<=bed[2]-5+1e-8&&y>=bed[1]+5-1e-8&&y<=bed[3]-5+1e-8));
+    assert.ok((moves[1].dx+moves[1].dy-moves[0].dx-moves[0].dy)/Math.sqrt(2)>5);
+    assert.deepEqual(arrangeViewerHullSpacesWithQuarterTurns(placed,bed,pivots.map(([x,y],i)=>[x+moves[i].dx,y+moves[i].dy])),
+      [{dx:0,dy:0,quarterTurn:false},{dx:0,dy:0,quarterTurn:false}]);
+    assert.deepEqual(arrangeViewerHullSpacesWithQuarterTurns(shapes,bed,pivots),moves);
+    assert.deepEqual([shapes,pivots],before);
+  }
+});
+test("batch hull turns preserve translation-only plans and reject unsupported inputs", () => {
+  const a=[[5,5],[95,5],[95,95],[5,95]], small=[[10,10],[15,10],[10,15]], other=[[70,70],[75,70],[70,75]];
+  const pivots=[[50,50],[50,50]];
+  assert.deepEqual(arrangeViewerHullSpacesWithQuarterTurns([small,other],plate,pivots),
+    [{dx:0,dy:0,quarterTurn:false},{dx:0,dy:0,quarterTurn:false}]);
+  assert.equal(arrangeViewerHullSpacesWithQuarterTurns([a,a],plate,pivots),null);
+  assert.equal(arrangeViewerHullSpacesWithQuarterTurns([a,null],plate,pivots),null);
+  assert.equal(arrangeViewerHullSpacesWithQuarterTurns([a,a],plate,[[NaN,0],[0,0]]),null);
+  assert.equal(arrangeViewerHullSpacesWithQuarterTurns(Array(5).fill(a),plate,Array(5).fill([50,50])),null);
 });

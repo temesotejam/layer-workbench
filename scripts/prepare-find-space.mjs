@@ -304,3 +304,33 @@ export function findViewerHullSpaceWithQuarterTurn(own, obstacles, plate, pivot,
   const move=findViewerHullSpace(rotated,obstacles,plate,gap);
   return move ? {...move,quarterTurn:true} : null;
 }
+
+
+// Explicit batch hull fallback. A translation-only solution retains priority.
+// Limit rotated hull search to four meshes (15 nonzero orientation subsets),
+// each using the existing bounded greedy planner. The offsets apply after a
+// positive world-Z turn about each supplied pivot; no inputs are mutated.
+export function arrangeViewerHullSpacesWithQuarterTurns(hulls, plate, pivots, gap = 5) {
+  if (!Array.isArray(hulls) || hulls.length < 2 || hulls.length > 6 ||
+      !Array.isArray(pivots) || pivots.length !== hulls.length ||
+      !pivots.every(p=>Array.isArray(p) && p.length===2 &&
+        p.every(v=>Number.isFinite(v) && Math.abs(v)<=1e7))) return null;
+  const shapes=hulls.map(h=>Array.isArray(h) && h.length<=32 ? viewerProjectedHull(h) : null);
+  if (shapes.some(h=>!h)) return null;
+  const direct=arrangeViewerHullSpaces(shapes,plate,gap);
+  if (direct) return direct.map(move=>({...move,quarterTurn:false}));
+  if (shapes.length>4 || !valid(plate) || !Number.isFinite(gap) || gap<0 || gap>1000) return null;
+  const rotated=shapes.map((h,i)=>{
+    const [px,py]=pivots[i];
+    return h.map(([x,y])=>[px-(y-py),py+(x-px)]);
+  });
+  const count=mask=>mask.toString(2).replace(/0/g,"").length;
+  const masks=Array.from({length:(1<<shapes.length)-1},(_,i)=>i+1)
+    .sort((a,b)=>count(a)-count(b)||a-b);
+  for (const mask of masks) {
+    const variant=shapes.map((h,i)=>mask & (1<<i) ? rotated[i] : h);
+    const moves=arrangeViewerHullSpaces(variant,plate,gap);
+    if (moves) return moves.map((move,i)=>({...move,quarterTurn:!!(mask & (1<<i))}));
+  }
+  return null;
+}
