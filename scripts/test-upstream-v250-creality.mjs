@@ -299,3 +299,12 @@ assert.deepEqual(process.chain.map(n=>indexed.records.find(p=>p.name===n)[combin
 assert.equal(process.settings[combinationCapKey],undefined);
 assert.equal(combined.process.settings[combinationCapKey],undefined);
 console.log("PASS: pinned CR-10 missing combination cap remains unset");
+
+const bottomFlowKey="bottom_solid_infill_flow_ratio";
+assert.deepEqual(process.chain.map(n=>indexed.records.find(p=>p.name===n)[bottomFlowKey]),
+  [undefined,undefined,"1"]);
+assert.equal(process.settings[bottomFlowKey],"1");
+assert.equal(combined.process.settings[bottomFlowKey],"1");
+assert.ok(!process.unsupported.includes(bottomFlowKey));
+assert.ok(process.unsupported.includes("top_solid_infill_flow_ratio"));
+console.log("PASS: official CR-10 bottom surface scalar flow; top nozzle vector not conflated");
