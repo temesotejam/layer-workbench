@@ -38,7 +38,7 @@ page.on('response', response => {
   if (response.status() >= 400) errors.push(`HTTP ${response.status()}: ${response.url()}`);
 });
 
-function makeBinarySTL() {
+function makeBinarySTL(dimensions = [20,20,20]) {
   const result = Buffer.alloc(84 + 50 * 12);
   result.write('Layer Workbench browser smoke cube', 0, 'ascii');
   const triangles = [
@@ -54,7 +54,7 @@ function makeBinarySTL() {
     const offset = 84 + i * 50;
     triangles[i].forEach((vertex, vertexIndex) =>
       vertex.forEach((component, axis) =>
-        result.writeFloatLE(component, offset + 12 + vertexIndex * 12 + axis * 4)));
+        result.writeFloatLE(component * dimensions[axis] / 20, offset + 12 + vertexIndex * 12 + axis * 4)));
   }
   return result;
 }
@@ -475,6 +475,78 @@ try {
   await page.locator('#object-count').getByText('0 objects').waitFor();
   assert.equal(await rx.isDisabled(), true);
   assert.equal(await ry.isDisabled(), true);
+
+  // Exercise the actual corner-seeded fallback, not only a pure helper test.
+  // Two centered 100 x 200 footprints cannot fit by retaining the first
+  // footprint at its initial location on a 256 mm bed with 5 mm clearance.
+  const tallFixture = name => ({name, mimeType:'model/stl',
+    buffer:makeBinarySTL([100,200,20])});
+  const readAllTransforms = async () => {
+    const nodes = page.locator('#object-tree [data-object-id]');
+    const states = [];
+    for (let i=0; i<await nodes.count(); i++) {
+      await nodes.nth(i).click();
+      states.push(await readCenterTransforms());
+    }
+    return states;
+  };
+  await page.locator('#model-file').setInputFiles([
+    tallFixture('corner-a.stl'), tallFixture('corner-b.stl'),
+  ]);
+  await page.locator('#object-count').getByText('2 objects').waitFor();
+  const cornerBefore = await readAllTransforms();
+  assert.deepEqual(cornerBefore.map(s=>s.slice(0,2).map(Number)),[[-50,-100],[-50,-100]]);
+  const cornerSelection = await page.locator('#object-tree .active').getAttribute('data-object-id');
+  assert.equal(findViewerSpace([-50,-100,50,100],[[-50,-100,50,100]],testPlate),null);
+  await arrangeAllButton.click();
+  assert.match(await page.locator('#file-status').innerText(), /Arranged all loose meshes/);
+  assert.equal(await page.locator('#object-tree .active').getAttribute('data-object-id'),cornerSelection);
+  const cornerAfter = await readAllTransforms();
+  assert.deepEqual(cornerAfter.map(s=>s.slice(0,2).map(Number)),[[-123,-123],[-18,-100]]);
+  assert.deepEqual(cornerAfter.map(s=>s.slice(2)),cornerBefore.map(s=>s.slice(2)));
+  await arrangeAllButton.click();
+  assert.match(await page.locator('#file-status').innerText(), /already have 5 mm/);
+  await undoButton.click();
+  assert.deepEqual(await readAllTransforms(),cornerBefore,'one undo restores both corner moves');
+  await redoButton.click();
+  assert.deepEqual(await readAllTransforms(),cornerAfter,'one redo restores both corner moves');
+
+  // Three such footprints cannot fit without changing orientation. The
+  // failed search must preserve every object and must not record history.
+  await page.locator('#model-file').setInputFiles(tallFixture('corner-c.stl'));
+  await page.locator('#object-count').getByText('3 objects').waitFor();
+  // Real pointer selection must remain possible when more than two models
+  // are loaded. The formerly horizontal flex list overflowed into the canvas.
+  const treeLayout = await page.locator('#object-tree').evaluate(tree => {
+    const bounds = tree.getBoundingClientRect();
+    return {
+      scrollWidth: tree.scrollWidth, clientWidth: tree.clientWidth,
+      rows: [...tree.querySelectorAll('[data-object-id]')].map(row => {
+        const r = row.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+        return {left:r.left-bounds.left,right:bounds.right-r.right,
+          top:r.top,bottom:r.bottom,hit:!!hit && row.contains(hit)};
+      }),
+    };
+  });
+  assert.equal(treeLayout.rows.length,3);
+  assert.ok(treeLayout.scrollWidth <= treeLayout.clientWidth + 1,'object list must not overflow horizontally');
+  for (const [i,row] of treeLayout.rows.entries()) {
+    assert.ok(row.left >= -1 && row.right >= -1 && row.hit,'object row must remain within sidebar and receive pointer events');
+    if (i) assert.ok(row.top >= treeLayout.rows[i-1].bottom-1,'object rows must stack vertically');
+  }
+  const impossibleBefore = await readAllTransforms();
+  assert.equal(await undoButton.isDisabled(),true,'import resets viewer history');
+  await arrangeAllButton.click();
+  assert.match(await page.locator('#file-status').innerText(), /No complete greedy viewer arrangement; nothing moved/);
+  assert.equal(await undoButton.isDisabled(),true);
+  assert.equal(await redoButton.isDisabled(),true);
+  assert.deepEqual(await readAllTransforms(),impossibleBefore);
+  for (let remaining=2; remaining>=0; remaining--) {
+    await page.locator('#remove-object').click();
+    await page.locator('#object-count').getByText(remaining+' object'+(remaining===1?'':'s'),{exact:true}).waitFor();
+  }
+  console.log('PASS: corner-seeded actual browser packing, batch undo/redo and atomic failure');
 
   // Reversible deletion must also preserve 3MF scene roots. The normal
   // public viewport treats a Core 3MF as one viewer item; the explicitly

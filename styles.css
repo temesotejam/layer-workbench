@@ -38,3 +38,10 @@
 .view-side-controls{display:flex;gap:3px}
 .view-side-controls .tool-button{padding:3px 5px;font-size:10px;cursor:pointer}
 .view-cube small{margin-top:0}
+
+/* Keep imported object rows inside the sidebar, independent of mesh count. */
+.object-tree{min-height:0;min-width:0;flex-direction:column;align-items:stretch;justify-content:flex-start;overflow:auto}
+.object-tree .empty-object{margin:auto}
+.object-tree .object-item{flex:none;min-width:0}
+.object-tree .object-name{min-width:0}
+.left-panel .panel-bottom{flex:none}

@@ -69,24 +69,38 @@ export function arrangeViewerSpaces(boxes, plate, gap = 5) {
     (a,b) => height(boxes[b])-height(boxes[a]) || width(boxes[b])-width(boxes[a]) || a-b,
   ];
   const tried = new Set();
-  // Preserve the original area-first result whenever it succeeds. Only retry
-  // a failed plan with distinct width-first and height-first orders, starting
-  // from an empty temporary placement each time. No partial plan escapes.
-  for (const compare of orders) {
-    const order = [...indices].sort(compare);
-    const key = order.join(",");
-    if (tried.has(key)) continue;
-    tried.add(key);
-    const placed = [], moves = Array(boxes.length);
-    let failed = false;
-    for (const i of order) {
-      const box = boxes[i];
-      const move = findViewerSpace(box, placed, plate, gap);
-      if (!move) { failed = true; break; }
-      moves[i] = move;
-      placed.push(box.map((v,j) => v + (j%2 ? move.dy : move.dx)));
+  // Preserve every previous successful plan. If all original orders fail,
+  // retry with the first footprint at the lower-left usable bed corner.
+  // A centered first object can otherwise block both sides of a feasible pack.
+  // At most six distinct attempts, each with fresh temporary placement.
+  for (const seedCorner of [false, true]) {
+    for (const compare of orders) {
+      const order = [...indices].sort(compare);
+      const key = Number(seedCorner) + ":" + order.join(",");
+      if (tried.has(key)) continue;
+      tried.add(key);
+      const placed = [], moves = Array(boxes.length);
+      let failed = false;
+      for (const i of order) {
+        const box = boxes[i];
+        let move;
+        if (seedCorner && placed.length === 0) {
+          // Check fit using original bounds before translating; otherwise an
+          // oversized valid input can overflow the validator's coordinate cap.
+          if (plate[0] + gap > plate[2] - gap - width(box) ||
+              plate[1] + gap > plate[3] - gap - height(box)) {
+            failed = true; break;
+          }
+          move = {dx: plate[0] + gap - box[0], dy: plate[1] + gap - box[1]};
+        } else {
+          move = findViewerSpace(box, placed, plate, gap);
+        }
+        if (!move) { failed = true; break; }
+        moves[i] = move;
+        placed.push(box.map((v,j) => v + (j%2 ? move.dy : move.dx)));
+      }
+      if (!failed) return moves;
     }
-    if (!failed) return moves;
   }
   return null;
 }
