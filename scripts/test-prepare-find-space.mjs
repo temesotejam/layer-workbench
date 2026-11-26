@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { findViewerSpace, arrangeViewerSpaces } from "./prepare-find-space.mjs";
+import { findViewerSpace, arrangeViewerSpaces, findViewerSpaceWithQuarterTurn } from "./prepare-find-space.mjs";
 
 const plate = [0, 0, 100, 100];
 const gap = 5;
@@ -126,4 +126,23 @@ test("remaining three corner seeds recover otherwise blocked arrangements", () =
       assert.deepEqual(arrangeViewerSpaces(placed,target,gap),input.map(()=>({dx:0,dy:0})));
     }
   }
+});
+
+// A fixed full-height obstacle leaves a narrow vertical strip. The chosen
+// mesh must rotate about its actual origin, not its bounding-box center.
+test("explicit quarter-turn fallback fits a narrow strip", () => {
+  const own=[20,30,80,50], obstacles=[[5,5,55,95]], pivot=[20,30];
+  const input=structuredClone([own,obstacles,pivot]);
+  assert.equal(findViewerSpace(own,obstacles,plate,gap),null);
+  const result=findViewerSpaceWithQuarterTurn(own,obstacles,plate,pivot,gap);
+  assert.deepEqual(result,{dx:60,dy:0,quarterTurn:true});
+  assertLayout([[0,30,20,90],...obstacles],[result,{dx:0,dy:0}]);
+  assert.deepEqual([own,obstacles,pivot],input);
+});
+test("quarter-turn fallback preserves feasible orientations and rejects blocked or invalid input", () => {
+  const own=[20,30,80,50], pivot=[20,30];
+  assert.deepEqual(findViewerSpaceWithQuarterTurn(own,[],plate,pivot,gap),
+    {dx:0,dy:0,quarterTurn:false});
+  assert.equal(findViewerSpaceWithQuarterTurn(own,[plate],plate,pivot,gap),null);
+  assert.throws(()=>findViewerSpaceWithQuarterTurn(own,[],plate,[NaN,0],gap),RangeError);
 });

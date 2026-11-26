@@ -106,3 +106,20 @@ export function arrangeViewerSpaces(boxes, plate, gap = 5) {
   }
   return null;
 }
+
+// Explicit selected-object fallback only. A +90-degree world-Z rotation
+// around the object's pivot maps the actual world AABB exactly (axis swap).
+// Preserve the original orientation whenever a translation alone fits.
+export function findViewerSpaceWithQuarterTurn(own, obstacles, plate, pivot, gap = 5) {
+  const direct = findViewerSpace(own, obstacles, plate, gap);
+  if (!Array.isArray(pivot) || pivot.length !== 2 ||
+      !pivot.every(v => Number.isFinite(v) && Math.abs(v) <= 1e7))
+    throw new RangeError("Invalid viewer rotation pivot");
+  if (direct) return {...direct, quarterTurn: false};
+  const [px, py] = pivot;
+  const rotated = [px - (own[3] - py), py + (own[0] - px),
+                   px - (own[1] - py), py + (own[2] - px)];
+  if (!valid(rotated)) return null;
+  const move = findViewerSpace(rotated, obstacles, plate, gap);
+  return move ? {...move, quarterTurn: true} : null;
+}

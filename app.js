@@ -7,7 +7,7 @@ import { ThreeMFLoader } from "three/addons/loaders/3MFLoader.js";
 import { automaticViewProjection, orthographicFitHalfHeight, perspectiveFitDistance, prepareViewOrientation } from "./scripts/prepare-camera-fit.mjs";
 import { get3mfViewportBuildItems } from "./scripts/three-mf-viewport-items.mjs";
 import { captureViewerTransform, createViewerTransformHistory } from "./scripts/prepare-viewer-transform-history.mjs";
-import { findViewerSpace, arrangeViewerSpaces } from "./scripts/prepare-find-space.mjs";
+import { findViewerSpace, arrangeViewerSpaces, findViewerSpaceWithQuarterTurn } from "./scripts/prepare-find-space.mjs";
 
 const picker = document.querySelector("#model-file");
 const status = document.querySelector("#file-status");
@@ -25,6 +25,7 @@ const dropToBedButton = document.querySelector("#drop-to-bed");
 const centerOnBedButton = document.querySelector("#center-on-bed");
 const checkPlacementButton = document.querySelector("#check-placement");
 const findSpaceButton = document.querySelector("#find-space");
+const findSpaceRotateButton = document.querySelector("#find-space-rotate");
 const arrangeAllButton = document.querySelector("#arrange-all");
 const placementStatus = document.querySelector("#placement-status");
 const undoButton = document.querySelector("#undo-viewer");
@@ -220,6 +221,7 @@ function selectEntry(id) {
   checkPlacementButton.disabled = dropToBedButton.disabled;
   findSpaceButton.disabled = dropToBedButton.disabled || entries.length > 64 ||
     !entries.every(item => !item.sourceRoot && ["stl", "obj"].includes(item.format));
+  findSpaceRotateButton.disabled = findSpaceButton.disabled;
   arrangeAllButton.disabled = entries.length < 2 || entries.length > 64 ||
     !entries.every(item => !item.sourceRoot && ["stl", "obj"].includes(item.format));
   entries.forEach(item => item.object?.traverse(node => {
@@ -612,8 +614,8 @@ checkPlacementButton.addEventListener("click", () => {
     " · " + z + " · XY bounding-box overlaps: " + overlap +
     " · Not a collision or printability check.";
 });
-// Move only the selected loose mesh to the nearest free AABB location.
-findSpaceButton.addEventListener("click", () => {
+// Move only the selected loose mesh. Rotation is an explicit fallback.
+function findSelectedSpace(allowRotation) {
   const entry = entries.find(item => item.id === selectedId);
   if (!rendererReady || transformControls.dragging || !entry || findSpaceButton.disabled) return;
   try {
@@ -624,34 +626,43 @@ findSpaceButton.addEventListener("click", () => {
     });
     const own = bounds.splice(entries.indexOf(entry), 1)[0];
     const hx = plate.geometry.parameters.width / 2, hy = plate.geometry.parameters.height / 2;
-    const result = findViewerSpace(own, bounds,
-      [plate.position.x-hx, plate.position.y-hy, plate.position.x+hx, plate.position.y+hy]);
+    const target = [plate.position.x-hx, plate.position.y-hy, plate.position.x+hx, plate.position.y+hy];
+    // Loose meshes are direct children of the identity world scene. The
+    // analytic world-Z rotation is not valid for an arbitrary parent frame.
+    if (allowRotation && entry.object.parent !== world) return;
+    const result = allowRotation ? findViewerSpaceWithQuarterTurn(own, bounds, target,
+      [entry.object.position.x, entry.object.position.y]) : findViewerSpace(own, bounds, target);
     if (!result) {
-      status.textContent = "No free viewer AABB placement with 5 mm clearance; nothing moved.";
+      status.textContent = allowRotation ? "No free viewer AABB placement even with +90° Z rotation; nothing moved." :
+        "No free viewer AABB placement with 5 mm clearance; nothing moved.";
       return;
     }
-    const {dx,dy} = result;
+    const {dx,dy,quarterTurn = false} = result;
     if (![entry.object.position.x+dx, entry.object.position.y+dy, dx, dy]
         .every(v => Number.isFinite(v) && Math.abs(v) <= 5000)) {
       status.textContent = "Cannot move model: viewer correction out of bounds.";
       return;
     }
-    if (Math.abs(dx) < 1e-9 && Math.abs(dy) < 1e-9) {
+    if (!quarterTurn && Math.abs(dx) < 1e-9 && Math.abs(dy) < 1e-9) {
       status.textContent = "Selected mesh already has 5 mm viewer AABB clearance.";
       return;
     }
     const before = captureViewerTransform(entry);
+    if (quarterTurn) entry.object.rotateOnWorldAxis(new THREE.Vector3(0,0,1), Math.PI/2);
     entry.object.position.x += dx;
     entry.object.position.y += dy;
     entry.object.updateMatrixWorld(true);
     entry.modified = true;
     recordViewerEdit(entry, before);
     updateTransformStatus();
-    status.textContent = "Moved selected mesh to free viewer AABB space (5 mm clearance; not printability).";
+    status.textContent = quarterTurn ? "Rotated selected mesh +90° Z and moved to free viewer AABB space (5 mm clearance; not printability)." :
+      "Moved selected mesh to free viewer AABB space (5 mm clearance; not printability).";
   } catch (error) {
     status.textContent = "Find space unavailable: " + error.message;
   }
-});
+}
+findSpaceButton.addEventListener("click", () => findSelectedSpace(false));
+findSpaceRotateButton.addEventListener("click", () => findSelectedSpace(true));
 // Plan all loose-mesh translations first; a failed plan leaves the entire scene unchanged.
 arrangeAllButton.addEventListener("click", () => {
   if (!rendererReady || transformControls.dragging || arrangeAllButton.disabled) return;

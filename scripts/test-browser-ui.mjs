@@ -66,6 +66,8 @@ try {
   const placementButton = page.locator('#check-placement');
   const placementStatus = page.locator('#placement-status');
   const findSpaceButton = page.locator('#find-space');
+  const findSpaceRotateButton = page.locator('#find-space-rotate');
+  assert.equal(await findSpaceRotateButton.isDisabled(), true);
   const arrangeAllButton = page.locator('#arrange-all');
   assert.equal(await arrangeAllButton.isDisabled(), true);
   assert.equal(await findSpaceButton.isDisabled(), true);
@@ -548,6 +550,44 @@ try {
   }
   console.log('PASS: corner-seeded actual browser packing, batch undo/redo and atomic failure');
 
+  // Explicit rotation fallback: a fixed full-height obstacle leaves only a narrow strip.
+  await page.locator('#model-file').setInputFiles([
+    {name:'fixed-strip.stl',mimeType:'model/stl',buffer:makeBinarySTL([150,246,20])},
+    {name:'rotate-strip.stl',mimeType:'model/stl',buffer:makeBinarySTL([120,60,20])},
+  ]);
+  await page.locator('#object-count').getByText('2 objects').waitFor();
+  await page.getByRole('button',{name:/fixed-strip\.stl/i}).click();
+  for (const [key,value] of [['x','-123'],['y','-123']]) {
+    await page.locator('#transform-'+key).fill(value);
+    await page.locator('#transform-'+key).press('Tab');
+  }
+  const fixedBefore=await readCenterTransforms();
+  await page.getByRole('button',{name:/rotate-strip\.stl/i}).click();
+  const rotationBefore=await readCenterTransforms();
+  await findSpaceButton.click();
+  assert.match(await page.locator('#file-status').innerText(), /No free viewer AABB placement/);
+  assert.deepEqual(await readCenterTransforms(),rotationBefore);
+  await findSpaceRotateButton.click();
+  assert.match(await page.locator('#file-status').innerText(), /Rotated selected mesh/);
+  const rotationAfter=await readCenterTransforms();
+  assert.equal(Number(rotationAfter[5]),90);
+  assert.deepEqual([rotationAfter[2],...rotationAfter.slice(6)],[rotationBefore[2],...rotationBefore.slice(6)]);
+  await placementButton.click();
+  assert.match(await placementStatus.innerText(), /Within viewer plate XY.*overlaps: 0/);
+  await findSpaceRotateButton.click();
+  assert.match(await page.locator('#file-status').innerText(), /already has 5 mm/);
+  await undoButton.click();
+  assert.deepEqual(await readCenterTransforms(),rotationBefore);
+  await redoButton.click();
+  assert.deepEqual(await readCenterTransforms(),rotationAfter);
+  await page.getByRole('button',{name:/fixed-strip\.stl/i}).click();
+  assert.deepEqual(await readCenterTransforms(),fixedBefore);
+  for (let remaining=1;remaining>=0;remaining--) {
+    await page.locator('#remove-object').click();
+    await page.locator('#object-count').getByText(remaining+' object'+(remaining===1?'':'s'),{exact:true}).waitFor();
+  }
+  console.log('PASS: explicit quarter-turn placement, fixed obstacle and reversible transform');
+
   // Reversible deletion must also preserve 3MF scene roots. The normal
   // public viewport treats a Core 3MF as one viewer item; the explicitly
   // opted-in isolated lab exposes its two build items independently.
@@ -566,6 +606,7 @@ try {
   assert.equal(await centerButton.isDisabled(), true, 'native 3MF centering remains unsupported');
   assert.equal(await placementButton.isDisabled(), true, '3MF placement check remains unsupported');
   assert.equal(await findSpaceButton.isDisabled(), true, '3MF arrangement remains unsupported');
+  assert.equal(await findSpaceRotateButton.isDisabled(), true, '3MF rotation placement remains unsupported');
   assert.equal(await arrangeAllButton.isDisabled(), true, '3MF batch arrangement remains unsupported');
   assert.equal(await rx.isDisabled(), true, 'new numeric X rotation is loose-mesh only');
   assert.equal(await ry.isDisabled(), true, 'new numeric Y rotation is loose-mesh only');
