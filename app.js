@@ -7,7 +7,7 @@ import { ThreeMFLoader } from "three/addons/loaders/3MFLoader.js";
 import { automaticViewProjection, orthographicFitHalfHeight, perspectiveFitDistance, prepareViewOrientation } from "./scripts/prepare-camera-fit.mjs";
 import { get3mfViewportBuildItems } from "./scripts/three-mf-viewport-items.mjs";
 import { captureViewerTransform, createViewerTransformHistory } from "./scripts/prepare-viewer-transform-history.mjs";
-import { findViewerSpace, arrangeViewerSpaces, findViewerSpaceWithQuarterTurn, arrangeViewerSpacesWithQuarterTurns } from "./scripts/prepare-find-space.mjs";
+import { findViewerSpace, arrangeViewerSpaces, findViewerSpaceWithQuarterTurn, arrangeViewerSpacesWithQuarterTurns, viewerProjectedHull, viewerHullsSeparated } from "./scripts/prepare-find-space.mjs";
 
 const picker = document.querySelector("#model-file");
 const status = document.querySelector("#file-status");
@@ -608,12 +608,43 @@ checkPlacementButton.addEventListener("click", () => {
   const halfX = plate.geometry.parameters.width / 2, halfY = plate.geometry.parameters.height / 2;
   const outside = own.min.x < plate.position.x - halfX - eps || own.max.x > plate.position.x + halfX + eps ||
     own.min.y < plate.position.y - halfY - eps || own.max.y > plate.position.y + halfY + eps;
-  const overlap = boxes.filter(b => b !== own &&
+  const overlaps = boxes.map((b,i)=>({b,i})).filter(({b}) => b !== own &&
     Math.min(b.max.x, own.max.x) - Math.max(b.min.x, own.min.x) > eps &&
-    Math.min(b.max.y, own.max.y) - Math.max(b.min.y, own.min.y) > eps).length;
+    Math.min(b.max.y, own.max.y) - Math.max(b.min.y, own.min.y) > eps);
+  // Refine only positive-area AABB candidates. Limit total additional vertex
+  // work; never subsample, as that could incorrectly exclude an overlap.
+  let budget = 50000;
+  const hullFor = item => {
+    const points = [], p = new THREE.Vector3();
+    let refused = false;
+    item.object.traverse(node => {
+      if (refused || !node.isMesh) return;
+      const attr=node.geometry?.getAttribute("position");
+      if (!attr || attr.itemSize!==3 || node.isInstancedMesh || node.isSkinnedMesh ||
+          node.morphTargetInfluences?.length || attr.count>budget) {
+        refused=true; return;
+      }
+      budget-=attr.count;
+      for (let i=0;i<attr.count;i++) {
+        p.fromBufferAttribute(attr,i).applyMatrix4(node.matrixWorld);
+        points.push([p.x,p.y]);
+      }
+    });
+    return refused ? null : viewerProjectedHull(points);
+  };
+  let possible=0, unavailable=0;
+  if (overlaps.length) {
+    const h=hullFor(selected);
+    for (const {i} of overlaps) {
+      const separated=h ? viewerHullsSeparated(h,hullFor(entries[i])) : null;
+      if (separated===null) unavailable++;
+      else if (!separated) possible++;
+    }
+  }
   const z = own.min.z < -eps ? "below bed" : own.min.z > eps ? "above bed" : "touches bed";
   placementStatus.textContent = (outside ? "Outside viewer plate" : "Within viewer plate XY") +
-    " · " + z + " · XY bounding-box overlaps: " + overlap +
+    " · " + z + " · XY bounding-box overlaps: " + overlaps.length +
+    " · XY convex-hull candidates: " + possible + "; unavailable: " + unavailable +
     " · Not a collision or printability check.";
 });
 // Move only the selected loose mesh. Rotation is an explicit fallback.
