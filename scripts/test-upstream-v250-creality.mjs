@@ -270,3 +270,9 @@ assert.equal(process.settings.infill_wall_overlap,"30%");
 assert.equal(combined.process.settings.infill_wall_overlap,"30%");
 assert.ok(!process.unsupported.includes("infill_wall_overlap"));
 console.log("PASS: actual pinned CR-10 infill/wall overlap 25% -> 23% -> 30%");
+
+assert.equal(indexed.records.find(p=>p.name==="0.20mm Standard @Creality CR-10 0.4 nozzle").minimum_sparse_infill_area,"10");
+assert.equal(process.settings.minimum_sparse_infill_area,"10");
+assert.equal(combined.process.settings.minimum_sparse_infill_area,"10");
+assert.ok(!process.unsupported.includes("minimum_sparse_infill_area"));
+console.log("PASS: pinned CR-10 minimum sparse-infill threshold 10 square mm");

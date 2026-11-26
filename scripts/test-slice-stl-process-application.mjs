@@ -250,3 +250,21 @@ for(const bad of [30,"30",["30%"],"101%"]){
   assert.equal(calls.length,0);
 }
 console.log("PASS: overlap percent reaches mock native-json unchanged, invalid inputs refuse session");
+
+{
+  const preset={...selected,process:{settings:{
+    ...selected.process.settings,minimum_sparse_infill_area:"10",sparse_infill_density:"15"
+  }}};
+  const {engine,calls}=mockedEngine();
+  await sliceMultiStlWithEngine(engine,items,null,null,preset);
+  const applied=calls.find(c=>c.name==="applyProfile");
+  assert.equal(applied.format,"orca.native-json");
+  assert.equal(applied.value.minimum_sparse_infill_area,"10");
+  assert.equal(applied.value.sparse_infill_density,"15");
+}
+for(const bad of [-1,"10%",["10"],10001]){
+  const {engine,calls}=mockedEngine();
+  await assert.rejects(()=>sliceMultiStlWithEngine(engine,items,null,{minimum_sparse_infill_area:bad}),
+    /Invalid|safe test range/);
+  assert.equal(calls.length,0);
+}

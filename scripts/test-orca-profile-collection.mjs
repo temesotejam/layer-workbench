@@ -940,3 +940,19 @@ for(const bad of [30,"30",["30%"],null,"-1%","101%","30% G28"])
   assert.throws(()=>resolve(overlapProfiles.map(rec=>rec.name==="0.16mm Fine @TestPrinter"
     ? {...rec,infill_wall_overlap:bad}:rec),selection),/Invalid|safe test range/);
 console.log("PASS: native infill/wall overlap percent inheritance and rejection");
+
+const areaProfiles=profiles.map(rec=>rec.name==="fdm_process_common"
+  ? {...rec,minimum_sparse_infill_area:"15"} : rec.name==="0.16mm Fine @TestPrinter"
+    ? {...rec,minimum_sparse_infill_area:"10"} : rec);
+const area=resolve(areaProfiles,selection).process;
+assert.equal(area.settings.minimum_sparse_infill_area,"10");
+assert.ok(!area.unsupported.includes("minimum_sparse_infill_area"));
+assert.equal(resolve(areaProfiles.map(rec=>{
+  if(rec.name!=="0.16mm Fine @TestPrinter")return rec;
+  const child={...rec};delete child.minimum_sparse_infill_area;return child;
+}),selection).process.settings.minimum_sparse_infill_area,"15");
+assert.equal(result.process.settings.minimum_sparse_infill_area,undefined);
+for(const bad of [-1,10000.01,"10%",["10"],null,true])
+  assert.throws(()=>resolve(areaProfiles.map(rec=>rec.name==="0.16mm Fine @TestPrinter"
+    ? {...rec,minimum_sparse_infill_area:bad}:rec),selection),/Invalid|safe test range/);
+console.log("PASS: native minimum sparse-infill area inheritance and rejection");
