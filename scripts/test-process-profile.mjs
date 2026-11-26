@@ -117,6 +117,8 @@ const ENUMS = Object.freeze({
   // COOP/COEP diagnostic page only. Native v2.5.0 stores this bool as "0"/"1".
   // Never infer "1" from a manufacturer profile or deploy this test path on Pages.
   enable_support: new Set(["0","1"]),
+  // Native coBool: combine sparse infill layers, not a layer count.
+  infill_combination: new Set(["0","1"]),
 });
 
 export function parseTestProcessOverrides(input) {
