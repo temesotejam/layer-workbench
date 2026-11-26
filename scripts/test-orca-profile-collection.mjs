@@ -1007,3 +1007,20 @@ for(const bad of [-1,"101%",["50%"],null,true])
   assert.throws(()=>resolve(capProfiles.map(rec=>rec.name==="0.16mm Fine @TestPrinter"
     ? {...rec,[combinationCapKey]:bad}:rec),selection),/Invalid|safe test range/);
 console.log("PASS: independent combination height cap inheritance and missing-value preservation");
+
+const bottomFlowKey="bottom_solid_infill_flow_ratio";
+const bottomFlowProfiles=profiles.map(rec=>rec.name==="fdm_process_common"
+  ? {...rec,[bottomFlowKey]:"1"} : rec.name==="0.16mm Fine @TestPrinter"
+    ? {...rec,[bottomFlowKey]:"0.75"} : rec);
+const bottomFlow=resolve(bottomFlowProfiles,selection).process;
+assert.equal(bottomFlow.settings[bottomFlowKey],"0.75");
+assert.ok(!bottomFlow.unsupported.includes(bottomFlowKey));
+assert.equal(resolve(bottomFlowProfiles.map(rec=>{
+  if(rec.name!=="0.16mm Fine @TestPrinter")return rec;
+  const child={...rec};delete child[bottomFlowKey];return child;
+}),selection).process.settings[bottomFlowKey],"1");
+assert.equal(result.process.settings[bottomFlowKey],undefined);
+for(const bad of [0,-1,"75%",["1"],null,true])
+  assert.throws(()=>resolve(bottomFlowProfiles.map(rec=>rec.name==="0.16mm Fine @TestPrinter"
+    ? {...rec,[bottomFlowKey]:bad}:rec),selection),/Invalid|safe test range/);
+console.log("PASS: independent bottom surface flow inheritance and absence preservation");
