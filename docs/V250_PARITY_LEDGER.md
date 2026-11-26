@@ -1114,3 +1114,18 @@ official v2.5.0 native-versus-WASM **same STL/full profile** G-code comparison.
 ## 2026-11-23: Marlin chamber heater requests in G-code diagnostics
 
 The bounded, read-only native/WASM heater comparison now recognizes explicit Marlin-style `M141 S...` (set chamber target without waiting) and `M191 S...`/`M191 R...` (set target and wait), in addition to nozzle (`M104`/`M109`) and bed (`M140`/`M190`) commands. Chamber requests are reported with `heater: chamber`; command type and S/R waiting mode are preserved rather than treating a set and a wait as interchangeable. `M104`, `M140` and `M141` with an `R` word are now **unknown** instead of inferred as supported requests. Extra heater selectors (`P`, `H`, chamber `T`), compact forms, macros and firmware-specific semantics remain unsupported and cause unknown diagnostics, not a fabricated temperature delta of zero. Sources: [Marlin M141](https://marlinfw.org/docs/gcode/M141.html) and [Marlin M191](https://marlinfw.org/docs/gcode/M191.html). This compares commanded targets only, not actual temperatures, correctness of printed G-code or native/WASM equivalence. Comparator equality remains strict and independent of this optional diagnostic.
+
+
+## 2026-11-26: explicit fan request comparison (diagnostic only)
+
+The source-pinned [GCodeWriter.cpp](https://github.com/OrcaSlicer/OrcaSlicer/blob/40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19/src/libslic3r/GCodeWriter.cpp)
+emits M106 S PWM requests, indexed P2/P3 requests and other flavor-specific
+forms. The strict native/WASM comparator now separately compares ordered
+explicit M106 S (optional P) and M107 (optional P) events. It retains absent
+selectors rather than assuming P0 and reports at most fifteen difference
+examples, with a signed PWM-word delta only for aligned M106 commands with
+the same selector. Ambiguous syntax, P-only M106, M126/M127, unknown
+parameters and out-of-range values produce an unavailable diagnostic.
+This is not an effective firmware fan-state simulation, physical duty-cycle
+measurement, profile equivalence proof or printable-output validation.
+Strict G-code equality is unchanged; no engine or public WASM change.

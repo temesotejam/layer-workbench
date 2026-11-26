@@ -6,6 +6,7 @@ on:
     paths:
       - "scripts/compare_gcode.py"
       - "scripts/heater_setpoint_diagnostic.py"
+      - "scripts/fan_request_diagnostic.py"
       - "scripts/test_compare_gcode.py"
       - "scripts/check_parity_pair.py"
       - "scripts/test_check_parity_pair.py"
@@ -24,6 +25,7 @@ on:
     paths:
       - "scripts/compare_gcode.py"
       - "scripts/heater_setpoint_diagnostic.py"
+      - "scripts/fan_request_diagnostic.py"
       - "scripts/test_compare_gcode.py"
       - "scripts/check_parity_pair.py"
       - "scripts/test_check_parity_pair.py"
