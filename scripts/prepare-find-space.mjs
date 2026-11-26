@@ -238,3 +238,52 @@ export function findViewerHullSpace(own, obstacles, plate, gap = 5) {
   }
   return best;
 }
+
+
+// Bounded batch fallback for viewer-only XY convex hulls. Every accepted
+// pair uses the same conservative clearance test as selected Find space.
+// Try original layout first, then at most 15 greedy orders/corner seeds.
+// No edits are made here; null means search failed, not impossible packing.
+export function arrangeViewerHullSpaces(hulls, plate, gap = 5) {
+  if (!Array.isArray(hulls) || hulls.length < 2 || hulls.length > 6 ||
+      !valid(plate) || !Number.isFinite(gap) || gap < 0 || gap > 1000) return null;
+  const shapes = hulls.map(h => Array.isArray(h) && h.length <= 32 ? viewerProjectedHull(h) : null);
+  if (shapes.some(h=>!h)) return null;
+  const boxes = shapes.map(h => {
+    const xs=h.map(p=>p[0]), ys=h.map(p=>p[1]);
+    return [Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)];
+  });
+  if (boxes.some(b=>b[2]-b[0]>plate[2]-plate[0]-2*gap ||
+                    b[3]-b[1]>plate[3]-plate[1]-2*gap)) return null;
+  if (shapes.every((h,i)=>{
+    const m=findViewerHullSpace(h,shapes.filter((_,j)=>j!==i),plate,gap);
+    return m && m.dx===0 && m.dy===0;
+  })) return shapes.map(()=>({dx:0,dy:0}));
+  const w=i=>boxes[i][2]-boxes[i][0], h=i=>boxes[i][3]-boxes[i][1];
+  const indices=shapes.map((_,i)=>i);
+  const orders=[
+    [...indices].sort((a,b)=>w(b)*h(b)-w(a)*h(a)||a-b),
+    [...indices].sort((a,b)=>w(b)-w(a)||h(b)-h(a)||a-b),
+    [...indices].sort((a,b)=>h(b)-h(a)||w(b)-w(a)||a-b),
+  ];
+  const tried=new Set();
+  for (const corner of [null,0,1,2,3]) for (const order of orders) {
+    const key=corner+":"+order.join(",");
+    if (tried.has(key)) continue;
+    tried.add(key);
+    const placed=[], moves=Array(shapes.length);
+    for (const i of order) {
+      let move;
+      if (corner!==null && !placed.length) {
+        const b=boxes[i];
+        move={dx:corner&1 ? plate[2]-gap-b[2] : plate[0]+gap-b[0],
+              dy:corner&2 ? plate[3]-gap-b[3] : plate[1]+gap-b[1]};
+      } else move=findViewerHullSpace(shapes[i],placed,plate,gap);
+      if (!move) break;
+      moves[i]=move;
+      placed.push(shapes[i].map(([x,y])=>[x+move.dx,y+move.dy]));
+    }
+    if (placed.length===shapes.length) return moves;
+  }
+  return null;
+}
