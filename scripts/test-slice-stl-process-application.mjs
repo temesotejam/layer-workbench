@@ -231,3 +231,22 @@ for (const bad of [true,1,2,'true','2',null,['1']]){
   assert.equal(Object.hasOwn(calls.find(c=>c.name==='init').value,'support_threshold_angle'),false);
 }
 console.log('PASS: explicit support toggle reaches both native init and native-json profile, while generic fallback stays disabled');
+
+{
+  const preset={...selected,process:{settings:{
+    ...selected.process.settings,infill_wall_overlap:"30%",inner_wall_line_width:"0.45"
+  }}};
+  const {engine,calls}=mockedEngine();
+  await sliceMultiStlWithEngine(engine,items,null,null,preset);
+  const applied=calls.find(c=>c.name==="applyProfile");
+  assert.equal(applied.format,"orca.native-json");
+  assert.equal(applied.value.infill_wall_overlap,"30%");
+  assert.equal(applied.value.inner_wall_line_width,"0.45");
+}
+for(const bad of [30,"30",["30%"],"101%"]){
+  const {engine,calls}=mockedEngine();
+  await assert.rejects(()=>sliceMultiStlWithEngine(engine,items,null,{infill_wall_overlap:bad}),
+    /Invalid|safe test range/);
+  assert.equal(calls.length,0);
+}
+console.log("PASS: overlap percent reaches mock native-json unchanged, invalid inputs refuse session");

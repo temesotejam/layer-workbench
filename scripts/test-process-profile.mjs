@@ -42,6 +42,9 @@ const LIMITS = {
   sparse_infill_density: [0,100],
   // Pinned native v2.5.0 process angle in degrees, never % or vector.
   infill_direction: [0,360],
+  // Pinned native coPercent, relative to inner_wall_line_width (not mm).
+  // The localhost adapter accepts only explicit percentages from 0 to 100.
+  infill_wall_overlap: [0,100],
   top_shell_layers: [0,12],
   bottom_shell_layers: [0,12],
   // Native v2.5.0 coFloat minimum shell thickness in millimetres.
@@ -132,6 +135,15 @@ export function parseTestProcessOverrides(input) {
     const range = LIMITS[key];
     if (typeof raw !== "number" && typeof raw !== "string")
       throw new Error("Invalid value for " + key);
+    if (key === "infill_wall_overlap") {
+      const percent = typeof raw === "string" && /^(\d+(?:\.\d+)?)%$/.exec(raw.trim());
+      if (!percent) throw new Error("Invalid percentage for " + key);
+      const ratio = Number(percent[1]);
+      if (!Number.isFinite(ratio) || ratio < range[0] || ratio > range[1])
+        throw new Error("Setting " + key + " is outside the safe test range.");
+      clean[key] = String(ratio) + "%";
+      continue;
+    }
     if (key === "initial_layer_travel_speed" && typeof raw === "string") {
       const percent = /^(\d+(?:\.\d+)?)%$/.exec(raw.trim());
       if (percent) {

@@ -1,4 +1,5 @@
 import {resolveIndexedOrcaProfiles} from "./orca-vendor-index.mjs";
+import {parseTestProcessOverrides} from "./test-process-profile.mjs";
 // Restricted reader for OrcaSlicer's REAL flat JSON profile record shape.
 // A vendor index references files under machine/, filament/, process/; this
 // tool accepts an explicitly selected local collection of those JSON records.
@@ -186,7 +187,11 @@ export function resolveOrcaProfileFamily(records,type,selected,options={}) {
     const unsupported=new Set();
     for(const rec of chain){
       for(const [key,value] of Object.entries(rec)){
-        if(Object.hasOwn(SPECS[type],key))settings[key]=validateNum(key,value,SPECS[type][key]);
+        if(type==="process" && key==="infill_wall_overlap") {
+          // Native coPercent is scalar, not a nozzle vector or absolute width.
+          // Share the final native-json validation, preserving the % token.
+          settings[key]=parseTestProcessOverrides({[key]:value})[key];
+        }else if(Object.hasOwn(SPECS[type],key))settings[key]=validateNum(key,value,SPECS[type][key]);
         else if(type==="process" && Object.hasOwn(PROCESS_ENUMS,key)) {
           if(typeof value!=="string" || !PROCESS_ENUMS[key].has(value))
             throw new Error("Invalid native process enum: "+key);
