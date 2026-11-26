@@ -324,3 +324,20 @@ for(const bad of [-1,"101%",["50%"],null,true]){
   assert.equal(calls.length,0);
 }
 console.log("PASS: native sparse combination cap transport preserves both units and sentinel");
+
+const bottomFlowKey="bottom_solid_infill_flow_ratio";
+for(const value of ["1","0.75"]){
+  const preset={...selected,process:{settings:{...selected.process.settings,[bottomFlowKey]:value}}};
+  const {engine,calls}=mockedEngine();
+  await sliceMultiStlWithEngine(engine,items,null,null,preset);
+  const applied=calls.find(c=>c.name==="applyProfile");
+  assert.equal(applied.format,"orca.native-json");
+  assert.equal(applied.value[bottomFlowKey],value);
+  assert.equal(applied.value.top_solid_infill_flow_ratio,undefined);
+}
+for(const bad of [0,"75%",["1"],null,true]){
+  const {engine,calls}=mockedEngine();
+  await assert.rejects(()=>sliceMultiStlWithEngine(engine,items,null,{[bottomFlowKey]:bad}),/Invalid|safe test range/);
+  assert.equal(calls.length,0);
+}
+console.log("PASS: bounded bottom surface flow reaches native-json, independent of top flow");
