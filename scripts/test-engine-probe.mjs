@@ -1115,6 +1115,65 @@ try {
     delete rawOrca[4].sparse_infill_density;
     await uploadRawOrca();
 
+    // Pinned v2.5.0 PerimeterGenerator.cpp uses the overlap percentage
+    // when expanding the infill region on interior layers. Keep geometry,
+    // density, pattern and widths fixed; vary only this native coPercent.
+    Object.assign(rawOrca[4],{
+      sparse_infill_pattern:'grid',sparse_infill_density:'35%',
+      line_width:'0.42',inner_wall_line_width:'0.45',outer_wall_line_width:'0.42',
+      sparse_infill_line_width:'0.45'
+    });
+    const noOverlap=await sliceWithLineWidth('0%','infill_wall_overlap');
+    const pinnedOverlap=await sliceWithLineWidth('30%','infill_wall_overlap');
+    const overlapWitness=code=>{
+      const parsed=parseGcodeToolpaths(code);
+      assert.equal(parsed.skippedMalformedMotion,0,'Overlap witness cannot ignore malformed motion');
+      assert.equal(parsed.skippedArcs,0,'Overlap witness cannot omit unsupported arcs');
+      const paths=[];
+      let totalLength=0;
+      for(const layer of parsed.layers)for(const s of layer.segments){
+        const feature=String(s.feature||'');
+        if(!s.extrusion||!feature.includes('infill')||
+           /solid|bridge|surface|gap|support/.test(feature))continue;
+        assert.equal(s.sourceMotion,'G1','Need linear sparse-infill deposition, not tessellated arcs');
+        assert.ok(Number.isFinite(s.commandedPositiveEMm)&&s.commandedPositiveEMm>0,
+          'Need positive commanded filament-axis E');
+        assert.ok(Number.isFinite(s.z1)&&Number.isFinite(s.z2),'Missing sparse-infill Z');
+        if(Math.abs(s.z1-s.z2)>0.0005)continue;
+        const length=Math.hypot(s.x2-s.x1,s.y2-s.y1);
+        if(length<0.001)continue;
+        const point=(x,y)=>[Math.round(x*1000),Math.round(y*1000)].join(',');
+        // Ignore traversal direction and ordering. A reorder or F/E-only
+        // change must not masquerade as a change to XY stroke geometry.
+        const ends=[point(s.x1,s.y1),point(s.x2,s.y2)].sort();
+        paths.push(Math.round(s.z2*1000)+':'+ends.join(':'));
+        totalLength+=length;
+      }
+      assert.ok(paths.length>=12,'Need feature-tagged sparse-infill XY deposition in both runs');
+      return {paths:paths.sort(),totalLength};
+    };
+    const overlap0=overlapWitness(noOverlap),overlap30=overlapWitness(pinnedOverlap);
+    const overlapReport={
+      fixture:'same two-STL localhost Prepare scene; grid 35%; fixed line widths',
+      native_key:'infill_wall_overlap',baseline:'0%',candidate:'30%',
+      baseline_sparse_xy_strokes:overlap0.paths.length,
+      candidate_sparse_xy_strokes:overlap30.paths.length,
+      baseline_sparse_path_mm:overlap0.totalLength,
+      candidate_sparse_path_mm:overlap30.totalLength,
+      geometry_changed:JSON.stringify(overlap0.paths)!==JSON.stringify(overlap30.paths),
+      desktop_native_parity:false,physical_overlap_verified:false,printer_ready:false
+    };
+    await writeFile(parityDir+'/infill-wall-overlap-deposition.json',
+      JSON.stringify(overlapReport,null,2)+'\n');
+    console.log('WASM_INFILL_WALL_OVERLAP_DEPOSITION '+JSON.stringify(overlapReport));
+    assert.ok(overlapReport.geometry_changed,
+      '0% -> 30% infill/wall overlap must change real unordered sparse-infill XY stroke geometry');
+    for(const key of ['infill_wall_overlap','sparse_infill_pattern','sparse_infill_density',
+      'line_width','inner_wall_line_width','outer_wall_line_width','sparse_infill_line_width'])
+      delete rawOrca[4][key];
+    await uploadRawOrca();
+    console.log('PASS: native infill_wall_overlap changes real tagged WASM sparse-infill geometry');
+
     const narrowWidthMotion=motionOnly(await sliceWithLineWidth('0.35'));
     const broadWidthMotion=motionOnly(await sliceWithLineWidth('0.65'));
     assert.ok(narrowWidthMotion.length>100&&broadWidthMotion.length>100,
