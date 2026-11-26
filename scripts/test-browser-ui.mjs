@@ -515,6 +515,26 @@ try {
   // failed search must preserve every object and must not record history.
   await page.locator('#model-file').setInputFiles(tallFixture('corner-c.stl'));
   await page.locator('#object-count').getByText('3 objects').waitFor();
+  // Real pointer selection must remain possible when more than two models
+  // are loaded. The formerly horizontal flex list overflowed into the canvas.
+  const treeLayout = await page.locator('#object-tree').evaluate(tree => {
+    const bounds = tree.getBoundingClientRect();
+    return {
+      scrollWidth: tree.scrollWidth, clientWidth: tree.clientWidth,
+      rows: [...tree.querySelectorAll('[data-object-id]')].map(row => {
+        const r = row.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+        return {left:r.left-bounds.left,right:bounds.right-r.right,
+          top:r.top,bottom:r.bottom,hit:!!hit && row.contains(hit)};
+      }),
+    };
+  });
+  assert.equal(treeLayout.rows.length,3);
+  assert.ok(treeLayout.scrollWidth <= treeLayout.clientWidth + 1,'object list must not overflow horizontally');
+  for (const [i,row] of treeLayout.rows.entries()) {
+    assert.ok(row.left >= -1 && row.right >= -1 && row.hit,'object row must remain within sidebar and receive pointer events');
+    if (i) assert.ok(row.top >= treeLayout.rows[i-1].bottom-1,'object rows must stack vertically');
+  }
   const impossibleBefore = await readAllTransforms();
   assert.equal(await undoButton.isDisabled(),true,'import resets viewer history');
   await arrangeAllButton.click();
