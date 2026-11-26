@@ -102,3 +102,28 @@ test("oversized but valid footprints return null, including at coordinate cap", 
   assert.equal(arrangeViewerSpaces(boxes,plate,gap),null);
   assert.deepEqual(boxes,original);
 });
+
+test("remaining three corner seeds recover otherwise blocked arrangements", () => {
+  const cases = [
+    {boxes:[[10,75,70,85],[50,15,75,70],[40,25,60,60],[50,15,75,75]],
+      expected:[{dx:0,dy:0},{dx:-10,dy:0},{dx:-25,dy:0},{dx:20,dy:-10}]},
+    {boxes:[[20,45,75,95],[15,75,60,85],[25,15,50,90],[80,20,95,55]],
+      expected:[{dx:15,dy:0},{dx:0,dy:-70},{dx:-20,dy:5},{dx:0,dy:-15}]},
+    {boxes:[[5,60,15,95],[35,25,75,85],[30,60,95,85],[35,50,80,95]],
+      expected:[{dx:0,dy:-50},{dx:20,dy:10},{dx:0,dy:-55},{dx:-30,dy:0}]},
+  ];
+  for (const {boxes,expected} of cases) {
+    // Each fixture also exercises translated plate coordinates.
+    for (const [tx,ty] of [[0,0],[-143,57]]) {
+      const shift = b => b.map((v,j)=>v+(j%2?ty:tx));
+      const input = boxes.map(shift), target = shift(plate);
+      const original = structuredClone(input);
+      const moves = arrangeViewerSpaces(input,target,gap);
+      assert.deepEqual(moves,expected);
+      assertLayout(input,moves,target);
+      assert.deepEqual(input,original);
+      const placed = input.map((b,i)=>b.map((v,j)=>v+(j%2?moves[i].dy:moves[i].dx)));
+      assert.deepEqual(arrangeViewerSpaces(placed,target,gap),input.map(()=>({dx:0,dy:0})));
+    }
+  }
+});

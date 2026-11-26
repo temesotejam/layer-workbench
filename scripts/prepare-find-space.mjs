@@ -69,14 +69,14 @@ export function arrangeViewerSpaces(boxes, plate, gap = 5) {
     (a,b) => height(boxes[b])-height(boxes[a]) || width(boxes[b])-width(boxes[a]) || a-b,
   ];
   const tried = new Set();
-  // Preserve every previous successful plan. If all original orders fail,
-  // retry with the first footprint at the lower-left usable bed corner.
-  // A centered first object can otherwise block both sides of a feasible pack.
-  // At most six distinct attempts, each with fresh temporary placement.
-  for (const seedCorner of [false, true]) {
+  // Preserve all previous attempts in order (unseeded, then lower-left).
+  // Only after these fail, try the other three usable plate corners.
+  // At most fifteen distinct attempts, each with fresh temporary placement.
+  // Corner bits: bit 0 = right, bit 1 = upper; null = no seed.
+  for (const seedCorner of [null, 0, 1, 2, 3]) {
     for (const compare of orders) {
       const order = [...indices].sort(compare);
-      const key = Number(seedCorner) + ":" + order.join(",");
+      const key = String(seedCorner) + ":" + order.join(",");
       if (tried.has(key)) continue;
       tried.add(key);
       const placed = [], moves = Array(boxes.length);
@@ -84,14 +84,16 @@ export function arrangeViewerSpaces(boxes, plate, gap = 5) {
       for (const i of order) {
         const box = boxes[i];
         let move;
-        if (seedCorner && placed.length === 0) {
+        if (seedCorner !== null && placed.length === 0) {
           // Check fit using original bounds before translating; otherwise an
           // oversized valid input can overflow the validator's coordinate cap.
           if (plate[0] + gap > plate[2] - gap - width(box) ||
               plate[1] + gap > plate[3] - gap - height(box)) {
             failed = true; break;
           }
-          move = {dx: plate[0] + gap - box[0], dy: plate[1] + gap - box[1]};
+          const x = seedCorner & 1 ? plate[2] - gap - width(box) : plate[0] + gap;
+          const y = seedCorner & 2 ? plate[3] - gap - height(box) : plate[1] + gap;
+          move = {dx: x - box[0], dy: y - box[1]};
         } else {
           move = findViewerSpace(box, placed, plate, gap);
         }
