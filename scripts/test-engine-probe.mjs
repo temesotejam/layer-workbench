@@ -810,6 +810,52 @@ try {
       await uploadRawOrca();
     }
 
+    // Pinned GCode.cpp multiplies erBottomSurface extrusion by this scalar.
+    // Compare actual positive E per XY mm, not metadata, against an
+    // independent top-surface control. Keep the single-nozzle scene fixed.
+    {
+      const key='bottom_solid_infill_flow_ratio', prior=rawOrca[4][key];
+      try {
+        const measure=code=>{
+          const p=parseGcodeToolpaths(code);
+          assert.equal(p.skippedMalformedMotion,0);
+          assert.equal(p.skippedArcs,0);
+          const roles=Object.fromEntries(['bottom surface','top surface'].map(role=>
+            [role,{strokes:0,xy_mm:0,e_mm:0}]));
+          for(const layer of p.layers)for(const seg of layer.segments){
+            if(!Object.hasOwn(roles,seg.feature)||!seg.extrusion)continue;
+            assert.equal(seg.sourceMotion,'G1');
+            assert.ok([seg.x1,seg.x2,seg.y1,seg.y2,seg.z1,seg.z2,seg.commandedPositiveEMm].every(Number.isFinite));
+            assert.ok(seg.commandedPositiveEMm>0);
+            const len=Math.hypot(seg.x2-seg.x1,seg.y2-seg.y1);
+            if(Math.abs(seg.z2-seg.z1)>0.0005||len<0.001)continue;
+            const v=roles[seg.feature];v.strokes++;v.xy_mm+=len;v.e_mm+=seg.commandedPositiveEMm;
+          }
+          for(const v of Object.values(roles)){
+            assert.ok(v.strokes>=12&&v.xy_mm>0&&v.e_mm>0,'Need real tagged skin deposition');
+            v.e_per_xy_mm=v.e_mm/v.xy_mm;
+          }
+          return roles;
+        };
+        const base=measure(await sliceWithLineWidth('1',key));
+        const reduced=measure(await sliceWithLineWidth('0.75',key));
+        const ratio=role=>reduced[role].e_per_xy_mm/base[role].e_per_xy_mm;
+        const report={base,reduced,bottom_ratio:ratio('bottom surface'),
+          top_ratio:ratio('top surface'),desktop_native_parity:false,printer_ready:false};
+        await writeFile(parityDir+'/bottom-surface-flow.json',JSON.stringify(report,null,2)+'\n');
+        console.log('WASM_BOTTOM_SURFACE_FLOW '+JSON.stringify(report));
+        for(const role of Object.keys(base)){
+          assert.ok(Math.abs(reduced[role].xy_mm/base[role].xy_mm-1)<0.005,
+            role+' XY length must remain within 0.5%');
+        }
+        assert.ok(Math.abs(report.bottom_ratio-0.75)<0.02,'Bottom positive E/XY must track flow multiplier');
+        assert.ok(Math.abs(report.top_ratio-1)<0.02,'Top positive E/XY must remain independent');
+        console.log('PASS: bottom surface flow changes real tagged E/XY without changing top flow');
+      } finally {
+        if(prior===undefined)delete rawOrca[4][key];else rawOrca[4][key]=prior;
+        await uploadRawOrca();
+      }
+    }
 
     // Native 2.5.0 thickness settings are a minimum solid depth in mm,
     // independent of top/bottom solid-layer counts. Use one-layer shells
