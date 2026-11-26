@@ -307,7 +307,7 @@ try {
   assert.match(await page.locator('#file-status').innerText(), /overlaps not checked/);
   const placementHistory = [await undoButton.isEnabled(), await redoButton.isEnabled()];
   await placementButton.click();
-  assert.match(await placementStatus.innerText(), /Within viewer plate XY.*XY bounding-box overlaps: 1/);
+  assert.match(await placementStatus.innerText(), /Within viewer plate XY.*XY bounding-box overlaps: 1.*XY convex-hull candidates: 1; unavailable: 0/);
   assert.deepEqual(await readCenterTransforms(), centered);
   assert.deepEqual([await undoButton.isEnabled(), await redoButton.isEnabled()], placementHistory);
   await centerButton.click();
@@ -320,7 +320,7 @@ try {
   assert.deepEqual(await readCenterTransforms(), beforeCenter);
   assert.match(await placementStatus.innerText(), /Check the selected mesh/);
   await placementButton.click();
-  assert.match(await placementStatus.innerText(), /XY bounding-box overlaps: 0/);
+  assert.match(await placementStatus.innerText(), /XY bounding-box overlaps: 0.*XY convex-hull candidates: 0; unavailable: 0/);
   await page.locator('#object-tree [data-object-id]').first().click();
   assert.equal(Number(await page.locator('#transform-x').inputValue()), originalX);
   assert.equal(Number(await page.locator('#transform-y').inputValue()), originalY);
