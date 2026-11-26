@@ -5,7 +5,7 @@ Only blank lines and semicolon comments are ignored. This is a strict ordered
 command comparison; it cannot by itself prove complete feature parity.
 """
 import argparse
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 import hashlib
 import json
 import math
@@ -48,6 +48,21 @@ def split_motion_words(line):
         index = word.end()
     return result
 
+def exact_decimal_word(value):
+    """Canonicalize numeric spelling without rounding to Decimal context precision."""
+    try:
+        sign, digits, exponent = Decimal(value).as_tuple()
+        if not any(digits):
+            return str(Decimal((sign, (0,), 0)))
+        end = len(digits)
+        while digits[end - 1] == 0:
+            end -= 1
+        return str(Decimal((sign, digits[:end], exponent + len(digits) - end)))
+    except (InvalidOperation, ValueError, OverflowError):
+        # An unrepresentable numeric word stays opaque, not silently equal.
+        return None
+
+
 def canonical(path):
     commands = []
     for n, line in enumerate(path.read_text(encoding='utf-8-sig', errors='strict').splitlines(), 1):
@@ -64,7 +79,8 @@ def canonical(path):
             else:
                 m = PARAM.fullmatch(token)
                 if m:
-                    normalized.append(m[1].upper() + str(Decimal(m[2]).normalize()))
+                    value = exact_decimal_word(m[2])
+                    normalized.append(m[1].upper() + value if value is not None else token)
                 else:
                     normalized.append(token)
         commands.append((n, ' '.join(normalized)))
