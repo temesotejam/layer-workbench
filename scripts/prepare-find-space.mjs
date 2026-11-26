@@ -200,3 +200,41 @@ export function viewerHullsSeparated(a,b) {
   }
   return false;
 }
+
+// Selected-mesh fallback only: bounded grid of translations, with a
+// conservative >= gap separating projection against every convex obstacle.
+// A failed search is not proof that no polygon packing exists.
+export function findViewerHullSpace(own, obstacles, plate, gap = 5) {
+  if (!valid(plate) || !Number.isFinite(gap) || gap < 0 || gap > 1000 ||
+      !Array.isArray(obstacles) || obstacles.length > 8) return null;
+  const checked = [own,...obstacles].map(h => Array.isArray(h) && h.length <= 32 ? viewerProjectedHull(h) : null);
+  if (checked.some(h=>!h)) return null;
+  const [a,...others] = checked;
+  const xs = a.map(p=>p[0]), ys = a.map(p=>p[1]);
+  const loX=plate[0]+gap-Math.min(...xs), hiX=plate[2]-gap-Math.max(...xs);
+  const loY=plate[1]+gap-Math.min(...ys), hiY=plate[3]-gap-Math.max(...ys);
+  if (loX>hiX || loY>hiY) return null;
+  const project = (h,nx,ny) => {
+    const values=h.map(p=>p[0]*nx+p[1]*ny);
+    return [Math.min(...values),Math.max(...values)];
+  };
+  const pairs = others.map(b => [a,b].flatMap(h=>h.map((p,i)=>{
+    const q=h[(i+1)%h.length], len=Math.hypot(q[0]-p[0],q[1]-p[1]);
+    const nx=(p[1]-q[1])/len, ny=(q[0]-p[0])/len;
+    const [alo,ahi]=project(a,nx,ny), [blo,bhi]=project(b,nx,ny);
+    return {nx,ny,left:blo-ahi,right:alo-bhi};
+  })));
+  // Precompute projections; only evaluate translation offsets in the grid.
+  const clear = (dx,dy) => pairs.every(axes=>axes.some(({nx,ny,left,right})=>{
+    const shift=dx*nx+dy*ny;
+    return left-shift>gap+1e-6 || right+shift>gap+1e-6;
+  }));
+  const candidates=(lo,hi)=>[...new Set([Math.min(hi,Math.max(lo,0)),
+    ...Array.from({length:9},(_,i)=>lo+(hi-lo)*i/8)])].sort((a,b)=>a-b);
+  let best=null, distance=Infinity;
+  for (const dx of candidates(loX,hiX)) for (const dy of candidates(loY,hiY)) {
+    const d=dx*dx+dy*dy;
+    if (d<distance && clear(dx,dy)) {best={dx,dy};distance=d;}
+  }
+  return best;
+}
