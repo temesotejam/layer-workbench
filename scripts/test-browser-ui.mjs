@@ -69,6 +69,8 @@ try {
   const findSpaceRotateButton = page.locator('#find-space-rotate');
   assert.equal(await findSpaceRotateButton.isDisabled(), true);
   const arrangeAllButton = page.locator('#arrange-all');
+  const arrangeAllRotateButton = page.locator('#arrange-all-rotate');
+  assert.equal(await arrangeAllRotateButton.isDisabled(),true);
   assert.equal(await arrangeAllButton.isDisabled(), true);
   assert.equal(await findSpaceButton.isDisabled(), true);
   assert.equal(await placementButton.isDisabled(), true);
@@ -588,6 +590,38 @@ try {
   }
   console.log('PASS: explicit quarter-turn placement, fixed obstacle and reversible transform');
 
+  await page.locator('#model-file').setInputFiles([
+    {name:'batch-wide.stl',mimeType:'model/stl',buffer:makeBinarySTL([200,100,20])},
+    {name:'batch-tall.stl',mimeType:'model/stl',buffer:makeBinarySTL([100,200,20])},
+  ]);
+  await page.locator('#object-count').getByText('2 objects').waitFor();
+  const batchRotateBefore=await readAllTransforms();
+  await arrangeAllButton.click();
+  assert.match(await page.locator('#file-status').innerText(),/No complete greedy/);
+  assert.deepEqual(await readAllTransforms(),batchRotateBefore);
+  assert.equal(await arrangeAllRotateButton.isEnabled(),true);
+  await arrangeAllRotateButton.click();
+  assert.match(await page.locator('#file-status').innerText(),/Arranged all loose meshes with \+90° turns/);
+  const batchRotateAfter=await readAllTransforms();
+  assert.deepEqual(batchRotateAfter.map(s=>Number(s[5])),[90,0]);
+  assert.deepEqual(batchRotateAfter.map(s=>[s[2],...s.slice(6)]),batchRotateBefore.map(s=>[s[2],...s.slice(6)]));
+  for(const name of ['batch-wide.stl','batch-tall.stl']){
+    await page.getByRole('button',{name}).click();
+    await placementButton.click();
+    assert.match(await placementStatus.innerText(),/Within viewer plate XY.*overlaps: 0/);
+  }
+  await arrangeAllRotateButton.click();
+  assert.match(await page.locator('#file-status').innerText(),/already have 5 mm/);
+  await undoButton.click();
+  assert.deepEqual(await readAllTransforms(),batchRotateBefore);
+  await redoButton.click();
+  assert.deepEqual(await readAllTransforms(),batchRotateAfter);
+  for(let remaining=1;remaining>=0;remaining--){
+    await page.locator('#remove-object').click();
+    await page.locator('#object-count').getByText(remaining+' object'+(remaining===1?'':'s'),{exact:true}).waitFor();
+  }
+  console.log('PASS: batch quarter-turn arrangement and atomic undo/redo');
+
   // Reversible deletion must also preserve 3MF scene roots. The normal
   // public viewport treats a Core 3MF as one viewer item; the explicitly
   // opted-in isolated lab exposes its two build items independently.
@@ -608,6 +642,7 @@ try {
   assert.equal(await findSpaceButton.isDisabled(), true, '3MF arrangement remains unsupported');
   assert.equal(await findSpaceRotateButton.isDisabled(), true, '3MF rotation placement remains unsupported');
   assert.equal(await arrangeAllButton.isDisabled(), true, '3MF batch arrangement remains unsupported');
+  assert.equal(await arrangeAllRotateButton.isDisabled(),true,'3MF batch rotation remains unsupported');
   assert.equal(await rx.isDisabled(), true, 'new numeric X rotation is loose-mesh only');
   assert.equal(await ry.isDisabled(), true, 'new numeric Y rotation is loose-mesh only');
   assert.equal(await undoButton.isDisabled(), true, 'import must clear preceding STL history');
