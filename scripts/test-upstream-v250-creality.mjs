@@ -290,3 +290,12 @@ assert.equal(process.settings.infill_combination,"0");
 assert.equal(combined.process.settings.infill_combination,"0");
 assert.ok(!process.unsupported.includes("infill_combination"));
 console.log("PASS: actual pinned CR-10 explicitly disables sparse infill combination");
+
+// None of the three pinned CR-10 process records explicitly sets the cap.
+// Do not manufacture the native 100% default in the collection adapter.
+const combinationCapKey="infill_combination_max_layer_height";
+assert.deepEqual(process.chain.map(n=>indexed.records.find(p=>p.name===n)[combinationCapKey]),
+  [undefined,undefined,undefined]);
+assert.equal(process.settings[combinationCapKey],undefined);
+assert.equal(combined.process.settings[combinationCapKey],undefined);
+console.log("PASS: pinned CR-10 missing combination cap remains unset");
