@@ -196,8 +196,8 @@ export function resolveOrcaProfileFamily(records,type,selected,options={}) {
         }else if(type==="process" && (key==="infill_anchor" || key==="infill_anchor_max" || key==="infill_combination_max_layer_height")) {
           // Native FloatOrPercent scalar; preserve mm vs % across inheritance.
           settings[key]=parseTestProcessOverrides({[key]:value})[key];
-        }else if(type==="process" && key==="minimum_sparse_infill_area") {
-          // Native coFloat is an absolute area, never a filament vector.
+        }else if(type==="process" && (key==="minimum_sparse_infill_area" || key==="bottom_solid_infill_flow_ratio")) {
+          // Native coFloat is a scalar (area or flow multiplier), never a filament vector.
           settings[key]=parseTestProcessOverrides({[key]:value})[key];
         }else if(Object.hasOwn(SPECS[type],key))settings[key]=validateNum(key,value,SPECS[type][key]);
         else if(type==="process" && Object.hasOwn(PROCESS_ENUMS,key)) {

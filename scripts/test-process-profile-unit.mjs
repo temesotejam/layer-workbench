@@ -371,3 +371,11 @@ for(const [input,expected] of [[0,"0"],["0%","0%"],["100%","100%"],[" 50.0% ","5
 for(const bad of [-1,2.01,"100.01%","-1%","0.2mm","50% G28",["50%"],null,true,NaN,Infinity,""])
   assert.throws(()=>parseTestProcessOverrides({[combinationCapKey]:bad}),/Invalid|safe test range/);
 console.log("PASS: bounded native sparse combination cap preserves mm, percent and zero sentinel");
+
+const bottomFlowKey="bottom_solid_infill_flow_ratio";
+for(const [input,expected] of [[1,"1"],["0.75","0.75"],[0.1,"0.1"],[2,"2"]])
+  assert.deepEqual(parseTestProcessOverrides({[bottomFlowKey]:input}),{[bottomFlowKey]:expected});
+for(const bad of [0,-1,2.01,"75%",["1"],null,true,NaN,Infinity,"1 G28"])
+  assert.throws(()=>parseTestProcessOverrides({[bottomFlowKey]:bad}),/Invalid|safe test range/);
+assert.throws(()=>parseTestProcessOverrides({top_solid_infill_flow_ratio:"1"}),/Unsupported process setting/);
+console.log("PASS: independent bounded scalar bottom surface flow; top nozzle vector remains unsupported");
