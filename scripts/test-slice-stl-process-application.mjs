@@ -289,3 +289,19 @@ for(const key of ["infill_anchor","infill_anchor_max"]){
   }
 }
 console.log("PASS: both anchor lengths reach native-json unchanged; bad overrides refuse session");
+
+for(const value of ["0","1"]){
+  const preset={...selected,process:{settings:{
+    ...selected.process.settings,infill_combination:value
+  }}};
+  const {engine,calls}=mockedEngine();
+  await sliceMultiStlWithEngine(engine,items,null,null,preset);
+  assert.equal(calls.find(c=>c.name==="applyProfile").format,"orca.native-json");
+  assert.equal(calls.find(c=>c.name==="applyProfile").value.infill_combination,value);
+}
+for(const bad of [0,true,"2","true",["1"],null]){
+  const {engine,calls}=mockedEngine();
+  await assert.rejects(()=>sliceMultiStlWithEngine(engine,items,null,{infill_combination:bad}),/Unsupported native enum/);
+  assert.equal(calls.length,0);
+}
+console.log("PASS: both serialized infill combination states reach native-json; invalid values refuse session");
