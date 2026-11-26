@@ -853,6 +853,54 @@ class ComparatorTests(unittest.TestCase):
                 self.assertIsNone(report['first_heater_setpoint_differences'])
 
 
+
+    def test_explicit_fan_request_deltas_are_diagnostic_only(self):
+        native = 'M106 S128\nM106 P2 S255\nM107 P3\nG1 X1 E1\n'
+        wasm = 'M106 S64\nM106 P2 S200\nM107 P3\nG1 X1 E1\n'
+        result = self.run_compare(native, wasm)
+        self.assertFalse(result['match'])
+        self.assertEqual(result['native_fan_request_events'], 3)
+        self.assertEqual(result['wasm_fan_request_events'], 3)
+        self.assertEqual(result['fan_request_difference_count'], 2)
+        a, b = result['first_fan_request_differences']
+        self.assertIsNone(a['native']['fan_index'])
+        self.assertEqual(a['wasm_minus_native_pwm_word'], '-64')
+        self.assertEqual(b['native']['fan_index'], 2)
+        self.assertEqual(b['wasm_minus_native_pwm_word'], '-55')
+        self.assertEqual(self.run_compare(native, native)['fan_request_difference_count'], 0)
+
+    def test_fan_command_and_selector_identity_are_not_collapsed(self):
+        result = self.run_compare('M106 S0\nM106 P2 S100\nM107 P1\n',
+                                  'M107\nM106 P3 S100\n')
+        self.assertEqual(result['fan_request_difference_count'], 3)
+        for entry in result['first_fan_request_differences']:
+            self.assertNotIn('wasm_minus_native_pwm_word', entry)
+        self.assertIsNone(result['first_fan_request_differences'][-1]['wasm'])
+        result = self.run_compare('M106 S100\n', 'M106 P0 S100\n')
+        self.assertEqual(result['fan_request_difference_count'], 1)
+        self.assertNotIn('wasm_minus_native_pwm_word', result['first_fan_request_differences'][0])
+
+    def test_unknown_fan_dialects_and_invalid_requests_are_not_zero_differences(self):
+        for cmd in ('M106', 'M106 P128', 'M126', 'M127', 'M106S128',
+                    'M106 S256', 'M106 S-1', 'M106 S1 P0.5',
+                    'M106 S100 S200', 'M106 S100 T1', 'M107 S1',
+                    'M106 S{fan_speed}'):
+            with self.subTest(cmd=cmd):
+                result = self.run_compare(cmd + '\n', 'M106 S0\n')
+                self.assertIsNone(result['native_fan_request_events'])
+                self.assertEqual(result['wasm_fan_request_events'], 1)
+                self.assertIsNone(result['fan_request_difference_count'])
+                self.assertIsNone(result['first_fan_request_differences'])
+
+    def test_fan_samples_bounded_count_and_padded_numbered_commands(self):
+        native = 'N10 M0106 P2 S10.0\n' * 20
+        wasm = 'N10 M0106 P2 S20\n' * 20
+        result = self.run_compare(native, wasm)
+        self.assertEqual(result['fan_request_difference_count'], 20)
+        self.assertEqual(len(result['first_fan_request_differences']), 15)
+        self.assertEqual(result['first_fan_request_differences'][0]
+                         ['wasm_minus_native_pwm_word'], '10')
+
     def test_padded_xyz_mode_commands_preserve_observed_path_length(self):
         code = ('M83\nG090\nG1 X10 E1\nG091\nG1 X-10 E1\n'
                 'G090\nG1 X20 E1\n')

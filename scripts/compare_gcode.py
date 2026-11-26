@@ -13,6 +13,7 @@ from pathlib import Path
 import re
 import sys
 from heater_setpoint_diagnostic import heater_setpoint_differences
+from fan_request_diagnostic import fan_request_differences
 
 PARAM = re.compile(r'^([A-Za-z])([+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)$')
 CODE = re.compile(r'^[GMT]\d+(?:\.\d+)?$|^T\d+$|^N\d+$', re.I)
@@ -615,6 +616,7 @@ def compare(native, wasm, min_extrusion_moves=0):
         issues.append(f'wasm has {wasm_extrusion} extrusion moves; expected at least {min_extrusion_moves}')
     return {
         **heater_setpoint_differences(a, b),
+        **fan_request_differences(a, b),
         'native': str(native), 'wasm': str(wasm),
         'native_commands': len(a), 'wasm_commands': len(b),
         'native_motion_commands': native_motion, 'wasm_motion_commands': wasm_motion,
