@@ -83,8 +83,10 @@ const LIMITS = {
   // Localhost test only: reject percentages and multi-nozzle vectors.
   internal_bridge_flow: [0.1,2],
   // Native coFloat bottom-surface extrusion multiplier; local positive range.
-  // Top flow is a separate nullable nozzle-vector option, not an alias.
   bottom_solid_infill_flow_ratio: [0.1,2],
+  // Native nullable coFloats nozzle vector; only one explicit positive slot.
+  // Official CR-10 serializes that slot as a numeric string.
+  top_solid_infill_flow_ratio: [0.1,2],
   // Pinned v2.5.0 Creality first-layer print speed: 15 mm/s absolute.
   // This is independent of first-layer infill and travel speed.
   initial_layer_speed: [1,800],
@@ -135,7 +137,14 @@ export function parseTestProcessOverrides(input) {
   if (entries.length > Object.keys(LIMITS).length + Object.keys(ENUMS).length)
     throw new Error("Too many override settings.");
   const clean = {};
-  for(const [key,raw] of entries) {
+  for(const [key,inputValue] of entries) {
+    let raw=inputValue;
+    const topFlowVector=key==="top_solid_infill_flow_ratio";
+    if(topFlowVector && Array.isArray(raw)) {
+      if(raw.length!==1 || !Object.hasOwn(raw,0))
+        throw new Error("Invalid single-slot nozzle vector for " + key);
+      raw=raw[0];
+    }
     if (Object.hasOwn(ENUMS,key)) {
       if (typeof raw !== "string" || !ENUMS[key].has(raw))
         throw new Error("Unsupported native enum value for " + key);
@@ -194,7 +203,7 @@ export function parseTestProcessOverrides(input) {
     if (!Number.isFinite(value) || value < range[0] || value > range[1] ||
        (INTEGERS.has(key) && !Number.isInteger(value)))
       throw new Error("Setting " + key + " is outside the safe test range.");
-    clean[key] = String(value);
+    clean[key] = topFlowVector ? [String(value)] : String(value);
   }
   return clean;
 }
