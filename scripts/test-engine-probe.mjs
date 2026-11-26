@@ -1355,6 +1355,67 @@ try {
     await uploadRawOrca();
     console.log('PASS: native sparse area threshold changes real sparse/solid tagged WASM deposition');
 
+    // Pinned Fill.cpp converts relative anchor lengths using spacing and
+    // clamps length to max; FillParams::dont_connect() selects the legacy
+    // connection path at max=0. Keep both settings explicit, including zeros.
+    // The 20 mm pair uses the source-pinned CR-10 max. If that geometry
+    // permits all joins, a 1 mm positive max probes the open-anchor fallback.
+    const anchorKeys=['infill_anchor','infill_anchor_max','sparse_infill_pattern',
+      'sparse_infill_density','sparse_infill_line_width','infill_wall_overlap',
+      'minimum_sparse_infill_area'];
+    const anchorPrior=new Map(anchorKeys.map(k=>[k,rawOrca[4][k]]));
+    try {
+      Object.assign(rawOrca[4],{sparse_infill_pattern:'grid',
+        sparse_infill_density:'35%',sparse_infill_line_width:'0.45',
+        infill_wall_overlap:'30%',minimum_sparse_infill_area:'0'});
+      const anchorCase=async(length,max)=>{
+        rawOrca[4].infill_anchor_max=max;
+        const gcode=await sliceWithLineWidth(length,'infill_anchor');
+        return overlapWitness(gcode);
+      };
+      const sameAnchorGeometry=(a,b)=>JSON.stringify(a.paths)===JSON.stringify(b.paths);
+      const bothZero=await anchorCase('0','0');
+      const lengthOnly=await anchorCase('400%','0');
+      const maxOnly=await anchorCase('0','20');
+      const pinnedBoth=await anchorCase('400%','20');
+      const zeroMaxInvariant=sameAnchorGeometry(bothZero,lengthOnly);
+      const maxResponse=!sameAnchorGeometry(lengthOnly,pinnedBoth);
+      const pinnedLengthResponse=!sameAnchorGeometry(maxOnly,pinnedBoth);
+      const summarizeAnchor=a=>({strokes:a.paths.length,xy_length_mm:a.totalLength});
+      const anchorReport={
+        fixture:'same two synthetic STLs; grid 35%; overlap 30%; fixed sparse width',
+        both_zero:summarizeAnchor(bothZero),length400_max0:summarizeAnchor(lengthOnly),
+        length0_max20:summarizeAnchor(maxOnly),length400_max20:summarizeAnchor(pinnedBoth),
+        zero_max_geometry_invariant:zeroMaxInvariant,
+        pinned_max_geometry_changed:maxResponse,
+        pinned_length_geometry_changed:pinnedLengthResponse,
+        desktop_native_parity:false,full_profile_applied:false,printer_ready:false
+      };
+      if(!pinnedLengthResponse){
+        const shortMaxOnly=await anchorCase('0','1');
+        const shortMaxBoth=await anchorCase('400%','1');
+        anchorReport.length0_max1=summarizeAnchor(shortMaxOnly);
+        anchorReport.length400_max1=summarizeAnchor(shortMaxBoth);
+        anchorReport.short_max_length_geometry_changed=!sameAnchorGeometry(shortMaxOnly,shortMaxBoth);
+      }
+      await writeFile(parityDir+'/sparse-infill-anchor-deposition.json',
+        JSON.stringify(anchorReport,null,2)+'\n');
+      console.log('WASM_SPARSE_INFILL_ANCHOR_DEPOSITION '+JSON.stringify(anchorReport));
+      assert.ok(zeroMaxInvariant,
+        'Zero max must bypass open-anchor length on the same synthetic scene');
+      assert.ok(maxResponse,
+        '0 to 20 mm max must change actual sparse XY stroke geometry at fixed 400% length');
+      assert.ok(pinnedLengthResponse||anchorReport.short_max_length_geometry_changed,
+        'Open-anchor length must change actual sparse XY geometry at a fixed positive max: '+JSON.stringify(anchorReport));
+      console.log('PASS: native sparse anchor max and open-anchor length affect tagged WASM XY geometry');
+    } finally {
+      for(const [key,value] of anchorPrior){
+        if(value===undefined)delete rawOrca[4][key];
+        else rawOrca[4][key]=value;
+      }
+      await uploadRawOrca();
+    }
+
     const narrowWidthMotion=motionOnly(await sliceWithLineWidth('0.35'));
     const broadWidthMotion=motionOnly(await sliceWithLineWidth('0.65'));
     assert.ok(narrowWidthMotion.length>100&&broadWidthMotion.length>100,
