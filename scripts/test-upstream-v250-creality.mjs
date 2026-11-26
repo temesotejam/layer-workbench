@@ -276,3 +276,11 @@ assert.equal(process.settings.minimum_sparse_infill_area,"10");
 assert.equal(combined.process.settings.minimum_sparse_infill_area,"10");
 assert.ok(!process.unsupported.includes("minimum_sparse_infill_area"));
 console.log("PASS: pinned CR-10 minimum sparse-infill threshold 10 square mm");
+
+for(const [key,expected] of [["infill_anchor","400%"],["infill_anchor_max","20"]]){
+  assert.equal(process.record[key],expected);
+  assert.equal(process.settings[key],expected);
+  assert.equal(combined.process.settings[key],expected);
+  assert.ok(!process.unsupported.includes(key));
+}
+console.log("PASS: pinned CR-10 anchor length 400% and maximum 20 mm independently forwarded");

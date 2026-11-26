@@ -47,6 +47,10 @@ const LIMITS = {
   infill_wall_overlap: [0,100],
   // Native coFloat area in mm², not density or a percentage. Local cap only.
   minimum_sparse_infill_area: [0,10000],
+  // Native coFloatOrPercent, relative to sparse_infill_line_width.
+  // Local caps: 1000 mm (native unlimited sentinel) or 1000%.
+  infill_anchor: [0,1000],
+  infill_anchor_max: [0,1000],
   top_shell_layers: [0,12],
   bottom_shell_layers: [0,12],
   // Native v2.5.0 coFloat minimum shell thickness in millimetres.
@@ -145,6 +149,16 @@ export function parseTestProcessOverrides(input) {
         throw new Error("Setting " + key + " is outside the safe test range.");
       clean[key] = String(ratio) + "%";
       continue;
+    }
+    if ((key === "infill_anchor" || key === "infill_anchor_max") && typeof raw === "string") {
+      const percent = /^(\d+(?:\.\d+)?)%$/.exec(raw.trim());
+      if (percent) {
+        const ratio = Number(percent[1]);
+        if (!Number.isFinite(ratio) || ratio < 0 || ratio > 1000)
+          throw new Error("Setting " + key + " is outside the safe test range.");
+        clean[key] = String(ratio) + "%";
+        continue;
+      }
     }
     if (key === "initial_layer_travel_speed" && typeof raw === "string") {
       const percent = /^(\d+(?:\.\d+)?)%$/.exec(raw.trim());
