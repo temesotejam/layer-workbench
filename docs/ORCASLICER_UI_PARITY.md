@@ -158,3 +158,17 @@ A centered first footprint can prevent any of the three previous greedy orders f
 ## 2026-11-26: vertically bounded viewer object list
 
 The corner-seeded arrangement browser regression exposed an independent UI defect: after importing a third loose mesh, the horizontal flex object list overflowed the sidebar and the 3D canvas intercepted its pointer events (run [45726868714](https://github.com/temesotejam/layer-workbench/actions/runs/45726868714)). The object tree now stacks full-width nonshrinking rows vertically, constrains names, and scrolls within the sidebar while keeping the empty state centered and the plate footer fixed. The Chrome regression explicitly checks row bounds, vertical order and real hit testing before selecting all three items and asserting atomic arrangement failure. This is an independent browser list layout, not a port of the pinned desktop [GUI_ObjectList.cpp](https://github.com/OrcaSlicer/OrcaSlicer/blob/40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19/src/slic3r/GUI/GUI_ObjectList.cpp) hierarchy, volume editing, native placement or print safety. No WASM change.
+
+
+## 2026-11-26: remaining three corner seeds for viewer arrangement
+
+The fixed-viewer AABB planner retains the original unseeded and lower-left
+attempts in the same order. Only if all fail, it tries lower-right, upper-left
+and upper-right as first-footprint seeds with the same three sort orders.
+At most fifteen distinct plans are considered, with no partial edits on
+failure. Three deterministic four-footprint fixtures exercise the new
+fallbacks, translated beds, clearance, input immutability and idempotence.
+The pinned [ArrangeJob.cpp](https://github.com/OrcaSlicer/OrcaSlicer/blob/40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19/src/slic3r/GUI/Jobs/ArrangeJob.cpp)
+uses native arrangement polygons and enables rotations through native settings;
+this limited browser fallback remains XY translations only, not native
+nesting, exhaustive packing, printer clearance, printability or WASM activation.
