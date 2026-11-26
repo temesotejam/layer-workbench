@@ -82,6 +82,9 @@ const LIMITS = {
   // CR-10 0.20mm Standard sets 1 while bridge_flow is 0.95; do not alias.
   // Localhost test only: reject percentages and multi-nozzle vectors.
   internal_bridge_flow: [0.1,2],
+  // Native coFloat bottom-surface extrusion multiplier; local positive range.
+  // Top flow is a separate nullable nozzle-vector option, not an alias.
+  bottom_solid_infill_flow_ratio: [0.1,2],
   // Pinned v2.5.0 Creality first-layer print speed: 15 mm/s absolute.
   // This is independent of first-layer infill and travel speed.
   initial_layer_speed: [1,800],
