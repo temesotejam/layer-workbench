@@ -1159,3 +1159,8 @@ native-json transport and the CI-only pinned official records. This adds
 one forwarded process key, not proof of actual WASM application or reduced
 sparse-infill toolpath mismatch. No engine build, native comparison fixture,
 official profile redistribution or public Pages engine enablement is changed.
+
+
+## 2026-11-26: isolated WASM infill/wall overlap geometry acceptance gate
+
+The pinned v2.5.0 [PerimeterGenerator.cpp](https://github.com/OrcaSlicer/OrcaSlicer/blob/40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19/src/libslic3r/PerimeterGenerator.cpp) applies the overlap to the infill region on interior layers (with separate top/bottom handling). The isolated Chrome test now varies only `infill_wall_overlap` from 0% to the pinned CR-10 30%, holding the two-STL scene, 35% grid density and line widths fixed. It requires nonempty feature-tagged positive-E planar linear sparse-infill strokes on both sides and a change in the sorted unoriented XY stroke multiset (1 µm coordinate resolution). G-code header, feedrate, extrusion amount or traversal-order-only changes do not satisfy this witness. The JSON diagnostic records path lengths and counts. This is an acceptance gate, not a claim of the physical overlap amount, native/WASM parity or printer safety. No engine rebuild or public WASM enablement.
