@@ -990,3 +990,20 @@ for(const bad of [0,1,true,"2","true",["1"],null])
   assert.throws(()=>resolve(combinationProfiles.map(rec=>rec.name==="0.16mm Fine @TestPrinter"
     ? {...rec,infill_combination:bad}:rec),selection),/Invalid native process enum/);
 console.log("PASS: explicit disabled child overrides enabled inherited infill combination");
+
+const combinationCapKey="infill_combination_max_layer_height";
+const capProfiles=profiles.map(rec=>rec.name==="fdm_process_common"
+  ? {...rec,[combinationCapKey]:"100%"} : rec.name==="0.16mm Fine @TestPrinter"
+    ? {...rec,[combinationCapKey]:"0.20"} : rec);
+const capResult=resolve(capProfiles,selection).process;
+assert.equal(capResult.settings[combinationCapKey],"0.2");
+assert.ok(!capResult.unsupported.includes(combinationCapKey));
+assert.equal(resolve(capProfiles.map(rec=>{
+  if(rec.name!=="0.16mm Fine @TestPrinter")return rec;
+  const child={...rec};delete child[combinationCapKey];return child;
+}),selection).process.settings[combinationCapKey],"100%");
+assert.equal(result.process.settings[combinationCapKey],undefined);
+for(const bad of [-1,"101%",["50%"],null,true])
+  assert.throws(()=>resolve(capProfiles.map(rec=>rec.name==="0.16mm Fine @TestPrinter"
+    ? {...rec,[combinationCapKey]:bad}:rec),selection),/Invalid|safe test range/);
+console.log("PASS: independent combination height cap inheritance and missing-value preservation");
