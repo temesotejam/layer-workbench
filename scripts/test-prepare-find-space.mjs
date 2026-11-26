@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { findViewerSpace, arrangeViewerSpaces, findViewerSpaceWithQuarterTurn, arrangeViewerSpacesWithQuarterTurns, viewerProjectedHull, viewerHullsSeparated } from "./prepare-find-space.mjs";
+import { findViewerSpace, arrangeViewerSpaces, findViewerSpaceWithQuarterTurn, arrangeViewerSpacesWithQuarterTurns, viewerProjectedHull, viewerHullsSeparated, findViewerHullSpace } from "./prepare-find-space.mjs";
 
 const plate = [0, 0, 100, 100];
 const gap = 5;
@@ -188,4 +188,26 @@ test("projected hull refuses degenerate, malformed and over-budget geometry", ()
   for (const pts of [[[0,0],[1,1],[2,2]],[[0,0],[0,1],[NaN,2]],Array(50001).fill([0,0]),Array.from({length:257},(_,i)=>[Math.cos(i*2*Math.PI/257),Math.sin(i*2*Math.PI/257)])])
     assert.equal(viewerProjectedHull(pts),null);
   assert.equal(viewerHullsSeparated(null,viewerProjectedHull([[0,0],[1,0],[0,1]])),null);
+});
+
+test("hull fallback fits opposing triangles that cannot fit by AABB", () => {
+  const target=[-128,-128,128,128], a=[[-100,-100],[100,-100],[-100,100]], b=[[100,100],[-100,100],[100,-100]];
+  const before=structuredClone([a,b]);
+  assert.equal(findViewerSpace([-100,-100,100,100],[[-100,-100,100,100]],target),null);
+  const move=findViewerHullSpace(a,[b],target);
+  assert.ok(move);
+  assert.ok(-(move.dx+move.dy)/Math.sqrt(2)>5);
+  assert.ok(a.every(([x,y])=>Math.abs(x+move.dx)<=123 && Math.abs(y+move.dy)<=123));
+  const moved=a.map(([x,y])=>[x+move.dx,y+move.dy]);
+  assert.deepEqual(findViewerHullSpace(moved,[b],target),{dx:0,dy:0});
+  assert.deepEqual([a,b],before);
+  assert.deepEqual(findViewerHullSpace(a,[b],target),move);
+});
+test("hull fallback refuses blocked, degenerate, over-budget or oversized inputs", () => {
+  const a=[[0,0],[90,0],[90,90],[0,90]];
+  assert.equal(findViewerHullSpace(a,[a],plate),null);
+  assert.equal(findViewerHullSpace(a,[[[0,0],[0,0],[1,1]]],plate),null);
+  assert.equal(findViewerHullSpace(a,Array(9).fill(a),plate),null);
+  assert.equal(findViewerHullSpace(Array(33).fill([0,0]),[],plate),null);
+  assert.equal(findViewerHullSpace(a,[],[0,0,50,50]),null);
 });

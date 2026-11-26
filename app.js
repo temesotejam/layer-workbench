@@ -7,7 +7,7 @@ import { ThreeMFLoader } from "three/addons/loaders/3MFLoader.js";
 import { automaticViewProjection, orthographicFitHalfHeight, perspectiveFitDistance, prepareViewOrientation } from "./scripts/prepare-camera-fit.mjs";
 import { get3mfViewportBuildItems } from "./scripts/three-mf-viewport-items.mjs";
 import { captureViewerTransform, createViewerTransformHistory } from "./scripts/prepare-viewer-transform-history.mjs";
-import { findViewerSpace, arrangeViewerSpaces, findViewerSpaceWithQuarterTurn, arrangeViewerSpacesWithQuarterTurns, viewerProjectedHull, viewerHullsSeparated } from "./scripts/prepare-find-space.mjs";
+import { findViewerSpace, arrangeViewerSpaces, findViewerSpaceWithQuarterTurn, arrangeViewerSpacesWithQuarterTurns, viewerProjectedHull, viewerHullsSeparated, findViewerHullSpace } from "./scripts/prepare-find-space.mjs";
 
 const picker = document.querySelector("#model-file");
 const status = document.querySelector("#file-status");
@@ -586,6 +586,29 @@ centerOnBedButton?.addEventListener("click", () => {
 });
 // Explicit, read-only layout check: no per-frame traversal or native state changes.
 // The fixed viewer plane is not a printer profile. AABB overlap is only a broad-phase hint.
+// Shared bounded world-XY hull reader; no subsampling or scene edits.
+function boundedViewerHullReader() {
+  let budget = 50000;
+  return item => {
+    const points = [], p = new THREE.Vector3();
+    let refused = false;
+    item.object.updateWorldMatrix(true, true);
+    item.object.traverse(node => {
+      if (refused || !node.isMesh) return;
+      const attr=node.geometry?.getAttribute("position");
+      if (!attr || attr.itemSize!==3 || node.isInstancedMesh || node.isSkinnedMesh ||
+          node.morphTargetInfluences?.length || attr.count>budget) {
+        refused=true; return;
+      }
+      budget-=attr.count;
+      for (let i=0;i<attr.count;i++) {
+        p.fromBufferAttribute(attr,i).applyMatrix4(node.matrixWorld);
+        points.push([p.x,p.y]);
+      }
+    });
+    return refused ? null : viewerProjectedHull(points);
+  };
+}
 checkPlacementButton.addEventListener("click", () => {
   const selected = entries.find(item => item.id === selectedId);
   if (!rendererReady || transformControls.dragging || !selected || checkPlacementButton.disabled) return;
@@ -613,25 +636,7 @@ checkPlacementButton.addEventListener("click", () => {
     Math.min(b.max.y, own.max.y) - Math.max(b.min.y, own.min.y) > eps);
   // Refine only positive-area AABB candidates. Limit total additional vertex
   // work; never subsample, as that could incorrectly exclude an overlap.
-  let budget = 50000;
-  const hullFor = item => {
-    const points = [], p = new THREE.Vector3();
-    let refused = false;
-    item.object.traverse(node => {
-      if (refused || !node.isMesh) return;
-      const attr=node.geometry?.getAttribute("position");
-      if (!attr || attr.itemSize!==3 || node.isInstancedMesh || node.isSkinnedMesh ||
-          node.morphTargetInfluences?.length || attr.count>budget) {
-        refused=true; return;
-      }
-      budget-=attr.count;
-      for (let i=0;i<attr.count;i++) {
-        p.fromBufferAttribute(attr,i).applyMatrix4(node.matrixWorld);
-        points.push([p.x,p.y]);
-      }
-    });
-    return refused ? null : viewerProjectedHull(points);
-  };
+  const hullFor = boundedViewerHullReader();
   let possible=0, unavailable=0;
   if (overlaps.length) {
     const h=hullFor(selected);
@@ -663,8 +668,17 @@ function findSelectedSpace(allowRotation) {
     // Loose meshes are direct children of the identity world scene. The
     // analytic world-Z rotation is not valid for an arbitrary parent frame.
     if (allowRotation && entry.object.parent !== world) return;
-    const result = allowRotation ? findViewerSpaceWithQuarterTurn(own, bounds, target,
+    let result = allowRotation ? findViewerSpaceWithQuarterTurn(own, bounds, target,
       [entry.object.position.x, entry.object.position.y]) : findViewerSpace(own, bounds, target);
+    // Only after the ordinary XY search fails, try a bounded convex-hull
+    // fallback. No change to explicit rotation or batch arrangement.
+    let hullFallback = false;
+    if (!result && !allowRotation && entries.length <= 9 && entry.object.parent === world) {
+      const hullFor = boundedViewerHullReader();
+      const h = hullFor(entry);
+      if (h) result = findViewerHullSpace(h, entries.filter(item=>item!==entry).map(hullFor), target);
+      hullFallback = !!result;
+    }
     if (!result) {
       status.textContent = allowRotation ? "No free viewer AABB placement even with +90° Z rotation; nothing moved." :
         "No free viewer AABB placement with 5 mm clearance; nothing moved.";
@@ -677,7 +691,8 @@ function findSelectedSpace(allowRotation) {
       return;
     }
     if (!quarterTurn && Math.abs(dx) < 1e-9 && Math.abs(dy) < 1e-9) {
-      status.textContent = "Selected mesh already has 5 mm viewer AABB clearance.";
+      status.textContent = hullFallback ? "Selected mesh already has 5 mm viewer convex-hull clearance (not printability)." :
+        "Selected mesh already has 5 mm viewer AABB clearance.";
       return;
     }
     const before = captureViewerTransform(entry);
@@ -689,6 +704,7 @@ function findSelectedSpace(allowRotation) {
     recordViewerEdit(entry, before);
     updateTransformStatus();
     status.textContent = quarterTurn ? "Rotated selected mesh +90° Z and moved to free viewer AABB space (5 mm clearance; not printability)." :
+      hullFallback ? "Moved selected mesh to free viewer convex-hull space (5 mm clearance; not printability)." :
       "Moved selected mesh to free viewer AABB space (5 mm clearance; not printability).";
   } catch (error) {
     status.textContent = "Find space unavailable: " + error.message;

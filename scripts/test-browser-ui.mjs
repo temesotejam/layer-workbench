@@ -622,6 +622,41 @@ try {
   }
   console.log('PASS: batch quarter-turn arrangement and atomic undo/redo');
 
+  // Two opposing triangular projections fill overlapping 200 mm AABBs.
+  // AABB packing is impossible, but a small diagonal hull translation works.
+  const triFixture=(name,opposite)=>({name,mimeType:'text/plain',buffer:Buffer.from(
+    (opposite ? 'v 200 200 0\nv 0 200 0\nv 200 0 0\nv 200 200 20\n' :
+      'v 0 0 0\nv 200 0 0\nv 0 200 0\nv 0 0 20\n')+
+    'f 1 3 2\nf 1 2 4\nf 1 4 3\nf 2 3 4\n')});
+  await page.locator('#model-file').setInputFiles([
+    triFixture('hull-fixed.obj',true),triFixture('hull-move.obj',false),
+  ]);
+  await page.locator('#object-count').getByText('2 objects').waitFor();
+  await page.getByRole('button',{name:/hull-fixed\.obj/i}).click();
+  const hullFixedBefore=await readCenterTransforms();
+  await page.getByRole('button',{name:/hull-move\.obj/i}).click();
+  const hullBefore=await readCenterTransforms();
+  await findSpaceButton.click();
+  assert.match(await page.locator('#file-status').innerText(),/free viewer convex-hull space/);
+  const hullAfter=await readCenterTransforms();
+  assert.notDeepEqual(hullAfter.slice(0,2),hullBefore.slice(0,2));
+  assert.deepEqual(hullAfter.slice(2),hullBefore.slice(2));
+  await placementButton.click();
+  assert.match(await placementStatus.innerText(),/Within viewer plate XY.*XY bounding-box overlaps: 1.*XY convex-hull candidates: 0; unavailable: 0/);
+  await findSpaceButton.click();
+  assert.match(await page.locator('#file-status').innerText(),/already has 5 mm viewer convex-hull clearance/);
+  await undoButton.click();
+  assert.deepEqual(await readCenterTransforms(),hullBefore);
+  await redoButton.click();
+  assert.deepEqual(await readCenterTransforms(),hullAfter);
+  await page.getByRole('button',{name:/hull-fixed\.obj/i}).click();
+  assert.deepEqual(await readCenterTransforms(),hullFixedBefore);
+  for(let remaining=1;remaining>=0;remaining--){
+    await page.locator('#remove-object').click();
+    await page.locator('#object-count').getByText(remaining+' object'+(remaining===1?'':'s'),{exact:true}).waitFor();
+  }
+  console.log('PASS: selected convex-hull fallback and reversible translation');
+
   // Reversible deletion must also preserve 3MF scene roots. The normal
   // public viewport treats a Core 3MF as one viewer item; the explicitly
   // opted-in isolated lab exposes its two build items independently.
