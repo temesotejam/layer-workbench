@@ -193,7 +193,7 @@ export function resolveOrcaProfileFamily(records,type,selected,options={}) {
           // Native coPercent is scalar, not a nozzle vector or absolute width.
           // Share the final native-json validation, preserving the % token.
           settings[key]=parseTestProcessOverrides({[key]:value})[key];
-        }else if(type==="process" && (key==="infill_anchor" || key==="infill_anchor_max")) {
+        }else if(type==="process" && (key==="infill_anchor" || key==="infill_anchor_max" || key==="infill_combination_max_layer_height")) {
           // Native FloatOrPercent scalar; preserve mm vs % across inheritance.
           settings[key]=parseTestProcessOverrides({[key]:value})[key];
         }else if(type==="process" && key==="minimum_sparse_infill_area") {

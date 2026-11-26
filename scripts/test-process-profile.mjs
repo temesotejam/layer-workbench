@@ -51,6 +51,9 @@ const LIMITS = {
   // Local caps: 1000 mm (native unlimited sentinel) or 1000%.
   infill_anchor: [0,1000],
   infill_anchor_max: [0,1000],
+  // Native coFloatOrPercent relative to nozzle diameter; 0 uses nozzle diameter.
+  // Local absolute cap 2 mm, percent cap 100%; native also clamps to nozzle.
+  infill_combination_max_layer_height: [0,2],
   top_shell_layers: [0,12],
   bottom_shell_layers: [0,12],
   // Native v2.5.0 coFloat minimum shell thickness in millimetres.
@@ -157,6 +160,16 @@ export function parseTestProcessOverrides(input) {
       if (percent) {
         const ratio = Number(percent[1]);
         if (!Number.isFinite(ratio) || ratio < 0 || ratio > 1000)
+          throw new Error("Setting " + key + " is outside the safe test range.");
+        clean[key] = String(ratio) + "%";
+        continue;
+      }
+    }
+    if (key === "infill_combination_max_layer_height" && typeof raw === "string") {
+      const percent = /^(\d+(?:\.\d+)?)%$/.exec(raw.trim());
+      if (percent) {
+        const ratio = Number(percent[1]);
+        if (!Number.isFinite(ratio) || ratio < 0 || ratio > 100)
           throw new Error("Setting " + key + " is outside the safe test range.");
         clean[key] = String(ratio) + "%";
         continue;

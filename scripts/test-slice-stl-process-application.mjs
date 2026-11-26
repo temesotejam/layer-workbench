@@ -305,3 +305,22 @@ for(const bad of [0,true,"2","true",["1"],null]){
   assert.equal(calls.length,0);
 }
 console.log("PASS: both serialized infill combination states reach native-json; invalid values refuse session");
+
+const combinationCapKey="infill_combination_max_layer_height";
+for(const value of ["0","50%","0.2","100%"]){
+  const preset={...selected,process:{settings:{
+    ...selected.process.settings,infill_combination:"1",[combinationCapKey]:value
+  }}};
+  const {engine,calls}=mockedEngine();
+  await sliceMultiStlWithEngine(engine,items,null,null,preset);
+  const applied=calls.find(c=>c.name==="applyProfile");
+  assert.equal(applied.format,"orca.native-json");
+  assert.equal(applied.value[combinationCapKey],value);
+  assert.equal(applied.value.infill_combination,"1");
+}
+for(const bad of [-1,"101%",["50%"],null,true]){
+  const {engine,calls}=mockedEngine();
+  await assert.rejects(()=>sliceMultiStlWithEngine(engine,items,null,{[combinationCapKey]:bad}),/Invalid|safe test range/);
+  assert.equal(calls.length,0);
+}
+console.log("PASS: native sparse combination cap transport preserves both units and sentinel");

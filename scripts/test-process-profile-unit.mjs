@@ -364,3 +364,10 @@ for(const v of ["0","1"])
 for(const bad of [0,1,true,false,"true","false","2","1%"," 1 ",["1"],null,"1 G28"])
   assert.throws(()=>parseTestProcessOverrides({infill_combination:bad}),/Unsupported native enum/);
 console.log("PASS: exact native sparse infill combination bool validation");
+
+const combinationCapKey="infill_combination_max_layer_height";
+for(const [input,expected] of [[0,"0"],["0%","0%"],["100%","100%"],[" 50.0% ","50%"],["0.20","0.2"],[2,"2"]])
+  assert.deepEqual(parseTestProcessOverrides({[combinationCapKey]:input}),{[combinationCapKey]:expected});
+for(const bad of [-1,2.01,"100.01%","-1%","0.2mm","50% G28",["50%"],null,true,NaN,Infinity,""])
+  assert.throws(()=>parseTestProcessOverrides({[combinationCapKey]:bad}),/Invalid|safe test range/);
+console.log("PASS: bounded native sparse combination cap preserves mm, percent and zero sentinel");
