@@ -657,6 +657,33 @@ try {
   }
   console.log('PASS: selected convex-hull fallback and reversible translation');
 
+  await page.locator('#model-file').setInputFiles([
+    triFixture('batch-hull-a.obj',false),triFixture('batch-hull-b.obj',true),
+  ]);
+  await page.locator('#object-count').getByText('2 objects').waitFor();
+  const batchHullBefore=await readAllTransforms();
+  await arrangeAllButton.click();
+  assert.match(await page.locator('#file-status').innerText(),/Arranged all loose meshes \(5 mm viewer convex-hull clearance/);
+  const batchHullAfter=await readAllTransforms();
+  assert.notDeepEqual(batchHullAfter,batchHullBefore);
+  assert.deepEqual(batchHullAfter.map(s=>s.slice(2)),batchHullBefore.map(s=>s.slice(2)));
+  for (const name of ['batch-hull-a.obj','batch-hull-b.obj']) {
+    await page.getByRole('button',{name}).click();
+    await placementButton.click();
+    assert.match(await placementStatus.innerText(),/Within viewer plate XY.*XY bounding-box overlaps: 1.*XY convex-hull candidates: 0; unavailable: 0/);
+  }
+  await arrangeAllButton.click();
+  assert.match(await page.locator('#file-status').innerText(),/already have 5 mm viewer convex-hull clearance/);
+  await undoButton.click();
+  assert.deepEqual(await readAllTransforms(),batchHullBefore);
+  await redoButton.click();
+  assert.deepEqual(await readAllTransforms(),batchHullAfter);
+  for(let remaining=1;remaining>=0;remaining--){
+    await page.locator('#remove-object').click();
+    await page.locator('#object-count').getByText(remaining+' object'+(remaining===1?'':'s'),{exact:true}).waitFor();
+  }
+  console.log('PASS: batch convex-hull fallback and atomic undo/redo');
+
   // Reversible deletion must also preserve 3MF scene roots. The normal
   // public viewport treats a Core 3MF as one viewer item; the explicitly
   // opted-in isolated lab exposes its two build items independently.
