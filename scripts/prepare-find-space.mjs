@@ -152,3 +152,51 @@ export function arrangeViewerSpacesWithQuarterTurns(boxes, plate, pivots, gap = 
   }
   return null;
 }
+
+// Bounded diagnostic only: the convex hull of world-XY vertices encloses the
+// mesh projection. A separated pair of hulls rules out overlap in that plane;
+// intersecting hulls do not prove mesh collision (concavities, holes, Z).
+export function viewerProjectedHull(points) {
+  if (!Array.isArray(points) || points.length < 3 || points.length > 50000 ||
+      !points.every(p => Array.isArray(p) && p.length === 2 &&
+        p.every(v => Number.isFinite(v) && Math.abs(v) <= 1e7))) return null;
+  const sorted = [...points].sort((a,b)=>a[0]-b[0] || a[1]-b[1]);
+  const unique = sorted.filter((p,i)=>!i || p[0]!==sorted[i-1][0] || p[1]!==sorted[i-1][1]);
+  const cross = (a,b,c)=>(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);
+  const half = list => {
+    const out=[];
+    for (const p of list) {
+      while (out.length>=2 && cross(out[out.length-2],out[out.length-1],p)<=0) out.pop();
+      out.push(p);
+    }
+    return out;
+  };
+  const lower=half(unique), upper=half([...unique].reverse());
+  const hull=lower.slice(0,-1).concat(upper.slice(0,-1));
+  return hull.length>=3 && hull.length<=256 ? hull : null;
+}
+
+// Separating-axis test with normalized normals and conservative contact
+// tolerance. Only use validated convex hulls returned by the above helper.
+export function viewerHullsSeparated(a,b) {
+  if (!a || !b) return null;
+  const project = (h,nx,ny) => {
+    let lo=Infinity, hi=-Infinity;
+    for (const p of h) {
+      const v=p[0]*nx+p[1]*ny;
+      lo=Math.min(lo,v); hi=Math.max(hi,v);
+    }
+    return [lo,hi];
+  };
+  for (const h of [a,b]) {
+    for (let i=0;i<h.length;i++) {
+      const p=h[i], q=h[(i+1)%h.length];
+      const dx=q[0]-p[0], dy=q[1]-p[1], len=Math.hypot(dx,dy);
+      if (!(len>0)) return null;
+      const nx=-dy/len, ny=dx/len;
+      const [alo,ahi]=project(a,nx,ny), [blo,bhi]=project(b,nx,ny);
+      if (blo-ahi>1e-6 || alo-bhi>1e-6) return true;
+    }
+  }
+  return false;
+}
