@@ -1129,3 +1129,17 @@ parameters and out-of-range values produce an unavailable diagnostic.
 This is not an effective firmware fan-state simulation, physical duty-cycle
 measurement, profile equivalence proof or printable-output validation.
 Strict G-code equality is unchanged; no engine or public WASM change.
+
+
+## 2026-11-26: exact numeric-word canonicalization for strict comparison
+
+Python Decimal.normalize() uses the active decimal context (normally 28
+significant digits). Consequently different numeric words could previously
+be rounded to the same canonical command. The comparator now removes trailing
+coefficient zeros using the exact Decimal tuple, preserving sign and value
+without context rounding. Unrepresentable words stay opaque. Regressions
+exercise distinct long-precision K words and mathematically equal exponent
+spellings. Ordinary opcode spelling and command order remain unchanged.
+This fixes the ordered command equality gate only: geometric and optional
+heater/fan metrics still have their own numerical limits. It does not reduce
+engine differences, prove full-profile equivalence, or enable public WASM.
