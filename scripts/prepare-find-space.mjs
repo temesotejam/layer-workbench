@@ -287,3 +287,20 @@ export function arrangeViewerHullSpaces(hulls, plate, gap = 5) {
   }
   return null;
 }
+
+// Explicit selected-mesh quarter turn: rotate the complete world XY hull
+// about the loose mesh's world pivot, then translate. Fixed obstacles stay
+// unchanged. Preserve a translation-only hull solution when available.
+export function findViewerHullSpaceWithQuarterTurn(own, obstacles, plate, pivot, gap = 5) {
+  if (!Array.isArray(pivot) || pivot.length !== 2 ||
+      !pivot.every(v=>Number.isFinite(v) && Math.abs(v)<=1e7) ||
+      !Array.isArray(own) || own.length > 32) return null;
+  const shape=viewerProjectedHull(own);
+  if (!shape) return null;
+  const direct=findViewerHullSpace(shape,obstacles,plate,gap);
+  if (direct) return {...direct,quarterTurn:false};
+  const [px,py]=pivot;
+  const rotated=shape.map(([x,y])=>[px-(y-py),py+(x-px)]);
+  const move=findViewerHullSpace(rotated,obstacles,plate,gap);
+  return move ? {...move,quarterTurn:true} : null;
+}

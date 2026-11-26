@@ -657,6 +657,43 @@ try {
   }
   console.log('PASS: selected convex-hull fallback and reversible translation');
 
+  // Upper-left and upper-right triangles cannot separate at the original
+  // orientation on this bed. A positive world-Z turn makes them complementary.
+  await page.locator('#model-file').setInputFiles([
+    triFixture('hull-turn-fixed.obj',true),
+    {name:'hull-turn-move.obj',mimeType:'text/plain',buffer:Buffer.from(
+      'v 0 200 0\nv 0 0 0\nv 200 200 0\nv 0 200 20\n'+
+      'f 1 3 2\nf 1 2 4\nf 1 4 3\nf 2 3 4\n')},
+  ]);
+  await page.locator('#object-count').getByText('2 objects').waitFor();
+  await page.getByRole('button',{name:'hull-turn-fixed.obj'}).click();
+  const turnFixedBefore=await readCenterTransforms();
+  await page.getByRole('button',{name:'hull-turn-move.obj'}).click();
+  const turnHullBefore=await readCenterTransforms();
+  await findSpaceButton.click();
+  assert.match(await page.locator('#file-status').innerText(),/No free viewer AABB placement/);
+  assert.deepEqual(await readCenterTransforms(),turnHullBefore);
+  await findSpaceRotateButton.click();
+  assert.match(await page.locator('#file-status').innerText(),/Rotated selected mesh .*free viewer convex-hull space/);
+  const turnHullAfter=await readCenterTransforms();
+  assert.equal(Number(turnHullAfter[5]),90);
+  assert.deepEqual([turnHullAfter[2],...turnHullAfter.slice(6)],[turnHullBefore[2],...turnHullBefore.slice(6)]);
+  await placementButton.click();
+  assert.match(await placementStatus.innerText(),/Within viewer plate XY.*XY bounding-box overlaps: 1.*XY convex-hull candidates: 0; unavailable: 0/);
+  await findSpaceRotateButton.click();
+  assert.match(await page.locator('#file-status').innerText(),/already has 5 mm viewer convex-hull clearance/);
+  await undoButton.click();
+  assert.deepEqual(await readCenterTransforms(),turnHullBefore);
+  await redoButton.click();
+  assert.deepEqual(await readCenterTransforms(),turnHullAfter);
+  await page.getByRole('button',{name:'hull-turn-fixed.obj'}).click();
+  assert.deepEqual(await readCenterTransforms(),turnFixedBefore);
+  for(let remaining=1;remaining>=0;remaining--){
+    await page.locator('#remove-object').click();
+    await page.locator('#object-count').getByText(remaining+' object'+(remaining===1?'':'s'),{exact:true}).waitFor();
+  }
+  console.log('PASS: selected convex-hull quarter turn and reversible transform');
+
   await page.locator('#model-file').setInputFiles([
     triFixture('batch-hull-a.obj',false),triFixture('batch-hull-b.obj',true),
   ]);

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { findViewerSpace, arrangeViewerSpaces, findViewerSpaceWithQuarterTurn, arrangeViewerSpacesWithQuarterTurns, viewerProjectedHull, viewerHullsSeparated, findViewerHullSpace, arrangeViewerHullSpaces } from "./prepare-find-space.mjs";
+import { findViewerSpace, arrangeViewerSpaces, findViewerSpaceWithQuarterTurn, arrangeViewerSpacesWithQuarterTurns, viewerProjectedHull, viewerHullsSeparated, findViewerHullSpace, arrangeViewerHullSpaces, findViewerHullSpaceWithQuarterTurn } from "./prepare-find-space.mjs";
 
 const plate = [0, 0, 100, 100];
 const gap = 5;
@@ -239,4 +239,26 @@ test("batch hull fallback refuses impossible and unsupported input without chang
   assert.equal(arrangeViewerHullSpaces([a,null],plate),null);
   assert.equal(arrangeViewerHullSpaces(Array(7).fill(a),plate),null);
   assert.equal(arrangeViewerHullSpaces([a,[[0,0],[1,1],[2,2]]],plate),null);
+});
+
+test("selected hull quarter turn fits where AABB and translation fail, about a translated pivot", () => {
+  for (const [px,py] of [[0,0],[31,-47]]) {
+    const fixed=[[100,100],[-100,100],[100,-100]].map(([x,y])=>[x+px,y+py]);
+    const own=[[-100,100],[-100,-100],[100,100]].map(([x,y])=>[x+px,y+py]);
+    const bed=[-128+px,-128+py,128+px,128+py];
+    const box=[-100+px,-100+py,100+px,100+py];
+    const before=structuredClone([own,fixed]);
+    assert.equal(findViewerSpaceWithQuarterTurn(box,[box],bed,[px,py]),null);
+    assert.equal(findViewerHullSpace(own,[fixed],bed),null);
+    const m=findViewerHullSpaceWithQuarterTurn(own,[fixed],bed,[px,py]);
+    assert.equal(m?.quarterTurn,true);
+    const placed=own.map(([x,y])=>[px-(y-py)+m.dx,py+(x-px)+m.dy]);
+    assert.ok(placed.every(([x,y])=>x>=bed[0]+5-1e-8&&x<=bed[2]-5+1e-8&&y>=bed[1]+5-1e-8&&y<=bed[3]-5+1e-8));
+    assert.ok(-(m.dx+m.dy)/Math.sqrt(2)>5);
+    assert.deepEqual(findViewerHullSpaceWithQuarterTurn(placed,[fixed],bed,[px+m.dx,py+m.dy]),{dx:0,dy:0,quarterTurn:false});
+    assert.deepEqual([own,fixed],before);
+    assert.equal(findViewerHullSpaceWithQuarterTurn(own,[null],bed,[px,py]),null);
+    assert.equal(findViewerHullSpaceWithQuarterTurn(own,[fixed],bed,[NaN,py]),null);
+    assert.equal(findViewerHullSpaceWithQuarterTurn(own,[fixed],[0,0,50,50],[px,py]),null);
+  }
 });
