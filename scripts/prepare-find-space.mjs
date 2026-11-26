@@ -123,3 +123,32 @@ export function findViewerSpaceWithQuarterTurn(own, obstacles, plate, pivot, gap
   const move = findViewerSpace(rotated, obstacles, plate, gap);
   return move ? {...move, quarterTurn: true} : null;
 }
+
+// Bounded independent AABB fallback: for at most six loose meshes, try each
+// subset of +90-degree world-Z turns, preferring fewer rotated objects.
+// Each orientation uses the existing greedy planner, so failure is not a proof
+// of impossible packing. No input changes; offsets are relative to the rotated
+// bounds and must be applied after rotating about the supplied world pivot.
+export function arrangeViewerSpacesWithQuarterTurns(boxes, plate, pivots, gap = 5) {
+  if (!Array.isArray(boxes) || boxes.length < 2 || boxes.length > 6 ||
+      !Array.isArray(pivots) || pivots.length !== boxes.length ||
+      !pivots.every(p => Array.isArray(p) && p.length === 2 &&
+        p.every(v => Number.isFinite(v) && Math.abs(v) <= 1e7)))
+    throw new RangeError("Invalid bounded viewer rotation arrangement");
+  const direct = arrangeViewerSpaces(boxes, plate, gap);
+  if (direct) return direct.map(move => ({...move, quarterTurn:false}));
+  const rotated = boxes.map((box,i) => {
+    const [px,py] = pivots[i];
+    return [px-(box[3]-py),py+(box[0]-px),px-(box[1]-py),py+(box[2]-px)];
+  });
+  const count = mask => mask.toString(2).replace(/0/g,"").length;
+  const masks = Array.from({length:(1<<boxes.length)-1},(_,i)=>i+1)
+    .sort((a,b)=>count(a)-count(b)||a-b);
+  for (const mask of masks) {
+    const variant = boxes.map((box,i) => mask & (1<<i) ? rotated[i] : box);
+    if (!variant.every(valid)) continue;
+    const moves = arrangeViewerSpaces(variant, plate, gap);
+    if (moves) return moves.map((move,i)=>({...move,quarterTurn:!!(mask & (1<<i))}));
+  }
+  return null;
+}

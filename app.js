@@ -7,7 +7,7 @@ import { ThreeMFLoader } from "three/addons/loaders/3MFLoader.js";
 import { automaticViewProjection, orthographicFitHalfHeight, perspectiveFitDistance, prepareViewOrientation } from "./scripts/prepare-camera-fit.mjs";
 import { get3mfViewportBuildItems } from "./scripts/three-mf-viewport-items.mjs";
 import { captureViewerTransform, createViewerTransformHistory } from "./scripts/prepare-viewer-transform-history.mjs";
-import { findViewerSpace, arrangeViewerSpaces, findViewerSpaceWithQuarterTurn } from "./scripts/prepare-find-space.mjs";
+import { findViewerSpace, arrangeViewerSpaces, findViewerSpaceWithQuarterTurn, arrangeViewerSpacesWithQuarterTurns } from "./scripts/prepare-find-space.mjs";
 
 const picker = document.querySelector("#model-file");
 const status = document.querySelector("#file-status");
@@ -27,6 +27,7 @@ const checkPlacementButton = document.querySelector("#check-placement");
 const findSpaceButton = document.querySelector("#find-space");
 const findSpaceRotateButton = document.querySelector("#find-space-rotate");
 const arrangeAllButton = document.querySelector("#arrange-all");
+const arrangeAllRotateButton = document.querySelector("#arrange-all-rotate");
 const placementStatus = document.querySelector("#placement-status");
 const undoButton = document.querySelector("#undo-viewer");
 const redoButton = document.querySelector("#redo-viewer");
@@ -224,6 +225,7 @@ function selectEntry(id) {
   findSpaceRotateButton.disabled = findSpaceButton.disabled;
   arrangeAllButton.disabled = entries.length < 2 || entries.length > 64 ||
     !entries.every(item => !item.sourceRoot && ["stl", "obj"].includes(item.format));
+  arrangeAllRotateButton.disabled = arrangeAllButton.disabled || entries.length > 6;
   entries.forEach(item => item.object?.traverse(node => {
     if (!node.isMesh) return;
     const materials = Array.isArray(node.material) ? node.material : [node.material];
@@ -663,9 +665,10 @@ function findSelectedSpace(allowRotation) {
 }
 findSpaceButton.addEventListener("click", () => findSelectedSpace(false));
 findSpaceRotateButton.addEventListener("click", () => findSelectedSpace(true));
-// Plan all loose-mesh translations first; a failed plan leaves the entire scene unchanged.
-arrangeAllButton.addEventListener("click", () => {
-  if (!rendererReady || transformControls.dragging || arrangeAllButton.disabled) return;
+// Plan every transform first; a failed plan leaves the entire scene unchanged.
+function arrangeAllViewerMeshes(allowRotation) {
+  if (!rendererReady || transformControls.dragging || arrangeAllButton.disabled ||
+      (allowRotation && arrangeAllRotateButton.disabled)) return;
   try {
     const bounds = entries.map(item => {
       item.object.updateWorldMatrix(true, true);
@@ -673,22 +676,27 @@ arrangeAllButton.addEventListener("click", () => {
       return [b.min.x, b.min.y, b.max.x, b.max.y];
     });
     const hx = plate.geometry.parameters.width / 2, hy = plate.geometry.parameters.height / 2;
-    const moves = arrangeViewerSpaces(bounds,
-      [plate.position.x-hx, plate.position.y-hy, plate.position.x+hx, plate.position.y+hy]);
+    const target = [plate.position.x-hx, plate.position.y-hy, plate.position.x+hx, plate.position.y+hy];
+    if (allowRotation && entries.some(item=>item.object.parent !== world)) return;
+    const moves = allowRotation ? arrangeViewerSpacesWithQuarterTurns(bounds,target,
+      entries.map(item=>[item.object.position.x,item.object.position.y])) : arrangeViewerSpaces(bounds,target);
     if (!moves) {
-      status.textContent = "No complete greedy viewer arrangement; nothing moved.";
+      status.textContent = allowRotation ? "No complete greedy viewer arrangement even with +90° turns; nothing moved." :
+        "No complete greedy viewer arrangement; nothing moved.";
       return;
     }
     const edits = [];
-    for (const [i, {dx,dy}] of moves.entries()) {
-      if (Math.abs(dx) < 1e-9 && Math.abs(dy) < 1e-9) continue;
+    for (const [i, {dx,dy,quarterTurn=false}] of moves.entries()) {
+      if (!quarterTurn && Math.abs(dx) < 1e-9 && Math.abs(dy) < 1e-9) continue;
       const entry = entries[i], before = captureViewerTransform(entry);
       const position = [before.position[0]+dx, before.position[1]+dy, before.position[2]];
       if (![dx,dy,...position.slice(0,2)].every(v => Number.isFinite(v) && Math.abs(v)<=5000)) {
         status.textContent = "Arrangement correction out of bounds; nothing moved.";
         return;
       }
-      edits.push({id:entry.id,before,after:{...before,position,modified:true},entry});
+      const quaternion = quarterTurn ? new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,1),Math.PI/2)
+        .multiply(new THREE.Quaternion().fromArray(before.quaternion)).toArray() : before.quaternion;
+      edits.push({id:entry.id,before,after:{...before,position,quaternion,modified:true},entry});
     }
     if (!edits.length) {
       status.textContent = "All meshes already have 5 mm viewer AABB clearance.";
@@ -698,16 +706,20 @@ arrangeAllButton.addEventListener("click", () => {
     detachedViewerDuplicates.clear();
     for (const {entry,after} of edits) {
       entry.object.position.fromArray(after.position);
+      entry.object.quaternion.fromArray(after.quaternion);
       entry.object.updateMatrixWorld(true);
       entry.modified = true;
     }
     updateTransformStatus();
     updateViewerHistoryButtons();
-    status.textContent = "Arranged all loose meshes (5 mm viewer AABB clearance; not printability).";
+    status.textContent = moves.some(move=>move.quarterTurn) ? "Arranged all loose meshes with +90° turns (5 mm viewer AABB clearance; not printability)." :
+      "Arranged all loose meshes (5 mm viewer AABB clearance; not printability).";
   } catch (error) {
     status.textContent = "Arrange all unavailable: " + error.message;
   }
-});
+}
+arrangeAllButton.addEventListener("click", () => arrangeAllViewerMeshes(false));
+arrangeAllRotateButton.addEventListener("click", () => arrangeAllViewerMeshes(true));
 // These are real browser-camera controls, independent of the experimental WASM
 // engine. They change only the view; they never change object coordinates.
 function showView(mode) {

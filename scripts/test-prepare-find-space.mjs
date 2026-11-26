@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { findViewerSpace, arrangeViewerSpaces, findViewerSpaceWithQuarterTurn } from "./prepare-find-space.mjs";
+import { findViewerSpace, arrangeViewerSpaces, findViewerSpaceWithQuarterTurn, arrangeViewerSpacesWithQuarterTurns } from "./prepare-find-space.mjs";
 
 const plate = [0, 0, 100, 100];
 const gap = 5;
@@ -145,4 +145,25 @@ test("quarter-turn fallback preserves feasible orientations and rejects blocked 
     {dx:0,dy:0,quarterTurn:false});
   assert.equal(findViewerSpaceWithQuarterTurn(own,[plate],plate,pivot,gap),null);
   assert.throws(()=>findViewerSpaceWithQuarterTurn(own,[],plate,[NaN,0],gap),RangeError);
+});
+
+test("batch quarter turns recover perpendicular footprints and preserve input", () => {
+  const boxes=[[10,30,90,70],[30,10,70,90]], pivots=[[10,30],[30,10]];
+  const original=structuredClone([boxes,pivots]);
+  assert.equal(arrangeViewerSpaces(boxes,plate,gap),null);
+  const moves=arrangeViewerSpacesWithQuarterTurns(boxes,plate,pivots,gap);
+  assert.ok(moves);
+  assert.deepEqual(moves.map(m=>m.quarterTurn),[true,false]);
+  assertLayout([[-30,30,10,110],boxes[1]],moves);
+  assert.deepEqual([boxes,pivots],original);
+  assert.deepEqual(arrangeViewerSpacesWithQuarterTurns(boxes,plate,pivots,gap),moves);
+});
+test("batch rotation preserves ordinary plans and rejects blocked or invalid requests", () => {
+  const boxes=[[30,10,70,90],[30,10,70,90]], pivots=[[30,10],[30,10]];
+  const expected=arrangeViewerSpaces(boxes,plate,gap).map(m=>({...m,quarterTurn:false}));
+  assert.deepEqual(arrangeViewerSpacesWithQuarterTurns(boxes,plate,pivots,gap),expected);
+  const blocked=Array(3).fill([10,10,90,90]);
+  assert.equal(arrangeViewerSpacesWithQuarterTurns(blocked,plate,Array(3).fill([50,50]),gap),null);
+  assert.throws(()=>arrangeViewerSpacesWithQuarterTurns(boxes,plate,[[NaN,0],[0,0]]),RangeError);
+  assert.throws(()=>arrangeViewerSpacesWithQuarterTurns(Array(7).fill(boxes[0]),plate,Array(7).fill(pivots[0])),RangeError);
 });
