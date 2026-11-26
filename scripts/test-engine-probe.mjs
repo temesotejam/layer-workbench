@@ -1416,6 +1416,73 @@ try {
       await uploadRawOrca();
     }
 
+    // Pinned PrintObject::combine_infill skips the first layer, groups
+    // adjacent sparse regions up to the nozzle/cap height, and keeps walls
+    // at their original layer heights. Here 0.16 mm layers and the 0.4 mm
+    // nozzle permit pairs (0.32 mm) with the native default 100% cap.
+    const combinationKeys=['infill_combination','sparse_infill_pattern',
+      'sparse_infill_density','minimum_sparse_infill_area','top_shell_layers',
+      'bottom_shell_layers','top_shell_thickness','bottom_shell_thickness'];
+    const combinationPrior=new Map(combinationKeys.map(k=>[k,rawOrca[4][k]]));
+    try {
+      assert.equal(rawOrca[5].layer_height,'0.16');
+      assert.equal(rawOrca[0].nozzle_diameter,'0.4');
+      Object.assign(rawOrca[4],{sparse_infill_pattern:'grid',
+        sparse_infill_density:'35%',minimum_sparse_infill_area:'0',
+        top_shell_layers:'1',bottom_shell_layers:'1',
+        top_shell_thickness:'0',bottom_shell_thickness:'0'});
+      const combinationLayers=code=>{
+        const parsed=parseGcodeToolpaths(code);
+        assert.equal(parsed.skippedMalformedMotion,0,'Cannot omit malformed motion');
+        assert.equal(parsed.skippedArcs,0,'Cannot omit unsupported arcs');
+        const sparse=new Set(),walls=new Set();
+        let sparseStrokes=0,wallStrokes=0;
+        for(const layer of parsed.layers)for(const s of layer.segments){
+          const role=s.feature==='sparse infill'?sparse:
+            (s.feature==='outer wall'||s.feature==='inner wall')?walls:null;
+          if(!role||!s.extrusion)continue;
+          assert.equal(s.sourceMotion,'G1');
+          assert.ok(Number.isFinite(s.commandedPositiveEMm)&&s.commandedPositiveEMm>0);
+          assert.ok([s.x1,s.y1,s.x2,s.y2,s.z1,s.z2].every(Number.isFinite));
+          if(Math.abs(s.z2-s.z1)>0.0005||Math.hypot(s.x2-s.x1,s.y2-s.y1)<0.001)continue;
+          role.add(Math.round(s.z2*1000));
+          if(role===sparse)sparseStrokes++;else wallStrokes++;
+        }
+        const sorted=set=>[...set].sort((a,b)=>a-b);
+        return {sparse:sorted(sparse),walls:sorted(walls),sparseStrokes,wallStrokes};
+      };
+      const off=combinationLayers(await sliceWithLineWidth('0','infill_combination'));
+      const on=combinationLayers(await sliceWithLineWidth('1','infill_combination'));
+      const onSparse=new Set(on.sparse),offSparse=new Set(off.sparse);
+      const offWalls=new Set(off.walls),onWalls=new Set(on.walls);
+      // Count complete interior triplets: baseline sparse deposition at all
+      // three 0.16-mm levels, combined sparse at both ends but not middle,
+      // and walls at all three levels in both slices.
+      const combinedGaps=off.sparse.filter(z=>!onSparse.has(z)&&
+        offSparse.has(z-160)&&offSparse.has(z+160)&&
+        onSparse.has(z-160)&&onSparse.has(z+160)&&
+        [z-160,z,z+160].every(v=>offWalls.has(v)&&onWalls.has(v)));
+      const report={fixture:'same two synthetic STLs; 0.16 mm layers; 0.4 mm nozzle; grid 35%',
+        native_key:'infill_combination',baseline:'0',candidate:'1',
+        off,on,combined_gap_z_mm:combinedGaps.map(z=>z/1000),
+        desktop_native_parity:false,combined_extrusion_height_verified:false,printer_ready:false};
+      await writeFile(parityDir+'/sparse-infill-combination-deposition.json',
+        JSON.stringify(report,null,2)+'\n');
+      console.log('WASM_SPARSE_INFILL_COMBINATION '+JSON.stringify(report));
+      assert.ok(off.sparseStrokes>=12&&on.sparseStrokes>=12&&off.wallStrokes>=12&&on.wallStrokes>=12,
+        'Need actual sparse and wall deposition in both runs');
+      assert.deepEqual(on.walls,off.walls,'Wall deposition Z levels must remain unchanged');
+      assert.ok(on.sparse.length<off.sparse.length&&combinedGaps.length>=2,
+        'Combination must omit sparse deposition at interior Z levels while retaining adjacent sparse and walls: '+JSON.stringify(report));
+      console.log('PASS: native infill_combination changes real sparse deposition Z cadence without removing wall levels');
+    } finally {
+      for(const [key,value] of combinationPrior){
+        if(value===undefined)delete rawOrca[4][key];
+        else rawOrca[4][key]=value;
+      }
+      await uploadRawOrca();
+    }
+
     const narrowWidthMotion=motionOnly(await sliceWithLineWidth('0.35'));
     const broadWidthMotion=motionOnly(await sliceWithLineWidth('0.65'));
     assert.ok(narrowWidthMotion.length>100&&broadWidthMotion.length>100,
