@@ -1420,7 +1420,7 @@ try {
     // adjacent sparse regions up to the nozzle/cap height, and keeps walls
     // at their original layer heights. Here 0.16 mm layers and the 0.4 mm
     // nozzle permit pairs (0.32 mm) with the native default 100% cap.
-    const combinationKeys=['infill_combination','sparse_infill_pattern',
+    const combinationKeys=['infill_combination','infill_combination_max_layer_height','sparse_infill_pattern',
       'sparse_infill_density','minimum_sparse_infill_area','top_shell_layers',
       'bottom_shell_layers','top_shell_thickness','bottom_shell_thickness'];
     const combinationPrior=new Map(combinationKeys.map(k=>[k,rawOrca[4][k]]));
@@ -1475,6 +1475,26 @@ try {
       assert.ok(on.sparse.length<off.sparse.length&&combinedGaps.length>=2,
         'Combination must omit sparse deposition at interior Z levels while retaining adjacent sparse and walls: '+JSON.stringify(report));
       console.log('PASS: native infill_combination changes real sparse deposition Z cadence without removing wall levels');
+
+      // Keep combination enabled. The 0.4 mm nozzle makes 50% equivalent
+      // to 0.20 mm (one 0.16 mm layer); 100% and zero use the full nozzle.
+      const capKey='infill_combination_max_layer_height';
+      const half=combinationLayers(await sliceWithLineWidth('50%',capKey));
+      const absolute=combinationLayers(await sliceWithLineWidth('0.20',capKey));
+      const full=combinationLayers(await sliceWithLineWidth('100%',capKey));
+      const zero=combinationLayers(await sliceWithLineWidth('0',capKey));
+      for(const result of [half,absolute,full,zero]){
+        assert.deepEqual(result.walls,off.walls,'Cap must not remove wall Z levels');
+        assert.ok(result.sparseStrokes>=12&&result.wallStrokes>=12);
+      }
+      assert.deepEqual(half.sparse,off.sparse,'50% must prevent two-layer combination');
+      assert.deepEqual(absolute.sparse,half.sparse,'Equivalent absolute and percent cap must match Z levels');
+      assert.deepEqual(full.sparse,on.sparse,'100% must reproduce default combined Z levels');
+      assert.deepEqual(zero.sparse,full.sparse,'Zero must use nozzle diameter, not disable combination');
+      const capReport={half,absolute,full,zero,desktop_native_parity:false,printer_ready:false};
+      await writeFile(parityDir+'/sparse-infill-combination-cap.json',JSON.stringify(capReport,null,2)+'\n');
+      console.log('WASM_SPARSE_INFILL_COMBINATION_CAP '+JSON.stringify(capReport));
+      console.log('PASS: combination height cap controls real sparse Z levels; equivalent units and zero sentinel verified');
     } finally {
       for(const [key,value] of combinationPrior){
         if(value===undefined)delete rawOrca[4][key];
