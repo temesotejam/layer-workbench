@@ -261,3 +261,12 @@ assert.equal(process.settings.initial_layer_travel_speed,'50%',
 assert.ok(!process.unsupported.includes('initial_layer_travel_speed'),
   'Pinned relative first-layer travel now reaches bounded WASM adapter as a percent token');
 console.log('PASS: pinned CR-10 support settings forwarded; support disabled and relative travel excluded');
+
+ // The pinned source declares coPercent relative to inner_wall_line_width.
+ // Native inheritance must preserve the exact child percent, not absolute mm.
+assert.deepEqual(process.chain.map(name=>indexed.records.find(p=>p.name===name).infill_wall_overlap),
+  ["25%","23%","30%"]);
+assert.equal(process.settings.infill_wall_overlap,"30%");
+assert.equal(combined.process.settings.infill_wall_overlap,"30%");
+assert.ok(!process.unsupported.includes("infill_wall_overlap"));
+console.log("PASS: actual pinned CR-10 infill/wall overlap 25% -> 23% -> 30%");

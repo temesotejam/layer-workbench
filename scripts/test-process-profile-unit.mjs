@@ -330,3 +330,11 @@ for (const bad of ['0%','201%','-20%','50%%','50% G28','auto',[],['50%'],null,0,
   assert.throws(()=>parseTestProcessOverrides({initial_layer_travel_speed:bad}),
     /Invalid|outside the safe test range/,String(bad));
 console.log('PASS: relative first-layer travel percent is preserved, bounded and independent of absolute speed');
+
+ // Pinned OrcaSlicer v2.5.0 coPercent relative to inner_wall_line_width.
+for(const [input,expected] of [["0%","0%"],["30%","30%"],[" 12.50% ","12.5%"],["100%","100%"]])
+  assert.deepEqual(parseTestProcessOverrides({infill_wall_overlap:input}),
+    {infill_wall_overlap:expected});
+for(const bad of [30,"30",["30%"],null,true,"-1%","100.01%","30%%","30% G28","Infinity%"])
+  assert.throws(()=>parseTestProcessOverrides({infill_wall_overlap:bad}),/Invalid|safe test range/);
+console.log("PASS: explicit bounded infill/wall overlap percent; no scalar or vector substitution");

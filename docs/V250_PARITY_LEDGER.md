@@ -1143,3 +1143,19 @@ spellings. Ordinary opcode spelling and command order remain unchanged.
 This fixes the ordered command equality gate only: geometric and optional
 heater/fan metrics still have their own numerical limits. It does not reduce
 engine differences, prove full-profile equivalence, or enable public WASM.
+
+
+## 2026-11-26: restricted native infill/wall overlap percent forwarding
+
+The source-pinned v2.5.0 `PrintConfig.cpp` declares `infill_wall_overlap`
+as coPercent relative to `inner_wall_line_width`. The actual Creality
+CR-10 0.20mm Standard process inheritance supplies 25%, then 23%, then 30%.
+The restricted localhost collection and native-json override parser now
+preserve this explicit percentage (bounded 0–100%, scalar percent string
+only). No arbitrary absolute widths, vectors, executable strings or inferred
+default are accepted. The existing inner wall width remains independent.
+Tests cover inheritance, invalid inputs before session creation, mocked
+native-json transport and the CI-only pinned official records. This adds
+one forwarded process key, not proof of actual WASM application or reduced
+sparse-infill toolpath mismatch. No engine build, native comparison fixture,
+official profile redistribution or public Pages engine enablement is changed.
