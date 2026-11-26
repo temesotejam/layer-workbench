@@ -1174,6 +1174,72 @@ try {
     await uploadRawOrca();
     console.log('PASS: native infill_wall_overlap changes real tagged WASM sparse-infill geometry');
 
+    // Pinned v2.5.0 PrintConfig.cpp: minimum_sparse_infill_area replaces
+    // small sparse regions by internal solid infill. Contrast zero with a
+    // deliberately high threshold, not the production CR-10 value of 10.
+    // Same existing two-STL scene, density, pattern and shell counts.
+    Object.assign(rawOrca[4],{
+      sparse_infill_pattern:'grid',sparse_infill_density:'35%',
+      top_shell_layers:'1',bottom_shell_layers:'1',
+      top_shell_thickness:'0',bottom_shell_thickness:'0'
+    });
+    const areaOff=await sliceWithLineWidth('0','minimum_sparse_infill_area');
+    const areaOn=await sliceWithLineWidth('10000','minimum_sparse_infill_area');
+    const areaWitness=code=>{
+      const parsed=parseGcodeToolpaths(code);
+      assert.equal(parsed.skippedArcs,0,'Sparse area witness cannot ignore arcs');
+      assert.equal(parsed.skippedMalformedMotion,0,'Sparse area witness cannot ignore malformed motion');
+      const byZ=new Map();
+      for(const layer of parsed.layers)for(const seg of layer.segments){
+        const role=seg.feature==='sparse infill'?'sparse':
+          seg.feature==='internal solid infill'?'solid':null;
+        if(!role||!seg.extrusion)continue;
+        assert.equal(seg.sourceMotion,'G1','Require actual linear infill strokes');
+        assert.ok(Number.isFinite(seg.commandedPositiveEMm)&&seg.commandedPositiveEMm>0,
+          'Require positive commanded filament E');
+        assert.ok([seg.x1,seg.y1,seg.x2,seg.y2,seg.z1,seg.z2].every(Number.isFinite),
+          'Require finite XYZ coordinates');
+        if(Math.abs(seg.z2-seg.z1)>0.0005)continue;
+        const length=Math.hypot(seg.x2-seg.x1,seg.y2-seg.y1);
+        if(length<0.001)continue;
+        const z=Math.round(seg.z2*1000)/1000;
+        const counts=byZ.get(z)||{sparse:0,solid:0,sparse_mm:0,solid_mm:0};
+        counts[role]++;
+        counts[role+'_mm']+=length;
+        byZ.set(z,counts);
+      }
+      return byZ;
+    };
+    const area0=areaWitness(areaOff),area10000=areaWitness(areaOn);
+    const areaTotals=byZ=>[...byZ.values()].reduce((sum,v)=>({
+      sparse:sum.sparse+v.sparse,solid:sum.solid+v.solid,
+      sparse_mm:sum.sparse_mm+v.sparse_mm,solid_mm:sum.solid_mm+v.solid_mm
+    }),{sparse:0,solid:0,sparse_mm:0,solid_mm:0});
+    const areaBaseline=areaTotals(area0),areaCandidate=areaTotals(area10000);
+    const switchedZ=[...area0.keys()].filter(z=>{
+      const a=area0.get(z),b=area10000.get(z);
+      return b&&a.sparse>=3&&a.sparse_mm-b.sparse_mm>1&&b.solid_mm-a.solid_mm>1;
+    }).sort((a,b)=>a-b);
+    const areaReport={
+      fixture:'same two synthetic STLs; grid 35%; one top/bottom shell; isolated Chrome',
+      native_key:'minimum_sparse_infill_area',baseline_mm2:0,candidate_mm2:10000,
+      baseline:areaBaseline,candidate:areaCandidate,
+      sparse_decreased_solid_increased_z_mm:switchedZ,
+      cr10_threshold_10_verified:false,desktop_native_parity:false,printer_ready:false
+    };
+    await writeFile(parityDir+'/minimum-sparse-infill-area-deposition.json',
+      JSON.stringify(areaReport,null,2)+'\n');
+    console.log('WASM_MINIMUM_SPARSE_INFILL_AREA_DEPOSITION '+JSON.stringify(areaReport));
+    assert.ok(areaBaseline.sparse>=12,'Need actual baseline sparse deposition');
+    assert.ok(areaCandidate.sparse_mm<areaBaseline.sparse_mm&&
+      areaCandidate.solid_mm>areaBaseline.solid_mm&&switchedZ.length>=2,
+      'High area threshold must decrease sparse and increase internal solid XY deposition on multiple shared Z levels: '+JSON.stringify(areaReport));
+    for(const key of ['minimum_sparse_infill_area','sparse_infill_pattern',
+      'sparse_infill_density','top_shell_layers','bottom_shell_layers',
+      'top_shell_thickness','bottom_shell_thickness'])delete rawOrca[4][key];
+    await uploadRawOrca();
+    console.log('PASS: native sparse area threshold changes real sparse/solid tagged WASM deposition');
+
     const narrowWidthMotion=motionOnly(await sliceWithLineWidth('0.35'));
     const broadWidthMotion=motionOnly(await sliceWithLineWidth('0.65'));
     assert.ok(narrowWidthMotion.length>100&&broadWidthMotion.length>100,
