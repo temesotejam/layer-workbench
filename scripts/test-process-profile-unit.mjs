@@ -338,3 +338,11 @@ for(const [input,expected] of [["0%","0%"],["30%","30%"],[" 12.50% ","12.5%"],["
 for(const bad of [30,"30",["30%"],null,true,"-1%","100.01%","30%%","30% G28","Infinity%"])
   assert.throws(()=>parseTestProcessOverrides({infill_wall_overlap:bad}),/Invalid|safe test range/);
 console.log("PASS: explicit bounded infill/wall overlap percent; no scalar or vector substitution");
+
+ // Native coFloat absolute square-millimetre threshold; no inferred default.
+for(const [input,expected] of [[0,"0"],["10","10"],[" 0.25 ","0.25"],[10000,"10000"]])
+  assert.deepEqual(parseTestProcessOverrides({minimum_sparse_infill_area:input}),
+    {minimum_sparse_infill_area:expected});
+for(const bad of [-1,10000.01,"10%","10 mm2",["10"],null,true,NaN,Infinity,""])
+  assert.throws(()=>parseTestProcessOverrides({minimum_sparse_infill_area:bad}),/Invalid|safe test range/);
+console.log("PASS: absolute sparse-infill area threshold validation");

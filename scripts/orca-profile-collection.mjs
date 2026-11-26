@@ -191,6 +191,9 @@ export function resolveOrcaProfileFamily(records,type,selected,options={}) {
           // Native coPercent is scalar, not a nozzle vector or absolute width.
           // Share the final native-json validation, preserving the % token.
           settings[key]=parseTestProcessOverrides({[key]:value})[key];
+        }else if(type==="process" && key==="minimum_sparse_infill_area") {
+          // Native coFloat is an absolute area, never a filament vector.
+          settings[key]=parseTestProcessOverrides({[key]:value})[key];
         }else if(Object.hasOwn(SPECS[type],key))settings[key]=validateNum(key,value,SPECS[type][key]);
         else if(type==="process" && Object.hasOwn(PROCESS_ENUMS,key)) {
           if(typeof value!=="string" || !PROCESS_ENUMS[key].has(value))

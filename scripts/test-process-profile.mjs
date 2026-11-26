@@ -45,6 +45,8 @@ const LIMITS = {
   // Pinned native coPercent, relative to inner_wall_line_width (not mm).
   // The localhost adapter accepts only explicit percentages from 0 to 100.
   infill_wall_overlap: [0,100],
+  // Native coFloat area in mm², not density or a percentage. Local cap only.
+  minimum_sparse_infill_area: [0,10000],
   top_shell_layers: [0,12],
   bottom_shell_layers: [0,12],
   // Native v2.5.0 coFloat minimum shell thickness in millimetres.
