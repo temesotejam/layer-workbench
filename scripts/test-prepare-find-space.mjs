@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { findViewerSpace, arrangeViewerSpaces, findViewerSpaceWithQuarterTurn, arrangeViewerSpacesWithQuarterTurns, viewerProjectedHull, viewerHullsSeparated, findViewerHullSpace } from "./prepare-find-space.mjs";
+import { findViewerSpace, arrangeViewerSpaces, findViewerSpaceWithQuarterTurn, arrangeViewerSpacesWithQuarterTurns, viewerProjectedHull, viewerHullsSeparated, findViewerHullSpace, arrangeViewerHullSpaces } from "./prepare-find-space.mjs";
 
 const plate = [0, 0, 100, 100];
 const gap = 5;
@@ -210,4 +210,33 @@ test("hull fallback refuses blocked, degenerate, over-budget or oversized inputs
   assert.equal(findViewerHullSpace(a,Array(9).fill(a),plate),null);
   assert.equal(findViewerHullSpace(Array(33).fill([0,0]),[],plate),null);
   assert.equal(findViewerHullSpace(a,[],[0,0,50,50]),null);
+});
+
+
+test("batch convex hull fallback fits opposing triangles, preserves input and is idempotent", () => {
+  const target=[-128,-128,128,128];
+  const shapes=[[[-100,-100],[100,-100],[-100,100]],[[100,100],[-100,100],[100,-100]]];
+  for (const [tx,ty] of [[0,0],[-70,42]]) {
+    const input=shapes.map(h=>h.map(([x,y])=>[x+tx,y+ty]));
+    const bed=target.map((v,j)=>v+(j%2?ty:tx));
+    const original=structuredClone(input);
+    assert.equal(arrangeViewerSpaces(Array(2).fill([-100+tx,-100+ty,100+tx,100+ty]),bed),null);
+    const moves=arrangeViewerHullSpaces(input,bed);
+    assert.ok(moves);
+    assert.ok((moves[1].dx+moves[1].dy-moves[0].dx-moves[0].dy)/Math.sqrt(2)>5);
+    const placed=input.map((h,i)=>h.map(([x,y])=>[x+moves[i].dx,y+moves[i].dy]));
+    assert.ok(placed.flat().every(([x,y])=>x>=bed[0]+5-1e-8&&x<=bed[2]-5+1e-8&&y>=bed[1]+5-1e-8&&y<=bed[3]-5+1e-8));
+    assert.deepEqual(arrangeViewerHullSpaces(placed,bed),[{dx:0,dy:0},{dx:0,dy:0}]);
+    assert.deepEqual(arrangeViewerHullSpaces(input,bed),moves);
+    assert.deepEqual(input,original);
+  }
+});
+test("batch hull fallback refuses impossible and unsupported input without changes", () => {
+  const a=[[5,5],[95,5],[95,95],[5,95]], input=[a,a];
+  const before=structuredClone(input);
+  assert.equal(arrangeViewerHullSpaces(input,plate),null);
+  assert.deepEqual(input,before);
+  assert.equal(arrangeViewerHullSpaces([a,null],plate),null);
+  assert.equal(arrangeViewerHullSpaces(Array(7).fill(a),plate),null);
+  assert.equal(arrangeViewerHullSpaces([a,[[0,0],[1,1],[2,2]]],plate),null);
 });
