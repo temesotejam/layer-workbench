@@ -1125,7 +1125,7 @@ try {
     });
     const noOverlap=await sliceWithLineWidth('0%','infill_wall_overlap');
     const pinnedOverlap=await sliceWithLineWidth('30%','infill_wall_overlap');
-    const overlapWitness=code=>{
+    const overlapWitness=(code,side='all')=>{
       const parsed=parseGcodeToolpaths(code);
       assert.equal(parsed.skippedMalformedMotion,0,'Overlap witness cannot ignore malformed motion');
       assert.equal(parsed.skippedArcs,0,'Overlap witness cannot omit unsupported arcs');
@@ -1143,6 +1143,11 @@ try {
         const length=Math.hypot(s.x2-s.x1,s.y2-s.y1);
         if(length<0.001)continue;
         const point=(x,y)=>[Math.round(x*1000),Math.round(y*1000)].join(',');
+        if(side!=='all'){
+          assert.ok(Math.max(s.x1,s.x2)<165||Math.min(s.x1,s.x2)>165,
+            'Combined infill witness requires disjoint left/right deposition');
+          if((s.x1>165?'right':'left')!==side)continue;
+        }
         // Ignore traversal direction and ordering. A reorder or F/E-only
         // change must not masquerade as a change to XY stroke geometry.
         const ends=[point(s.x1,s.y1),point(s.x2,s.y2)].sort();
@@ -1287,6 +1292,58 @@ try {
       assert.ok(selectiveZ.length>=2,
         'At 10 mm² the small region must switch while the large control retains sparse deposition: '+JSON.stringify(selectiveReport));
       console.log('PASS: 10 mm² native threshold selectively switches small-region WASM deposition');
+
+      // Exercise both source-pinned CR-10 values together, not just isolated
+      // key toggles. Keep the same geometry and other overrides fixed.
+      // At 30% overlap, compare 0 vs 10 mm²; at 10 mm² compare 0 vs 30%.
+      // Large-object sparse geometry is a negative control for the area
+      // threshold and a positive control for overlap.
+      const priorOverlap=rawOrca[4].infill_wall_overlap;
+      try {
+        rawOrca[4].infill_wall_overlap='30%';
+        const overlap30Area0=await sliceWithLineWidth('0','minimum_sparse_infill_area');
+        const overlap30Area10=await sliceWithLineWidth('10','minimum_sparse_infill_area');
+        rawOrca[4].infill_wall_overlap='0%';
+        const overlap0Area10=await sliceWithLineWidth('10','minimum_sparse_infill_area');
+        const small30Area0=areaWitness(overlap30Area0,'right');
+        const small30Area10=areaWitness(overlap30Area10,'right');
+        const large30Area0=overlapWitness(overlap30Area0,'left');
+        const large30Area10=overlapWitness(overlap30Area10,'left');
+        const large0Area10=overlapWitness(overlap0Area10,'left');
+        const bothZ=[...small30Area0.keys()].filter(z=>{
+          const a=small30Area0.get(z),b=small30Area10.get(z);
+          return b&&a.sparse_mm>0.1&&b.sparse_mm<0.001&&b.solid_mm>a.solid_mm+0.1;
+        }).sort((a,b)=>a-b);
+        const geometryPreserved=JSON.stringify(large30Area0.paths)===JSON.stringify(large30Area10.paths);
+        const overlapChangesGeometry=JSON.stringify(large0Area10.paths)!==JSON.stringify(large30Area10.paths);
+        const combinedReport={
+          fixture:'same two STL controls; two walls; grid 35%; isolated Chrome',
+          overlap_percent:[0,30],minimum_area_mm2:[0,10],
+          small_30pct_area0:areaTotals(small30Area0),
+          small_30pct_area10:areaTotals(small30Area10),
+          small_switch_z_mm:bothZ,
+          large_30pct_area0_mm:large30Area0.totalLength,
+          large_30pct_area10_mm:large30Area10.totalLength,
+          large_0pct_area10_mm:large0Area10.totalLength,
+          large_threshold_geometry_preserved:geometryPreserved,
+          large_overlap_geometry_changed:overlapChangesGeometry,
+          exact_region_area_verified:false,full_profile_applied:false,
+          desktop_native_parity:false,printer_ready:false
+        };
+        await writeFile(parityDir+'/combined-cr10-infill-overlap-area.json',
+          JSON.stringify(combinedReport,null,2)+'\n');
+        console.log('WASM_COMBINED_CR10_INFILL_OVERLAP_AREA '+JSON.stringify(combinedReport));
+        assert.ok(bothZ.length>=2,
+          '30% overlap plus 10 mm² area must selectively solidify the small control: '+JSON.stringify(combinedReport));
+        assert.ok(geometryPreserved,
+          'Area threshold alone must preserve large control sparse stroke multiset');
+        assert.ok(overlapChangesGeometry,
+          'Overlap must change large sparse stroke geometry with the area threshold enabled');
+        console.log('PASS: combined CR-10 overlap and minimum area independently affect real WASM deposition');
+      } finally {
+        if(priorOverlap===undefined)delete rawOrca[4].infill_wall_overlap;
+        else rawOrca[4].infill_wall_overlap=priorOverlap;
+      }
     } finally {
       rawOrca[5].wall_loops=priorWalls;
       await setAreaScale('x',priorSx);
