@@ -7,7 +7,7 @@ import { ThreeMFLoader } from "three/addons/loaders/3MFLoader.js";
 import { automaticViewProjection, orthographicFitHalfHeight, perspectiveFitDistance, prepareViewOrientation } from "./scripts/prepare-camera-fit.mjs";
 import { get3mfViewportBuildItems } from "./scripts/three-mf-viewport-items.mjs";
 import { captureViewerTransform, createViewerTransformHistory } from "./scripts/prepare-viewer-transform-history.mjs";
-import { findViewerSpace, arrangeViewerSpaces, findViewerSpaceWithQuarterTurn, arrangeViewerSpacesWithQuarterTurns, viewerProjectedHull, viewerHullsSeparated, findViewerHullSpace, arrangeViewerHullSpaces } from "./scripts/prepare-find-space.mjs";
+import { findViewerSpace, arrangeViewerSpaces, findViewerSpaceWithQuarterTurn, arrangeViewerSpacesWithQuarterTurns, viewerProjectedHull, viewerHullsSeparated, findViewerHullSpace, arrangeViewerHullSpaces, findViewerHullSpaceWithQuarterTurn } from "./scripts/prepare-find-space.mjs";
 
 const picker = document.querySelector("#model-file");
 const status = document.querySelector("#file-status");
@@ -670,13 +670,16 @@ function findSelectedSpace(allowRotation) {
     if (allowRotation && entry.object.parent !== world) return;
     let result = allowRotation ? findViewerSpaceWithQuarterTurn(own, bounds, target,
       [entry.object.position.x, entry.object.position.y]) : findViewerSpace(own, bounds, target);
-    // Only after the ordinary XY search fails, try a bounded convex-hull
-    // fallback. No change to explicit rotation or batch arrangement.
+    // Preserve existing AABB results; otherwise try bounded hull placement.
+    // A quarter turn is only attempted by the explicit rotation command.
     let hullFallback = false;
-    if (!result && !allowRotation && entries.length <= 9 && entry.object.parent === world) {
+    if (!result && entries.length <= 9 && entry.object.parent === world) {
       const hullFor = boundedViewerHullReader();
       const h = hullFor(entry);
-      if (h) result = findViewerHullSpace(h, entries.filter(item=>item!==entry).map(hullFor), target);
+      const obstacles = entries.filter(item=>item!==entry).map(hullFor);
+      if (h) result = allowRotation ?
+        findViewerHullSpaceWithQuarterTurn(h, obstacles, target, [entry.object.position.x, entry.object.position.y]) :
+        findViewerHullSpace(h, obstacles, target);
       hullFallback = !!result;
     }
     if (!result) {
@@ -703,7 +706,9 @@ function findSelectedSpace(allowRotation) {
     entry.modified = true;
     recordViewerEdit(entry, before);
     updateTransformStatus();
-    status.textContent = quarterTurn ? "Rotated selected mesh +90° Z and moved to free viewer AABB space (5 mm clearance; not printability)." :
+    status.textContent = quarterTurn ? (hullFallback ?
+      "Rotated selected mesh +90° Z and moved to free viewer convex-hull space (5 mm clearance; not printability)." :
+      "Rotated selected mesh +90° Z and moved to free viewer AABB space (5 mm clearance; not printability).") :
       hullFallback ? "Moved selected mesh to free viewer convex-hull space (5 mm clearance; not printability)." :
       "Moved selected mesh to free viewer AABB space (5 mm clearance; not printability).";
   } catch (error) {
