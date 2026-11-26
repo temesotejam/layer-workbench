@@ -172,3 +172,8 @@ The pinned [ArrangeJob.cpp](https://github.com/OrcaSlicer/OrcaSlicer/blob/40ecc6
 uses native arrangement polygons and enables rotations through native settings;
 this limited browser fallback remains XY translations only, not native
 nesting, exhaustive packing, printer clearance, printability or WASM activation.
+
+
+## 2026-11-26: explicit selected-mesh quarter-turn placement fallback
+
+The pinned [ArrangeJob.cpp](https://github.com/OrcaSlicer/OrcaSlicer/blob/40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19/src/slic3r/GUI/Jobs/ArrangeJob.cpp) includes native rotation in arrangement results. The independent viewer adds a separate Find space + 90° command for one loose STL/OBJ. It prefers the existing XY-only solution, and only if none exists tries a positive 90-degree rotation around the object's world-Z pivot. The AABB is computed analytically by swapping the world extrema around that pivot. Fixed obstacles, Z and scale are unchanged; one viewer undo/redo restores both translation and quaternion. Failed plans do not edit the scene. Unit and actual Chrome regressions exercise a narrow strip that requires rotation, preservation of the original orientation when feasible, fixed obstacles, no-op and 3MF exclusion. This is not native polygon nesting, arbitrary rotation optimization, multi-object rotation, real printer clearance, printability or WASM activation.
