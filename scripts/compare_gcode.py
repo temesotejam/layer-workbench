@@ -247,7 +247,7 @@ def valid_g17_arc(start, end, words, units, absolute_arc_centers):
             and abs(r0 - r1) <= max(0.05, r0 * 0.001))
 
 def extrusion_move_metrics(commands, feature_context=None, feature_stats=None,
-                           feature_z_stats=None):
+                           feature_z_stats=None, planar_strokes=None):
     """Summarize positive E and G1 XY path length for fixture sanity.
 
     A present X/Y word alone does not prove movement: e.g. G1 X0 E1 at the
@@ -440,6 +440,13 @@ def extrusion_move_metrics(commands, feature_context=None, feature_stats=None,
                 footprint['linear_moves'] += 1
                 footprint['linear_xy_mm'] += length
                 footprint['linear_positive_e_mm'] += delta
+                # Optional in-memory fixture trace; discard on invalid parse.
+                # Never log coordinates or extrusion values from this trace.
+                if planar_strokes is not None:
+                    label = (feature_context or {}).get(line_no) or 'unclassified'
+                    planar_strokes.append((z_position, label,
+                                           (start_xy['X'], start_xy['Y']),
+                                           (xy['X'], xy['Y']), delta))
                 if feature_stats is not None or feature_z_stats is not None:
                     # Observed deposited Z is not a validated native layer.
                     label = (feature_context or {}).get(line_no) or 'unclassified'

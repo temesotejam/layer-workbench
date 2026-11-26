@@ -2,7 +2,7 @@
 // The fixture and full profiles are generated on this runner only.
 // The translated mode edits offline; private-edit probes the existing test-only
 // C ABI manifest mutation, not persistent Slic3r::Model or metadata preservation.
-// No G-code generation, printing, or production engine activation.
+// Optional same-archive slice comparison is CI-only. No printing or production activation.
 import assert from 'node:assert/strict';
 import {readFile,writeFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
@@ -11,11 +11,14 @@ import {auditNative3mfWorldFacetGroups,auditNative3mfWorldFacetWinding}
   from './audit-native-3mf-world-facets.mjs';
 
 const args=process.argv.slice(2);
-assert.ok(args.length===0||(args.length===1&&['--translated','--private-edit'].includes(args[0])));
+assert.ok(args.length===0||(args.length===1&&['--translated','--private-edit','--slice-embedded','--slice-anchor-zero','--slice-both-zero'].includes(args[0])));
 const translated=args[0]==='--translated';
 const privateEdit=args[0]==='--private-edit';
+const anchorZero=args[0]==='--slice-anchor-zero';
+const bothZero=args[0]==='--slice-both-zero';
+const embeddedSlice=args[0]==='--slice-embedded'||anchorZero||bothZero;
 const source=await readFile('native-cli-output/'+
-  (translated?'native-v250-project-translated.3mf':'native-v250-project.3mf'));
+  (bothZero?'both-zero.3mf':anchorZero?'anchor-zero.3mf':embeddedSlice?'browser-source-preserving-edited.3mf':translated?'native-v250-project-translated.3mf':'native-v250-project.3mf'));
 assert.ok(source.length>300 && source.length<=4_000_000);
 assert.equal(source.readUInt32LE(0),0x04034b50);
 const baselineGroups=JSON.parse(await readFile('native-cli-output/native-world-facets.json','utf8'));
@@ -61,6 +64,44 @@ try {
   assert.equal(capability.engine.family,'OrcaSlicer');
   assert.equal(capability.engine.version,'2.5.0');
   assert.equal(capability.api.version,'0.7.0');
+  if(embeddedSlice){
+    // Same exact archive as the native CLI comparison, no applyProfile(),
+    // setObjects(), STL conversion, arrangement or replacement settings.
+    // Effective native/WASM profile equivalence is NOT assumed.
+    const bytes=await page.evaluate(async raw=>{
+      const engine=globalThis.__layerDiagnosticEngine?.engine;
+      if(!crossOriginIsolated||!engine?.createSession)
+        throw new Error('Isolated diagnostic engine unavailable');
+      const session=await engine.createSession();
+      try {
+        await session.initProfile('project.3mf',new Uint8Array(raw));
+        const m=await session.getManifest();
+        if(m.instances?.length!==2||m.objects?.length!==2||m.plates?.length!==1||
+            typeof m.plates[0].id!=='string'||!m.plates[0].id)
+          throw new Error('Unexpected same-archive fixture hierarchy');
+        const id=m.plates[0].id;
+        const result=await session.slice({schemaVersion:'0.7.0',
+          plateSelection:'selected',plateIds:[id],includeGcode:true,includeStatistics:false});
+        const plates=result?.plateResults;
+        if(result?.schemaVersion!=='0.7.0'||plates?.length!==1||plates[0].plateId!==id)
+          throw new Error('Unexpected same-archive slice response');
+        const assets=plates[0].assets?.filter(a=>a.kind==='gcode');
+        if(assets?.length!==1||!assets[0].id)
+          throw new Error('Expected exactly one selected-plate G-code asset');
+        const data=await session.getAsset(assets[0].id);
+        if(!(data instanceof Uint8Array)||data.length<1024||data.length>12_000_000)
+          throw new Error('Same-archive G-code outside diagnostic bounds');
+        new TextDecoder('utf-8',{fatal:true}).decode(data);
+        return Array.from(data);
+      } finally {await session.dispose();}
+    },Array.from(source));
+    await writeFile('native-cli-output/'+(bothZero?'both-zero-wasm.gcode':anchorZero?'anchor-zero-wasm.gcode':'same-archive-wasm.gcode'),Buffer.from(bytes),{flag:'wx'});
+    console.log('WASM_SAME_ARCHIVE_SLICE '+JSON.stringify({
+      sourceSha256:createHash('sha256').update(source).digest('hex'),
+      bytes:bytes.length,anchorZeroControl:anchorZero,bothZeroControl:bothZero,embeddedProfileOnly:true,effectiveProfileParity:false,
+      printApproved:false
+    }));
+  }else{
   // Keep geometry conversion and untouched archive preservation independent.
   const result=await page.evaluate(async ({encoded,privateEdit,delta,editedIndex})=>{
     const source=new Uint8Array(encoded);
@@ -203,5 +244,6 @@ try {
   }else{
     console.log('PASS: '+(translated?'offline-translated native CLI project':'untouched native CLI project')+
       ' -> isolated WASM geometry and byte preservation; not in-session edit or desktop metadata parity');
+  }
   }
 } finally {await browser.close();}

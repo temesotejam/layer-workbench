@@ -15,6 +15,12 @@ on:
       - "scripts/audit_native_3mf_metadata_loss.py"
       - "scripts/test_audit_native_3mf_metadata_loss.py"
       - "scripts/compare_gcode.py"
+      - "scripts/audit_gcode_infill_config.py"
+      - "scripts/make_anchor_zero_control.py"
+      - "scripts/test_make_anchor_zero_control.py"
+      - "scripts/test_audit_gcode_infill_config.py"
+      - "scripts/gcode_lexical_attribution.py"
+      - "scripts/test_gcode_lexical_attribution.py"
       - "scripts/verify_native_gcode_repeatability.py"
       - "scripts/test_verify_native_gcode_repeatability.py"
       - "scripts/preserve-native-source-translation.mjs"
@@ -36,6 +42,12 @@ on:
       - "scripts/audit_native_3mf_metadata_loss.py"
       - "scripts/test_audit_native_3mf_metadata_loss.py"
       - "scripts/compare_gcode.py"
+      - "scripts/audit_gcode_infill_config.py"
+      - "scripts/make_anchor_zero_control.py"
+      - "scripts/test_make_anchor_zero_control.py"
+      - "scripts/test_audit_gcode_infill_config.py"
+      - "scripts/gcode_lexical_attribution.py"
+      - "scripts/test_gcode_lexical_attribution.py"
       - "scripts/verify_native_gcode_repeatability.py"
       - "scripts/test_verify_native_gcode_repeatability.py"
       - "scripts/preserve-native-source-translation.mjs"
@@ -65,6 +77,9 @@ jobs:
           python3 -m unittest discover -s scripts -p test_compare_native_3mf_world_facets.py -v
           python3 -m unittest discover -s scripts -p test_audit_native_3mf_metadata_loss.py -v
           python3 -m unittest discover -s scripts -p test_verify_native_gcode_repeatability.py -v
+          python3 -m unittest discover -s scripts -p test_gcode_lexical_attribution.py -v
+          python3 -m unittest discover -s scripts -p test_audit_gcode_infill_config.py -v
+          python3 -m unittest discover -s scripts -p test_make_anchor_zero_control.py -v
           npm install --no-save --no-package-lock playwright@1.56.1 fflate@0.8.2
       - name: Download the official v2.5.0 Linux AppImage only inside CI
         shell: bash
@@ -419,3 +434,156 @@ jobs:
           PY
           # This is native-vs-native after a browser edit, NOT native-vs-WASM
           # slicing parity. The original project and all G-code stay in CI.
+
+      - name: Slice exactly the same browser-edited native project with both engines
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="${RUNNER_TEMP}/OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.5.0.AppImage"
+          input="${PWD}/native-cli-output/browser-source-preserving-edited.3mf"
+          test -s "${input}"
+          sha256sum "${input}"
+          out="${PWD}/native-cli-output/same-archive-native"
+          mkdir "${out}"
+          timeout 180s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
+            "${input}" --arrange 0 --slice 0 --outputdir "${out}" \
+            > "${out}/native-slice.log" 2>&1 || {
+              echo 'Native same-archive slice failed'
+              exit 1
+            }
+          test -s "${out}/plate_1.gcode"
+          python3 scripts/serve-isolated.py --port 8766 > /tmp/isolated-layer-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..25}; do
+            if curl -fsS http://127.0.0.1:8766/engine-probe.html >/dev/null; then break; fi
+            sleep 1
+          done
+          timeout 240s node scripts/test-native-cli-3mf-to-wasm.mjs --slice-embedded
+          # One-setting intervention: disable single-ended anchors, retain max.
+          # Both engines receive exactly the same second archive, not an override.
+          python3 scripts/make_anchor_zero_control.py "${input}" native-cli-output/anchor-zero.3mf
+          control="${PWD}/native-cli-output/anchor-zero-native"
+          mkdir "${control}"
+          timeout 180s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
+            "${PWD}/native-cli-output/anchor-zero.3mf" --arrange 0 --slice 0 --outputdir "${control}" \
+            > "${control}/native-slice.log" 2>&1 || {
+              echo 'Native anchor-zero slice failed'
+              exit 1
+            }
+          timeout 240s node scripts/test-native-cli-3mf-to-wasm.mjs --slice-anchor-zero
+          # Second one-setting intervention relative to the anchor-zero control.
+          # FillParams::dont_connect() is true at zero maximum for multiline Grid.
+          python3 scripts/make_anchor_zero_control.py native-cli-output/anchor-zero.3mf native-cli-output/both-zero.3mf --max-only
+          both="${PWD}/native-cli-output/both-zero-native"
+          mkdir "${both}"
+          timeout 180s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
+            "${PWD}/native-cli-output/both-zero.3mf" --arrange 0 --slice 0 --outputdir "${both}" \
+            > "${both}/native-slice.log" 2>&1 || {
+              echo 'Native both-zero slice failed'
+              exit 1
+            }
+          timeout 240s node scripts/test-native-cli-3mf-to-wasm.mjs --slice-both-zero
+          # Strict comparator unchanged; no raw G-code or settings in the log.
+          # A mismatch is a parity FAIL, not evidence that the harness failed.
+          # Do not merge a failed gate or activate the engine on Pages.
+          python3 - <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, 'scripts')
+          from compare_gcode import compare
+          from gcode_lexical_attribution import compare_lexical
+          from audit_gcode_infill_config import compare_infill_config
+          root = Path('native-cli-output')
+          folder = root / 'same-archive-native'
+          native = folder / 'plate_1.gcode'
+          wasm = root / 'same-archive-wasm.gcode'
+          if sorted(folder.rglob('*.gcode')) != [native]:
+              raise SystemExit('Expected exactly one native plate G-code')
+          if not all(1024 <= p.stat().st_size <= 12_000_000 for p in (native, wasm)):
+              raise SystemExit('Same-archive G-code outside diagnostic bounds')
+          r = compare(native, wasm, min_extrusion_moves=100)
+          fields = ('match', 'mismatched_commands', 'native_commands', 'wasm_commands',
+                    'native_extrusion_moves', 'wasm_extrusion_moves',
+                    'native_counted_linear_xy_mm', 'wasm_counted_linear_xy_mm',
+                    'native_counted_planar_z_levels', 'wasm_counted_planar_z_levels',
+                    'counted_positive_e_delta_mm', 'feature_category_deltas')
+          summary = {k: r[k] for k in fields}
+          summary.update(input_issue_count=len(r['input_issues']),
+                         identical_source_archive=True, replacement_profiles=False,
+                         effective_full_profile_equivalence_verified=False,
+                         parity_pass=False, usable_for_printing=False)
+          print('NATIVE_WASM_SAME_ARCHIVE ' + json.dumps(summary, sort_keys=True))
+          print('NATIVE_WASM_LEXICAL_ATTRIBUTION ' + json.dumps(
+              compare_lexical(native, wasm), sort_keys=True))
+          print('NATIVE_WASM_HEATER_DIFFERENCE_COUNT ' + json.dumps(
+              r['heater_setpoint_difference_count']))
+          print('NATIVE_WASM_INFILL_CONFIG ' + json.dumps(
+              compare_infill_config(native, wasm, archive=root / 'browser-source-preserving-edited.3mf'), sort_keys=True))
+          # Verify the intervention in both serialized output configurations.
+          from audit_gcode_infill_config import parse_config
+          cn = root / 'anchor-zero-native' / 'plate_1.gcode'
+          cw = root / 'anchor-zero-wasm.gcode'
+          if sorted(cn.parent.rglob('*.gcode')) != [cn]:
+              raise SystemExit('Expected exactly one control plate')
+          if not all(1024 <= p.stat().st_size <= 12_000_000 for p in (cn, cw)):
+              raise SystemExit('Control G-code outside diagnostic bounds')
+          for base, control_file in ((native, cn), (wasm, cw)):
+              a, b = parse_config(base), parse_config(control_file)
+              if (a is None or b is None or 'infill_anchor' not in a or
+                      b.get('infill_anchor') not in ('0', '0%') or
+                      a.get('infill_anchor') in ('0', '0%') or
+                      a.keys() != b.keys() or
+                      {k for k in a if a[k] != b[k]} != {'infill_anchor'}):
+                  raise SystemExit('Anchor intervention not verified in serialized output')
+          control_result = compare(cn, cw, min_extrusion_moves=100)
+          if control_result['input_issues']:
+              raise SystemExit('Invalid control G-code')
+          def sparse(a, b):
+              d = compare_lexical(a, b)['planar_stroke_diagnostics']
+              if d['status'] != 'measured':
+                  raise SystemExit('Unavailable control geometry')
+              return d['collinear_coverage']['by_feature']['sparse infill']
+          print('ANCHOR_ZERO_CONTROL ' + json.dumps({
+              'baseline_native_vs_wasm': sparse(native, wasm),
+              'control_native_vs_wasm': sparse(cn, cw),
+              'native_intervention': sparse(native, cn),
+              'wasm_intervention': sparse(wasm, cw),
+              'control_ordered_match': control_result['match'],
+              'control_extrusion_moves': [control_result['native_extrusion_moves'],
+                                          control_result['wasm_extrusion_moves']],
+              'effective_full_profile_equivalence_verified': False,
+              'usable_for_printing': False}, sort_keys=True))
+          bn = root / 'both-zero-native' / 'plate_1.gcode'
+          bw = root / 'both-zero-wasm.gcode'
+          if sorted(bn.parent.rglob('*.gcode')) != [bn]:
+              raise SystemExit('Expected exactly one both-zero control plate')
+          if not all(1024 <= p.stat().st_size <= 12_000_000 for p in (bn, bw)):
+              raise SystemExit('Both-zero G-code outside diagnostic bounds')
+          for base, control_file in ((cn, bn), (cw, bw)):
+              a, b = parse_config(base), parse_config(control_file)
+              if (a is None or b is None or 'infill_anchor_max' not in a or
+                      b.get('infill_anchor') not in ('0', '0%') or
+                      b.get('infill_anchor_max') not in ('0', '0%') or
+                      a.get('infill_anchor_max') in ('0', '0%') or
+                      a.keys() != b.keys() or
+                      {k for k in a if a[k] != b[k]} != {'infill_anchor_max'}):
+                  raise SystemExit('Maximum anchor intervention not verified in serialized output')
+          both_result = compare(bn, bw, min_extrusion_moves=100)
+          if both_result['input_issues']:
+              raise SystemExit('Invalid both-zero G-code')
+          print('ANCHOR_BOTH_ZERO_CONTROL ' + json.dumps({
+              'control_native_vs_wasm': sparse(bn, bw),
+              'native_max_intervention': sparse(cn, bn),
+              'wasm_max_intervention': sparse(cw, bw),
+              'control_ordered_match': both_result['match'],
+              'control_extrusion_moves': [both_result['native_extrusion_moves'],
+                                          both_result['wasm_extrusion_moves']],
+              'effective_full_profile_equivalence_verified': False,
+              'usable_for_printing': False}, sort_keys=True))
+          if not r['match'] or not control_result['match'] or not both_result['match']:
+              raise SystemExit('Same-archive strict ordered G-code comparison FAIL')
+          print('PASS: ordered commands for this single archive; effective profiles remain unverified')
+          PY
+          # All input archives and raw output G-code remain on this runner.
