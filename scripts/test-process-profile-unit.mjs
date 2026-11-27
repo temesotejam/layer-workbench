@@ -412,3 +412,9 @@ for(const key of ["only_one_wall_top","only_one_wall_first_layer"]){
 assert.deepEqual(parseTestProcessOverrides({only_one_wall_top:"1",only_one_wall_first_layer:"0"}),
   {only_one_wall_top:"1",only_one_wall_first_layer:"0"});
 console.log("PASS: independent serialized single-wall surface toggles");
+
+for(const seam of ["nearest","aligned","aligned_back","back","random"])
+  assert.deepEqual(parseTestProcessOverrides({seam_position:seam}),{seam_position:seam});
+for(const bad of ["Aligned","aligned back","back ","",0,true,null,["aligned"]])
+  assert.throws(()=>parseTestProcessOverrides({seam_position:bad}),/native enum/);
+console.log("PASS: exact pinned seam-position enum tokens only");
