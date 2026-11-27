@@ -2629,6 +2629,58 @@ try {
         }
       }
       console.log('PASS: Arachne independent zero-shell gates and both-zero no-op; not native parity');
+
+      // On the unchanged flat cube, compare the start of the first actual
+      // outer-wall extrusion in each interior layer. This is a bounded
+      // seam-location proxy (not the internal native seam candidate).
+      // Pinned SeamPlacer.cpp prefers larger Y for Rear, whereas Random
+      // selects a position along viable edges using a coordinate-derived seed.
+      const seamStarts=code=>{
+        const p=parseGcodeToolpaths(code);
+        assert.equal(p.skippedMalformedMotion,0);
+        assert.equal(p.skippedArcs,0);
+        const layers=[];
+        for(const layer of p.layers){
+          const outer=layer.segments.filter(s=>s.feature==='outer wall'&&
+            s.extrusion&&s.sourceMotion==='G1'&&
+            [s.x1,s.x2,s.y1,s.y2,s.z1,s.z2,s.commandedPositiveEMm].every(Number.isFinite)&&
+            s.commandedPositiveEMm>0&&Math.abs(s.z2-s.z1)<0.0005&&s.z2>1&&s.z2<19&&
+            Math.hypot(s.x2-s.x1,s.y2-s.y1)>0.001);
+          if(!outer.length)continue;
+          const xs=outer.flatMap(s=>[s.x1,s.x2]),ys=outer.flatMap(s=>[s.y1,s.y2]);
+          const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys);
+          assert.ok(maxX-minX>19&&maxY-minY>19,'Need full outer cube contour');
+          const first=outer[0];
+          layers.push({z_um:Math.round(first.z2*1000),start_x_mm:first.x1,start_y_mm:first.y1,
+            min_x_mm:minX,max_x_mm:maxX,min_y_mm:minY,max_y_mm:maxY,
+            rear_offset_mm:maxY-first.y1});
+        }
+        return layers;
+      };
+      const seamSettings={...settings,wall_sequence:'inner wall/outer wall'};
+      const rear=seamStarts(await sliceRing('seam-back.json',
+        {...seamSettings,seam_position:'back'},/^PASS: 1 STL model\(s\)/));
+      const random=seamStarts(await sliceRing('seam-random.json',
+        {...seamSettings,seam_position:'random'},/^PASS: 1 STL model\(s\)/));
+      const summary=layers=>({layers:layers.length,
+        rear_band:layers.filter(l=>l.rear_offset_mm<=1).length,
+        front_half:layers.filter(l=>l.start_y_mm<(l.min_y_mm+l.max_y_mm)/2).length,
+        distinct_starts:new Set(layers.map(l=>[Math.round(l.start_x_mm*10),Math.round(l.start_y_mm*10)].join(','))).size});
+      const seamReport={rear:summary(rear),random:summary(random)};
+      await writeFile(parityDir+'/classic-seam-starts.json',JSON.stringify({
+        ...seamReport,rear_layers:rear,random_layers:random,native_desktop_parity:false,printer_ready:false
+      },null,2)+'\n');
+      console.log('CLASSIC_SEAM_STARTS '+JSON.stringify(seamReport));
+      assert.ok(rear.length>=30&&random.length>=30,'Need multiple real outer contours');
+      assert.deepEqual(rear.map(l=>l.z_um),random.map(l=>l.z_um),'Seam mode must preserve wall Z cadence');
+      for(let i=0;i<rear.length;i++){
+        for(const k of ['min_x_mm','max_x_mm','min_y_mm','max_y_mm'])
+          assert.ok(Math.abs(rear[i][k]-random[i][k])<0.25,'Seam mode must preserve cube bounds: '+k);
+      }
+      assert.equal(seamReport.rear.rear_band,rear.length,'Rear mode must begin near the high-Y edge');
+      assert.ok(seamReport.random.front_half>=5&&seamReport.random.distinct_starts>=5,
+        'Random mode must produce varied outer starts, including the front half');
+      console.log('PASS: classic rear and random modes change actual outer-wall start locations; not native parity');
     }
 
     // A through-tunnel bridge arch gives the slicer a real unsupported roof.
