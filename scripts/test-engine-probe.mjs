@@ -2269,6 +2269,110 @@ try {
         'retraction_minimum_travel'])delete record[key];
     console.log('PASS: minimum travel threshold changes real paired retraction count');
 
+
+    // Measure a bounded same-layer retract/travel/recover witness using
+    // actual modal XYZ and E motion, not comments or Z option echoes.
+    // Slope/normal lifts can have different paths; compare peak height only.
+    const sameLayerHopWitness=function sameLayerHopWitness(code){
+  let xyzMode=null,eMode=null,e=0,pos={X:NaN,Y:NaN,Z:NaN},lastZ=NaN,trial=null;
+  const excursions=[];
+  const eps=0.00001;
+  for(const line of code.split(/\r?\n/)){
+    const words=line.split(';')[0].trim().split(/\s+/), cmd=words[0].toUpperCase();
+    const args=Object.fromEntries(words.slice(1)
+      .filter(w=>/^[XYZE][+-]?(?:\d+(?:\.\d*)?|\.\d+)$/i.test(w))
+      .map(w=>[w[0].toUpperCase(),Number(w.slice(1))]));
+    if(cmd==='G90'||cmd==='G91'){xyzMode=cmd;continue;}
+    if(cmd==='M82'||cmd==='M83'){eMode=cmd;continue;}
+    if(cmd==='G28'||cmd==='G92'){
+      if(cmd==='G28'||['X','Y','Z'].some(k=>Object.hasOwn(args,k))){
+        trial=null;lastZ=NaN;
+        for(const k of ['X','Y','Z'])if(cmd==='G28'||Object.hasOwn(args,k))
+          pos[k]=cmd==='G28'?NaN:args[k];
+      }
+      if(cmd==='G92'&&Object.hasOwn(args,'E'))e=args.E;
+      continue;
+    }
+    if(!['G0','G1','G2','G3'].includes(cmd))continue;
+    const prev={...pos};
+    for(const k of ['X','Y','Z'])if(Object.hasOwn(args,k))
+      pos[k]=xyzMode==='G90'?args[k]:xyzMode==='G91'?pos[k]+args[k]:NaN;
+    const xy=Math.hypot(pos.X-prev.X,pos.Y-prev.Y)>eps;
+    const spatial=['X','Y','Z'].some(k=>Object.hasOwn(args,k));
+    let de=0;
+    if(Object.hasOwn(args,'E')){
+      de=eMode==='M83'?args.E:eMode==='M82'?args.E-e:NaN;
+      e=eMode==='M83'?e+de:args.E;
+    }
+    if(xy&&de>eps){
+      if(trial?.recovered&&trial.travel&&Number.isFinite(pos.Z)&&
+        Math.abs(pos.Z-trial.base)<eps&&Math.abs(prev.Z-pos.Z)<eps)
+        excursions.push(trial.peak-trial.base);
+      trial=null;
+      lastZ=Number.isFinite(pos.Z)&&Math.abs(prev.Z-pos.Z)<eps?pos.Z:NaN;
+      continue;
+    }
+    if(!Number.isFinite(pos.Z)||!Number.isFinite(de)){trial=null;lastZ=NaN;continue;}
+    if(!spatial&&cmd==='G1'&&de< -eps){
+      trial=Number.isFinite(lastZ)&&Math.abs(pos.Z-lastZ)<eps?
+        {base:lastZ,peak:lastZ,length:-de,travel:false,recovered:false}:null;
+      continue;
+    }
+    if(!trial)continue;
+    if(de< -eps||pos.Z<trial.base-eps){trial=null;continue;}
+    trial.peak=Math.max(trial.peak,pos.Z);
+    if(xy&&Math.abs(de)<eps)trial.travel=true;
+    if(de>eps){
+      if(spatial||trial.recovered||Math.abs(de-trial.length)>0.001){trial=null;continue;}
+      trial.recovered=true;
+    }
+  }
+  return excursions;
+};
+    for(const [fixture,expected] of [["G90\nM83\nG1 X0 Y0 Z0.2\nG1 X1 E0.1\nG1 E-0.8\nG1 X5\nG1 E0.8\nG1 X6 E0.1",[0]],["G90\nM83\nG1 X0 Y0 Z0.2\nG1 X1 E0.1\nG1 E-0.8\nG1 Z0.6\nG1 X5\nG1 Z0.2\nG1 E0.8\nG1 X6 E0.1",[0.4]],["G90\nM83\nG1 X0 Y0 Z0.2\nG1 X1 E0.1\nG1 E-0.8\nG1 X2 Z1.0\nG1 X5\nG1 Z0.2\nG1 E0.8\nG1 X6 E0.1",[0.8]],["G90\nM83\nG1 X0 Y0 Z0.2\nG1 X1 E0.1\nG1 E-0.8\nG1 Z0.6\nG1 X5\nG1 Z0.4\nG1 E0.8\nG1 X6 E0.1",[]],["G90\nM83\nG1 X0 Y0 Z0.2\nG1 X1 E0.1\nG1 E-0.8\nG1 Z0.6\nG1 Z0.2\nG1 E0.8\nG1 X6 E0.1",[]],["G90\nM83\nG1 X0 Y0 Z0.2\nG1 X1 E0.1\nG1 E-0.8\nG1 X5 Z0.4\nG1 E0.8\nG1 X6 E0.1",[]],["G90\nM83\nG1 X0 Y0 Z0.2\nG1 X1 E0.1\nG1 E-0.8\nG91\nG1 X4 Z0.4\nG1 Z-0.4\nG90\nG1 E0.8\nG1 X6 E0.1",[0.4]],["G90\nM82\nG92 E10\nG1 X0 Y0 Z0.2\nG1 X1 E10.1\nG1 E9.3\nG1 X5 Z0.6\nG1 Z0.2\nG1 E10.1\nG1 X6 E10.2",[0.4]]]){
+      const got=sameLayerHopWitness(fixture);
+      assert.equal(got.length,expected.length);
+      assert.ok(got.every((v,i)=>Math.abs(v-expected[i])<0.000001));
+    }
+    const hopReport=[];
+    for(const height of [0,0.4,0.8]){
+      Object.assign(rawOrca[0],{z_hop:['0.2']});
+      Object.assign(rawOrca[1],{retraction_length:'0.8',
+        retraction_speed:'40',deretraction_speed:'40',
+        retraction_minimum_travel:'0',z_hop:String(height)});
+      await uploadRawOrca();
+      await prepare.locator('#lab-slice').click();
+      await prepare.waitForFunction(()=>{
+        const status=document.querySelector('#lab-status')?.textContent||'';
+        return status.startsWith('PASS:')||status.startsWith('FAILED');
+      },null,{timeout:120000});
+      assert.match(await prepare.locator('#lab-status').innerText(),/^PASS: 2 STL model\(s\)/);
+      const code=await prepare.locator('#lab-download').evaluate(async link=>
+        await(await fetch(link.href)).text());
+      const rises=sameLayerHopWitness(code);
+      const positive=rises.filter(v=>v>0.001);
+      hopReport.push({height,pairs:rises.length,positive:positive.length,
+        matched:positive.filter(v=>Math.abs(v-height)<0.002).length,
+        min:positive.length?Math.min(...positive):null,
+        max:positive.length?Math.max(...positive):null});
+      console.log('MACHINE_Z_HOP_MOTION '+JSON.stringify(hopReport.at(-1)));
+    }
+    await writeFile(parityDir+'/machine-z-hop-motion.json',
+      JSON.stringify({fixture:'same-layer two synthetic STL models; localhost only',
+        cases:hopReport,desktop_native_parity:false,printer_ready:false},null,2));
+    for(const test of hopReport){
+      assert.ok(test.pairs>=10,'Expected real same-layer travel witnesses: '+JSON.stringify(test));
+      if(test.height===0)assert.equal(test.positive,0,'Disabled hop must not rise above same-layer Z');
+      else {
+        assert.ok(test.matched>=10,'Expected real configured-height lift excursions: '+JSON.stringify(test));
+        assert.equal(test.matched,test.positive,'Observed positive excursions must match height: '+JSON.stringify(test));
+      }
+    }
+    for(const record of rawOrca.slice(0,2))
+      for(const key of ['retraction_length','retraction_speed','deretraction_speed',
+        'retraction_minimum_travel','z_hop'])delete record[key];
+    console.log('PASS: real same-layer Z-hop heights including explicit zero');
+
     // Selecting a native bed without raw Orca profiles must never fall back
     // to generic PLA output while silently ignoring the selected heater.
     await prepare.locator('#lab-orca-profiles').setInputFiles([]);
