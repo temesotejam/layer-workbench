@@ -1156,3 +1156,21 @@ console.log("PASS: bounded machine retraction inheritance, one-slot vectors and 
     assert.throws(()=>resolve(withMode.map(p=>p.name===selection.machine?{...p,travel_slope:bad}:p),selection),/out of test limits/);
 }
 console.log("PASS: exact native Z-hop enum tokens and bounded traveling angle");
+
+{
+  const gates={retract_lift_above:["5"],retract_lift_below:["10"]};
+  const inherited=profiles.map(p=>p.name==="base printer"?{...p,...gates}:p);
+  for(const [key,value] of Object.entries(gates)){
+    assert.equal(result.machine.settings[key],undefined);
+    assert.deepEqual(resolve(inherited,selection).machine.settings[key],value);
+    const child=value=>inherited.map(p=>p.name===selection.machine?{...p,[key]:value}:p);
+    for(const valid of ["0",["0"],"1000"]){
+      const m=resolve(child(valid),selection).machine;
+      assert.deepEqual(m.settings[key],[Array.isArray(valid)?valid[0]:valid]);
+      assert.ok(!m.unsupported.includes(key));
+    }
+    for(const bad of [[],["1","2"],"1%","-1","1000.01",null,true,{},["nil"]])
+      assert.throws(()=>resolve(child(bad),selection),/Multi-extruder|Invalid|out of test limits/);
+  }
+}
+console.log("PASS: independent absolute Z-hop gates, inheritance and explicit zero");

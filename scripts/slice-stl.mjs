@@ -81,6 +81,8 @@ const MACHINE_INIT_VECTORS=Object.freeze({
   // Pinned coFloats in mm; zero is an explicit threshold, not absence.
   retraction_minimum_travel:[0,100],
   z_hop:[0,5],travel_slope:[1,90],
+  // Absolute Z in mm, locally bounded; zero below means no upper limit.
+  retract_lift_above:[0,1000],retract_lift_below:[0,1000],
 });
 const MACHINE_Z_HOP_TYPES=new Set(['Auto Lift','Normal Lift','Slope Lift','Spiral Lift']);
 const FILAMENT_INIT_SCALARS=Object.freeze({
