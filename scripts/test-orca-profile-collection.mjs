@@ -1058,3 +1058,21 @@ for(const bad of [0,1,true,"2","true",["1"],null])
   assert.throws(()=>resolve(thinWallProfiles.map(rec=>rec.name==="0.16mm Fine @TestPrinter"
     ? {...rec,detect_thin_wall:bad}:rec),selection),/Invalid native process enum/);
 console.log("PASS: classic thin-wall child precedence and absence preservation");
+
+const orderProfiles=profiles.map(p=>p.name==="fdm_process_common"
+  ? {...p,wall_sequence:"inner wall/outer wall"} : p.name==="0.16mm Fine @TestPrinter"
+    ? {...p,wall_sequence:"outer wall/inner wall"} : p);
+const wallOrderResolved=resolve(orderProfiles,selection).process;
+assert.equal(wallOrderResolved.settings.wall_sequence,"outer wall/inner wall");
+assert.ok(!wallOrderResolved.unsupported.includes("wall_sequence"));
+assert.equal(resolve(orderProfiles.map(p=>{
+  if(p.name!=="0.16mm Fine @TestPrinter")return p;
+  const child={...p};delete child.wall_sequence;return child;
+}),selection).process.settings.wall_sequence,"inner wall/outer wall");
+assert.equal(resolve(orderProfiles.map(p=>p.name==="0.16mm Fine @TestPrinter"
+  ? {...p,wall_sequence:"inner-outer-inner wall"}:p),selection).process.settings.wall_sequence,"inner-outer-inner wall");
+assert.equal(result.process.settings.wall_sequence,undefined);
+for(const bad of ["Inner/Outer","inner wall/outer wall/infill",0,true,null,["outer wall/inner wall"]])
+  assert.throws(()=>resolve(orderProfiles.map(p=>p.name==="0.16mm Fine @TestPrinter"
+    ? {...p,wall_sequence:bad}:p),selection),/Invalid native process enum/);
+console.log("PASS: wall order inheritance, explicit child and absence preservation");
