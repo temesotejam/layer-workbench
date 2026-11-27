@@ -2307,7 +2307,7 @@ try {
     if(xy&&de>eps){
       if(trial?.recovered&&trial.travel&&Number.isFinite(pos.Z)&&
         Math.abs(pos.Z-trial.base)<eps&&Math.abs(prev.Z-pos.Z)<eps)
-        excursions.push(details?{height:trial.peak-trial.base,vertical:trial.vertical,
+        excursions.push(details?{base:trial.base,height:trial.peak-trial.base,vertical:trial.vertical,
           slopes:trial.slopes,otherRise:trial.otherRise}:trial.peak-trial.base);
       trial=null;
       lastZ=Number.isFinite(pos.Z)&&Math.abs(prev.Z-pos.Z)<eps?pos.Z:NaN;
@@ -2438,6 +2438,47 @@ try {
       for(const key of ['retraction_length','retraction_speed','deretraction_speed',
         'retraction_minimum_travel','z_hop','z_hop_types','travel_slope'])delete record[key];
     console.log('PASS: real Normal Lift and two Slope Lift angles on same-layer moves');
+
+    // Compare independent absolute-Z limits using actual same-layer pairs.
+    // Ignore 0.002 mm near a threshold to avoid decimal rounding ambiguity.
+    // Normal Lift isolates the height gate from slope/spiral selection.
+    const gateReport=[];
+    for(const [above,below] of [[5,0],[0,10],[5,10]]){
+      Object.assign(rawOrca[1],{retraction_length:'0.8',retraction_speed:'40',
+        deretraction_speed:'40',retraction_minimum_travel:'0',z_hop:'0.4',
+        z_hop_types:'Normal Lift',retract_lift_above:String(above),retract_lift_below:String(below)});
+      await uploadRawOrca();
+      await prepare.locator('#lab-slice').click();
+      await prepare.waitForFunction(()=>{
+        const status=document.querySelector('#lab-status')?.textContent||'';
+        return status.startsWith('PASS:')||status.startsWith('FAILED');
+      },null,{timeout:120000});
+      assert.match(await prepare.locator('#lab-status').innerText(),/^PASS: 2 STL model\(s\)/);
+      const code=await prepare.locator('#lab-download').evaluate(async link=>
+        await(await fetch(link.href)).text());
+      const observed=sameLayerHopWitness(code,true);
+      const away=observed.filter(v=>Math.abs(v.base-above)>0.002&&
+        (!below||Math.abs(v.base-below)>0.002));
+      const enabled=away.filter(v=>v.base>=above&&(!below||v.base<=below));
+      const disabled=away.filter(v=>v.base<above||(below>0&&v.base>below));
+      gateReport.push({above,below,pairs:observed.length,enabled:enabled.length,
+        enabledMatched:enabled.filter(v=>Math.abs(v.height-0.4)<0.002).length,
+        disabled:disabled.length,disabledMatched:disabled.filter(v=>Math.abs(v.height)<0.002).length,
+        boundaryExcluded:observed.length-away.length});
+      console.log('MACHINE_Z_HOP_HEIGHT_GATES '+JSON.stringify(gateReport.at(-1)));
+    }
+    await writeFile(parityDir+'/machine-z-hop-height-gates.json',
+      JSON.stringify({fixture:'same-layer two synthetic STL models; localhost only',
+        cases:gateReport,desktop_native_parity:false,printer_ready:false},null,2));
+    for(const test of gateReport){
+      assert.ok(test.enabled>=10&&test.disabled>=10,'Need witnesses inside and outside height gates: '+JSON.stringify(test));
+      assert.equal(test.enabledMatched,test.enabled,'Enabled Z-hop height must match');
+      assert.equal(test.disabledMatched,test.disabled,'Disabled Z-hop must not rise');
+    }
+    for(const record of rawOrca.slice(0,2))
+      for(const key of ['retraction_length','retraction_speed','deretraction_speed',
+        'retraction_minimum_travel','z_hop','z_hop_types','retract_lift_above','retract_lift_below'])delete record[key];
+    console.log('PASS: real same-layer Z-hop absolute height gates');
 
     // Selecting a native bed without raw Orca profiles must never fall back
     // to generic PLA output while silently ignoring the selected heater.
