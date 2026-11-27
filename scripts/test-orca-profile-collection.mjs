@@ -1111,8 +1111,8 @@ for(const bad of ["Aligned",0,true,null,["aligned"]])
 console.log("PASS: seam-position inheritance, override and absence");
 
 {
-  const parent={retraction_length:["5"],retraction_speed:["60"],deretraction_speed:["40"],retraction_minimum_travel:["2"],z_hop:["0.4"]};
-  const child={retraction_length:"0.8",retraction_speed:"40",deretraction_speed:"0",retraction_minimum_travel:"0",z_hop:"0"};
+  const parent={retraction_length:["5"],retraction_speed:["60"],deretraction_speed:["40"],retraction_minimum_travel:["2"],z_hop:["0.4"],travel_slope:["3"]};
+  const child={retraction_length:"0.8",retraction_speed:"40",deretraction_speed:"0",retraction_minimum_travel:"0",z_hop:"0",travel_slope:"90"};
   const withRetraction=profiles.map(p=>p.name==="base printer"?{...p,...parent}:
     p.name===selection.machine?{...p,...child}:p);
   const machine=resolve(withRetraction,selection).machine;
@@ -1138,3 +1138,21 @@ console.log("PASS: seam-position inheritance, override and absence");
     ? {...p,z_hop:"5"}:p),selection).machine.settings.z_hop,["5"]);
 }
 console.log("PASS: bounded machine retraction inheritance, one-slot vectors and absence");
+
+{
+  const withMode=profiles.map(p=>p.name==="base printer"?{...p,z_hop_types:["Normal Lift"]}:p);
+  assert.deepEqual(resolve(withMode,selection).machine.settings.z_hop_types,["Normal Lift"]);
+  assert.equal(result.machine.settings.z_hop_types,undefined);
+  for(const mode of ["Auto Lift","Normal Lift","Slope Lift","Spiral Lift"]){
+    for(const value of [mode,[mode]]){
+      const machine=resolve(withMode.map(p=>p.name===selection.machine?{...p,z_hop_types:value}:p),selection).machine;
+      assert.deepEqual(machine.settings.z_hop_types,[mode]);
+      assert.ok(!machine.unsupported.includes("z_hop_types"));
+    }
+  }
+  for(const bad of [[],["Auto Lift","Normal Lift"],"Auto","auto lift"," Auto Lift",null,1,true,{},["nil"]])
+    assert.throws(()=>resolve(withMode.map(p=>p.name===selection.machine?{...p,z_hop_types:bad}:p),selection),/Invalid single-tool native Z-hop type/);
+  for(const bad of ["0","90.01"])
+    assert.throws(()=>resolve(withMode.map(p=>p.name===selection.machine?{...p,travel_slope:bad}:p),selection),/out of test limits/);
+}
+console.log("PASS: exact native Z-hop enum tokens and bounded traveling angle");
