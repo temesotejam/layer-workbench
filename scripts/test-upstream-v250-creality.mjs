@@ -363,3 +363,12 @@ for(const [key,value] of Object.entries({z_hop_types:["Auto Lift"],travel_slope:
   assert.ok(!machine.unsupported.includes(key));
 }
 console.log("PASS: pinned CR-10 Auto Lift and 3 degree traveling angle reach restricted collection");
+
+for(const key of ["retract_lift_above","retract_lift_below"]){
+  assert.deepEqual(machine.chain.map(n=>indexed.records.find(p=>p.name===n)[key]),
+    [undefined,undefined,"0"]);
+  assert.deepEqual(machine.settings[key],["0"]);
+  assert.deepEqual(combined.machine.settings[key],["0"]);
+  assert.ok(!machine.unsupported.includes(key));
+}
+console.log("PASS: pinned CR-10 explicit zero Z-hop height gates reach restricted collection");
