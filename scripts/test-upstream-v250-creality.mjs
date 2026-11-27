@@ -352,3 +352,14 @@ for(const [key,chainValues] of Object.entries({
   assert.ok(!machine.unsupported.includes(key));
 }
 console.log("PASS: pinned CR-10 machine retraction length and independent speeds reach restricted collection");
+
+assert.deepEqual(machine.chain.map(n=>indexed.records.find(p=>p.name===n).z_hop_types),
+  ["Normal Lift",undefined,"Auto Lift"]);
+assert.deepEqual(machine.chain.map(n=>indexed.records.find(p=>p.name===n).travel_slope),
+  [undefined,undefined,"3"]);
+for(const [key,value] of Object.entries({z_hop_types:["Auto Lift"],travel_slope:["3"]})){
+  assert.deepEqual(machine.settings[key],value);
+  assert.deepEqual(combined.machine.settings[key],value);
+  assert.ok(!machine.unsupported.includes(key));
+}
+console.log("PASS: pinned CR-10 Auto Lift and 3 degree traveling angle reach restricted collection");

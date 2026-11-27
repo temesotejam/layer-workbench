@@ -433,7 +433,7 @@ console.log("PASS: single-wall surface toggle native transfer and independent ov
 console.log("PASS: seam-position native transfer and explicit override");
 
 {
-  const vectors={retraction_length:["0.8"],retraction_speed:["40"],deretraction_speed:["0"],retraction_minimum_travel:["0"],z_hop:["0.4"]};
+  const vectors={retraction_length:["0.8"],retraction_speed:["40"],deretraction_speed:["0"],retraction_minimum_travel:["0"],z_hop:["0.4"],travel_slope:["3"]};
   const preset={...selected,machine:{settings:{...selected.machine.settings,...vectors}}};
   const {engine,calls}=mockedEngine();
   await sliceMultiStlWithEngine(engine,items,null,null,preset);
@@ -458,3 +458,26 @@ console.log("PASS: seam-position native transfer and explicit override");
       ...preset.machine.settings,z_hop:[value]}}}).z_hop,[value]);
 }
 console.log("PASS: machine retraction vectors reach native init; malformed inputs refused before session");
+
+{
+  for(const mode of ["Auto Lift","Normal Lift","Slope Lift","Spiral Lift"]){
+    const preset={...selected,machine:{settings:{...selected.machine.settings,z_hop_types:[mode],travel_slope:["3"]}}};
+    const {engine,calls}=mockedEngine();
+    await sliceMultiStlWithEngine(engine,items,null,null,preset);
+    const init=calls.find(c=>c.name==="init").value;
+    assert.deepEqual(init.z_hop_types,[mode]);
+    assert.deepEqual(init.travel_slope,["3"]);
+  }
+  assert.equal(makeRestrictedInitConfig(selected).z_hop_types,undefined);
+  for(const bad of ["Auto Lift",[],["Auto Lift","Normal Lift"],["Auto"],["auto lift"],[null],[1],[true],{}]){
+    const invalid=mockedEngine();
+    await assert.rejects(()=>sliceMultiStlWithEngine(invalid.engine,items,null,null,
+      {...selected,machine:{settings:{...selected.machine.settings,z_hop_types:bad}}}),/Invalid single-tool native Z-hop type vector/);
+    assert.equal(invalid.calls.length,0);
+  }
+  for(const bad of [["0"],["90.01"]])
+    assert.throws(()=>makeRestrictedInitConfig({...selected,machine:{settings:{...selected.machine.settings,travel_slope:bad}}}),/outside diagnostic bounds/);
+  for(const value of ["1","90"])
+    assert.deepEqual(makeRestrictedInitConfig({...selected,machine:{settings:{...selected.machine.settings,travel_slope:[value]}}}).travel_slope,[value]);
+}
+console.log("PASS: native Z-hop enum vector and traveling angle reach init; invalid input refused");

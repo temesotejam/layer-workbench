@@ -80,8 +80,9 @@ const MACHINE_INIT_VECTORS=Object.freeze({
   retraction_length:[0,10],retraction_speed:[1,100],deretraction_speed:[0,100],
   // Pinned coFloats in mm; zero is an explicit threshold, not absence.
   retraction_minimum_travel:[0,100],
-  z_hop:[0,5],
+  z_hop:[0,5],travel_slope:[1,90],
 });
+const MACHINE_Z_HOP_TYPES=new Set(['Auto Lift','Normal Lift','Slope Lift','Spiral Lift']);
 const FILAMENT_INIT_SCALARS=Object.freeze({
   nozzle_temperature:[160,290], bed_temperature:[0,120],
 });
@@ -135,7 +136,11 @@ export function makeRestrictedInitConfig(profileCollection=null) {
       machine[key]=boundedNativeNumber(value,key,MACHINE_INIT_BOUNDS[key]);
     else if (Object.hasOwn(MACHINE_INIT_VECTORS,key))
       machine[key]=boundedNativeNumber(value,key,MACHINE_INIT_VECTORS[key],true);
-    else throw new Error("Unsupported restricted machine init key: " + key);
+    else if (key==="z_hop_types") {
+      if(!Array.isArray(value)||value.length!==1||!MACHINE_Z_HOP_TYPES.has(value[0]))
+        throw new Error("Invalid single-tool native Z-hop type vector");
+      machine[key]=[value[0]];
+    } else throw new Error("Unsupported restricted machine init key: " + key);
   }
   if (!Object.hasOwn(machine,"nozzle_diameter") ||
       !Object.hasOwn(machine,"printable_height"))

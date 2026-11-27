@@ -13,8 +13,10 @@ const MACHINE_RETRACTION_VECTORS=Object.freeze({
   // Pinned coFloats in mm; zero is an explicit threshold, not absence.
   retraction_minimum_travel:[0,100],
   // Pinned coFloats; zero disables lift, native maximum is 5 mm.
-  z_hop:[0,5],
+  z_hop:[0,5],travel_slope:[1,90],
 });
+// Pinned coEnums; the serialized tokens (including spaces) are not UI labels.
+const MACHINE_Z_HOP_TYPES=new Set(['Auto Lift','Normal Lift','Slope Lift','Spiral Lift']);
 const SPECS={
   machine:{nozzle_diameter:[0.2,1.2],printable_height:[10,1000]},
   filament:{nozzle_temperature:[160,290],bed_temperature:[0,120]},
@@ -210,6 +212,11 @@ export function resolveOrcaProfileFamily(records,type,selected,options={}) {
       for(const [key,value] of Object.entries(rec)){
         if(type==="machine" && Object.hasOwn(MACHINE_RETRACTION_VECTORS,key)) {
           settings[key]=[validateNum(key,value,MACHINE_RETRACTION_VECTORS[key])];
+        }else if(type==="machine" && key==="z_hop_types") {
+          const token=Array.isArray(value)&&value.length===1?value[0]:value;
+          if(typeof token!=="string"||!MACHINE_Z_HOP_TYPES.has(token))
+            throw new Error('Invalid single-tool native Z-hop type');
+          settings[key]=[token];
         }else if(type==="process" && key==="infill_wall_overlap") {
           // Native coPercent is scalar, not a nozzle vector or absolute width.
           // Share the final native-json validation, preserving the % token.
