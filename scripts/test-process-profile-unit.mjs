@@ -395,3 +395,10 @@ for (const bad of [0,1,true,false,"true","2","1%",["1"],null]) {
   assert.throws(()=>parseTestProcessOverrides({detect_thin_wall:bad}),/native enum/);
 }
 console.log("PASS: explicit serialized thin-wall toggle only");
+
+const wallOrders=["inner wall/outer wall","outer wall/inner wall","inner-outer-inner wall"];
+for(const value of wallOrders)
+  assert.deepEqual(parseTestProcessOverrides({wall_sequence:value}),{wall_sequence:value});
+for(const bad of ["Inner/Outer","inner wall/outer wall/infill","outer wall/inner wall ","",0,true,null,["inner wall/outer wall"]])
+  assert.throws(()=>parseTestProcessOverrides({wall_sequence:bad}),/native enum/);
+console.log("PASS: exact pinned wall-order enum tokens only");
