@@ -332,3 +332,9 @@ for(const [key,value] of Object.entries({only_one_wall_top:"1",only_one_wall_fir
   assert.ok(!process.unsupported.includes(key));
 }
 console.log("PASS: pinned CR-10 top single wall on, first-layer single wall off");
+
+assert.deepEqual(process.chain.map(n=>indexed.records.find(p=>p.name===n).seam_position),
+  ["nearest","aligned","aligned"],"Pinned v2.5.0 CR-10 seam position inheritance");
+assert.equal(process.settings.seam_position,"aligned");
+assert.ok(!process.unsupported.includes("seam_position"));
+console.log("PASS: pinned CR-10 seam position reaches restricted process adapter");

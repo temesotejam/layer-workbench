@@ -1093,3 +1093,19 @@ for(const key of ["only_one_wall_top","only_one_wall_first_layer"]){
       ? {...p,[key]:bad}:p),selection),/Invalid native process enum/);
 }
 console.log("PASS: single-wall surface toggle inheritance and absence");
+
+const seamProfiles=profiles.map(p=>p.name==="fdm_process_common"
+  ? {...p,seam_position:"nearest"}:p.name==="0.16mm Fine @TestPrinter"
+    ? {...p,seam_position:"aligned"}:p);
+const seamResolved=resolve(seamProfiles,selection).process;
+assert.equal(seamResolved.settings.seam_position,"aligned");
+assert.ok(!seamResolved.unsupported.includes("seam_position"));
+assert.equal(resolve(seamProfiles.map(p=>{
+  if(p.name!=="0.16mm Fine @TestPrinter")return p;
+  const child={...p};delete child.seam_position;return child;
+}),selection).process.settings.seam_position,"nearest");
+assert.equal(result.process.settings.seam_position,undefined);
+for(const bad of ["Aligned",0,true,null,["aligned"]])
+  assert.throws(()=>resolve(seamProfiles.map(p=>p.name==="0.16mm Fine @TestPrinter"
+    ? {...p,seam_position:bad}:p),selection),/Invalid native process enum/);
+console.log("PASS: seam-position inheritance, override and absence");
