@@ -113,6 +113,9 @@ const PROCESS_ENUMS=Object.freeze({
   infill_combination:new Set(["0","1"]),
   // Pinned CR-10 classic wall generator explicitly enables thin-wall detection.
   detect_thin_wall:new Set(["0","1"]),
+  // Preserve independent native single-wall surface toggles.
+  only_one_wall_top:new Set(["0","1"]),
+  only_one_wall_first_layer:new Set(["0","1"]),
 });
 // Pinned OrcaSlicer v2.5.0 PrintConfig.cpp: curr_bed_type enum and
 // six native per-filament steady/first-layer coInts pairs. UI labels are

@@ -1076,3 +1076,20 @@ for(const bad of ["Inner/Outer","inner wall/outer wall/infill",0,true,null,["out
   assert.throws(()=>resolve(orderProfiles.map(p=>p.name==="0.16mm Fine @TestPrinter"
     ? {...p,wall_sequence:bad}:p),selection),/Invalid native process enum/);
 console.log("PASS: wall order inheritance, explicit child and absence preservation");
+
+for(const key of ["only_one_wall_top","only_one_wall_first_layer"]){
+  const surfaceProfiles=profiles.map(p=>p.name==="fdm_process_common"
+    ? {...p,[key]:"0"} : p.name==="0.16mm Fine @TestPrinter" ? {...p,[key]:"1"} : p);
+  const surface=resolve(surfaceProfiles,selection).process;
+  assert.equal(surface.settings[key],"1");
+  assert.ok(!surface.unsupported.includes(key));
+  assert.equal(resolve(surfaceProfiles.map(p=>{
+    if(p.name!=="0.16mm Fine @TestPrinter")return p;
+    const child={...p};delete child[key];return child;
+  }),selection).process.settings[key],"0");
+  assert.equal(result.process.settings[key],undefined);
+  for(const bad of [0,true,"2",["1"],null])
+    assert.throws(()=>resolve(surfaceProfiles.map(p=>p.name==="0.16mm Fine @TestPrinter"
+      ? {...p,[key]:bad}:p),selection),/Invalid native process enum/);
+}
+console.log("PASS: single-wall surface toggle inheritance and absence");

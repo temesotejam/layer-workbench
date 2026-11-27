@@ -402,3 +402,13 @@ for(const value of wallOrders)
 for(const bad of ["Inner/Outer","inner wall/outer wall/infill","outer wall/inner wall ","",0,true,null,["inner wall/outer wall"]])
   assert.throws(()=>parseTestProcessOverrides({wall_sequence:bad}),/native enum/);
 console.log("PASS: exact pinned wall-order enum tokens only");
+
+for(const key of ["only_one_wall_top","only_one_wall_first_layer"]){
+  for(const value of ["0","1"])
+    assert.deepEqual(parseTestProcessOverrides({[key]:value}),{[key]:value});
+  for(const bad of [0,1,true,false,"true","2","1%",["1"],null])
+    assert.throws(()=>parseTestProcessOverrides({[key]:bad}),/native enum/);
+}
+assert.deepEqual(parseTestProcessOverrides({only_one_wall_top:"1",only_one_wall_first_layer:"0"}),
+  {only_one_wall_top:"1",only_one_wall_first_layer:"0"});
+console.log("PASS: independent serialized single-wall surface toggles");
