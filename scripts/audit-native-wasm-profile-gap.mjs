@@ -7,6 +7,26 @@ import {fileURLToPath} from "node:url";
 
 const FAMILIES=Object.freeze(["machine","process","filament"]);
 
+// Pinned v2.5.0 ConfigBase::load_from_json (Config.cpp) handles these
+// exact record fields before the PrintConfig deserialization branch.
+// Classification is informational: metadata can affect preset identity,
+// selection and generated headers; it must not be silently discarded.
+const RECORD_METADATA=new Set(["version","from","setting_id","filament_id",
+  "instantiation","description"]);
+const PRINTER_SELECTION=new Set(["compatible_printers","compatible_printers_condition"]);
+function missingKeyRole(kind,key) {
+  if(RECORD_METADATA.has(key)) return "preset-record-metadata";
+  // Preset.cpp is_compatible_with_printer evaluates these fields for
+  // process/filament selection; they remain important compatibility gates.
+  if(kind!=="machine" && PRINTER_SELECTION.has(key)) return "printer-compatibility";
+  return "unclassified";
+}
+function partitionMissingKeys(kind,keys) {
+  const groups={"preset-record-metadata":[],"printer-compatibility":[],"unclassified":[]};
+  for(const key of keys) groups[missingKeyRole(kind,key)].push(key);
+  return groups;
+}
+
 // These hints identify *syntax* transformations only, not equivalent effective
 // PrintConfig values or evidence that the WASM engine applied either option.
 // Never infer that an arbitrary one-element array or a percent speed is safe
@@ -68,6 +88,7 @@ export function auditProfileCoverage(full, restricted) {
       throw new Error("Empty native or restricted "+kind+" settings");
     const nativeSet=new Set(nativeKeys), wasmSet=new Set(wasmKeys);
     const notForwarded=nativeKeys.filter(k=>!wasmSet.has(k));
+    const missingRoles=partitionMissingKeys(kind,notForwarded);
     const derived=wasmKeys.filter(k=>!nativeSet.has(k));
     const overlapping=wasmKeys.filter(k=>nativeSet.has(k));
     // Raw differences can be legitimate scalar/vector and percent conversions.
@@ -85,6 +106,7 @@ export function auditProfileCoverage(full, restricted) {
       overlapping_option_count:overlapping.length,
       not_forwarded_count:notForwarded.length,
       not_forwarded_keys:notForwarded,
+      not_forwarded_keys_by_role:missingRoles,
       restricted_only_keys:derived,
       raw_value_differences_requiring_review:transformed,
       raw_value_difference_shapes:differences,
@@ -107,7 +129,7 @@ export function auditProfileCoverage(full, restricted) {
     recognized_syntax_only_count:recognizedSyntaxCount,
     unexplained_raw_value_difference_count:unexplainedCount,
     families,
-    note:"Key overlap and recognized syntax-only conversions do not prove semantic option equivalence or WASM application. Missing options and value discrepancies block a full-profile parity claim."
+    note:"Key overlap and recognized syntax-only conversions do not prove semantic option equivalence or WASM application. Missing options and value discrepancies block a full-profile parity claim. Missing-key roles are informational; unclassified keys require review and metadata/compatibility are not presumed behaviorally irrelevant."
   };
 }
 
@@ -146,6 +168,8 @@ async function main() {
       ", raw-value-review="+row.raw_value_differences_requiring_review.length+
       ", syntax-only-hints="+row.recognized_syntax_only_count+
       ", unexplained="+row.unexplained_raw_value_difference_count);
+    console.log(kind+" missing-key roles: "+JSON.stringify(Object.fromEntries(
+      Object.entries(row.not_forwarded_keys_by_role).map(([role,keys])=>[role,keys.length]))));
     // Name and shape only; never emit original profile values or executable G-code.
     const unexplained=row.raw_value_difference_shapes.filter(item=>item.syntax_only_hint==="unexplained")
       .map(item=>({key:item.key,native_shape:item.native_shape,
