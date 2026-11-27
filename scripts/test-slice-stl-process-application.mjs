@@ -377,3 +377,21 @@ console.log("PASS: one-slot native top flow transport preserves separate bottom 
   assert.equal(invalid.calls.length,0);
 }
 console.log("PASS: classic thin-wall selection reaches mocked native-json with explicit override precedence");
+
+{
+  const preset={...selected,process:{settings:{...selected.process.settings,
+    wall_generator:"classic",wall_sequence:"inner wall/outer wall"}}};
+  for(const order of ["outer wall/inner wall","inner-outer-inner wall",null]){
+    const {engine,calls}=mockedEngine();
+    await sliceMultiStlWithEngine(engine,items,null,order===null?null:{wall_sequence:order},preset);
+    const applied=calls.find(c=>c.name==="applyProfile");
+    assert.equal(applied.format,"orca.native-json");
+    assert.equal(applied.value.wall_generator,"classic");
+    assert.equal(applied.value.wall_sequence,order??"inner wall/outer wall");
+  }
+  const invalid=mockedEngine();
+  await assert.rejects(()=>sliceMultiStlWithEngine(invalid.engine,items,null,
+    {wall_sequence:"Inner/Outer"},preset),/native enum/);
+  assert.equal(invalid.calls.length,0);
+}
+console.log("PASS: wall sequence reaches mocked native-json with override precedence");
