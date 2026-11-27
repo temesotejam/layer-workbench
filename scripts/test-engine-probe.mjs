@@ -2552,6 +2552,39 @@ try {
         off_first:g.off[0],on_first:g.on[0],off_last:g.off.at(-1),on_last:g.on.at(-1)
       }))));
       console.log('PASS: classic simultaneous toggles and independent zero-shell gates; not native parity');
+
+      // Arachne has a separate perimeter generator; do not infer its behavior
+      // from the classic result. Test the flat cube before stepped surfaces.
+      const arachneResults=[];
+      for(const [top,first] of [['0','0'],['1','0'],['0','1'],['1','1']]){
+        const code=await sliceRing('arachne-single-wall-'+top+first+'.json',
+          {...settings,wall_generator:'arachne',wall_sequence:'inner wall/outer wall',
+            only_one_wall_top:top,only_one_wall_first_layer:first},/^PASS: 1 STL model\(s\)/);
+        arachneResults.push({top,first,layers:surfaceLayers(code)});
+      }
+      const arachneControl=arachneResults[0].layers;
+      const arachneSummary=arachneResults.map(({top,first,layers})=>({
+        top,first,layers:layers.length,first_layer:layers[0],last_layer:layers.at(-1),
+        interior_with_inner:layers.slice(1,-1).filter(l=>l.inner_mm>1).length
+      }));
+      await writeFile(parityDir+'/arachne-single-wall-surfaces.json',JSON.stringify({
+        results:arachneResults,native_desktop_parity:false,printer_ready:false
+      },null,2)+'\n');
+      console.log('ARACHNE_SINGLE_WALL_SURFACES '+JSON.stringify(arachneSummary));
+      assert.ok(arachneControl.length>=10&&arachneControl.every(l=>l.inner_mm>1),
+        'Arachne control must deposit actual inner walls on all cube layers');
+      for(const {top,first,layers} of arachneResults){
+        assertCadence(layers,arachneControl);
+        assert.equal(layers[0].inner_mm===0,first==='1',
+          'Arachne first layer must follow its own toggle');
+        assert.equal(layers.at(-1).inner_mm===0,top==='1',
+          'Arachne final layer must follow its own toggle');
+        if(first==='0')assert.ok(layers[0].inner_mm>1,'Arachne first-layer inner deposition missing');
+        if(top==='0')assert.ok(layers.at(-1).inner_mm>1,'Arachne top-layer inner deposition missing');
+        assert.ok(layers.slice(1,-1).every(l=>l.inner_mm>1),
+          'Arachne flat cube must retain interior inner deposition');
+      }
+      console.log('PASS: Arachne independent and simultaneous flat-cube surface toggles; not native parity');
     }
 
     // A through-tunnel bridge arch gives the slicer a real unsupported roof.
