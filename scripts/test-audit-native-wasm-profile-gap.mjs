@@ -157,16 +157,17 @@ const withRoles={
 const classified=auditProfileCoverage(withRoles,restricted);
 assert.deepEqual(classified.families.machine.not_forwarded_keys_by_role,{
   "preset-record-metadata":["from","version"],"printer-compatibility":[],
-  unclassified:["compatible_printers","default_print_profile","machine_start_gcode","unknown_motion_key"]
+  "custom-gcode-hook":["machine_start_gcode"],
+  unclassified:["compatible_printers","default_print_profile","unknown_motion_key"]
 });
 assert.deepEqual(classified.families.process.not_forwarded_keys_by_role,{
   "preset-record-metadata":["description","instantiation","setting_id"],
   "printer-compatibility":["compatible_printers","compatible_printers_condition"],
-  unclassified:["bridge_speed","machine_start_gcode"]
+  "custom-gcode-hook":[],unclassified:["bridge_speed","machine_start_gcode"]
 });
 assert.deepEqual(classified.families.filament.not_forwarded_keys_by_role,{
   "preset-record-metadata":["filament_id"],
-  "printer-compatibility":["compatible_printers"],unclassified:["filament_max_volumetric_speed"]
+  "printer-compatibility":["compatible_printers"],"custom-gcode-hook":[],unclassified:["filament_max_volumetric_speed"]
 });
 for(const row of Object.values(classified.families)) {
   const partition=Object.values(row.not_forwarded_keys_by_role).flat().sort();
@@ -178,4 +179,34 @@ assert.equal(classified.full_profile_parity_established,false);
 assert.equal(classified.native_vs_wasm_gcode_compared,false);
 assert.equal(classified.print_ready,false);
 
+// Recognize only exact source-declared hook families and shapes. Values
+// must never be included in the audit; nonempty does not imply execution.
+const hookReport=auditProfileCoverage({
+  machine:{...full.machine,machine_end_gcode:"  ",before_layer_change_gcode:[],
+    file_start_gcode:"; PRIVATE_SENTINEL",unknown_gcode:"PRIVATE_SENTINEL",
+    filament_end_gcode:["PRIVATE_SENTINEL"]},
+  process:{...full.process,machine_start_gcode:"PRIVATE_SENTINEL"},
+  filament:{...full.filament,filament_start_gcode:["","PRIVATE_SENTINEL"],
+    filament_end_gcode:[" "],filament_change_extrusion_role_gcode:[null],
+    machine_end_gcode:"PRIVATE_SENTINEL"}
+},restricted);
+assert.deepEqual(hookReport.families.machine.not_forwarded_custom_gcode_hooks,[
+  {key:"before_layer_change_gcode",presence:"unrecognized-shape"},
+  {key:"file_start_gcode",presence:"nonempty"},
+  {key:"machine_end_gcode",presence:"blank"},
+  {key:"machine_start_gcode",presence:"nonempty"}
+]);
+assert.deepEqual(hookReport.families.filament.not_forwarded_custom_gcode_hooks,[
+  {key:"filament_change_extrusion_role_gcode",presence:"unrecognized-shape"},
+  {key:"filament_end_gcode",presence:"blank"},
+  {key:"filament_start_gcode",presence:"nonempty"}
+]);
+assert.deepEqual(hookReport.families.process.not_forwarded_custom_gcode_hooks,[]);
+assert.ok(hookReport.families.machine.not_forwarded_keys_by_role.unclassified.includes("unknown_gcode"));
+assert.ok(hookReport.families.machine.not_forwarded_keys_by_role.unclassified.includes("filament_end_gcode"));
+assert.ok(hookReport.families.filament.not_forwarded_keys_by_role.unclassified.includes("machine_end_gcode"));
+assert.ok(!JSON.stringify(hookReport).includes("PRIVATE_SENTINEL"));
+assert.equal(hookReport.full_profile_parity_established,false);
+assert.equal(hookReport.print_ready,false);
+assert.deepEqual(all.families.machine.not_forwarded_custom_gcode_hooks,[]);
 console.log("PASS: native/restricted key coverage and conservative value-shape classification, never parity");
