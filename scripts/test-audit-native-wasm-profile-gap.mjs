@@ -126,6 +126,28 @@ for(const [native,forwarded] of [
 assert.equal(topFlowAudit("1",["1"],"bottom_solid_infill_flow_ratio")
   .families.process.unexplained_raw_value_difference_count,1);
 
+// Known bounded machine coFloats are normalized without claiming semantics.
+function machineVectorAudit(key,native,forwarded){
+  return auditProfileCoverage({...full,machine:{...full.machine,[key]:native}},
+    {...restricted,machine:{settings:{...restricted.machine.settings,[key]:forwarded}}});
+}
+for(const [key,lo,hi] of [["retraction_length",0,10],["retraction_speed",1,100],
+  ["deretraction_speed",0,100],["retraction_minimum_travel",0,100],["z_hop",0,5]]){
+  for(const n of [lo,hi]){
+    const audit=machineVectorAudit(key,String(n),[String(n)]);
+    assert.ok(audit.families.machine.raw_value_difference_shapes.some(v=>
+      v.key===key&&v.syntax_only_hint==="single-machine-retraction-scalar-to-vector"));
+    assert.ok(audit.families.machine.raw_value_differences_requiring_review.includes(key));
+    assert.equal(audit.full_profile_parity_established,false);
+  }
+  for(const [native,forwarded] of [[String(hi+1),[String(hi+1)]],
+    [String(lo-1),[String(lo-1)]],[String(lo)+"%",[String(lo)]],
+    [String(lo),[String(lo),String(lo)]],[String(lo),[lo]],
+    [String(lo),[String(lo)+".0"]],[String(lo),[String(hi)]],[null,["0"]]])
+    assert.equal(machineVectorAudit(key,native,forwarded).families.machine.unexplained_raw_value_difference_count,1);
+}
+assert.equal(machineVectorAudit("wipe_distance","1",["1"]).families.machine.unexplained_raw_value_difference_count,1);
+
 // Even exact keys/values cannot certify actual native/WASM execution parity.
 const exactlyMatched={machine:{settings:{nozzle_diameter:["0.4"],printable_height:"200",machine_start_gcode:"M104 S200"}},
  process:{settings:{layer_height:"0.2",sparse_infill_density:"15%",bridge_speed:"40"}},

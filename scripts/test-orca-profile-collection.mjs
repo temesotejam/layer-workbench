@@ -1111,8 +1111,8 @@ for(const bad of ["Aligned",0,true,null,["aligned"]])
 console.log("PASS: seam-position inheritance, override and absence");
 
 {
-  const parent={retraction_length:["5"],retraction_speed:["60"],deretraction_speed:["40"],retraction_minimum_travel:["2"]};
-  const child={retraction_length:"0.8",retraction_speed:"40",deretraction_speed:"0",retraction_minimum_travel:"0"};
+  const parent={retraction_length:["5"],retraction_speed:["60"],deretraction_speed:["40"],retraction_minimum_travel:["2"],z_hop:["0.4"]};
+  const child={retraction_length:"0.8",retraction_speed:"40",deretraction_speed:"0",retraction_minimum_travel:"0",z_hop:"0"};
   const withRetraction=profiles.map(p=>p.name==="base printer"?{...p,...parent}:
     p.name===selection.machine?{...p,...child}:p);
   const machine=resolve(withRetraction,selection).machine;
@@ -1132,5 +1132,9 @@ console.log("PASS: seam-position inheritance, override and absence");
   }
   assert.throws(()=>resolve(withRetraction.map(p=>p.name===selection.machine
     ? {...p,retraction_speed:"0"}:p),selection),/out of test limits/);
+  assert.throws(()=>resolve(withRetraction.map(p=>p.name===selection.machine
+    ? {...p,z_hop:"5.01"}:p),selection),/out of test limits/);
+  assert.deepEqual(resolve(withRetraction.map(p=>p.name===selection.machine
+    ? {...p,z_hop:"5"}:p),selection).machine.settings.z_hop,["5"]);
 }
 console.log("PASS: bounded machine retraction inheritance, one-slot vectors and absence");

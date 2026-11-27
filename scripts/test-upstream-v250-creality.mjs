@@ -344,6 +344,7 @@ for(const [key,chainValues] of Object.entries({
   retraction_speed:[["60"],["60"],"40"],
   deretraction_speed:[["40"],["40"],"40"],
   retraction_minimum_travel:[["2"],["2"],"1"],
+  z_hop:[["0"],["0.4"],"0.4"],
 })){
   assert.deepEqual(machine.chain.map(n=>indexed.records.find(p=>p.name===n)[key]),chainValues);
   assert.deepEqual(machine.settings[key],[chainValues.at(-1)]);

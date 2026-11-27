@@ -12,6 +12,8 @@ const MACHINE_RETRACTION_VECTORS=Object.freeze({
   retraction_length:[0,10],retraction_speed:[1,100],deretraction_speed:[0,100],
   // Pinned coFloats in mm; zero is an explicit threshold, not absence.
   retraction_minimum_travel:[0,100],
+  // Pinned coFloats; zero disables lift, native maximum is 5 mm.
+  z_hop:[0,5],
 });
 const SPECS={
   machine:{nozzle_diameter:[0.2,1.2],printable_height:[10,1000]},

@@ -433,7 +433,7 @@ console.log("PASS: single-wall surface toggle native transfer and independent ov
 console.log("PASS: seam-position native transfer and explicit override");
 
 {
-  const vectors={retraction_length:["0.8"],retraction_speed:["40"],deretraction_speed:["0"],retraction_minimum_travel:["0"]};
+  const vectors={retraction_length:["0.8"],retraction_speed:["40"],deretraction_speed:["0"],retraction_minimum_travel:["0"],z_hop:["0.4"]};
   const preset={...selected,machine:{settings:{...selected.machine.settings,...vectors}}};
   const {engine,calls}=mockedEngine();
   await sliceMultiStlWithEngine(engine,items,null,null,preset);
@@ -451,5 +451,10 @@ console.log("PASS: seam-position native transfer and explicit override");
   }
   assert.throws(()=>makeRestrictedInitConfig({...preset,machine:{settings:{
     ...preset.machine.settings,retraction_speed:["0"]}}}),/outside diagnostic bounds/);
+  assert.throws(()=>makeRestrictedInitConfig({...preset,machine:{settings:{
+    ...preset.machine.settings,z_hop:["5.01"]}}}),/outside diagnostic bounds/);
+  for(const value of ["0","5"])
+    assert.deepEqual(makeRestrictedInitConfig({...preset,machine:{settings:{
+      ...preset.machine.settings,z_hop:[value]}}}).z_hop,[value]);
 }
 console.log("PASS: machine retraction vectors reach native init; malformed inputs refused before session");
