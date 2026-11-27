@@ -2272,8 +2272,8 @@ try {
 
     // Measure a bounded same-layer retract/travel/recover witness using
     // actual modal XYZ and E motion, not comments or Z option echoes.
-    // Slope/normal lifts can have different paths; compare peak height only.
-    const sameLayerHopWitness=function sameLayerHopWitness(code){
+    // Preserve the height-only witness and optionally classify the ascending moves.
+    const sameLayerHopWitness=function sameLayerHopWitness(code,details=false){
   let xyzMode=null,eMode=null,e=0,pos={X:NaN,Y:NaN,Z:NaN},lastZ=NaN,trial=null;
   const excursions=[];
   const eps=0.00001;
@@ -2307,7 +2307,8 @@ try {
     if(xy&&de>eps){
       if(trial?.recovered&&trial.travel&&Number.isFinite(pos.Z)&&
         Math.abs(pos.Z-trial.base)<eps&&Math.abs(prev.Z-pos.Z)<eps)
-        excursions.push(trial.peak-trial.base);
+        excursions.push(details?{height:trial.peak-trial.base,vertical:trial.vertical,
+          slopes:trial.slopes,otherRise:trial.otherRise}:trial.peak-trial.base);
       trial=null;
       lastZ=Number.isFinite(pos.Z)&&Math.abs(prev.Z-pos.Z)<eps?pos.Z:NaN;
       continue;
@@ -2315,12 +2316,20 @@ try {
     if(!Number.isFinite(pos.Z)||!Number.isFinite(de)){trial=null;lastZ=NaN;continue;}
     if(!spatial&&cmd==='G1'&&de< -eps){
       trial=Number.isFinite(lastZ)&&Math.abs(pos.Z-lastZ)<eps?
-        {base:lastZ,peak:lastZ,length:-de,travel:false,recovered:false}:null;
+        {base:lastZ,peak:lastZ,length:-de,travel:false,recovered:false,
+          vertical:0,slopes:[],otherRise:0}:null;
       continue;
     }
     if(!trial)continue;
     if(de< -eps||pos.Z<trial.base-eps){trial=null;continue;}
     trial.peak=Math.max(trial.peak,pos.Z);
+    const dz=pos.Z-prev.Z, dxy=Math.hypot(pos.X-prev.X,pos.Y-prev.Y);
+    if(details&&dz>eps){
+      if(!['G0','G1'].includes(cmd)||!Number.isFinite(dxy)||Math.abs(de)>=eps)
+        trial.otherRise++;
+      else if(dxy<=eps)trial.vertical++;
+      else trial.slopes.push(Math.atan2(dz,dxy)*180/Math.PI);
+    }
     if(xy&&Math.abs(de)<eps)trial.travel=true;
     if(de>eps){
       if(spatial||trial.recovered||Math.abs(de-trial.length)>0.001){trial=null;continue;}
@@ -2372,6 +2381,63 @@ try {
       for(const key of ['retraction_length','retraction_speed','deretraction_speed',
         'retraction_minimum_travel','z_hop'])delete record[key];
     console.log('PASS: real same-layer Z-hop heights including explicit zero');
+
+    // Distinguish actual upward motion, not option echoes or lift comments.
+    // A short slope travel may use a steeper straight diagonal, and a
+    // spiral may fall back to a normal lift. Do not infer either from peak.
+    const liftFixture='G90\nM83\nG1 X0 Y0 Z0.2\nG1 X1 E0.1\nG1 E-0.8\n';
+    const liftFinish='\nG1 X5\nG1 Z0.2\nG1 E0.8\nG1 X6 E0.1';
+    const verticalControl=sameLayerHopWitness(liftFixture+'G1 Z0.6'+liftFinish,true);
+    assert.equal(verticalControl.length,1);
+    assert.equal(verticalControl[0].vertical,1);
+    assert.deepEqual(verticalControl[0].slopes,[]);
+    const slopeControl=sameLayerHopWitness(liftFixture+'G1 X1.4 Z0.6'+liftFinish,true);
+    assert.equal(slopeControl.length,1);
+    assert.equal(slopeControl[0].vertical,0);
+    assert.ok(Math.abs(slopeControl[0].slopes[0]-45)<0.000001);
+    const arcControl=sameLayerHopWitness(liftFixture+'G2 X1 Z0.6 I0.1 J0'+liftFinish,true);
+    assert.equal(arcControl.length,1);
+    assert.equal(arcControl[0].otherRise,1);
+    assert.deepEqual(arcControl[0].slopes,[]);
+    const modeReport=[];
+    for(const [mode,angle] of [['Normal Lift',45],['Slope Lift',15],['Slope Lift',45]]){
+      Object.assign(rawOrca[1],{retraction_length:'0.8',retraction_speed:'40',
+        deretraction_speed:'40',retraction_minimum_travel:'0',z_hop:'0.4',
+        z_hop_types:mode,travel_slope:String(angle)});
+      await uploadRawOrca();
+      await prepare.locator('#lab-slice').click();
+      await prepare.waitForFunction(()=>{
+        const status=document.querySelector('#lab-status')?.textContent||'';
+        return status.startsWith('PASS:')||status.startsWith('FAILED');
+      },null,{timeout:120000});
+      assert.match(await prepare.locator('#lab-status').innerText(),/^PASS: 2 STL model\(s\)/);
+      const code=await prepare.locator('#lab-download').evaluate(async link=>
+        await(await fetch(link.href)).text());
+      const observed=sameLayerHopWitness(code,true);
+      const positive=observed.filter(v=>v.height>0.001);
+      const matchingHeight=positive.filter(v=>Math.abs(v.height-0.4)<0.002);
+      modeReport.push({mode,angle,pairs:observed.length,positive:positive.length,
+        matchingHeight:matchingHeight.length,
+        verticalOnly:matchingHeight.filter(v=>v.vertical>0&&!v.slopes.length&&!v.otherRise).length,
+        matchingSlope:matchingHeight.filter(v=>v.slopes.some(a=>Math.abs(a-angle)<0.5)).length,
+        otherRise:matchingHeight.filter(v=>v.otherRise>0).length});
+      console.log('MACHINE_Z_HOP_MODE_MOTION '+JSON.stringify(modeReport.at(-1)));
+    }
+    await writeFile(parityDir+'/machine-z-hop-mode-motion.json',
+      JSON.stringify({fixture:'same-layer two synthetic STL models; localhost only',
+        cases:modeReport,desktop_native_parity:false,printer_ready:false},null,2));
+    for(const test of modeReport){
+      assert.ok(test.positive>=10,'Expected positive same-layer lifts: '+JSON.stringify(test));
+      assert.equal(test.matchingHeight,test.positive,'Lift height must be preserved');
+      if(test.mode==='Normal Lift'){
+        assert.ok(test.verticalOnly>=10,'Expected real vertical lift moves');
+        assert.equal(test.matchingSlope,0,'Normal lift must not emit configured-angle diagonal witnesses');
+      }else assert.ok(test.matchingSlope>=10,'Expected actual configured-angle ascent: '+JSON.stringify(test));
+    }
+    for(const record of rawOrca.slice(0,2))
+      for(const key of ['retraction_length','retraction_speed','deretraction_speed',
+        'retraction_minimum_travel','z_hop','z_hop_types','travel_slope'])delete record[key];
+    console.log('PASS: real Normal Lift and two Slope Lift angles on same-layer moves');
 
     // Selecting a native bed without raw Orca profiles must never fall back
     // to generic PLA output while silently ignoring the selected heater.
