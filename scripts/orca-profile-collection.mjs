@@ -14,6 +14,8 @@ const MACHINE_RETRACTION_VECTORS=Object.freeze({
   retraction_minimum_travel:[0,100],
   // Pinned coFloats; zero disables lift, native maximum is 5 mm.
   z_hop:[0,5],travel_slope:[1,90],
+  // Absolute Z in mm, locally bounded; zero below means no upper limit.
+  retract_lift_above:[0,1000],retract_lift_below:[0,1000],
 });
 // Pinned coEnums; the serialized tokens (including spaces) are not UI labels.
 const MACHINE_Z_HOP_TYPES=new Set(['Auto Lift','Normal Lift','Slope Lift','Spiral Lift']);
