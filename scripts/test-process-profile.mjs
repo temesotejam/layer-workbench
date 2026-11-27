@@ -127,6 +127,8 @@ const ENUMS = Object.freeze({
   enable_support: new Set(["0","1"]),
   // Native coBool: combine sparse infill layers, not a layer count.
   infill_combination: new Set(["0","1"]),
+  // Native coBool; the classic perimeter generator can add thin-wall paths.
+  detect_thin_wall: new Set(["0","1"]),
 });
 
 export function parseTestProcessOverrides(input) {
