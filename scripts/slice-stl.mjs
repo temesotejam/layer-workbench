@@ -74,6 +74,11 @@ export function resolveRestrictedProcessSettings(processOverrides = null, profil
 const MACHINE_INIT_BOUNDS=Object.freeze({
   nozzle_diameter:[0.2,1.2], printable_height:[10,1000],
 });
+// Same bounded localhost-only retraction vector contract as the resolver.
+// Zero length disables retraction; zero deretraction speed uses native fallback.
+const MACHINE_INIT_VECTORS=Object.freeze({
+  retraction_length:[0,10],retraction_speed:[1,100],deretraction_speed:[0,100],
+});
 const FILAMENT_INIT_SCALARS=Object.freeze({
   nozzle_temperature:[160,290], bed_temperature:[0,120],
 });
@@ -123,9 +128,11 @@ export function makeRestrictedInitConfig(profileCollection=null) {
     throw new Error("Expected resolved restricted machine and filament settings.");
   const machine=Object.create(null), filament=Object.create(null);
   for (const [key,value] of Object.entries(profileCollection.machine.settings)) {
-    if (!Object.hasOwn(MACHINE_INIT_BOUNDS,key))
-      throw new Error("Unsupported restricted machine init key: " + key);
-    machine[key]=boundedNativeNumber(value,key,MACHINE_INIT_BOUNDS[key]);
+    if (Object.hasOwn(MACHINE_INIT_BOUNDS,key))
+      machine[key]=boundedNativeNumber(value,key,MACHINE_INIT_BOUNDS[key]);
+    else if (Object.hasOwn(MACHINE_INIT_VECTORS,key))
+      machine[key]=boundedNativeNumber(value,key,MACHINE_INIT_VECTORS[key],true);
+    else throw new Error("Unsupported restricted machine init key: " + key);
   }
   if (!Object.hasOwn(machine,"nozzle_diameter") ||
       !Object.hasOwn(machine,"printable_height"))

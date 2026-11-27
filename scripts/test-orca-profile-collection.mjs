@@ -1109,3 +1109,28 @@ for(const bad of ["Aligned",0,true,null,["aligned"]])
   assert.throws(()=>resolve(seamProfiles.map(p=>p.name==="0.16mm Fine @TestPrinter"
     ? {...p,seam_position:bad}:p),selection),/Invalid native process enum/);
 console.log("PASS: seam-position inheritance, override and absence");
+
+{
+  const parent={retraction_length:["5"],retraction_speed:["60"],deretraction_speed:["40"]};
+  const child={retraction_length:"0.8",retraction_speed:"40",deretraction_speed:"0"};
+  const withRetraction=profiles.map(p=>p.name==="base printer"?{...p,...parent}:
+    p.name===selection.machine?{...p,...child}:p);
+  const machine=resolve(withRetraction,selection).machine;
+  for(const [key,value] of Object.entries(child)){
+    assert.deepEqual(machine.settings[key],[value]);
+    assert.ok(!machine.unsupported.includes(key));
+    assert.equal(result.machine.settings[key],undefined);
+    const inherited=withRetraction.map(p=>{
+      if(p.name!==selection.machine)return p;
+      const record={...p};delete record[key];return record;
+    });
+    assert.deepEqual(resolve(inherited,selection).machine.settings[key],parent[key]);
+    for(const bad of [[],["1","2"],"1%","1,2",null,true,{},["nil"],"-1","101"]){
+      assert.throws(()=>resolve(withRetraction.map(p=>p.name===selection.machine
+        ? {...p,[key]:bad}:p),selection),/Multi-extruder|Invalid|out of test limits/);
+    }
+  }
+  assert.throws(()=>resolve(withRetraction.map(p=>p.name===selection.machine
+    ? {...p,retraction_speed:"0"}:p),selection),/out of test limits/);
+}
+console.log("PASS: bounded machine retraction inheritance, one-slot vectors and absence");

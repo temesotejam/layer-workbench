@@ -5,6 +5,12 @@ import {parseTestProcessOverrides} from "./test-process-profile.mjs";
 // tool accepts an explicitly selected local collection of those JSON records.
 // It does not execute start/end G-code and does not approve print safety.
 const MAX_RECORDS=96,MAX_DEPTH=20;
+// Pinned PrintConfig.cpp coFloats: one selected extruder only. The CR-10
+// chain uses one-slot arrays in its parents and scalar tokens in the child.
+// Preserve a one-slot native vector; never interpret a multi-variant vector.
+const MACHINE_RETRACTION_VECTORS=Object.freeze({
+  retraction_length:[0,10],retraction_speed:[1,100],deretraction_speed:[0,100],
+});
 const SPECS={
   machine:{nozzle_diameter:[0.2,1.2],printable_height:[10,1000]},
   filament:{nozzle_temperature:[160,290],bed_temperature:[0,120]},
@@ -198,7 +204,9 @@ export function resolveOrcaProfileFamily(records,type,selected,options={}) {
     const unsupported=new Set();
     for(const rec of chain){
       for(const [key,value] of Object.entries(rec)){
-        if(type==="process" && key==="infill_wall_overlap") {
+        if(type==="machine" && Object.hasOwn(MACHINE_RETRACTION_VECTORS,key)) {
+          settings[key]=[validateNum(key,value,MACHINE_RETRACTION_VECTORS[key])];
+        }else if(type==="process" && key==="infill_wall_overlap") {
           // Native coPercent is scalar, not a nozzle vector or absolute width.
           // Share the final native-json validation, preserving the % token.
           settings[key]=parseTestProcessOverrides({[key]:value})[key];
