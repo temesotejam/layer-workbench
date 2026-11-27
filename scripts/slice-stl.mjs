@@ -80,6 +80,7 @@ const MACHINE_INIT_VECTORS=Object.freeze({
   retraction_length:[0,10],retraction_speed:[1,100],deretraction_speed:[0,100],
   // Pinned coFloats in mm; zero is an explicit threshold, not absence.
   retraction_minimum_travel:[0,100],
+  z_hop:[0,5],
 });
 const FILAMENT_INIT_SCALARS=Object.freeze({
   nozzle_temperature:[160,290], bed_temperature:[0,120],
