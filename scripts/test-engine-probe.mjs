@@ -2277,6 +2277,74 @@ try {
       'baseline/candidate feature segments='+baselineGap.length+'/'+candidateGap.length);
 
 
+    // Pinned classic thin walls are emitted as external perimeters.
+    // Connected 0.30 mm wide, 12 mm long spur on a 10 mm square body;
+    // explicit triangles (not concave OBJ n-gons) form a closed prism.
+    {
+      const xy=[[0,0],[10,0],[10,4.85],[22,4.85],[22,5.15],[10,5.15],[10,10],[0,10]];
+      const cap=[[0,1,2],[0,2,5],[0,5,6],[0,6,7],[2,3,4],[2,4,5]];
+      const obj=[0,3].flatMap(z=>xy.map(([x,y])=>'v '+x+' '+y+' '+z));
+      for(const [a,b,c] of cap){
+        obj.push('f '+[c+1,b+1,a+1].join(' '));
+        obj.push('f '+[a+9,b+9,c+9].join(' '));
+      }
+      for(let i=0;i<xy.length;i++){
+        const j=(i+1)%xy.length;
+        obj.push('f '+[i+1,j+1,j+9].join(' '),'f '+[i+1,j+9,i+9].join(' '));
+      }
+      await prepare.locator('#remove-object').click();
+      await prepare.locator('#object-count').getByText('0 objects').waitFor();
+      await prepare.locator('#model-file').setInputFiles({
+        name:'classic-thin-wall-spur.obj',mimeType:'text/plain',buffer:Buffer.from(obj.join('\n')+'\n'),
+      });
+      await prepare.locator('#object-count').getByText('1 object').waitFor({timeout:30000});
+      const settings={layer_height:0.2,initial_layer_print_height:0.2,wall_loops:2,
+        wall_generator:'classic',line_width:0.42,outer_wall_line_width:0.42,
+        inner_wall_line_width:0.42,outer_wall_speed:12,inner_wall_speed:16,
+        travel_speed:50,sparse_infill_density:20};
+      const outer=code=>{
+        const p=parseGcodeToolpaths(code);
+        assert.equal(p.skippedMalformedMotion,0);
+        assert.equal(p.skippedArcs,0);
+        return p.layers.flatMap(layer=>layer.segments).filter(s=>
+          s.feature==='outer wall'&&s.extrusion&&s.sourceMotion==='G1'&&
+          [s.x1,s.x2,s.y1,s.y2,s.z1,s.z2,s.commandedPositiveEMm].every(Number.isFinite)&&
+          s.commandedPositiveEMm>0&&Math.abs(s.z2-s.z1)<0.0005&&s.z2>=0.4-0.0005&&
+          Math.hypot(s.x2-s.x1,s.y2-s.y1)>0.001);
+      };
+      const off=outer(await sliceRing('classic-thin-wall-off.json',{...settings,detect_thin_wall:'0'}));
+      const on=outer(await sliceRing('classic-thin-wall-on.json',{...settings,detect_thin_wall:'1'}));
+      assert.ok(off.length>=12&&on.length>=12,'Both slices require actual outer-wall deposition');
+      // The same geometry is not moved. Relative X from the broad body's
+      // left outer wall removes the global bed offset. Clip crossing strokes
+      // at the distal threshold rather than requiring both endpoints inside.
+      const left=segments=>segments.reduce((x,s)=>Math.min(x,s.x1,s.x2),Infinity);
+      const x0=left(off),cut=x0+12;
+      assert.ok(Math.abs(left(on)-x0)<0.25,'Broad body reference shifted unexpectedly');
+      const summary=segments=>{
+        const body=segments.filter(s=>Math.max(s.x1,s.x2)<x0+8);
+        const distalLength=s=>{
+          const lo=Math.min(s.x1,s.x2),hi=Math.max(s.x1,s.x2);
+          const len=Math.hypot(s.x2-s.x1,s.y2-s.y1);
+          return hi<=cut?0:lo>=cut?len:len*(hi-cut)/(hi-lo);
+        };
+        const spur=segments.filter(s=>distalLength(s)>0.001);
+        const levels=ss=>[...new Set(ss.map(s=>Math.round(s.z2*1000)))].sort((a,b)=>a-b);
+        return {body_strokes:body.length,body_z_um:levels(body),spur_strokes:spur.length,
+          spur_z_um:levels(spur),spur_xy_mm:spur.reduce((n,s)=>n+distalLength(s),0)};
+      };
+      const report={off:summary(off),on:summary(on),native_desktop_parity:false,printer_ready:false};
+      await writeFile(parityDir+'/classic-thin-wall-deposition.json',JSON.stringify(report,null,2)+'\n');
+      console.log('CLASSIC_THIN_WALL_DEPOSITION '+JSON.stringify(report));
+      assert.ok(report.off.body_z_um.length>=3&&report.on.body_strokes>=12,
+        'Broad body needs real multilayer control deposition');
+      assert.deepEqual(report.off.body_z_um,report.on.body_z_um,'Broad body layer cadence must remain fixed');
+      assert.equal(report.off.spur_strokes,0,'Disabled classic thin wall must not deposit distal spur');
+      assert.ok(report.on.spur_z_um.length>=3&&report.on.spur_xy_mm>5,
+        'Enabled classic thin wall must deposit actual tagged distal spur strokes');
+      console.log('PASS: classic thin-wall switch adds real distal outer-wall deposition; not native parity');
+    }
+
     // A through-tunnel bridge arch gives the slicer a real unsupported roof.
     // Unlike the earlier two cubes this shape has a geometric bridge region,
     // but evidence must still come from tagged positive-E native G-code.
