@@ -2135,6 +2135,100 @@ try {
       'Selected native volumetric cap must change actual XY extrusion F rate, not merely metadata');
     console.log('PASS: explicit extruder-variant 0.7 vs 40 mm3/s changes median native G1 extrusion feedrate');
 
+
+    // Native GCodeWriter emits pure-E G1 retract/unretract with speeds
+    // multiplied by 60. Compare paired travel events, never profile comments.
+    const retractionPairs=code=>{
+      let mode=null,e=0,feed=NaN,deposited=false,pending=null;
+      const pairs=[];
+      for(const line of code.split(/\r?\n/)){
+        const words=line.split(';')[0].trim().split(/\s+/);
+        const cmd=words[0].toUpperCase();
+        const args=Object.fromEntries(words.slice(1)
+          .filter(w=>/^[XYZEF][+-]?(?:\d+(?:\.\d*)?|\.\d+)$/i.test(w))
+          .map(w=>[w[0].toUpperCase(),Number(w.slice(1))]));
+        if(cmd==='M82'||cmd==='M83'){mode=cmd;continue;}
+        if(cmd==='G92'){if(Object.hasOwn(args,'E'))e=args.E;continue;}
+        if(!['G0','G1','G2','G3'].includes(cmd))continue;
+        if(Object.hasOwn(args,'F'))feed=args.F;
+        const xy=Object.hasOwn(args,'X')||Object.hasOwn(args,'Y');
+        const spatial=xy||Object.hasOwn(args,'Z');
+        if(!Object.hasOwn(args,'E')){
+          if(xy&&pending)pending.travel=true;
+          continue;
+        }
+        if(mode===null)continue;
+        const delta=mode==='M83'?args.E:args.E-e;
+        e=mode==='M83'?e+delta:args.E;
+        if(xy&&delta>0.00001){deposited=true;pending=null;continue;}
+        if(spatial||cmd!=='G1'||!deposited||!Number.isFinite(feed)){
+          pending=null;continue;
+        }
+        if(delta< -0.00001)pending={length:-delta,retractFeed:feed,travel:false};
+        else if(delta>0.00001){
+          if(pending?.travel)pairs.push({length:pending.length,
+            retractFeed:pending.retractFeed,recovery:delta,recoveryFeed:feed});
+          pending=null;
+        }
+      }
+      return pairs;
+    };
+    for(const fixture of [
+      'M83\nG1 X1 E0.1\nG1 E-0.8 F2400\nG1 X5\nG1 E0.8 F1800',
+      'M82\nG92 E10\nG1 X1 E10.1\nG1 E9.3 F2400\nG1 X5\nG1 E10.1 F1800',
+    ]){
+      const pairs=retractionPairs(fixture);
+      assert.equal(pairs.length,1);
+      assert.ok(Math.abs(pairs[0].length-0.8)<0.00001&&
+        Math.abs(pairs[0].recovery-0.8)<0.00001);
+      assert.equal(pairs[0].retractFeed,2400);
+      assert.equal(pairs[0].recoveryFeed,1800);
+    }
+    assert.equal(retractionPairs('M83\nG1 X1 E0.1\nG1 E-0.8 F2400\nG1 E0.8 F1800').length,0);
+    assert.equal(retractionPairs('M83\nG1 X1 E0.1\nG1 X2 E-0.8 F2400\nG1 X5\nG1 E0.8 F1800').length,0);
+    const retractionCases=[
+      {length:0.8,retract:40,recovery:40},
+      {length:1.6,retract:40,recovery:40},
+      {length:0.8,retract:25,recovery:40},
+      {length:0.8,retract:40,recovery:30},
+      {length:0.8,retract:25,recovery:0},
+    ];
+    // Keep the same two-STL scene, temperatures, process and variant.
+    // Parent vectors and child scalars exercise the newly added wire adapter.
+    const retractionReport=[];
+    for(const test of retractionCases){
+      Object.assign(rawOrca[0],{retraction_length:['5'],retraction_speed:['60'],deretraction_speed:['60']});
+      Object.assign(rawOrca[1],{retraction_length:String(test.length),
+        retraction_speed:String(test.retract),deretraction_speed:String(test.recovery)});
+      await uploadRawOrca();
+      await prepare.locator('#lab-slice').click();
+      await prepare.waitForFunction(()=>{
+        const status=document.querySelector('#lab-status')?.textContent||'';
+        return status.startsWith('PASS:')||status.startsWith('FAILED');
+      },null,{timeout:120000});
+      assert.match(await prepare.locator('#lab-status').innerText(),/^PASS: 2 STL model\(s\)/);
+      const code=await prepare.locator('#lab-download').evaluate(async link=>
+        await(await fetch(link.href)).text());
+      const pairs=retractionPairs(code);
+      const matched=pairs.filter(p=>Math.abs(p.length-test.length)<0.001&&
+        Math.abs(p.recovery-test.length)<0.001&&
+        Math.abs(p.retractFeed-test.retract*60)<0.01&&
+        Math.abs(p.recoveryFeed-(test.recovery||test.retract)*60)<0.01);
+      retractionReport.push({...test,pairs:pairs.length,matched:matched.length,
+        sample:pairs.slice(0,5)});
+      console.log('MACHINE_RETRACTION_MOTION '+JSON.stringify(retractionReport.at(-1)));
+    }
+    await writeFile(parityDir+'/machine-retraction-motion.json',
+      JSON.stringify({fixture:'same two synthetic STL models; localhost only',
+        cases:retractionReport,desktop_native_parity:false,printer_ready:false},null,2));
+    for(const test of retractionReport){
+      assert.ok(test.pairs>=10,'Expected actual paired pure-E travel retractions: '+JSON.stringify(test));
+      assert.equal(test.matched,test.pairs,'Retraction length and both feedrates must match: '+JSON.stringify(test));
+    }
+    for(const record of rawOrca.slice(0,2))
+      for(const key of ['retraction_length','retraction_speed','deretraction_speed'])delete record[key];
+    console.log('PASS: real machine retraction length, independent speeds and zero-speed fallback');
+
     // Selecting a native bed without raw Orca profiles must never fall back
     // to generic PLA output while silently ignoring the selected heater.
     await prepare.locator('#lab-orca-profiles').setInputFiles([]);
