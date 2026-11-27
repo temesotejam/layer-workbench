@@ -2585,6 +2585,50 @@ try {
           'Arachne flat cube must retain interior inner deposition');
       }
       console.log('PASS: Arachne independent and simultaneous flat-cube surface toggles; not native parity');
+
+      // Arachne uses its own shell gates. Compare matched OFF/OFF and
+      // ON/ON profiles; explicitly disable minimum shell thickness.
+      const arachneGated=[];
+      for(const [topShell,bottomShell] of [[0,2],[2,0],[0,0]]){
+        const shellSettings={...settings,wall_generator:'arachne',
+          wall_sequence:'inner wall/outer wall',
+          top_shell_layers:topShell,bottom_shell_layers:bottomShell,
+          top_shell_thickness:0,bottom_shell_thickness:0};
+        const pair=[];
+        for(const toggle of ['0','1']){
+          pair.push(surfaceLayers(await sliceRing('arachne-single-wall-shell-'+topShell+bottomShell+'-'+toggle+'.json',
+            {...shellSettings,only_one_wall_top:toggle,only_one_wall_first_layer:toggle},
+            /^PASS: 1 STL model\(s\)/)));
+        }
+        arachneGated.push({top_shell_layers:topShell,bottom_shell_layers:bottomShell,
+          off:pair[0],on:pair[1]});
+      }
+      await writeFile(parityDir+'/arachne-single-wall-shell-gates.json',JSON.stringify({
+        gated:arachneGated,native_desktop_parity:false,printer_ready:false
+      },null,2)+'\n');
+      console.log('ARACHNE_SINGLE_WALL_SHELL_GATES '+JSON.stringify(arachneGated.map(g=>({
+        top:g.top_shell_layers,bottom:g.bottom_shell_layers,layers:g.on.length,
+        off_first:g.off[0],on_first:g.on[0],off_last:g.off.at(-1),on_last:g.on.at(-1)
+      }))));
+      for(const {top_shell_layers:topShell,bottom_shell_layers:bottomShell,off,on} of arachneGated){
+        assertCadence(off,arachneControl);
+        assertCadence(on,off);
+        assert.ok(off.every(l=>l.inner_mm>1),'Arachne shell OFF control must deposit inner walls');
+        for(let i=0;i<off.length;i++){
+          const remove=(i===0&&bottomShell>0)||(i===off.length-1&&topShell>0);
+          if(remove)assert.equal(on[i].inner_mm,0,'Arachne nonzero shell must permit its surface toggle');
+          else assert.ok(on[i].inner_mm>1,'Arachne zero shell or interior must retain inner deposition');
+          // When both shell counts are zero, both toggles are ineffective
+          // in upstream; all wall-role XY lengths must match the control.
+          if(topShell===0&&bottomShell===0){
+            for(const role of ['inner_mm','outer_mm']){
+              assert.ok(Math.abs(on[i][role]-off[i][role])<0.0001,
+                'Arachne both-zero shell gates must preserve '+role);
+            }
+          }
+        }
+      }
+      console.log('PASS: Arachne independent zero-shell gates and both-zero no-op; not native parity');
     }
 
     // A through-tunnel bridge arch gives the slicer a real unsupported roof.
