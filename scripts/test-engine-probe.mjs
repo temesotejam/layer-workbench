@@ -2502,6 +2502,56 @@ try {
           'Interior of flat cube must retain inner walls');
       }
       console.log('PASS: independent top and first layer classic single-wall deposition; not native parity');
+
+      // Complete the nonzero-shell factorial, then compare matched zero-shell
+      // controls. The source-pinned has_*_shell_layers gates depend on layer
+      // count, not fill density. Never infer a wall effect from a profile echo.
+      const bothOn=surfaceLayers(await sliceRing('single-wall-surfaces-11.json',
+        {...settings,wall_sequence:'inner wall/outer wall',
+          only_one_wall_top:'1',only_one_wall_first_layer:'1'},/^PASS: 1 STL model\(s\)/));
+      const assertCadence=(actual,control)=>{
+        assert.deepEqual(actual.map(l=>l.z_um),control.map(l=>l.z_um),
+          'Single-wall shell gate changed wall Z cadence');
+        assert.ok(actual.every(l=>l.outer_mm>1),'Outer wall must remain present');
+      };
+      assertCadence(bothOn,bothOff);
+      assert.equal(bothOn[0].inner_mm,0,'Both-on must remove first-layer inner wall');
+      assert.equal(bothOn.at(-1).inner_mm,0,'Both-on must remove last-layer inner wall');
+      assert.ok(bothOn.slice(1,-1).every(l=>l.inner_mm>1),'Both-on must retain interior inner walls');
+      const gated=[];
+      for(const [topShell,bottomShell] of [[0,2],[2,0]]){
+        const shellSettings={...settings,wall_sequence:'inner wall/outer wall',
+          top_shell_layers:topShell,bottom_shell_layers:bottomShell,
+          top_shell_thickness:0,bottom_shell_thickness:0};
+        const pair=[];
+        for(const toggle of ['0','1']){
+          pair.push(surfaceLayers(await sliceRing('single-wall-shell-'+topShell+bottomShell+'-'+toggle+'.json',
+            {...shellSettings,only_one_wall_top:toggle,only_one_wall_first_layer:toggle},
+            /^PASS: 1 STL model\(s\)/)));
+        }
+        const [off,on]=pair;
+        assert.ok(off.length>=10,'Zero-shell control must contain first, last and interior walls');
+        assertCadence(off,bothOff);
+        assertCadence(on,off);
+        assert.ok(off.every(l=>l.inner_mm>1),'Zero-shell OFF control must have actual inner deposition');
+        for(let i=0;i<off.length;i++){
+          const remove=(i===0&&bottomShell>0)||(i===off.length-1&&topShell>0);
+          if(remove)assert.equal(on[i].inner_mm,0,'Nonzero shell must permit the corresponding single-wall toggle');
+          else assert.ok(Math.abs(on[i].inner_mm-off[i].inner_mm)<0.0001,
+            'Disabled shell or interior must preserve inner-wall XY length');
+          assert.ok(Math.abs(on[i].outer_mm-off[i].outer_mm)<0.0001,
+            'Outer-wall XY length must remain unchanged');
+        }
+        gated.push({top_shell_layers:topShell,bottom_shell_layers:bottomShell,off,on});
+      }
+      await writeFile(parityDir+'/classic-single-wall-shell-gates.json',JSON.stringify({
+        both_on:bothOn,gated,native_desktop_parity:false,printer_ready:false
+      },null,2)+'\n');
+      console.log('CLASSIC_SINGLE_WALL_SHELL_GATES '+JSON.stringify(gated.map(g=>({
+        top:g.top_shell_layers,bottom:g.bottom_shell_layers,layers:g.on.length,
+        off_first:g.off[0],on_first:g.on[0],off_last:g.off.at(-1),on_last:g.on.at(-1)
+      }))));
+      console.log('PASS: classic simultaneous toggles and independent zero-shell gates; not native parity');
     }
 
     // A through-tunnel bridge arch gives the slicer a real unsupported roof.
