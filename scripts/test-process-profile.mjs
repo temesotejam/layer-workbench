@@ -131,6 +131,9 @@ const ENUMS = Object.freeze({
   infill_combination: new Set(["0","1"]),
   // Native coBool; the classic perimeter generator can add thin-wall paths.
   detect_thin_wall: new Set(["0","1"]),
+  // Native coBool options for a single wall on top/first layers.
+  only_one_wall_top: new Set(["0","1"]),
+  only_one_wall_first_layer: new Set(["0","1"]),
 });
 
 export function parseTestProcessOverrides(input) {

@@ -395,3 +395,23 @@ console.log("PASS: classic thin-wall selection reaches mocked native-json with e
   assert.equal(invalid.calls.length,0);
 }
 console.log("PASS: wall sequence reaches mocked native-json with override precedence");
+
+{
+  const preset={...selected,process:{settings:{...selected.process.settings,
+    only_one_wall_top:"1",only_one_wall_first_layer:"0"}}};
+  const {engine,calls}=mockedEngine();
+  await sliceMultiStlWithEngine(engine,items,null,{only_one_wall_first_layer:"1"},preset);
+  const applied=calls.find(c=>c.name==="applyProfile");
+  assert.equal(applied.format,"orca.native-json");
+  assert.equal(applied.value.only_one_wall_top,"1");
+  assert.equal(applied.value.only_one_wall_first_layer,"1");
+  const baseline=mockedEngine();
+  await sliceMultiStlWithEngine(baseline.engine,items,null,null,preset);
+  assert.equal(baseline.calls.find(c=>c.name==="applyProfile").value.only_one_wall_first_layer,"0");
+  for(const key of ["only_one_wall_top","only_one_wall_first_layer"]){
+    const invalid=mockedEngine();
+    await assert.rejects(()=>sliceMultiStlWithEngine(invalid.engine,items,null,{[key]:true},preset),/native enum/);
+    assert.equal(invalid.calls.length,0);
+  }
+}
+console.log("PASS: single-wall surface toggle native transfer and independent override");

@@ -325,3 +325,10 @@ assert.equal(cr10Child.wall_sequence,"inner wall/outer wall");
 assert.equal(process.settings.wall_sequence,"inner wall/outer wall");
 assert.ok(!process.unsupported.includes("wall_sequence"));
 console.log("PASS: pinned CR-10 explicit inner/outer wall sequence");
+
+for(const [key,value] of Object.entries({only_one_wall_top:"1",only_one_wall_first_layer:"0"})){
+  assert.equal(cr10Child[key],value);
+  assert.equal(process.settings[key],value);
+  assert.ok(!process.unsupported.includes(key));
+}
+console.log("PASS: pinned CR-10 top single wall on, first-layer single wall off");

@@ -2451,6 +2451,57 @@ try {
       assert.equal(nestedMatches,results[2].length,
         'Sandwich must deposit the deeper inner loop, outer loop, then adjacent inner loop');
       console.log('PASS: classic three-wall sandwich role and nested-span witness; no native parity asserted');
+
+      // Independent surface toggles on the same flat-topped cube, with
+      // nonzero top/bottom shells and explicit classic two-wall mode.
+      const surfaceLayers=code=>{
+        const p=parseGcodeToolpaths(code);
+        assert.equal(p.skippedMalformedMotion,0);
+        assert.equal(p.skippedArcs,0);
+        const layers=[];
+        for(const layer of p.layers){
+          const strokes=layer.segments.filter(s=>s.extrusion&&s.sourceMotion==='G1'&&
+            (s.feature==='outer wall'||s.feature==='inner wall')&&
+            [s.x1,s.x2,s.y1,s.y2,s.z1,s.z2,s.commandedPositiveEMm].every(Number.isFinite)&&
+            s.commandedPositiveEMm>0&&Math.abs(s.z2-s.z1)<0.0005&&
+            Math.hypot(s.x2-s.x1,s.y2-s.y1)>0.001);
+          if(!strokes.length)continue;
+          const length=role=>strokes.filter(s=>s.feature===role)
+            .reduce((total,s)=>total+Math.hypot(s.x2-s.x1,s.y2-s.y1),0);
+          layers.push({z_um:Math.round(strokes[0].z2*1000),
+            inner_mm:length('inner wall'),outer_mm:length('outer wall')});
+        }
+        return layers.sort((a,b)=>a.z_um-b.z_um);
+      };
+      const surfaceResults=[];
+      for(const [top,first] of [['0','0'],['1','0'],['0','1']]){
+        const code=await sliceRing('single-wall-surfaces-'+top+first+'.json',
+          {...settings,wall_sequence:'inner wall/outer wall',
+            only_one_wall_top:top,only_one_wall_first_layer:first},/^PASS: 1 STL model\(s\)/);
+        surfaceResults.push(surfaceLayers(code));
+      }
+      const [bothOff,topOnly,firstOnly]=surfaceResults;
+      await writeFile(parityDir+'/classic-single-wall-surfaces.json',JSON.stringify({
+        both_off:bothOff,top_only:topOnly,first_only:firstOnly,
+        native_desktop_parity:false,printer_ready:false
+      },null,2)+'\n');
+      console.log('CLASSIC_SINGLE_WALL_SURFACES '+JSON.stringify(surfaceResults.map(layers=>({
+        layers:layers.length,first:layers[0],last:layers.at(-1)
+      }))));
+      assert.ok(bothOff.length>=10,'Need first, last and interior wall layers');
+      for(const layers of surfaceResults){
+        assert.deepEqual(layers.map(l=>l.z_um),bothOff.map(l=>l.z_um),'Surface toggle changed wall Z cadence');
+        assert.ok(layers.every(l=>l.outer_mm>1),'Outer wall must remain present');
+      }
+      assert.ok(bothOff[0].inner_mm>1&&bothOff.at(-1).inner_mm>1,'Both-off control must have inner walls at both ends');
+      assert.equal(topOnly.at(-1).inner_mm,0,'Top-only must remove the last-layer inner wall');
+      assert.equal(firstOnly[0].inner_mm,0,'First-only must remove the first-layer inner wall');
+      assert.ok(topOnly[0].inner_mm>1&&firstOnly.at(-1).inner_mm>1,'Opposite surface must retain its inner wall');
+      for(let i=1;i<bothOff.length-1;i++){
+        assert.ok(bothOff[i].inner_mm>1&&topOnly[i].inner_mm>1&&firstOnly[i].inner_mm>1,
+          'Interior of flat cube must retain inner walls');
+      }
+      console.log('PASS: independent top and first layer classic single-wall deposition; not native parity');
     }
 
     // A through-tunnel bridge arch gives the slicer a real unsupported roof.
