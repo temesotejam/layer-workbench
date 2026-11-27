@@ -14,15 +14,35 @@ const FAMILIES=Object.freeze(["machine","process","filament"]);
 const RECORD_METADATA=new Set(["version","from","setting_id","filament_id",
   "instantiation","description"]);
 const PRINTER_SELECTION=new Set(["compatible_printers","compatible_printers_condition"]);
+// Pinned Preset.cpp machine/filament option lists and PrintConfig.cpp
+// declarations. Exact names and families only; never classify arbitrary *_gcode.
+const CUSTOM_GCODE_HOOKS={
+  machine:new Set(["file_start_gcode","machine_start_gcode","machine_end_gcode",
+    "before_layer_change_gcode","printing_by_object_gcode","layer_change_gcode",
+    "time_lapse_gcode","wrapping_detection_gcode","change_filament_gcode",
+    "change_extrusion_role_gcode"]),
+  process:new Set(),
+  filament:new Set(["filament_start_gcode","filament_end_gcode","filament_change_extrusion_role_gcode"])
+};
+function customGcodePresence(kind,value) {
+  // Only the source-declared shapes are recognized. Nonempty includes comments
+  // and placeholders; this is not proof that a hook executes or emits motion.
+  const slots=kind==="machine" && typeof value==="string" ? [value] :
+    kind==="filament" && Array.isArray(value) && value.length>0 &&
+      value.every(v=>typeof v==="string") ? value : null;
+  if(!slots)return "unrecognized-shape";
+  return slots.some(v=>v.trim().length>0) ? "nonempty" : "blank";
+}
 function missingKeyRole(kind,key) {
   if(RECORD_METADATA.has(key)) return "preset-record-metadata";
   // Preset.cpp is_compatible_with_printer evaluates these fields for
   // process/filament selection; they remain important compatibility gates.
   if(kind!=="machine" && PRINTER_SELECTION.has(key)) return "printer-compatibility";
+  if(CUSTOM_GCODE_HOOKS[kind].has(key)) return "custom-gcode-hook";
   return "unclassified";
 }
 function partitionMissingKeys(kind,keys) {
-  const groups={"preset-record-metadata":[],"printer-compatibility":[],"unclassified":[]};
+  const groups={"preset-record-metadata":[],"printer-compatibility":[],"custom-gcode-hook":[],"unclassified":[]};
   for(const key of keys) groups[missingKeyRole(kind,key)].push(key);
   return groups;
 }
@@ -89,6 +109,8 @@ export function auditProfileCoverage(full, restricted) {
     const nativeSet=new Set(nativeKeys), wasmSet=new Set(wasmKeys);
     const notForwarded=nativeKeys.filter(k=>!wasmSet.has(k));
     const missingRoles=partitionMissingKeys(kind,notForwarded);
+    const missingHooks=missingRoles["custom-gcode-hook"].map(key=>({key,
+      presence:customGcodePresence(kind,native[key])}));
     const derived=wasmKeys.filter(k=>!nativeSet.has(k));
     const overlapping=wasmKeys.filter(k=>nativeSet.has(k));
     // Raw differences can be legitimate scalar/vector and percent conversions.
@@ -107,6 +129,7 @@ export function auditProfileCoverage(full, restricted) {
       not_forwarded_count:notForwarded.length,
       not_forwarded_keys:notForwarded,
       not_forwarded_keys_by_role:missingRoles,
+      not_forwarded_custom_gcode_hooks:missingHooks,
       restricted_only_keys:derived,
       raw_value_differences_requiring_review:transformed,
       raw_value_difference_shapes:differences,
@@ -170,6 +193,7 @@ async function main() {
       ", unexplained="+row.unexplained_raw_value_difference_count);
     console.log(kind+" missing-key roles: "+JSON.stringify(Object.fromEntries(
       Object.entries(row.not_forwarded_keys_by_role).map(([role,keys])=>[role,keys.length]))));
+    if(row.not_forwarded_custom_gcode_hooks.length)console.log(kind+" missing custom G-code hook presence: "+JSON.stringify(row.not_forwarded_custom_gcode_hooks));
     // Name and shape only; never emit original profile values or executable G-code.
     const unexplained=row.raw_value_difference_shapes.filter(item=>item.syntax_only_hint==="unexplained")
       .map(item=>({key:item.key,native_shape:item.native_shape,
