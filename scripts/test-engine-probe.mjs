@@ -2229,6 +2229,46 @@ try {
       for(const key of ['retraction_length','retraction_speed','deretraction_speed'])delete record[key];
     console.log('PASS: real machine retraction length, independent speeds and zero-speed fallback');
 
+    // Pinned GCode::needs_retraction rejects travel shorter than the
+    // configured threshold. Compare two extreme bounded thresholds on
+    // the identical fixture, keeping the verified retract length/speeds.
+    // Layer changes and other retract causes may remain, so do not require
+    // zero pairs at the high threshold.
+    const thresholdReport=[];
+    for(const threshold of [0,100]){
+      Object.assign(rawOrca[0],{retraction_minimum_travel:['2']});
+      Object.assign(rawOrca[1],{retraction_length:'0.8',
+        retraction_speed:'40',deretraction_speed:'40',
+        retraction_minimum_travel:String(threshold)});
+      await uploadRawOrca();
+      await prepare.locator('#lab-slice').click();
+      await prepare.waitForFunction(()=>{
+        const status=document.querySelector('#lab-status')?.textContent||'';
+        return status.startsWith('PASS:')||status.startsWith('FAILED');
+      },null,{timeout:120000});
+      assert.match(await prepare.locator('#lab-status').innerText(),/^PASS: 2 STL model\(s\)/);
+      const code=await prepare.locator('#lab-download').evaluate(async link=>
+        await(await fetch(link.href)).text());
+      const pairs=retractionPairs(code);
+      const matched=pairs.filter(p=>Math.abs(p.length-0.8)<0.001&&
+        Math.abs(p.recovery-0.8)<0.001&&
+        Math.abs(p.retractFeed-2400)<0.01&&Math.abs(p.recoveryFeed-2400)<0.01);
+      thresholdReport.push({threshold,pairs:pairs.length,matched:matched.length});
+      console.log('MACHINE_RETRACTION_TRAVEL_THRESHOLD '+JSON.stringify(thresholdReport.at(-1)));
+    }
+    await writeFile(parityDir+'/machine-retraction-travel-threshold.json',
+      JSON.stringify({fixture:'same two synthetic STL models; localhost only',
+        cases:thresholdReport,desktop_native_parity:false,printer_ready:false},null,2));
+    assert.ok(thresholdReport[0].pairs>=10,'Expected real low-threshold travel retractions');
+    assert.ok(thresholdReport[1].pairs<thresholdReport[0].pairs,
+      'Higher minimum travel must reduce paired travel retractions on this fixture');
+    for(const test of thresholdReport)
+      assert.equal(test.matched,test.pairs,'Remaining paired retracts must retain length and speeds');
+    for(const record of rawOrca.slice(0,2))
+      for(const key of ['retraction_length','retraction_speed','deretraction_speed',
+        'retraction_minimum_travel'])delete record[key];
+    console.log('PASS: minimum travel threshold changes real paired retraction count');
+
     // Selecting a native bed without raw Orca profiles must never fall back
     // to generic PLA output while silently ignoring the selected heater.
     await prepare.locator('#lab-orca-profiles').setInputFiles([]);
