@@ -377,5 +377,12 @@ for(const [input,expected] of [[1,"1"],["0.75","0.75"],[0.1,"0.1"],[2,"2"]])
   assert.deepEqual(parseTestProcessOverrides({[bottomFlowKey]:input}),{[bottomFlowKey]:expected});
 for(const bad of [0,-1,2.01,"75%",["1"],null,true,NaN,Infinity,"1 G28"])
   assert.throws(()=>parseTestProcessOverrides({[bottomFlowKey]:bad}),/Invalid|safe test range/);
-assert.throws(()=>parseTestProcessOverrides({top_solid_infill_flow_ratio:"1"}),/Unsupported process setting/);
-console.log("PASS: independent bounded scalar bottom surface flow; top nozzle vector remains unsupported");
+console.log("PASS: independent bounded scalar bottom surface flow");
+const topFlowKey="top_solid_infill_flow_ratio";
+for(const [input,expected] of [["1","1"],[["0.75"],"0.75"],[0.1,"0.1"],[[2],"2"]])
+  assert.deepEqual(parseTestProcessOverrides({[topFlowKey]:input}),{[topFlowKey]:[expected]});
+for(const bad of [0,-1,2.01,"75%","nil",null,true,[],["1","0.75"],[null],["nil"],[["1"]],Array(1),"1,0.75","1 G28"])
+  assert.throws(()=>parseTestProcessOverrides({[topFlowKey]:bad}),/Invalid|safe test range/);
+assert.deepEqual(parseTestProcessOverrides({[topFlowKey]:["0.75"],[bottomFlowKey]:"1"}),
+  {[topFlowKey]:["0.75"],[bottomFlowKey]:"1"});
+console.log("PASS: explicit single-slot top surface vector, distinct from bottom scalar");

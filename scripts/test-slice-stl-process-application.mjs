@@ -341,3 +341,20 @@ for(const bad of [0,"75%",["1"],null,true]){
   assert.equal(calls.length,0);
 }
 console.log("PASS: bounded bottom surface flow reaches native-json, independent of top flow");
+
+const topFlowKey="top_solid_infill_flow_ratio";
+for(const value of ["0.75",["0.75"]]){
+  const preset={...selected,process:{settings:{...selected.process.settings,[topFlowKey]:value,[bottomFlowKey]:"1"}}};
+  const {engine,calls}=mockedEngine();
+  await sliceMultiStlWithEngine(engine,items,null,null,preset);
+  const applied=calls.find(c=>c.name==="applyProfile");
+  assert.equal(applied.format,"orca.native-json");
+  assert.deepEqual(applied.value[topFlowKey],["0.75"]);
+  assert.equal(applied.value[bottomFlowKey],"1");
+}
+for(const bad of [0,"75%",["1","0.75"],null,["nil"],[null],true]){
+  const {engine,calls}=mockedEngine();
+  await assert.rejects(()=>sliceMultiStlWithEngine(engine,items,null,{[topFlowKey]:bad}),/Invalid|safe test range/);
+  assert.equal(calls.length,0);
+}
+console.log("PASS: one-slot native top flow transport preserves separate bottom scalar");

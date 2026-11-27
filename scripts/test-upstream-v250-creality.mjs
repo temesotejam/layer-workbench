@@ -306,5 +306,10 @@ assert.deepEqual(process.chain.map(n=>indexed.records.find(p=>p.name===n)[bottom
 assert.equal(process.settings[bottomFlowKey],"1");
 assert.equal(combined.process.settings[bottomFlowKey],"1");
 assert.ok(!process.unsupported.includes(bottomFlowKey));
-assert.ok(process.unsupported.includes("top_solid_infill_flow_ratio"));
-console.log("PASS: official CR-10 bottom surface scalar flow; top nozzle vector not conflated");
+const topFlowKey="top_solid_infill_flow_ratio";
+assert.deepEqual(process.chain.map(n=>indexed.records.find(p=>p.name===n)[topFlowKey]),
+  [undefined,undefined,"1"]);
+assert.deepEqual(process.settings[topFlowKey],["1"]);
+assert.deepEqual(combined.process.settings[topFlowKey],["1"]);
+assert.ok(!process.unsupported.includes(topFlowKey));
+console.log("PASS: official CR-10 bottom scalar and one-slot top nozzle vector remain independent");

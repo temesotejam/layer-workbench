@@ -199,6 +199,9 @@ export function resolveOrcaProfileFamily(records,type,selected,options={}) {
         }else if(type==="process" && (key==="minimum_sparse_infill_area" || key==="bottom_solid_infill_flow_ratio")) {
           // Native coFloat is a scalar (area or flow multiplier), never a filament vector.
           settings[key]=parseTestProcessOverrides({[key]:value})[key];
+        }else if(type==="process" && key==="top_solid_infill_flow_ratio") {
+          // Preserve one explicit native nozzle slot; never flatten it into bottom flow.
+          settings[key]=parseTestProcessOverrides({[key]:value})[key];
         }else if(Object.hasOwn(SPECS[type],key))settings[key]=validateNum(key,value,SPECS[type][key]);
         else if(type==="process" && Object.hasOwn(PROCESS_ENUMS,key)) {
           if(typeof value!=="string" || !PROCESS_ENUMS[key].has(value))

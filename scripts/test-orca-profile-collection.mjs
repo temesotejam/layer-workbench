@@ -1024,3 +1024,20 @@ for(const bad of [0,-1,"75%",["1"],null,true])
   assert.throws(()=>resolve(bottomFlowProfiles.map(rec=>rec.name==="0.16mm Fine @TestPrinter"
     ? {...rec,[bottomFlowKey]:bad}:rec),selection),/Invalid|safe test range/);
 console.log("PASS: independent bottom surface flow inheritance and absence preservation");
+
+const topFlowKey="top_solid_infill_flow_ratio";
+const topFlowProfiles=profiles.map(rec=>rec.name==="fdm_process_common"
+  ? {...rec,[topFlowKey]:"1"} : rec.name==="0.16mm Fine @TestPrinter"
+    ? {...rec,[topFlowKey]:["0.75"]} : rec);
+const topFlow=resolve(topFlowProfiles,selection).process;
+assert.deepEqual(topFlow.settings[topFlowKey],["0.75"]);
+assert.ok(!topFlow.unsupported.includes(topFlowKey));
+assert.deepEqual(resolve(topFlowProfiles.map(rec=>{
+  if(rec.name!=="0.16mm Fine @TestPrinter")return rec;
+  const child={...rec};delete child[topFlowKey];return child;
+}),selection).process.settings[topFlowKey],["1"]);
+assert.equal(result.process.settings[topFlowKey],undefined);
+for(const bad of [0,"75%",["1","0.75"],null,["nil"],[null],true])
+  assert.throws(()=>resolve(topFlowProfiles.map(rec=>rec.name==="0.16mm Fine @TestPrinter"
+    ? {...rec,[topFlowKey]:bad}:rec),selection),/Invalid|safe test range/);
+console.log("PASS: independent one-slot top flow inheritance and absence preservation");
