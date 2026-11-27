@@ -1,0 +1,63 @@
+name: Probe v2.5.0 deterministic infill arc ordering
+on:
+  pull_request:
+    paths:
+      - 'scripts/patch-v250-infill-arc-order.py'
+      - 'scripts/test-v250-infill-arc-order.cpp'
+      - '.github/workflows/probe-v250-infill-arc-order.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  arc-order:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stage candidate only from pinned upstream blob
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 2 --max-time 60 --max-filesize 1000000 \
+            https://raw.githubusercontent.com/OrcaSlicer/OrcaSlicer/40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19/src/libslic3r/Fill/FillBase.cpp \
+            -o "${RUNNER_TEMP}/FillBase.cpp"
+          python3 scripts/patch-v250-infill-arc-order.py "${RUNNER_TEMP}/FillBase.cpp" "${RUNNER_TEMP}/arc-candidate"
+          printf '\n' >> "${RUNNER_TEMP}/FillBase.cpp"
+          if python3 scripts/patch-v250-infill-arc-order.py "${RUNNER_TEMP}/FillBase.cpp" "${RUNNER_TEMP}/bad-candidate"; then
+            echo 'Unexpectedly accepted modified source'
+            exit 1
+          fi
+          test ! -e "${RUNNER_TEMP}/bad-candidate"
+      - name: Test exact candidate lambdas with native C++
+        shell: bash
+        run: |
+          set -euo pipefail
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror -UNDEBUG \
+            -I"${RUNNER_TEMP}/arc-candidate" scripts/test-v250-infill-arc-order.cpp \
+            -o "${RUNNER_TEMP}/arc-native"
+          "${RUNNER_TEMP}/arc-native"
+      - uses: actions/cache@v4
+        with:
+          path: /opt/emsdk
+          key: emsdk-ubuntu-mt-3.1.74-native-eh-v1
+      - name: Install pinned candidate SDK if needed
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -x /opt/emsdk/emsdk ]; then
+            git clone --depth 1 https://github.com/emscripten-core/emsdk.git /opt/emsdk
+          fi
+          /opt/emsdk/emsdk install 3.1.74
+          /opt/emsdk/emsdk activate 3.1.74
+      - name: Test exact candidate lambdas with Emscripten libc++
+        shell: bash
+        run: |
+          set -eo pipefail
+          source /opt/emsdk/emsdk_env.sh
+          em++ --version
+          em++ -std=c++17 -O2 -Wall -Wextra -Werror -UNDEBUG -sASSERTIONS=1 -sENVIRONMENT=node \
+            -I"${RUNNER_TEMP}/arc-candidate" scripts/test-v250-infill-arc-order.cpp \
+            -o "${RUNNER_TEMP}/arc-wasm.js"
+          node "${RUNNER_TEMP}/arc-wasm.js"
+      # No full engine rebuild, output artifacts, or Pages activation.

@@ -1,0 +1,666 @@
+# CI-only experiment. Build recipe copied from accepted run 45284215349
+# at f2b3c08bdc97ca551df924e82a2d5929f35654fe; comparison fixture from c4ff91c2c8bcccdb5818cc56087cb22509e1005e.
+# Do not use its artifact as an accepted engine or deploy it to Pages.
+name: Experimental v2.5.0 infill equal-neighbor engine comparison
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/experiment-v250-infill-arc-engine.yml'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: experimental-v250-infill-arc-engine
+  cancel-in-progress: false
+jobs:
+  experimental-build:
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'test/v250-infill-equal-neighbor-fallback' }}
+    # Stable runner image: ubuntu-latest moved to 26.04 and its apt mirrors
+    # failed DNS resolution in #43047097790 before any WASM work began.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - name: Read experiment patch from this PR
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Preserve only experiment patch before switching to accepted recipe
+        run: |
+          cp scripts/patch-v250-infill-arc-order.py "${RUNNER_TEMP}/patch-v250-infill-arc-order.py"
+          cp scripts/test-v250-infill-arc-order.cpp "${RUNNER_TEMP}/test-v250-infill-arc-order.cpp"
+      - name: Checkout exact accepted build inputs
+        uses: actions/checkout@v4
+        with:
+          ref: f2b3c08bdc97ca551df924e82a2d5929f35654fe
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 26
+
+      # GitHub-hosted Ubuntu 24.04 already ships the build toolchain.
+      # Avoid apt-get: Azure Ubuntu mirror DNS failed repeatedly even with
+      # 3 retries (run #43051471275), before CMake could start.
+      - name: Verify preinstalled build tools (APT-free)
+        shell: bash
+        run: bash scripts/prepare-wasm-runner.sh
+
+      - name: Clone and pin the WebAssembly engine source
+        run: |
+          git clone https://github.com/Hiosdra/OrcaWasm.git orcawasm
+          git -C orcawasm checkout 60a09e04f1990be39c8f6f35dffef1a2c9e224c4
+
+      - name: Clone target OrcaSlicer source
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch v2.5.0 https://github.com/OrcaSlicer/OrcaSlicer.git orcawasm/orca
+          test "$(git -C orcawasm/orca rev-parse HEAD)" = 40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19
+          source_file=orcawasm/orca/src/libslic3r/Fill/FillBase.cpp
+          python3 "${RUNNER_TEMP}/patch-v250-infill-arc-order.py" "${source_file}" "${RUNNER_TEMP}/arc-candidate"
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror -UNDEBUG \
+            -I"${RUNNER_TEMP}/arc-candidate" "${RUNNER_TEMP}/test-v250-infill-arc-order.cpp" \
+            -o "${RUNNER_TEMP}/arc-native"
+          "${RUNNER_TEMP}/arc-native"
+          cp "${RUNNER_TEMP}/arc-candidate/FillBase.cpp" "${source_file}"
+          sha256sum "${source_file}" > "${RUNNER_TEMP}/arc-source.sha256"
+
+      - name: Cache Emscripten SDK
+        id: cache-emsdk
+        uses: actions/cache@v4
+        with:
+          path: /opt/emsdk
+          key: emsdk-ubuntu-mt-3.1.74-native-eh-v1
+
+      - name: Install Emscripten
+        if: steps.cache-emsdk.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 https://github.com/emscripten-core/emsdk.git /opt/emsdk
+          /opt/emsdk/emsdk install 3.1.74
+          /opt/emsdk/emsdk activate 3.1.74
+
+      - name: Restore dependency and compiler caches
+        id: deps-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            orcawasm/deps-install
+            orcawasm/build-wasm/emscripten-cache-mt
+            ~/.cache/ccache
+          key: wasm-v2.5.0-emsdk-3.1.74-cgal-6.2.1-assimp-5.4.3-draco-1.5.7-occt-7.8.1-onetbb-2021.13.2-native-eh-v5-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            wasm-v2.5.0-emsdk-3.1.74-cgal-6.2.1-assimp-5.4.3-draco-1.5.7-occt-7.8.1-onetbb-2021.13.2-native-eh-v5-${{ runner.os }}-
+            wasm-v2.5.0-emsdk-3.1.74-cgal-6.2.1-assimp-5.4.3-draco-1.5.7-occt-7.8.1-onetbb-2021.13.2-native-eh-v4-${{ runner.os }}-
+            wasm-v2.5.0-emsdk-3.1.74-cgal-6.2.1-assimp-5.4.3-occt-7.8.1-onetbb-2021.13.2-native-eh-v3-${{ runner.os }}-
+
+      - name: Adapt the engine patcher to v2.5.0
+        run: python3 scripts/adapt-orcawasm-v2.5.0.py orcawasm/patches/apply.py orcawasm/orca/CMakeLists.txt orcawasm/scripts/build-local-wsl.sh
+
+      # Upstream build-local-wsl.sh runs the smoke suite in its trailing block.
+      # Run the SAME smoke suite once as a dedicated CI gate after compilation.
+      # A failure must still fail the build, but must not conceal the independent
+      # native 3MF export regression or prevent useful runtime diagnostics.
+      - name: Separate upstream embedded smoke from compilation (fail closed)
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("orcawasm/scripts/build-local-wsl.sh")
+          source = path.read_text(encoding="utf-8")
+          suffix = "(\nnode scripts/smoke-test.mjs --wasm-dir artifacts\n)\n"
+          if not source.endswith(suffix) or source.count(suffix) != 1:
+              raise SystemExit("pinned OrcaWasm embedded smoke trailer drifted; refuse to modify")
+          path.write_text(
+              source[:-len(suffix)] + "# Smoke runs once in explicit CI gate below.\n",
+              encoding="utf-8",
+          )
+          PY
+
+      # The pinned generic-PLA modifier smoke previously relied on Orca's
+      # implicit support_enable default. Select it explicitly for this test
+      # fixture; DO NOT remove the baseline-vs-enforcer output assertion.
+      - name: Unit-test fail-closed support smoke fixture patch
+        run: python3 -m unittest discover -s scripts -p 'test_patch_orcawasm_support_smoke.py' -v
+
+      - name: Enable supports explicitly in pinned generic modifier smoke fixture
+        run: python3 scripts/patch-orcawasm-support-smoke.py orcawasm/scripts/smoke-test.mjs
+
+      - name: Check fail-closed native 3MF export patch
+        run: python3 -m unittest discover -s scripts -p 'test_patch_orcawasm_3mf_object_export.py' -v
+
+      - name: Stage experimental native 3MF object-preserving exporter
+        run: python3 scripts/patch-orcawasm-3mf-object-export.py orcawasm/bridge/slicer.cpp
+
+      - name: Unit-test fail-closed imported 3MF preservation guard
+        run: python3 -m unittest discover -s scripts -p 'test_patch_orcawasm_preservation_guard.py' -v
+
+      - name: Stage imported native 3MF provenance guard
+        run: python3 scripts/patch_orcawasm_preservation_guard.py orcawasm/bridge/slicer.cpp
+
+      - name: Unit-test pinned private imported-session transform patch
+        run: python3 -m unittest discover -s scripts -p 'test_patch_orcawasm_private_instance_edit.py' -v
+
+      - name: Stage private imported native session transform prototype
+        run: python3 scripts/patch_orcawasm_private_instance_edit.py orcawasm/bridge/slicer.cpp orcawasm/wasm/CMakeLists.txt
+
+      - name: Verify native 3MF export path no longer flattens all objects
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'This is an experimental candidate, NOT desktop 3MF parity.' orcawasm/bridge/slicer.cpp
+
+      - name: Verify v2.5.0 omits the obsolete TextShape WASM override
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e orcawasm/orca/src/libslic3r/Shape/TextShape.cpp
+          test ! -e orcawasm/orca/src/libslic3r/Shape/TextShape.hpp
+          if grep -Fq 'Shape/TextShape.cpp' orcawasm/patches/apply.py; then
+            echo "::error::Obsolete TextShape override still injected into v2.5.0"
+            exit 1
+          fi
+
+      - name: Verify headless CMake excludes native FFmpeg packaging
+        run: |
+          set -euo pipefail
+          grep -Fq 'if (NOT APPLE AND NOT SLIC3R_WASM)' orcawasm/orca/src/CMakeLists.txt
+
+      - name: Verify wasm32-safe Arachne bead-count saturation
+        run: |
+          set -euo pipefail
+          grep -Fq 'inset_count > std::numeric_limits<size_t>::max() / 2' orcawasm/orca/src/libslic3r/Arachne/WallToolPaths.cpp
+          grep -Fq '? std::numeric_limits<size_t>::max()' orcawasm/orca/src/libslic3r/Arachne/WallToolPaths.cpp
+
+      - name: Verify WASM-only OpenCV texture-source exclusion
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          cmake = Path("orcawasm/orca/src/libslic3r/CMakeLists.txt").read_text(encoding="utf-8")
+          guard = (
+              "if(SLIC3R_WASM)\n"
+              "    list(REMOVE_ITEM lisbslic3r_sources\n"
+              "        TexturePainting.cpp\n"
+              "        TextureToColor/TextureToColor.cpp\n"
+              "    )\n"
+              "endif()"
+          )
+          if cmake.count(guard) != 1:
+              raise SystemExit("WASM-only OpenCV texture guard missing or duplicated")
+          PY
+
+      - name: Verify exact-only WASM Voronoi predicates (no unsupported FPU rounding)
+        shell: bash
+        run: |
+          set -euo pipefail
+          file=orcawasm/orca/src/libslic3r/Geometry/VoronoiUtilsCgal.cpp
+          grep -Fq 'using ParabolicTangentToSegmentOrientationPredicateFiltered = ExactWasmPredicate<' "$file"
+          grep -Fq 'using ParabolicTangentToParabolicTangentOrientationPredicateFiltered = ExactWasmPredicate<' "$file"
+          grep -Fq '#if defined(SLIC3R_WASM) && defined(ARACHNE_DEBUG)' "$file"
+          grep -Fq '#include <CGAL/Surface_sweep_2_algorithms.h>' "$file"
+          grep -Fq '#if !defined(SLIC3R_WASM)' "$file"
+
+      - name: Verify Boost.Log pthread build configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'STAMP="${INSTALL}/.boost_built_mt_native_eh_v4"' orcawasm/scripts/build-local-wsl.sh
+          if grep -Fq 'define=BOOST_LOG_NO_THREADS=1' orcawasm/scripts/build-local-wsl.sh; then
+            echo "::error::Boost.Log must be rebuilt with pthread support"
+            exit 1
+          fi
+          if grep -Fq 'BOOST_LOG_NO_THREADS' orcawasm/cmake/wasm_find_paths.cmake; then
+            echo "::error::WASM compile definitions still select single-threaded Boost.Log ABI"
+            exit 1
+          fi
+
+      - name: Verify v2.5.0 capability metadata matches pinned upstream
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          bridge = Path("orcawasm/bridge/slicer.cpp").read_text(encoding="utf-8")
+          expected = '"engine":{"family":"OrcaSlicer","version":"2.5.0"}'
+          if bridge.count(expected) != 1:
+              raise SystemExit("WASM engine does not advertise source tag v2.5.0")
+          if '"engine":{"family":"OrcaSlicer","version":"2.4.2"}' in bridge:
+              raise SystemExit("WASM engine still reports old v2.4.2 metadata")
+          PY
+
+      - name: Verify OrcaSlicer v2.5 bridge validation API
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          bridge = Path("orcawasm/bridge/slicer.cpp").read_text(encoding="utf-8")
+          expected = "Slic3r::StringObjectException validation_error = print.validate();"
+          if bridge.count(expected) != 1 or "print.validate(&warning)" in bridge:
+              raise SystemExit("v2.5.0 Print::validate bridge adaptation missing")
+          PY
+
+      - name: Build Assimp 5.4.3 for WebAssembly
+        env:
+          EMSDK: /opt/emsdk
+          EXTRA_CXX_FLAGS: "-fwasm-exceptions -pthread"
+          EXTRA_C_FLAGS: "-sSUPPORT_LONGJMP=wasm -pthread"
+        run: bash scripts/build-assimp-wasm.sh
+
+      - name: Build Draco 1.5.7 for WebAssembly
+        env:
+          EMSDK: /opt/emsdk
+          # Draco 1.5.7 explicitly tests $ENV{EMSCRIPTEN} in CMake.
+          EMSCRIPTEN: /opt/emsdk/upstream/emscripten
+          EXTRA_CXX_FLAGS: "-fwasm-exceptions -pthread"
+          EXTRA_C_FLAGS: "-sSUPPORT_LONGJMP=wasm -pthread"
+        run: bash scripts/build-draco-wasm.sh
+
+      - name: Build OrcaSlicer v2.5.0 as WebAssembly
+        id: wasm_build
+        env:
+          EMSDK: /opt/emsdk
+          EMSDK_VERSION: "3.1.74"
+          ORCA_VERSION: v2.5.0
+          OCCT_VERSION: "7.8.1"
+          ONETBB_VERSION: v2021.13.2
+          OUTPUT_NAME: slicer-mt
+          BOOST_THREADING: multi
+          EXTRA_CXX_FLAGS: "-fwasm-exceptions -pthread"
+          EXTRA_C_FLAGS: "-sSUPPORT_LONGJMP=wasm -pthread"
+        run: |
+          set -eo pipefail
+          cd orcawasm
+          bash scripts/build-local-wsl.sh 2>&1 | tee "$GITHUB_WORKSPACE/wasm-candidate-build.log"
+          cd "$GITHUB_WORKSPACE"
+          sha256sum -c "${RUNNER_TEMP}/arc-source.sha256"
+
+      # Read accepted caches, but never save experimental compiler output into them.
+
+      # Preserve a short, searchable compiler/CMake failure excerpt when
+      # hosted GitHub Actions job-log retrieval is unavailable or times out.
+      # This is diagnostic-only: it never publishes an untested WASM binary.
+      - name: Capture failed build diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f wasm-candidate-build.log ]]; then
+            {
+              echo "## Error context"
+              grep -En -B 4 -A 10 '(FAILED:|error:|CMake Error|ninja: build stopped|undefined symbol|fatal error:)' wasm-candidate-build.log | tail -n 350 || true
+              echo
+              echo "## Final build output"
+              tail -n 100 wasm-candidate-build.log
+            } > wasm-candidate-failure.txt
+            {
+              echo "### Failed WASM candidate: diagnostic extract"
+              echo '```text'
+              tail -n 150 wasm-candidate-failure.txt
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload failed build diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: experimental-v250-equal-neighbor-failure-diagnostics
+          path: wasm-candidate-failure.txt
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Run API conformance tests
+        working-directory: orcawasm
+        run: node scripts/conformance.mjs --wasm-dir artifacts
+
+      - name: Run asynchronous binding tests
+        working-directory: orcawasm
+        run: node scripts/binding-test.mjs --wasm-dir artifacts
+
+      # Run this safety assertion even if the unrelated modifier smoke later
+      # fails. A failed guard still fails the overall job and never publishes
+      # the WASM binary; only the tiny diagnostic JSON is archived.
+      - name: Verify imported 3MF provenance guard on rebuilt WASM (non-print)
+        if: ${{ !cancelled() && steps.wasm_build.outcome == 'success' }}
+        timeout-minutes: 6
+        run: |
+          set -euo pipefail
+          node --check scripts/test-v250-imported-replacement-guard.mjs
+          python3 scripts/make_3mf_two_build_fixture.py --output parity-output/independent-core-two-build.3mf
+          node scripts/test-v250-imported-replacement-guard.mjs
+
+      - name: Verify private in-session imported-3MF edit on rebuilt WASM
+        if: ${{ !cancelled() && steps.wasm_build.outcome == 'success' }}
+        timeout-minutes: 8
+        run: |
+          set -euo pipefail
+          node --check scripts/test-v250-private-instance-edit.mjs
+          python3 scripts/make_3mf_two_build_fixture.py --output parity-output/independent-core-two-build.3mf
+          node scripts/test-v250-private-instance-edit.mjs
+
+      - name: Run end-to-end engine smoke test
+        if: ${{ !cancelled() && steps.wasm_build.outcome == 'success' }}
+        working-directory: orcawasm
+        timeout-minutes: 20
+        run: node scripts/smoke-test.mjs --wasm-dir artifacts
+
+      - name: Archive imported 3MF provenance result (report only, never WASM)
+        if: ${{ always() && steps.wasm_build.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: experimental-v250-equal-neighbor-provenance-report
+          path: |
+            parity-output/rebuilt-import-replacement-guard.json
+            parity-output/private-imported-instance-edit.json
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Test native multi-object 3MF export on rebuilt WASM (non-print)
+        # Run even if the independent smoke gate fails. No failed build is
+        # released; this isolates 3MF regressions from unrelated smoke results.
+        if: ${{ !cancelled() && steps.wasm_build.outcome == 'success' }}
+        timeout-minutes: 12
+        run: |
+          set -euo pipefail
+          node scripts/test-v250-native-multiobject-export.mjs
+          python3 - <<'PY'
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, 'scripts')
+          from audit_3mf_scene import audit
+          report = audit(Path('parity-output/rebuilt-shared-object.3mf'))
+          if (report['totalBuildItems'], report['totalMeshTriangles'], report['totalResolvedTriangleInstances']) != (2, 12, 24):
+              raise SystemExit('Shared Core resource or placement count was not preserved')
+          scenes = [s for s in report['scenes'] if s['buildItems']]
+          if len(scenes) != 1 or len({i['objectId'] for i in scenes[0]['buildItems']}) != 1:
+              raise SystemExit('Shared object must have one Core build root ID')
+          print('PASS: two Core build items share one root and 12 stored triangles')
+          PY
+
+      - name: Record build metadata
+        if: always()
+        run: |
+          {
+            echo "## Experimental infill arc order (not accepted)"
+            echo "- Baseline build recipe: f2b3c08bdc97ca551df924e82a2d5929f35654fe"
+            echo "- Patch source: ${GITHUB_SHA}"
+            echo "- Baseline artifact run: 45284215349"
+            echo "- Target upstream: OrcaSlicer v2.5.0"
+            echo "- WebAssembly source: Hiosdra/OrcaWasm@60a09e04f1990be39c8f6f35dffef1a2c9e224c4"
+            echo "- WebAssembly source commit: $(git -C orcawasm rev-parse HEAD 2>/dev/null || echo unavailable)"
+            echo "- Upstream source commit: $(git -C orcawasm/orca rev-parse HEAD 2>/dev/null || echo unavailable)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload candidate artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: experimental-v250-equal-neighbor-wasm
+          path: |
+            orcawasm/artifacts/slicer-mt.js
+            orcawasm/artifacts/slicer-mt.wasm
+          if-no-files-found: error
+          retention-days: 1
+
+  same-archive:
+    needs: experimental-build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: c4ff91c2c8bcccdb5818cc56087cb22509e1005e
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate browser test and matching regressions
+        run: |
+          node --check scripts/test-native-cli-3mf-to-wasm.mjs
+          node --check scripts/preserve-native-source-translation.mjs
+          node scripts/test-audit-native-3mf-world-facets.mjs
+          python3 -m unittest discover -s scripts -p test_edit_native_3mf_build_transform.py -v
+          python3 -m unittest discover -s scripts -p test_verify_native_3mf_edit_effect.py -v
+          python3 -m unittest discover -s scripts -p test_compare_native_3mf_world_facets.py -v
+          python3 -m unittest discover -s scripts -p test_audit_native_3mf_metadata_loss.py -v
+          python3 -m unittest discover -s scripts -p test_verify_native_gcode_repeatability.py -v
+          python3 -m unittest discover -s scripts -p test_gcode_lexical_attribution.py -v
+          python3 -m unittest discover -s scripts -p test_audit_gcode_infill_config.py -v
+          python3 -m unittest discover -s scripts -p test_make_anchor_zero_control.py -v
+          npm install --no-save --no-package-lock playwright@1.56.1 fflate@0.8.2
+      - name: Download the official v2.5.0 Linux AppImage only inside CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p native-cli-output
+          asset="OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.5.0.AppImage"
+          url="https://github.com/OrcaSlicer/OrcaSlicer/releases/download/v2.5.0/${asset}"
+          curl --fail --location --show-error --silent --retry 3 \
+            --retry-all-errors --max-time 360 --max-filesize 800000000 \
+            "${url}" -o "${RUNNER_TEMP}/${asset}"
+          test "$(wc -c < "${RUNNER_TEMP}/${asset}")" -gt 50000000
+          file "${RUNNER_TEMP}/${asset}" | tee native-cli-output/appimage-format.txt
+          grep -q 'ELF' native-cli-output/appimage-format.txt
+          sha256sum "${RUNNER_TEMP}/${asset}" | tee native-cli-output/official-v250-appimage.sha256
+          # Observed on the official release asset in two independent PR CI downloads.
+          actual="$(sha256sum "${RUNNER_TEMP}/${asset}" | cut -d ' ' -f1)"
+          test "${actual}" = "d13eb0a9cd618ed080ab6b82c64c0a60c4501aac91e88d5ac2c3b526fb141a7c"
+          chmod +x "${RUNNER_TEMP}/${asset}"
+      - name: Install the host libraries required by the official AppImage
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Hosted runners sometimes select a very slow regional EC2
+          # Ubuntu mirror; the last two PR probes reached the job timeout
+          # while downloading ordinary dependencies. Change only that mirror
+          # on this ephemeral runner, retaining Ubuntu's signed repositories
+          # and its separate security source.
+          for source in /etc/apt/apt-mirrors.txt /etc/apt/sources.list.d/ubuntu.sources; do
+            if [ -f "${source}" ] && grep -Eq '([a-z0-9-]+\.)?ec2\.archive\.ubuntu\.com' "${source}"; then
+              sudo sed -i -E 's@https?://[a-z0-9.-]+\.ec2\.archive\.ubuntu\.com/ubuntu@http://archive.ubuntu.com/ubuntu@g' "${source}"
+              echo "Switched regional EC2 archive mirror to standard Ubuntu archive in ${source}"
+            fi
+          done
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 install -y --no-install-recommends \
+            libopengl0 libwebkit2gtk-4.1-0 libjavascriptcoregtk-4.1-0 libglu1-mesa
+      - name: Prepare pinned full native v2.5.0 machine, process and filament presets
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/test-prepare-native-v250-presets.mjs
+          # Upstream JSON stays ephemeral on the runner. Source revision is
+          # pinned in the fetcher and asserted again during materialization.
+          python3 scripts/fetch-upstream-v250-fixture.py
+          node scripts/prepare-native-v250-presets.mjs \
+            upstream-v250-creality-fixture.json upstream-v250-filament-fixture.json \
+            native-cli-output/native-profiles
+          # Preserve only the provenance and digest manifest in CI artifacts.
+          cp native-cli-output/native-profiles/manifest.json native-cli-output/native-profiles-manifest.log
+
+      - name: Generate official native multipart project in CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="${RUNNER_TEMP}/OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.5.0.AppImage"
+          python3 scripts/make_3mf_two_build_fixture.py --output native-cli-output/two-build-items.3mf
+          project="${PWD}/native-cli-output/native-v250-project.3mf"
+          timeout 180s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
+            native-cli-output/two-build-items.3mf \
+            --load-settings "native-cli-output/native-profiles/process.json;native-cli-output/native-profiles/machine.json" \
+            --load-filaments native-cli-output/native-profiles/filament.json \
+            --arrange 0 --export-3mf "${project}" \
+            > native-cli-output/native-project-export.log 2>&1 || {
+              tail -n 120 native-cli-output/native-project-export.log
+              exit 1
+            }
+          test -s "${project}"
+          python3 scripts/verify_native_3mf_package.py --input "${project}"
+          # Independently compose Core build and external-component transforms.
+          # Keep the original oriented facets private to this disposable runner.
+          python3 - <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, 'scripts')
+          from compare_native_3mf_world_facets import _world_facets
+          rows = _world_facets('native-cli-output/native-v250-project.3mf')
+          if [row['triangle_count'] for row in rows] != [12, 12]:
+              raise SystemExit('Unexpected native fixture facet counts')
+          Path('native-cli-output/native-world-facets.json').write_text(
+              json.dumps([row['oriented_facets'] for row in rows]))
+          PY
+      - name: Translate one native build item offline and audit non-target bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/edit_native_3mf_build_transform.py \
+            --input native-cli-output/native-v250-project.3mf \
+            --output native-cli-output/native-v250-project-translated.3mf \
+            --build-index 0 --translate-mm 12 -7 0
+          python3 scripts/verify_native_3mf_edit_effect.py \
+            --baseline native-cli-output/native-v250-project.3mf \
+            --candidate native-cli-output/native-v250-project-translated.3mf \
+            --build-index 0 --translate-mm 12 -7 0
+      - name: Fetch accepted WASM candidate (no rebuild)
+        uses: actions/download-artifact@v4
+        with:
+          name: layer-workbench-orcaslicer-v2.5.0-wasm
+          repository: temesotejam/layer-workbench
+          run-id: 45284215349
+          github-token: ${{ github.token }}
+          path: engine-test-artifacts
+      - name: Native CLI project to isolated Chrome WASM
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/serve-isolated.py --port 8766 > /tmp/isolated-layer-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..25}; do
+            if curl -fsS http://127.0.0.1:8766/engine-probe.html >/dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/test-native-cli-3mf-to-wasm.mjs
+          node scripts/test-native-cli-3mf-to-wasm.mjs --translated
+          node scripts/test-native-cli-3mf-to-wasm.mjs --private-edit
+
+      - name: Quantify native config and package loss without printing settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Positive control: the independent offline translation preserved
+          # metadata member bytes. Do not lower this gate for WASM.
+          python3 scripts/audit_native_3mf_metadata_loss.py \
+            --baseline native-cli-output/native-v250-project.3mf \
+            --candidate native-cli-output/native-v250-project-translated.3mf \
+            --require-identical-config
+          # Best effort intentionally allows metadata loss. Report counts
+          # even when the candidate has no native config members. Geometry
+          # acceptance and strict preservation rejection remain separate.
+          python3 scripts/audit_native_3mf_metadata_loss.py \
+            --baseline native-cli-output/native-v250-project.3mf \
+            --candidate native-cli-output/wasm-private-edited.3mf
+
+      - name: Require source-preserving browser edit to keep every non-target member
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Select the left-hand original build independently from Core facets.
+          index="$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+          groups=json.loads(Path('native-cli-output/native-world-facets.json').read_text())
+          assert len(groups)==2
+          bounds=[(min(p[0] for f in g for p in f),max(p[0] for f in g for p in f)) for g in groups]
+          index=min(range(2),key=lambda i:bounds[i][0])
+          assert bounds[index][1]+12<bounds[1-index][0]
+          print(index)
+          PY
+          )"
+          python3 scripts/verify_native_3mf_edit_effect.py \
+            --baseline native-cli-output/native-v250-project.3mf \
+            --candidate native-cli-output/browser-source-preserving-edited.3mf \
+            --build-index "${index}" --translate-mm 12 -7 0
+          python3 scripts/audit_native_3mf_metadata_loss.py \
+            --baseline native-cli-output/native-v250-project.3mf \
+            --candidate native-cli-output/browser-source-preserving-edited.3mf \
+            --require-identical-config
+
+      - name: Fetch this run's experimental artifact (never accepted lookup)
+        uses: actions/download-artifact@v4
+        with:
+          name: experimental-v250-equal-neighbor-wasm
+          path: experimental-engine-artifacts
+      - name: Compare official and both WASM engines using one unchanged archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="${RUNNER_TEMP}/OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.5.0.AppImage"
+          input="${PWD}/native-cli-output/browser-source-preserving-edited.3mf"
+          sha256sum "${input}" > "${RUNNER_TEMP}/same-archive.sha256"
+          out="${PWD}/native-cli-output/same-archive-native"
+          mkdir "${out}"
+          timeout 180s env APPIMAGE_EXTRACT_AND_RUN=1 "${app}" \
+            "${input}" --arrange 0 --slice 0 --outputdir "${out}" \
+            > "${out}/native-slice.log" 2>&1
+          test -s "${out}/plate_1.gcode"
+          python3 scripts/serve-isolated.py --port 8766 > /tmp/isolated-layer-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..25}; do
+            if curl -fsS http://127.0.0.1:8766/engine-probe.html >/dev/null; then break; fi
+            sleep 1
+          done
+          timeout 240s node scripts/test-native-cli-3mf-to-wasm.mjs --slice-embedded
+          mv native-cli-output/same-archive-wasm.gcode native-cli-output/baseline-wasm.gcode
+          sha256sum -c "${RUNNER_TEMP}/same-archive.sha256"
+          for file in slicer-mt.js slicer-mt.wasm; do
+            test -s "experimental-engine-artifacts/${file}"
+            cp "experimental-engine-artifacts/${file}" "engine-test-artifacts/${file}"
+          done
+          timeout 240s node scripts/test-native-cli-3mf-to-wasm.mjs --slice-embedded
+          sha256sum -c "${RUNNER_TEMP}/same-archive.sha256"
+          python3 - <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, 'scripts')
+          from compare_gcode import compare
+          from gcode_lexical_attribution import compare_lexical
+          from audit_gcode_infill_config import parse_config
+          root = Path('native-cli-output')
+          native = root / 'same-archive-native/plate_1.gcode'
+          baseline = root / 'baseline-wasm.gcode'
+          candidate = root / 'same-archive-wasm.gcode'
+          if sorted(native.parent.rglob('*.gcode')) != [native]:
+              raise SystemExit('Expected exactly one native plate')
+          if not all(1024 <= p.stat().st_size <= 12_000_000 for p in (native, baseline, candidate)):
+              raise SystemExit('Invalid diagnostic G-code size')
+          a, b = parse_config(baseline), parse_config(candidate)
+          if not a or not b or a != b:
+              raise SystemExit('Experimental and accepted serialized settings differ or are unavailable')
+          if a.get('infill_anchor') in (None, '0', '0%') or a.get('infill_anchor_max') in (None, '0', '0%'):
+              raise SystemExit('Normal nonzero anchor settings required')
+          def measure(label, x, y):
+              strict = compare(x, y, min_extrusion_moves=100)
+              if strict['input_issues']:
+                  raise SystemExit('Invalid strict comparison input: ' + label)
+              geo = compare_lexical(x, y)['planar_stroke_diagnostics']
+              if geo['status'] != 'measured':
+                  raise SystemExit('Unavailable geometry: ' + label)
+              sparse = geo['collinear_coverage']['by_feature']['sparse infill']
+              report = {k: strict[k] for k in ('match', 'mismatched_commands', 'native_commands',
+                        'wasm_commands', 'native_extrusion_moves', 'wasm_extrusion_moves')}
+              report.update(label=label, sparse=sparse, identical_source_archive=True,
+                            effective_full_profile_equivalence_verified=False, usable_for_printing=False)
+              print('EXPERIMENTAL_ARC_ENGINE ' + json.dumps(report, sort_keys=True), flush=True)
+              return strict['match'], sparse
+          _, old = measure('official-vs-accepted', native, baseline)
+          passed, new = measure('official-vs-experimental', native, candidate)
+          measure('accepted-vs-experimental', baseline, candidate)
+          print('EXPERIMENTAL_ARC_DELTA ' + json.dumps({k: new[k] - old[k] for k in
+                ('native_unmatched_mm', 'wasm_unmatched_mm', 'shared_mm')}, sort_keys=True))
+          if not passed:
+              raise SystemExit('Experimental strict ordered G-code comparison FAIL')
+          print('PASS: this fixture only; no artifact promotion or print-safety claim')
+          PY
+          # No original profiles, archives, or raw G-code are uploaded.
