@@ -34,6 +34,16 @@ function rawRepresentationHint(kind,key,native,restricted) {
       typeof native === "string" && /^\d+(?:\.\d+)?%$/.test(native.trim()) &&
       numeric(restricted) && Number(native.trim().slice(0,-1)) === Number(restricted))
     return "density-percent-token-to-numeric";
+  // Pinned top surface flow is a nullable coFloats option, serialized as
+  // one scalar token in the CR-10 preset. The restricted parser emits a
+  // one-slot string array; only the explicit positive local range is covered.
+  // This is not a general scalar-to-vector rule or a nullable/default rule.
+  if(kind === "process" && key === "top_solid_infill_flow_ratio" &&
+      numeric(native) && Array.isArray(restricted) && restricted.length === 1 &&
+      typeof restricted[0] === "string" && numeric(restricted[0]) &&
+      Number(native) >= 0.1 && Number(native) <= 2 &&
+      restricted[0] === String(Number(native)))
+    return "single-top-flow-scalar-to-nozzle-vector";
   return null;
 }
 function valueShape(value) {
