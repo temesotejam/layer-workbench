@@ -1174,3 +1174,19 @@ console.log("PASS: exact native Z-hop enum tokens and bounded traveling angle");
   }
 }
 console.log("PASS: independent absolute Z-hop gates, inheritance and explicit zero");
+
+{
+  const key="enable_arc_fitting";
+  const base=profiles.map(p=>p.name==="fdm_process_common"?{...p,[key]:"0"}:p);
+  assert.equal(result.process.settings[key],undefined);
+  assert.equal(resolve(base,selection).process.settings[key],"disabled");
+  const child=value=>base.map(p=>p.name==="0.16mm Fine @TestPrinter"?{...p,[key]:value}:p);
+  for(const [value,expected] of [["0","disabled"],["FALSE","disabled"],["1","enabled"],["True","enabled"],["disabled","disabled"],["enabled","enabled"],["sparse_infill","sparse_infill"]]){
+    const actual=resolve(child(value),selection).process;
+    assert.equal(actual.settings[key],expected);
+    assert.ok(!actual.unsupported.includes(key));
+  }
+  for(const bad of ["Enabled"," 0","sparse infill",0,1,true,false,null,["enabled"],{}])
+    assert.throws(()=>resolve(child(bad),selection),/Invalid native process enum/);
+}
+console.log("PASS: native arc-fitting inheritance, legacy string conversion and absence");
