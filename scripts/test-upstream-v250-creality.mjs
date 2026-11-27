@@ -313,3 +313,10 @@ assert.deepEqual(process.settings[topFlowKey],["1"]);
 assert.deepEqual(combined.process.settings[topFlowKey],["1"]);
 assert.ok(!process.unsupported.includes(topFlowKey));
 console.log("PASS: official CR-10 bottom scalar and one-slot top nozzle vector remain independent");
+
+// Pinned CR-10 opts into classic thin-wall detection; keep exact bool.
+assert.deepEqual(process.chain.map(n=>indexed.records.find(p=>p.name===n).detect_thin_wall),["0","0","1"]);
+assert.equal(process.settings.wall_generator,"classic");
+assert.equal(process.settings.detect_thin_wall,"1");
+assert.ok(!process.unsupported.includes("detect_thin_wall"));
+console.log("PASS: pinned CR-10 classic thin-wall detection child override");

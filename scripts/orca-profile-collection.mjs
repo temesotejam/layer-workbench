@@ -109,6 +109,8 @@ const PROCESS_ENUMS=Object.freeze({
   bottom_surface_pattern:new Set(["monotonic","monotonicline","rectilinear"]),
   // Pinned native coBool serialized as a string; no inferred default.
   infill_combination:new Set(["0","1"]),
+  // Pinned CR-10 classic wall generator explicitly enables thin-wall detection.
+  detect_thin_wall:new Set(["0","1"]),
 });
 // Pinned OrcaSlicer v2.5.0 PrintConfig.cpp: curr_bed_type enum and
 // six native per-filament steady/first-layer coInts pairs. UI labels are

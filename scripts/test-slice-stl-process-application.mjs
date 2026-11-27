@@ -358,3 +358,22 @@ for(const bad of [0,"75%",["1","0.75"],null,["nil"],[null],true]){
   assert.equal(calls.length,0);
 }
 console.log("PASS: one-slot native top flow transport preserves separate bottom scalar");
+
+// Thin-wall forwarding is not proof of thin-wall geometry generation.
+{
+  const preset={...selected,process:{settings:{...selected.process.settings,
+    wall_generator:"classic",detect_thin_wall:"1"}}};
+  const {engine,calls}=mockedEngine();
+  await sliceMultiStlWithEngine(engine,items,null,{detect_thin_wall:"0"},preset);
+  const applied=calls.find(c=>c.name==="applyProfile");
+  assert.equal(applied.format,"orca.native-json");
+  assert.equal(applied.value.wall_generator,"classic");
+  assert.equal(applied.value.detect_thin_wall,"0");
+  const enabled=mockedEngine();
+  await sliceMultiStlWithEngine(enabled.engine,items,null,null,preset);
+  assert.equal(enabled.calls.find(c=>c.name==="applyProfile").value.detect_thin_wall,"1");
+  const invalid=mockedEngine();
+  await assert.rejects(()=>sliceMultiStlWithEngine(invalid.engine,items,null,{detect_thin_wall:true},preset),/native enum/);
+  assert.equal(invalid.calls.length,0);
+}
+console.log("PASS: classic thin-wall selection reaches mocked native-json with explicit override precedence");
