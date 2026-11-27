@@ -342,7 +342,7 @@ console.log("PASS: pinned CR-10 seam position reaches restricted process adapter
 for(const [key,chainValues] of Object.entries({
   retraction_length:[["5"],["5"],"0.8"],
   retraction_speed:[["60"],["60"],"40"],
-  deretraction_speed:[undefined,["40"],"40"],
+  deretraction_speed:[["40"],["40"],"40"],
 })){
   assert.deepEqual(machine.chain.map(n=>indexed.records.find(p=>p.name===n)[key]),chainValues);
   assert.deepEqual(machine.settings[key],[chainValues.at(-1)]);
