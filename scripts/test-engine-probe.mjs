@@ -2392,6 +2392,65 @@ try {
       assert.ok(innerFirst.every(l=>l.first==='inner wall'),'Inner/outer must start with actual inner deposition');
       assert.ok(outerFirst.every(l=>l.first==='outer wall'),'Outer/inner must start with actual outer deposition');
       console.log('PASS: actual classic wall deposition order responds to native enum; no native parity asserted');
+
+      // Three classic walls: the pinned sandwich algorithm places the deeper
+      // inner loop before the outer loop and the adjacent inner loop after it.
+      // Keep this separate from the established two-wall gate above.
+      const summarizeThree=code=>{
+        const p=parseGcodeToolpaths(code);
+        assert.equal(p.skippedMalformedMotion,0);
+        assert.equal(p.skippedArcs,0);
+        const layers=[];
+        for(const layer of p.layers){
+          const strokes=layer.segments.filter(s=>s.extrusion&&s.sourceMotion==='G1'&&
+            (s.feature==='outer wall'||s.feature==='inner wall')&&
+            [s.x1,s.x2,s.y1,s.y2,s.z1,s.z2,s.commandedPositiveEMm].every(Number.isFinite)&&
+            s.commandedPositiveEMm>0&&Math.abs(s.z2-s.z1)<0.0005&&s.z2>1&&s.z2<19&&
+            Math.hypot(s.x2-s.x1,s.y2-s.y1)>0.001);
+          if(!strokes.length)continue;
+          const runs=[];
+          for(const s of strokes){
+            if(runs.at(-1)?.role!==s.feature)runs.push({role:s.feature,strokes:[]});
+            runs.at(-1).strokes.push(s);
+          }
+          layers.push({z_um:Math.round(strokes[0].z2*1000),runs:runs.map(run=>{
+            const xs=run.strokes.flatMap(s=>[s.x1,s.x2]);
+            const ys=run.strokes.flatMap(s=>[s.y1,s.y2]);
+            return {role:run.role,count:run.strokes.length,
+              span_x_um:Math.round((Math.max(...xs)-Math.min(...xs))*1000),
+              span_y_um:Math.round((Math.max(...ys)-Math.min(...ys))*1000)};
+          })});
+        }
+        return layers;
+      };
+      const modes=['inner wall/outer wall','outer wall/inner wall','inner-outer-inner wall'];
+      const results=[];
+      for(let i=0;i<modes.length;i++){
+        results.push(summarizeThree(await sliceRing('wall-order-three-'+i+'.json',
+          {...settings,wall_loops:3,wall_sequence:modes[i]},/^PASS: 1 STL model\(s\)/)));
+      }
+      const expected=['inner wall|outer wall','outer wall|inner wall','inner wall|outer wall|inner wall'];
+      const observed=results.map((layers,i)=>({mode:modes[i],layers:layers.length,
+        role_matches:layers.filter(l=>l.runs.map(r=>r.role).join('|')===expected[i]).length}));
+      const hasNestedSpans=l=>{
+        if(l.runs.length!==3)return false;
+        const [deep,outer,adjacent]=l.runs;
+        return ['span_x_um','span_y_um'].every(k=>
+          outer[k]>adjacent[k]+100&&adjacent[k]>deep[k]+100&&deep[k]>0);
+      };
+      const nestedMatches=results[2].filter(hasNestedSpans).length;
+      await writeFile(parityDir+'/classic-three-wall-order.json',JSON.stringify({
+        modes,results,observed,nested_matches:nestedMatches,native_desktop_parity:false,printer_ready:false
+      },null,2)+'\n');
+      console.log('CLASSIC_THREE_WALL_ORDER '+JSON.stringify({observed,nested_matches:nestedMatches}));
+      for(let i=0;i<results.length;i++){
+        assert.ok(results[i].length>=10,'Need multiple three-wall interior layers');
+        assert.deepEqual(results[i].map(l=>l.z_um),results[0].map(l=>l.z_um),'Three-wall cadence changed');
+        assert.equal(observed[i].role_matches,results[i].length,'Unexpected three-wall chronological role runs: '+modes[i]);
+      }
+      assert.equal(nestedMatches,results[2].length,
+        'Sandwich must deposit the deeper inner loop, outer loop, then adjacent inner loop');
+      console.log('PASS: classic three-wall sandwich role and nested-span witness; no native parity asserted');
     }
 
     // A through-tunnel bridge arch gives the slicer a real unsupported roof.
