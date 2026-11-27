@@ -2204,7 +2204,7 @@ try {
       // not evidence of gap paths until feature-tagged G-code confirms them.
       wall_generator:'classic',gap_fill_target:'everywhere',
     };
-    const sliceRing=async(name,settings)=>{
+    const sliceRing=async(name,settings,expectedStatus=/^PASS: 1 STL\/OBJ mesh model\(s\)/)=>{
       await prepare.locator('#lab-process').setInputFiles({
         name,mimeType:'application/json',buffer:Buffer.from(JSON.stringify(settings)),
       });
@@ -2213,8 +2213,7 @@ try {
         const status=document.querySelector('#lab-status')?.textContent||'';
         return status.startsWith('PASS:')||status.startsWith('FAILED');
       },null,{timeout:120000});
-      assert.match(await prepare.locator('#lab-status').innerText(),
-        /^PASS: 1 STL\/OBJ mesh model\(s\)/);
+      assert.match(await prepare.locator('#lab-status').innerText(),expectedStatus);
       return prepare.locator('#lab-download').evaluate(async link=>
         await(await fetch(link.href)).text());
     };
@@ -2380,9 +2379,9 @@ try {
         return layers;
       };
       const innerFirst=summarize(await sliceRing('wall-order-inner-first.json',
-        {...settings,wall_sequence:'inner wall/outer wall'}));
+        {...settings,wall_sequence:'inner wall/outer wall'},/^PASS: 1 STL model\(s\)/));
       const outerFirst=summarize(await sliceRing('wall-order-outer-first.json',
-        {...settings,wall_sequence:'outer wall/inner wall'}));
+        {...settings,wall_sequence:'outer wall/inner wall'},/^PASS: 1 STL model\(s\)/));
       const report={inner_first:innerFirst,outer_first:outerFirst,native_desktop_parity:false,printer_ready:false};
       await writeFile(parityDir+'/classic-wall-order.json',JSON.stringify(report,null,2)+'\n');
       console.log('CLASSIC_WALL_ORDER '+JSON.stringify({inner_layers:innerFirst.length,outer_layers:outerFirst.length,
