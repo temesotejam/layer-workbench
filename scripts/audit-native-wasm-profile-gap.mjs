@@ -59,6 +59,15 @@ function rawRepresentationHint(kind,key,native,restricted) {
       Array.isArray(native) && native.length === 1 && numeric(native[0]) &&
       numeric(restricted) && Number(native[0]) === Number(restricted))
     return "single-nozzle-vector-to-scalar";
+  // Explicitly supported single-tool machine coFloats, not a general
+  // scalar-to-vector equivalence rule. Keep raw differences in the audit.
+  const machineVectors={retraction_length:[0,10],retraction_speed:[1,100],
+    deretraction_speed:[0,100],retraction_minimum_travel:[0,100],z_hop:[0,5]};
+  if(kind==="machine" && Object.hasOwn(machineVectors,key) &&
+      numeric(native) && Number(native)>=machineVectors[key][0] &&
+      Number(native)<=machineVectors[key][1] && Array.isArray(restricted) &&
+      restricted.length===1 && restricted[0]===String(Number(native)))
+    return "single-machine-retraction-scalar-to-vector";
   // The restricted one-filament PLA bridge accepts these explicit single-slot
   // native arrays, but only these exact fields and this verified PLA material.
   if(kind === "filament" && key === "filament_type" &&
