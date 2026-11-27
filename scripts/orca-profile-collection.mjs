@@ -93,6 +93,8 @@ const PROCESS_ENUMS=Object.freeze({
   // Retain exact serialized values, never the desktop UI labels.
   ensure_vertical_shell_thickness:new Set(["none","ensure_critical_only","ensure_moderate","ensure_all"]),
   wall_generator:new Set(["classic","arachne"]),
+  // Pinned native wall-order enum; preserve exact serialized tokens.
+  wall_sequence:new Set(["inner wall/outer wall","outer wall/inner wall","inner-outer-inner wall"]),
   gap_fill_target:new Set(["everywhere","topbottom","nowhere"]),
   // Pinned v2.5.0 Creality common uses crosshatch; its CR-10 0.20mm child
   // overrides this to grid. Other enum tokens require separate verification.

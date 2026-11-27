@@ -109,6 +109,8 @@ const ENUMS = Object.freeze({
   // This option can alter internal solid regions even with shell layers fixed.
   ensure_vertical_shell_thickness: new Set(["none","ensure_critical_only","ensure_moderate","ensure_all"]),
   wall_generator: new Set(["classic","arachne"]),
+  // Exact v2.5.0 wall-order enum tokens, not translated display labels.
+  wall_sequence: new Set(["inner wall/outer wall","outer wall/inner wall","inner-outer-inner wall"]),
   gap_fill_target: new Set(["everywhere","topbottom","nowhere"]),
   // Exact values inspected in the source-pinned Creality v2.5.0 chain.
   // Not an arbitrary native fill-pattern allow-list.

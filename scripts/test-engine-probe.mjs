@@ -2204,7 +2204,7 @@ try {
       // not evidence of gap paths until feature-tagged G-code confirms them.
       wall_generator:'classic',gap_fill_target:'everywhere',
     };
-    const sliceRing=async(name,settings)=>{
+    const sliceRing=async(name,settings,expectedStatus=/^PASS: 1 STL\/OBJ mesh model\(s\)/)=>{
       await prepare.locator('#lab-process').setInputFiles({
         name,mimeType:'application/json',buffer:Buffer.from(JSON.stringify(settings)),
       });
@@ -2213,8 +2213,7 @@ try {
         const status=document.querySelector('#lab-status')?.textContent||'';
         return status.startsWith('PASS:')||status.startsWith('FAILED');
       },null,{timeout:120000});
-      assert.match(await prepare.locator('#lab-status').innerText(),
-        /^PASS: 1 STL\/OBJ mesh model\(s\)/);
+      assert.match(await prepare.locator('#lab-status').innerText(),expectedStatus);
       return prepare.locator('#lab-download').evaluate(async link=>
         await(await fetch(link.href)).text());
     };
@@ -2343,6 +2342,56 @@ try {
       assert.ok(report.on.spur_z_um.length>=3&&report.on.spur_xy_mm>5,
         'Enabled classic thin wall must deposit actual tagged distal spur strokes');
       console.log('PASS: classic thin-wall switch adds real distal outer-wall deposition; not native parity');
+    }
+
+    // A single ordinary cube isolates chronological wall order from thin-wall,
+    // brim-first-layer and multiple-island effects. Inspect actual positive-E
+    // strokes in parser insertion order, NOT just comments or role totals.
+    {
+      await prepare.locator('#remove-object').click();
+      await prepare.locator('#object-count').getByText('0 objects').waitFor();
+      await prepare.locator('#model-file').setInputFiles({
+        name:'wall-order-cube.stl',mimeType:'model/stl',buffer:cube,
+      });
+      await prepare.locator('#object-count').getByText('1 object').waitFor({timeout:30000});
+      const settings={layer_height:0.2,initial_layer_print_height:0.2,wall_loops:2,
+        wall_generator:'classic',line_width:0.42,outer_wall_line_width:0.42,
+        inner_wall_line_width:0.42,outer_wall_speed:12,inner_wall_speed:16,
+        travel_speed:50,sparse_infill_density:20,top_shell_layers:2,bottom_shell_layers:2};
+      const summarize=code=>{
+        const p=parseGcodeToolpaths(code);
+        assert.equal(p.skippedMalformedMotion,0);
+        assert.equal(p.skippedArcs,0);
+        const layers=[];
+        for(const layer of p.layers){
+          const strokes=layer.segments.filter(s=>s.extrusion&&s.sourceMotion==='G1'&&
+            (s.feature==='outer wall'||s.feature==='inner wall')&&
+            [s.x1,s.x2,s.y1,s.y2,s.z1,s.z2,s.commandedPositiveEMm].every(Number.isFinite)&&
+            s.commandedPositiveEMm>0&&Math.abs(s.z2-s.z1)<0.0005&&s.z2>1&&s.z2<19&&
+            Math.hypot(s.x2-s.x1,s.y2-s.y1)>0.001);
+          if(!strokes.length)continue;
+          const roles=strokes.map(s=>s.feature);
+          assert.ok(roles.includes('inner wall')&&roles.includes('outer wall'),
+            'Both wall roles must deposit in each sampled interior layer');
+          layers.push({z_um:Math.round(strokes[0].z2*1000),first:roles[0],
+            inner:roles.filter(r=>r==='inner wall').length,outer:roles.filter(r=>r==='outer wall').length});
+        }
+        return layers;
+      };
+      const innerFirst=summarize(await sliceRing('wall-order-inner-first.json',
+        {...settings,wall_sequence:'inner wall/outer wall'},/^PASS: 1 STL model\(s\)/));
+      const outerFirst=summarize(await sliceRing('wall-order-outer-first.json',
+        {...settings,wall_sequence:'outer wall/inner wall'},/^PASS: 1 STL model\(s\)/));
+      const report={inner_first:innerFirst,outer_first:outerFirst,native_desktop_parity:false,printer_ready:false};
+      await writeFile(parityDir+'/classic-wall-order.json',JSON.stringify(report,null,2)+'\n');
+      console.log('CLASSIC_WALL_ORDER '+JSON.stringify({inner_layers:innerFirst.length,outer_layers:outerFirst.length,
+        inner_first_matches:innerFirst.filter(l=>l.first==='inner wall').length,
+        outer_first_matches:outerFirst.filter(l=>l.first==='outer wall').length}));
+      assert.ok(innerFirst.length>=10&&outerFirst.length>=10,'Need multiple interior layers');
+      assert.deepEqual(innerFirst.map(l=>l.z_um),outerFirst.map(l=>l.z_um),'Wall layer cadence changed');
+      assert.ok(innerFirst.every(l=>l.first==='inner wall'),'Inner/outer must start with actual inner deposition');
+      assert.ok(outerFirst.every(l=>l.first==='outer wall'),'Outer/inner must start with actual outer deposition');
+      console.log('PASS: actual classic wall deposition order responds to native enum; no native parity asserted');
     }
 
     // A through-tunnel bridge arch gives the slicer a real unsupported roof.
