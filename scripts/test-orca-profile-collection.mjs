@@ -1041,3 +1041,20 @@ for(const bad of [0,"75%",["1","0.75"],null,["nil"],[null],true])
   assert.throws(()=>resolve(topFlowProfiles.map(rec=>rec.name==="0.16mm Fine @TestPrinter"
     ? {...rec,[topFlowKey]:bad}:rec),selection),/Invalid|safe test range/);
 console.log("PASS: independent one-slot top flow inheritance and absence preservation");
+
+const thinWallProfiles=profiles.map(rec=>rec.name==="fdm_process_common"
+  ? {...rec,detect_thin_wall:"0"} : rec.name==="0.16mm Fine @TestPrinter"
+    ? {...rec,detect_thin_wall:"1",wall_generator:"classic"} : rec);
+const thinWall=resolve(thinWallProfiles,selection).process;
+assert.equal(thinWall.settings.detect_thin_wall,"1");
+assert.equal(thinWall.settings.wall_generator,"classic");
+assert.ok(!thinWall.unsupported.includes("detect_thin_wall"));
+assert.equal(resolve(thinWallProfiles.map(rec=>{
+  if(rec.name!=="0.16mm Fine @TestPrinter")return rec;
+  const child={...rec};delete child.detect_thin_wall;return child;
+}),selection).process.settings.detect_thin_wall,"0");
+assert.equal(result.process.settings.detect_thin_wall,undefined);
+for(const bad of [0,1,true,"2","true",["1"],null])
+  assert.throws(()=>resolve(thinWallProfiles.map(rec=>rec.name==="0.16mm Fine @TestPrinter"
+    ? {...rec,detect_thin_wall:bad}:rec),selection),/Invalid native process enum/);
+console.log("PASS: classic thin-wall child precedence and absence preservation");
