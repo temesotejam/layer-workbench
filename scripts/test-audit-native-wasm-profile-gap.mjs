@@ -142,4 +142,40 @@ assert.throws(()=>auditProfileCoverage(full,{...restricted,process:null}),/Missi
 const derived=auditProfileCoverage(full,{...restricted,filament:{settings:{...restricted.filament.settings,curr_bed_type:"High Temp Plate"}}});
 assert.deepEqual(derived.families.filament.restricted_only_keys,["curr_bed_type"]);
 assert.equal(derived.families.filament.overlapping_option_count,2);
+
+// Missing-key classifications are a disjoint exhaustive partition, not a
+// new parity gate. Metadata and compatibility remain in the original count.
+const withRoles={
+  machine:{...full.machine,from:"system",version:"2.5.0",compatible_printers:["X"],
+    default_print_profile:"Test",unknown_motion_key:"1"},
+  process:{...full.process,setting_id:"id",instantiation:"true",
+    compatible_printers:["Test"],compatible_printers_condition:"x",
+    machine_start_gcode:"M104 S200",description:"test"},
+  filament:{...full.filament,filament_id:"test",compatible_printers:["Test"],
+    filament_flow_ratio:["0.98"],filament_max_volumetric_speed:["12","21"]}
+};
+const classified=auditProfileCoverage(withRoles,restricted);
+assert.deepEqual(classified.families.machine.not_forwarded_keys_by_role,{
+  "preset-record-metadata":["from","version"],"printer-compatibility":[],
+  unclassified:["compatible_printers","default_print_profile","machine_start_gcode","unknown_motion_key"]
+});
+assert.deepEqual(classified.families.process.not_forwarded_keys_by_role,{
+  "preset-record-metadata":["description","instantiation","setting_id"],
+  "printer-compatibility":["compatible_printers","compatible_printers_condition"],
+  unclassified:["bridge_speed","machine_start_gcode"]
+});
+assert.deepEqual(classified.families.filament.not_forwarded_keys_by_role,{
+  "preset-record-metadata":["filament_id"],
+  "printer-compatibility":["compatible_printers"],unclassified:["filament_max_volumetric_speed"]
+});
+for(const row of Object.values(classified.families)) {
+  const partition=Object.values(row.not_forwarded_keys_by_role).flat().sort();
+  assert.deepEqual(partition,row.not_forwarded_keys);
+  assert.equal(partition.length,row.not_forwarded_count);
+}
+assert.equal(classified.total_not_forwarded_count,16);
+assert.equal(classified.full_profile_parity_established,false);
+assert.equal(classified.native_vs_wasm_gcode_compared,false);
+assert.equal(classified.print_ready,false);
+
 console.log("PASS: native/restricted key coverage and conservative value-shape classification, never parity");
