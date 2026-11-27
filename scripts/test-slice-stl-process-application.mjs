@@ -481,3 +481,23 @@ console.log("PASS: machine retraction vectors reach native init; malformed input
     assert.deepEqual(makeRestrictedInitConfig({...selected,machine:{settings:{...selected.machine.settings,travel_slope:[value]}}}).travel_slope,[value]);
 }
 console.log("PASS: native Z-hop enum vector and traveling angle reach init; invalid input refused");
+
+{
+  const gates={retract_lift_above:["5"],retract_lift_below:["0"]};
+  const preset={...selected,machine:{settings:{...selected.machine.settings,...gates}}};
+  const {engine,calls}=mockedEngine();
+  await sliceMultiStlWithEngine(engine,items,null,null,preset);
+  const init=calls.find(c=>c.name==="init").value;
+  for(const [key,value] of Object.entries(gates)){
+    assert.deepEqual(init[key],value);
+    assert.equal(makeRestrictedInitConfig(selected)[key],undefined);
+    for(const bad of ["1",[],["1","2"],["1%"],[null],["-1"],["1000.01"]]){
+      const invalid=mockedEngine();
+      await assert.rejects(()=>sliceMultiStlWithEngine(invalid.engine,items,null,null,
+        {...preset,machine:{settings:{...preset.machine.settings,[key]:bad}}}),
+        /Expected single-tool|Invalid restricted|outside diagnostic bounds/);
+      assert.equal(invalid.calls.length,0);
+    }
+  }
+}
+console.log("PASS: Z-hop height gates reach native init; invalid inputs refused");
