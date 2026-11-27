@@ -415,3 +415,19 @@ console.log("PASS: wall sequence reaches mocked native-json with override preced
   }
 }
 console.log("PASS: single-wall surface toggle native transfer and independent override");
+
+{
+  const preset={...selected,process:{settings:{...selected.process.settings,seam_position:"aligned"}}};
+  for(const seam of [null,"nearest","aligned_back","back","random"]){
+    const {engine,calls}=mockedEngine();
+    await sliceMultiStlWithEngine(engine,items,null,seam===null?null:{seam_position:seam},preset);
+    const applied=calls.find(c=>c.name==="applyProfile");
+    assert.equal(applied.format,"orca.native-json");
+    assert.equal(applied.value.seam_position,seam??"aligned");
+  }
+  const invalid=mockedEngine();
+  await assert.rejects(()=>sliceMultiStlWithEngine(invalid.engine,items,null,
+    {seam_position:"Aligned"},preset),/native enum/);
+  assert.equal(invalid.calls.length,0);
+}
+console.log("PASS: seam-position native transfer and explicit override");
