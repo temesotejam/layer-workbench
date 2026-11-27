@@ -93,6 +93,8 @@ const PROCESS_ENUMS=Object.freeze({
   // Retain exact serialized values, never the desktop UI labels.
   ensure_vertical_shell_thickness:new Set(["none","ensure_critical_only","ensure_moderate","ensure_all"]),
   wall_generator:new Set(["classic","arachne"]),
+  // CR-10 inherits aligned from Creality; preserve exact native enum tokens.
+  seam_position:new Set(["nearest","aligned","aligned_back","back","random"]),
   // Pinned native wall-order enum; preserve exact serialized tokens.
   wall_sequence:new Set(["inner wall/outer wall","outer wall/inner wall","inner-outer-inner wall"]),
   gap_fill_target:new Set(["everywhere","topbottom","nowhere"]),
