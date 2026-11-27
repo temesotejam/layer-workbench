@@ -320,3 +320,8 @@ assert.equal(process.settings.wall_generator,"classic");
 assert.equal(process.settings.detect_thin_wall,"1");
 assert.ok(!process.unsupported.includes("detect_thin_wall"));
 console.log("PASS: pinned CR-10 classic thin-wall detection child override");
+
+assert.equal(cr10Child.wall_sequence,"inner wall/outer wall");
+assert.equal(process.settings.wall_sequence,"inner wall/outer wall");
+assert.ok(!process.unsupported.includes("wall_sequence"));
+console.log("PASS: pinned CR-10 explicit inner/outer wall sequence");
