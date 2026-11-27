@@ -98,6 +98,34 @@ assert.equal(auditProfileCoverage({
   ...restricted,process:{settings:{...restricted.process.settings,bridge_speed:"50"}}
 }).families.process.unexplained_raw_value_difference_count,1);
 
+// Top flow is explicitly forwarded as one positive canonical nozzle slot.
+function topFlowAudit(native, forwarded, key="top_solid_infill_flow_ratio") {
+  return auditProfileCoverage({
+    ...full,process:{...full.process,[key]:native}
+  },{
+    ...restricted,process:{settings:{...restricted.process.settings,[key]:forwarded}}
+  });
+}
+for(const [native,forwarded] of [["1",["1"]],["0.75",["0.75"]],[2,["2"]],["0.10",["0.1"]]]) {
+  const audited=topFlowAudit(native,forwarded);
+  assert.ok(audited.families.process.raw_value_difference_shapes.some(item=>
+    item.key==="top_solid_infill_flow_ratio" &&
+    item.syntax_only_hint==="single-top-flow-scalar-to-nozzle-vector"));
+  assert.equal(audited.families.process.unexplained_raw_value_difference_count,0);
+  assert.equal(audited.full_profile_parity_established,false);
+  assert.equal(audited.native_vs_wasm_gcode_compared,false);
+  assert.equal(audited.print_ready,false);
+}
+for(const [native,forwarded] of [
+  ["1",["1","1"]],["1",["0.75"]],["1",[1]],["1",["1.00"]],
+  ["0",["0"]],["0.05",["0.05"]],["2.1",["2.1"]],
+  [null,["1"]],["nil",["1"]],["100%",["1"]],["1",null]
+]) {
+  assert.equal(topFlowAudit(native,forwarded).families.process.unexplained_raw_value_difference_count,1);
+}
+assert.equal(topFlowAudit("1",["1"],"bottom_solid_infill_flow_ratio")
+  .families.process.unexplained_raw_value_difference_count,1);
+
 // Even exact keys/values cannot certify actual native/WASM execution parity.
 const exactlyMatched={machine:{settings:{nozzle_diameter:["0.4"],printable_height:"200",machine_start_gcode:"M104 S200"}},
  process:{settings:{layer_height:"0.2",sparse_infill_density:"15%",bridge_speed:"40"}},
