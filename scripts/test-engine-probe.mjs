@@ -903,6 +903,84 @@ try {
       }
     }
 
+    // Simultaneous scalar bottom and single-slot top flow: factorial
+    // witness, with the walls as an independent negative control. Compare
+    // actual unoriented XYZ stroke multisets, not just total path length.
+    {
+      const bottomKey='bottom_solid_infill_flow_ratio';
+      const topKey='top_solid_infill_flow_ratio';
+      const prior=Object.fromEntries([bottomKey,topKey].map(k=>[k,rawOrca[4][k]]));
+      try {
+        const measure=code=>{
+          const p=parseGcodeToolpaths(code);
+          assert.equal(p.skippedMalformedMotion,0);
+          assert.equal(p.skippedArcs,0);
+          const roles=Object.fromEntries(['bottom surface','top surface','outer wall','inner wall']
+            .map(role=>[role,{strokes:0,xy_mm:0,e_mm:0,geometry:[]}]));
+          for(const layer of p.layers)for(const seg of layer.segments){
+            if(!Object.hasOwn(roles,seg.feature)||!seg.extrusion)continue;
+            assert.equal(seg.sourceMotion,'G1');
+            const xyz=[seg.x1,seg.y1,seg.z1,seg.x2,seg.y2,seg.z2];
+            assert.ok([...xyz,seg.commandedPositiveEMm].every(Number.isFinite));
+            assert.ok(seg.commandedPositiveEMm>0);
+            const len=Math.hypot(seg.x2-seg.x1,seg.y2-seg.y1);
+            if(Math.abs(seg.z2-seg.z1)>0.0005||len<0.001)continue;
+            const points=[xyz.slice(0,3),xyz.slice(3)].map(point=>
+              point.map(v=>Math.round(v*1000)).join(',')).sort();
+            const v=roles[seg.feature];
+            v.strokes++;v.xy_mm+=len;v.e_mm+=seg.commandedPositiveEMm;
+            v.geometry.push(points.join('/'));
+          }
+          for(const v of Object.values(roles)){
+            assert.ok(v.strokes>=12&&v.xy_mm>0&&v.e_mm>0,'Need actual skin and wall deposition');
+            v.geometry.sort();
+            v.e_per_xy_mm=v.e_mm/v.xy_mm;
+          }
+          return roles;
+        };
+        const slice=async(bottom,top)=>{
+          rawOrca[4][bottomKey]=bottom;
+          return measure(await sliceWithLineWidth([top],topKey));
+        };
+        const base=await slice('1','1');
+        const bottomOnly=await slice('0.75','1');
+        const topOnly=await slice('1','1.25');
+        const combined=await slice('0.75','1.25');
+        const results={};
+        for(const [label,run,expectedBottom,expectedTop] of [
+          ['bottom_only',bottomOnly,0.75,1],
+          ['top_only',topOnly,1,1.25],
+          ['combined',combined,0.75,1.25]
+        ]){
+          results[label]={};
+          for(const role of Object.keys(base)){
+            const b=base[role],v=run[role];
+            const expected=role==='bottom surface'?expectedBottom:role==='top surface'?expectedTop:1;
+            const ratio=v.e_per_xy_mm/b.e_per_xy_mm;
+            const geometryEqual=v.geometry.length===b.geometry.length&&
+              v.geometry.every((stroke,i)=>stroke===b.geometry[i]);
+            results[label][role]={strokes:v.strokes,xy_mm:v.xy_mm,e_mm:v.e_mm,
+              ratio,expected,geometry_equal:geometryEqual};
+          }
+        }
+        const report={fixture:'same two STL controls; explicit bottom scalar and top one-slot array',
+          base:Object.fromEntries(Object.entries(base).map(([role,{geometry,...metrics}])=>[role,metrics])),
+          results,desktop_native_parity:false,printer_ready:false};
+        await writeFile(parityDir+'/combined-surface-flow.json',JSON.stringify(report,null,2)+'\n');
+        console.log('WASM_COMBINED_SURFACE_FLOW '+JSON.stringify(report));
+        for(const [label,roles] of Object.entries(results))for(const [role,v] of Object.entries(roles)){
+          assert.ok(v.geometry_equal,label+' '+role+' must preserve unoriented XYZ geometry at 1 um');
+          assert.ok(Math.abs(v.ratio-v.expected)<0.02,label+' '+role+' E/XY must track independent multiplier');
+        }
+        console.log('PASS: simultaneous top/bottom flow independently changes real tagged E/XY with unchanged wall controls');
+      } finally {
+        for(const key of [bottomKey,topKey]){
+          if(prior[key]===undefined)delete rawOrca[4][key];else rawOrca[4][key]=prior[key];
+        }
+        await uploadRawOrca();
+      }
+    }
+
     // Native 2.5.0 thickness settings are a minimum solid depth in mm,
     // independent of top/bottom solid-layer counts. Use one-layer shells
     // and contrast 0 mm (off) vs 1.6 mm (on) over the SAME two-STL scene.
