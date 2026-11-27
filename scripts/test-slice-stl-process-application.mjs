@@ -433,7 +433,7 @@ console.log("PASS: single-wall surface toggle native transfer and independent ov
 console.log("PASS: seam-position native transfer and explicit override");
 
 {
-  const vectors={retraction_length:["0.8"],retraction_speed:["40"],deretraction_speed:["0"]};
+  const vectors={retraction_length:["0.8"],retraction_speed:["40"],deretraction_speed:["0"],retraction_minimum_travel:["0"]};
   const preset={...selected,machine:{settings:{...selected.machine.settings,...vectors}}};
   const {engine,calls}=mockedEngine();
   await sliceMultiStlWithEngine(engine,items,null,null,preset);

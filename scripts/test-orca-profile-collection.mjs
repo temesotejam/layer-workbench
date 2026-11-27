@@ -1111,8 +1111,8 @@ for(const bad of ["Aligned",0,true,null,["aligned"]])
 console.log("PASS: seam-position inheritance, override and absence");
 
 {
-  const parent={retraction_length:["5"],retraction_speed:["60"],deretraction_speed:["40"]};
-  const child={retraction_length:"0.8",retraction_speed:"40",deretraction_speed:"0"};
+  const parent={retraction_length:["5"],retraction_speed:["60"],deretraction_speed:["40"],retraction_minimum_travel:["2"]};
+  const child={retraction_length:"0.8",retraction_speed:"40",deretraction_speed:"0",retraction_minimum_travel:"0"};
   const withRetraction=profiles.map(p=>p.name==="base printer"?{...p,...parent}:
     p.name===selection.machine?{...p,...child}:p);
   const machine=resolve(withRetraction,selection).machine;

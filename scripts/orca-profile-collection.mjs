@@ -10,6 +10,8 @@ const MAX_RECORDS=96,MAX_DEPTH=20;
 // Preserve a one-slot native vector; never interpret a multi-variant vector.
 const MACHINE_RETRACTION_VECTORS=Object.freeze({
   retraction_length:[0,10],retraction_speed:[1,100],deretraction_speed:[0,100],
+  // Pinned coFloats in mm; zero is an explicit threshold, not absence.
+  retraction_minimum_travel:[0,100],
 });
 const SPECS={
   machine:{nozzle_diameter:[0.2,1.2],printable_height:[10,1000]},
