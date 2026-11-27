@@ -386,3 +386,12 @@ for(const bad of [0,-1,2.01,"75%","nil",null,true,[],["1","0.75"],[null],["nil"]
 assert.deepEqual(parseTestProcessOverrides({[topFlowKey]:["0.75"],[bottomFlowKey]:"1"}),
   {[topFlowKey]:["0.75"],[bottomFlowKey]:"1"});
 console.log("PASS: explicit single-slot top surface vector, distinct from bottom scalar");
+
+// Native classic thin-wall switch is a serialized bool, never a count.
+for (const value of ["0","1"]) {
+  assert.deepEqual(parseTestProcessOverrides({detect_thin_wall:value}),{detect_thin_wall:value});
+}
+for (const bad of [0,1,true,false,"true","2","1%",["1"],null]) {
+  assert.throws(()=>parseTestProcessOverrides({detect_thin_wall:bad}),/native enum/);
+}
+console.log("PASS: explicit serialized thin-wall toggle only");
