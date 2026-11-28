@@ -425,3 +425,13 @@ for(const value of ["disabled","enabled","sparse_infill"])
 for(const bad of ["0","1","false","true","Enabled","sparse infill",0,1,true,null,["enabled"]])
   assert.throws(()=>parseTestProcessOverrides({enable_arc_fitting:bad}),/native enum/);
 console.log("PASS: canonical arc-fitting process override tokens only");
+
+// Native process speed is scalar; percentages retain the travel-speed unit.
+for(const [input,expected] of [[0,"0"],["0%","0%"],["80%","80%"],["35.5","35.5"],[1500,"1500"],["200%","200%"]])
+  assert.deepEqual(parseTestProcessOverrides({wipe_speed:input,role_based_wipe_speed:"0"}),{wipe_speed:expected,role_based_wipe_speed:"0"});
+for(const bad of [[],["80%"],"201%","1501","-1%","-1","80mm/s","1e2%","Infinity",null,true,{}])
+  assert.throws(()=>parseTestProcessOverrides({wipe_speed:bad}),/Invalid|safe test range/);
+for(const bad of [0,1,true,"true","2",["1"],null])
+  assert.throws(()=>parseTestProcessOverrides({role_based_wipe_speed:bad}),/native enum/);
+assert.deepEqual(parseTestProcessOverrides({role_based_wipe_speed:"1"}),{role_based_wipe_speed:"1"});
+console.log("PASS: bounded native wipe speed and role-based switch, preserving units");
