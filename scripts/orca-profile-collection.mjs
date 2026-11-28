@@ -16,6 +16,8 @@ const MACHINE_RETRACTION_VECTORS=Object.freeze({
   z_hop:[0,5],travel_slope:[1,90],
   // Absolute Z in mm, locally bounded; zero below means no upper limit.
   retract_lift_above:[0,1000],retract_lift_below:[0,1000],
+  // Local diagnostic bound, not an upstream maximum.
+  wipe_distance:[0,20],
 });
 // Pinned coEnums; the serialized tokens (including spaces) are not UI labels.
 const MACHINE_Z_HOP_TYPES=new Set(['Auto Lift','Normal Lift','Slope Lift','Spiral Lift']);
@@ -215,6 +217,17 @@ export function resolveOrcaProfileFamily(records,type,selected,options={}) {
       for(const [key,value] of Object.entries(rec)){
         if(type==="machine" && Object.hasOwn(MACHINE_RETRACTION_VECTORS,key)) {
           settings[key]=[validateNum(key,value,MACHINE_RETRACTION_VECTORS[key])];
+        }else if(type==="machine" && key==="wipe") {
+          // Pinned coBools: accept only the actual serialized single-slot tokens.
+          const token=Array.isArray(value)&&value.length===1?value[0]:value;
+          if(token!=="0"&&token!=="1")throw new Error("Invalid single-tool native wipe toggle");
+          settings[key]=[token];
+        }else if(type==="machine" && key==="retract_before_wipe") {
+          // Pinned coPercents: retain the explicit percent unit, never mm.
+          const token=Array.isArray(value)&&value.length===1?value[0]:value;
+          if(typeof token!=="string"||!/^\d+(?:\.\d+)?%$/.test(token)||Number(token.slice(0,-1))>100)
+            throw new Error("Invalid single-tool native retract-before-wipe percent");
+          settings[key]=[String(Number(token.slice(0,-1)))+"%"];
         }else if(type==="machine" && key==="z_hop_types") {
           const token=Array.isArray(value)&&value.length===1?value[0]:value;
           if(typeof token!=="string"||!MACHINE_Z_HOP_TYPES.has(token))
