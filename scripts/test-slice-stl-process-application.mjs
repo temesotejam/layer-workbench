@@ -501,3 +501,18 @@ console.log("PASS: native Z-hop enum vector and traveling angle reach init; inva
   }
 }
 console.log("PASS: Z-hop height gates reach native init; invalid inputs refused");
+
+{
+  const preset={...selected,process:{settings:{...selected.process.settings,enable_arc_fitting:"disabled"}}};
+  for(const mode of [null,"enabled","sparse_infill","disabled"]){
+    const {engine,calls}=mockedEngine();
+    await sliceMultiStlWithEngine(engine,items,null,mode===null?null:{enable_arc_fitting:mode},preset);
+    const applied=calls.find(c=>c.name==="applyProfile");
+    assert.equal(applied.format,"orca.native-json");
+    assert.equal(applied.value.enable_arc_fitting,mode??"disabled");
+  }
+  const invalid=mockedEngine();
+  await assert.rejects(()=>sliceMultiStlWithEngine(invalid.engine,items,null,{enable_arc_fitting:"1"},preset),/native enum/);
+  assert.equal(invalid.calls.length,0);
+}
+console.log("PASS: canonical arc-fitting mode reaches native process application");

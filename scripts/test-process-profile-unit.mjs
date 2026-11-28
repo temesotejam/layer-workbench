@@ -418,3 +418,10 @@ for(const seam of ["nearest","aligned","aligned_back","back","random"])
 for(const bad of ["Aligned","aligned back","back ","",0,true,null,["aligned"]])
   assert.throws(()=>parseTestProcessOverrides({seam_position:bad}),/native enum/);
 console.log("PASS: exact pinned seam-position enum tokens only");
+
+// Canonical direct overrides only; source legacy normalization is separate.
+for(const value of ["disabled","enabled","sparse_infill"])
+  assert.deepEqual(parseTestProcessOverrides({enable_arc_fitting:value}),{enable_arc_fitting:value});
+for(const bad of ["0","1","false","true","Enabled","sparse infill",0,1,true,null,["enabled"]])
+  assert.throws(()=>parseTestProcessOverrides({enable_arc_fitting:bad}),/native enum/);
+console.log("PASS: canonical arc-fitting process override tokens only");

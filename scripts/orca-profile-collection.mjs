@@ -109,6 +109,7 @@ const PROCESS_ENUMS=Object.freeze({
   wall_generator:new Set(["classic","arachne"]),
   // CR-10 inherits aligned from Creality; preserve exact native enum tokens.
   seam_position:new Set(["nearest","aligned","aligned_back","back","random"]),
+  enable_arc_fitting:new Set(["disabled","enabled","sparse_infill"]),
   // Pinned native wall-order enum; preserve exact serialized tokens.
   wall_sequence:new Set(["inner wall/outer wall","outer wall/inner wall","inner-outer-inner wall"]),
   gap_fill_target:new Set(["everywhere","topbottom","nowhere"]),
@@ -234,9 +235,16 @@ export function resolveOrcaProfileFamily(records,type,selected,options={}) {
           settings[key]=parseTestProcessOverrides({[key]:value})[key];
         }else if(Object.hasOwn(SPECS[type],key))settings[key]=validateNum(key,value,SPECS[type][key]);
         else if(type==="process" && Object.hasOwn(PROCESS_ENUMS,key)) {
-          if(typeof value!=="string" || !PROCESS_ENUMS[key].has(value))
+          // Pinned PrintConfig.cpp handle_legacy: legacy string booleans for
+          // arc fitting are mapped before native enum deserialization.
+          let token=value;
+          if(key==="enable_arc_fitting" && typeof token==="string"){
+            if(token==="0" || token.toLowerCase()==="false")token="disabled";
+            else if(token==="1" || token.toLowerCase()==="true")token="enabled";
+          }
+          if(typeof token!=="string" || !PROCESS_ENUMS[key].has(token))
             throw new Error("Invalid native process enum: "+key);
-          settings[key]=value;
+          settings[key]=token;
         }else if(!META.has(key))unsupported.add(key);
       }
     }

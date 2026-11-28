@@ -372,3 +372,10 @@ for(const key of ["retract_lift_above","retract_lift_below"]){
   assert.ok(!machine.unsupported.includes(key));
 }
 console.log("PASS: pinned CR-10 explicit zero Z-hop height gates reach restricted collection");
+
+assert.deepEqual(process.chain.map(n=>indexed.records.find(p=>p.name===n).enable_arc_fitting),
+  [undefined,"0","0"]);
+assert.equal(process.settings.enable_arc_fitting,"disabled");
+assert.equal(combined.process.settings.enable_arc_fitting,"disabled");
+assert.ok(!process.unsupported.includes("enable_arc_fitting"));
+console.log("PASS: pinned CR-10 legacy arc-fitting 0 normalized to canonical disabled");
