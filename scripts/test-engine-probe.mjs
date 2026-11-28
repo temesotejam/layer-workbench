@@ -2566,6 +2566,60 @@ try {
         'retraction_minimum_travel','z_hop','z_hop_types','travel_slope'])delete record[key];
     console.log('PASS: actual Spiral Lift with linear and arc fitting modes');
 
+    // Auto selects slope vs spiral based on nearby overhang intersection.
+    // The existing two-STL fixture is the first (flat-wall) control, not a
+    // proof that the overhang branch or every fallback has been exercised.
+    const autoAngle=45;
+    const classifyAutoRise=v=>{
+      if(v.spiralArcs===1&&v.otherRise===1&&!v.vertical&&!v.slopes.length&&!v.spiralLinear)
+        return 'spiral';
+      if(!v.spiralArcs&&!v.otherRise&&!v.spiralLinear&&v.vertical===1&&!v.slopes.length)
+        return 'vertical';
+      if(!v.spiralArcs&&!v.otherRise&&!v.spiralLinear&&!v.vertical&&v.slopes.length===1)
+        return Math.abs(v.slopes[0]-autoAngle)<0.5?'configuredSlope':'otherSlope';
+      return 'unclassified';
+    };
+    assert.equal(classifyAutoRise(verticalControl[0]),'vertical');
+    assert.equal(classifyAutoRise(slopeControl[0]),'configuredSlope');
+    assert.equal(classifyAutoRise(spiralWitness('G17\nG3 Z0.6 I0.2 J0 P1')),'spiral');
+    assert.equal(classifyAutoRise(spiralWitness(spiralPolygon)),'unclassified');
+    assert.equal(classifyAutoRise(arcControl[0]),'unclassified');
+    Object.assign(rawOrca[1],{retraction_length:'0.8',retraction_speed:'40',
+      deretraction_speed:'40',retraction_minimum_travel:'0',z_hop:'0.4',
+      z_hop_types:'Auto Lift',travel_slope:String(autoAngle)});
+    rawOrca[5].enable_arc_fitting='enabled';
+    await uploadRawOrca();
+    await prepare.locator('#lab-slice').click();
+    await prepare.waitForFunction(()=>{
+      const status=document.querySelector('#lab-status')?.textContent||'';
+      return status.startsWith('PASS:')||status.startsWith('FAILED');
+    },null,{timeout:120000});
+    assert.match(await prepare.locator('#lab-status').innerText(),/^PASS: 2 STL model\(s\)/);
+    const autoCode=await prepare.locator('#lab-download').evaluate(async link=>
+      await(await fetch(link.href)).text());
+    const autoObserved=sameLayerHopWitness(autoCode,true);
+    const autoPositive=autoObserved.filter(v=>v.height>0.001);
+    const autoMatching=autoPositive.filter(v=>Math.abs(v.height-0.4)<0.002);
+    const autoReport={angle:autoAngle,pairs:autoObserved.length,
+      positive:autoPositive.length,matchingHeight:autoMatching.length,
+      configuredSlope:0,otherSlope:0,spiral:0,vertical:0,unclassified:0};
+    for(const v of autoMatching)autoReport[classifyAutoRise(v)]++;
+    console.log('MACHINE_AUTO_LIFT_MOTION '+JSON.stringify(autoReport));
+    await writeFile(parityDir+'/machine-auto-lift-motion.json',
+      JSON.stringify({fixture:'same-layer two synthetic STL models; localhost only',
+        case:autoReport,overhang_selection_verified:false,desktop_native_parity:false,
+        printer_ready:false},null,2));
+    assert.ok(autoReport.positive>=10,'Need actual Auto Lift witnesses');
+    assert.equal(autoReport.matchingHeight,autoReport.positive,'Auto Lift must preserve hop height');
+    assert.ok(autoReport.configuredSlope>=10,
+      'Expected actual configured-angle Auto Lift slopes on flat-wall fixture: '+JSON.stringify(autoReport));
+    assert.equal(autoMatching.filter(v=>v.spiralLinear).length,0,
+      'Arc-enabled Auto Lift must not emit rising linear spiral polygons');
+    delete rawOrca[5].enable_arc_fitting;
+    for(const key of ['retraction_length','retraction_speed','deretraction_speed',
+      'retraction_minimum_travel','z_hop','z_hop_types','travel_slope'])delete rawOrca[1][key];
+    console.log('PASS: actual Auto Lift flat-wall slope witness; overhang selection not verified');
+
 
     // Selecting a native bed without raw Orca profiles must never fall back
     // to generic PLA output while silently ignoring the selected heater.
