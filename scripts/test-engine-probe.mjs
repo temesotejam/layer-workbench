@@ -2621,6 +2621,112 @@ try {
     console.log('PASS: actual Auto Lift flat-wall slope witness; overhang selection not verified');
 
 
+
+    // Observe negative E during real XY motion; comments alone are not a witness.
+    // Restrict to same-layer linear, single-tool retract/travel/recover pairs.
+    function wipeMotionWitness(code){
+      const eps=0.00001, pairs=[];
+      let xyz=null, emode=null, e=0, pos={X:NaN,Y:NaN,Z:NaN}, deposited=false, trial=null;
+      const invalidate=()=>{trial=null;deposited=false;};
+      for(const line of code.split(/\r?\n/)){
+        const words=line.split(';')[0].trim().split(/\s+/), cmd=words[0].toUpperCase();
+        const args=Object.fromEntries(words.slice(1).filter(w=>/^[XYZE][+-]?(?:\d+(?:\.\d*)?|\.\d+)$/i.test(w)).map(w=>[w[0].toUpperCase(),Number(w.slice(1))]));
+        if(cmd==='G90'||cmd==='G91'){xyz=cmd;continue;}
+        if(cmd==='M82'||cmd==='M83'){emode=cmd;continue;}
+        if(cmd==='G28'||cmd==='G92'){
+          if(cmd==='G28'||['X','Y','Z'].some(k=>Object.hasOwn(args,k))){
+            invalidate();
+            for(const k of ['X','Y','Z'])if(cmd==='G28'||Object.hasOwn(args,k))pos[k]=cmd==='G28'?NaN:args[k];
+          }
+          if(cmd==='G92'&&Object.hasOwn(args,'E'))e=args.E;
+          continue;
+        }
+        if(['G10','G11'].includes(cmd)||/^T\d+$/.test(cmd)){invalidate();continue;}
+        if(!['G0','G1','G2','G3'].includes(cmd))continue;
+        const prev={...pos};
+        for(const k of ['X','Y','Z'])if(Object.hasOwn(args,k))pos[k]=xyz==='G90'?args[k]:xyz==='G91'?pos[k]+args[k]:NaN;
+        let de=0;
+        if(Object.hasOwn(args,'E')){
+          de=emode==='M83'?args.E:emode==='M82'?args.E-e:NaN;
+          e=emode==='M83'?e+de:args.E;
+        }
+        const dxy=Math.hypot(pos.X-prev.X,pos.Y-prev.Y),dz=pos.Z-prev.Z;
+        if(!['G0','G1'].includes(cmd)||![dxy,dz,de].every(Number.isFinite)||Math.abs(dz)>eps){invalidate();continue;}
+        if(dxy>eps&&de>eps){
+          if(trial?.recovered&&trial.travel)pairs.push(trial);
+          trial=null;deposited=true;continue;
+        }
+        if(de< -eps){
+          if(!deposited||trial?.travel||trial?.recovered){invalidate();continue;}
+          trial??={total:0,before:0,wipeE:0,wipeXY:0,travel:false,recovered:false,recovery:0};
+          trial.total-=de;
+          if(dxy>eps){trial.wipeXY+=dxy;trial.wipeE-=de;}
+          else if(!trial.wipeXY)trial.before-=de;
+          continue;
+        }
+        if(!trial)continue;
+        if(dxy>eps&&Math.abs(de)<=eps){trial.travel=true;continue;}
+        if(de>eps){
+          if(dxy>eps||!trial.travel||trial.recovered){invalidate();continue;}
+          trial.recovered=true;trial.recovery=de;
+        }
+      }
+      return pairs;
+    }
+    for(const [fixture,n,xy] of [["G90\nM83\nG1 X0 Y0 Z0.2\nG1 X3 E0.1\nG1 E-0.56\nG1 X2 E-0.12\nG1 X1 E-0.12\nG1 X6\nG1 E0.8\nG1 X7 E0.1",1,2],["G90\nM82\nG92 E10\nG1 X0 Y0 Z0.2\nG1 X3 E10.1\nG1 E9.54\nG1 X2 E9.42\nG1 X1 E9.3\nG92 E0\nG1 X6\nG1 E0.8\nG1 X7 E0.9",1,2],["G90\nM83\nG1 X0 Y0 Z0.2\nG1 X3 E0.1\nG1 E-0.8\nG1 X6\nG1 E0.8\nG1 X7 E0.1",1,0],["G90\nM83\nG1 X0 Y0 Z0.2\nG1 X3 E0.1\nG1 E-0.56\nG1 X2 E-0.24\nG1 Z0.4\nG1 X6\nG1 E0.8\nG1 X7 E0.1",0,0],["G90\nM83\nG1 X0 Y0 Z0.2\nG1 X3 E0.1\nG1 E-0.56\nG1 X2 E-0.24\nG1 E0.8\nG1 X7 E0.1",0,0],["G90\nM83\nG1 X0 Y0 Z0.2\nG1 X3 E0.1\nG1 E-0.56\nG91\nG1 X-1 E-0.12\nG1 X-1 E-0.12\nG1 X5\nG1 E0.8\nG1 X1 E0.1",1,2]]){
+      const pairs=wipeMotionWitness(fixture);
+      assert.equal(pairs.length,n);
+      assert.ok(pairs.every(v=>Math.abs(v.wipeXY-xy)<0.000001&&
+        Math.abs(v.total-0.8)<0.000001&&Math.abs(v.recovery-0.8)<0.000001));
+    }
+    const wipeReport=[];
+    for(const test of [
+      {enabled:'0',distance:2,before:70},
+      {enabled:'1',distance:0,before:70},
+      {enabled:'1',distance:2,before:70},
+      {enabled:'1',distance:2,before:100},
+    ]){
+      Object.assign(rawOrca[1],{retraction_length:'0.8',retraction_speed:'40',
+        deretraction_speed:'40',retraction_minimum_travel:'0',z_hop:'0',
+        wipe:test.enabled,wipe_distance:String(test.distance),
+        retract_before_wipe:String(test.before)+'%'});
+      rawOrca[5].enable_arc_fitting='disabled';
+      await uploadRawOrca();
+      await prepare.locator('#lab-slice').click();
+      await prepare.waitForFunction(()=>{
+        const status=document.querySelector('#lab-status')?.textContent||'';
+        return status.startsWith('PASS:')||status.startsWith('FAILED');
+      },null,{timeout:120000});
+      assert.match(await prepare.locator('#lab-status').innerText(),/^PASS: 2 STL model\(s\)/);
+      const code=await prepare.locator('#lab-download').evaluate(async link=>
+        await(await fetch(link.href)).text());
+      const pairs=wipeMotionWitness(code);
+      const wiping=pairs.filter(v=>v.wipeXY>0.00001);
+      wipeReport.push({...test,pairs:pairs.length,wiping:wiping.length,
+        matchingTotal:pairs.filter(v=>Math.abs(v.total-0.8)<0.002&&
+          Math.abs(v.recovery-0.8)<0.002).length,
+        boundedWipes:wiping.filter(v=>v.wipeXY<=test.distance+0.02&&
+          v.before>=0.8*test.before/100-0.002).length,
+        maxWipeXY:wiping.reduce((m,v)=>Math.max(m,v.wipeXY),0),
+        maxWipeE:wiping.reduce((m,v)=>Math.max(m,v.wipeE),0)});
+      console.log('MACHINE_WIPE_MOTION '+JSON.stringify(wipeReport.at(-1)));
+    }
+    await writeFile(parityDir+'/machine-wipe-motion.json',
+      JSON.stringify({fixture:'same two synthetic STL models; localhost only',
+        cases:wipeReport,desktop_native_parity:false,printer_ready:false},null,2));
+    for(const test of wipeReport){
+      assert.ok(test.pairs>=10,'Need actual same-layer paired retracts: '+JSON.stringify(test));
+      assert.equal(test.matchingTotal,test.pairs,'Total E retract/recovery must match');
+      if(test.enabled==='1'&&test.distance>0&&test.before<100){
+        assert.ok(test.wiping>=10,'Need actual simultaneous XY/negative E witnesses');
+        assert.equal(test.boundedWipes,test.wiping,'Wipe path bound and minimum pre-retract must hold');
+      }else assert.equal(test.wiping,0,'No simultaneous XY/negative E expected in control');
+    }
+    delete rawOrca[5].enable_arc_fitting;
+    for(const key of ['retraction_length','retraction_speed','deretraction_speed',
+      'retraction_minimum_travel','z_hop','wipe','wipe_distance','retract_before_wipe'])delete rawOrca[1][key];
+    console.log('PASS: actual wipe and retract motion with disabled, zero-distance and full pre-retract controls');
+
     // Selecting a native bed without raw Orca profiles must never fall back
     // to generic PLA output while silently ignoring the selected heater.
     await prepare.locator('#lab-orca-profiles').setInputFiles([]);
