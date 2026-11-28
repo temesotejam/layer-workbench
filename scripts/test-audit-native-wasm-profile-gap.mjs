@@ -133,7 +133,7 @@ function machineVectorAudit(key,native,forwarded){
 }
 for(const [key,lo,hi] of [["retraction_length",0,10],["retraction_speed",1,100],
   ["deretraction_speed",0,100],["retraction_minimum_travel",0,100],["z_hop",0,5],
-  ["travel_slope",1,90],["retract_lift_above",0,1000],["retract_lift_below",0,1000]]){
+  ["travel_slope",1,90],["retract_lift_above",0,1000],["retract_lift_below",0,1000],["wipe_distance",0,20]]){
   for(const n of [lo,hi]){
     const audit=machineVectorAudit(key,String(n),[String(n)]);
     assert.ok(audit.families.machine.raw_value_difference_shapes.some(v=>
@@ -147,7 +147,26 @@ for(const [key,lo,hi] of [["retraction_length",0,10],["retraction_speed",1,100],
     [String(lo),[String(lo)+".0"]],[String(lo),[String(hi)]],[null,["0"]]])
     assert.equal(machineVectorAudit(key,native,forwarded).families.machine.unexplained_raw_value_difference_count,1);
 }
-assert.equal(machineVectorAudit("wipe_distance","1",["1"]).families.machine.unexplained_raw_value_difference_count,1);
+assert.equal(machineVectorAudit("unrelated_distance","1",["1"]).families.machine.unexplained_raw_value_difference_count,1);
+for(const token of ["0","1"]){
+  const a=machineVectorAudit("wipe",token,[token]);
+  assert.equal(a.families.machine.raw_value_difference_shapes.find(v=>v.key==="wipe").syntax_only_hint,"single-machine-wipe-bool-scalar-to-vector");
+  assert.ok(a.families.machine.raw_value_differences_requiring_review.includes("wipe"));
+}
+for(const [native,forwarded] of [[true,["1"]],[1,["1"]],["true",["1"]],["1",["0"]],["1",[1]],["1",["1","1"]],[" 1",["1"]]])
+  assert.equal(machineVectorAudit("wipe",native,forwarded).families.machine.unexplained_raw_value_difference_count,1);
+for(const key of ["retract_before_wipe","retract_after_wipe"]){
+  for(const [native,forwarded] of [["0%",["0%"]],["70.00%",["70%"]],["100%",["100%"]],["0.5%",["0.5%"]]]){
+    const a=machineVectorAudit(key,native,forwarded);
+    assert.equal(a.families.machine.raw_value_difference_shapes.find(v=>v.key===key).syntax_only_hint,"single-machine-wipe-percent-scalar-to-vector");
+    assert.ok(a.families.machine.raw_value_differences_requiring_review.includes(key));
+    assert.equal(a.full_profile_parity_established,false);
+    assert.equal(a.print_ready,false);
+  }
+  for(const [native,forwarded] of [["101%",["101%"]],["-1%",["-1%"]],["70",["70%"]],["70%",["70"]],["70%",["70.0%"]],["70%",["20%"]],["70%",["70%","70%"]],[" 70%",["70%"]],[70,["70%"]],[null,["0%"]]])
+    assert.equal(machineVectorAudit(key,native,forwarded).families.machine.unexplained_raw_value_difference_count,1);
+}
+assert.equal(machineVectorAudit("unrelated_percent","70%",["70%"]).families.machine.unexplained_raw_value_difference_count,1);
 
 // Exact machine lift enum vector and legacy process arc fitting conversions.
 for(const mode of ["Auto Lift","Normal Lift","Slope Lift","Spiral Lift"]){
