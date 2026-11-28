@@ -2783,6 +2783,32 @@ try {
       feedFixture.replace('G1 F2100','G1 F2100 F2400'),
     ]) assert.equal(wipeMotionWitness(invalidFeed).filter(v=>hasWipeFeed(v,2100)).length,0,
       'Missing, changed, invalid or unsupported-mode feed is not fixed-speed evidence');
+    // Upstream limits the simultaneous E amount by retract speed * path / wipe speed.
+    // Require closed tagged XY with the actual fixed modal F, not merely a total-E match.
+    const hasSpeedBudget=(v,test)=>{
+      const eps=0.002;
+      const expectedE=Math.min(0.8*(100-test.before-test.after)/100,
+        test.retractSpeed*v.taggedXY/(test.expectedF/60));
+      return v.tagClosed&&!v.tagOpen&&v.taggedXY>0.00001&&v.taggedE>0.00001&&
+        v.taggedXY<=test.distance+0.02&&v.missingTaggedFeed===0&&
+        Math.abs(v.minTaggedFeed-test.expectedF)<0.1&&Math.abs(v.maxTaggedFeed-test.expectedF)<0.1&&
+        Math.abs(v.taggedXY-v.wipeXY)<0.00001&&Math.abs(v.taggedE-v.wipeE)<eps&&
+        Math.abs(v.wipeE-expectedE)<eps&&
+        Math.abs(v.before-(0.8-expectedE-0.8*test.after/100))<eps&&
+        Math.abs(v.after-0.8*test.after/100)<eps;
+    };
+    const budgetFixture=['G90','M83','G1 X0 Y0 Z0.2','G1 X3 E0.1',
+      'G1 E-0.6 F120','; WIPE_START','G1 F1200','G1 X1 E-0.2',
+      '; WIPE_END','G1 X6','G1 E0.8','G1 X7 E0.1'].join('\n');
+    const budgetTest={before:70,after:0,distance:2,retractSpeed:2,expectedF:1200};
+    assert.equal(wipeMotionWitness(budgetFixture).filter(v=>hasSpeedBudget(v,budgetTest)).length,1);
+    for(const malformed of [
+      budgetFixture.replace('E-0.6','E-0.56').replace('E-0.2','E-0.24'),
+      budgetFixture.replace('F1200','F2400'),
+      budgetFixture.replace('; WIPE_END','; missing end'),
+      budgetFixture.replace('G1 X1 E-0.2','G1 X2 E-0.2'),
+    ]) assert.equal(wipeMotionWitness(malformed).filter(v=>hasSpeedBudget(v,budgetTest)).length,0,
+      'Wrong split, feed, missing marker or shorter path must not prove speed budget');
     const wipeReport=[];
     for(const test of [
       {enabled:'0',distance:2,before:70,after:0},
@@ -2797,8 +2823,11 @@ try {
       {enabled:'1',distance:2,before:70,after:30,speed:'50%',expectedF:2400},
       {enabled:'1',distance:2,before:70,after:30,speed:'50%',travel:100,expectedF:3000},
       {enabled:'1',distance:2,before:70,after:30,speed:'5',expectedF:600},
+      // 2 mm at 20/40 mm/s permits 0.20/0.10 mm E at 2 mm/s (budget 0.24).
+      {enabled:'1',distance:2,before:70,after:0,speed:'20',expectedF:1200,retractSpeed:2},
+      {enabled:'1',distance:2,before:70,after:0,speed:'40',expectedF:2400,retractSpeed:2},
     ]){
-      Object.assign(rawOrca[1],{retraction_length:'0.8',retraction_speed:'40',
+      Object.assign(rawOrca[1],{retraction_length:'0.8',retraction_speed:String(test.retractSpeed??40),
         deretraction_speed:'40',retraction_minimum_travel:'0',z_hop:'0',
         wipe:test.enabled,wipe_distance:String(test.distance),
         retract_before_wipe:String(test.before)+'%',retract_after_wipe:String(test.after)+'%'});
@@ -2819,12 +2848,19 @@ try {
       const zeroTagged=pairs.filter(isTaggedZeroWipe);
       wipeReport.push({...test,pairs:pairs.length,wiping:wiping.length,
         zeroTagged:zeroTagged.length,
-        ...(test.expectedF!==undefined?{
+        ...(test.expectedF!==undefined&&test.retractSpeed===undefined?{
           matchingFeed:zeroTagged.filter(v=>hasWipeFeed(v,test.expectedF)).length,
           missingFeed:zeroTagged.filter(v=>v.missingTaggedFeed>0).length,
           inheritedFeed:zeroTagged.filter(v=>v.inheritedTaggedFeed>0).length,
           observedMinF:zeroTagged.length?Math.min(...zeroTagged.map(v=>v.minTaggedFeed)):null,
           observedMaxF:zeroTagged.length?Math.max(...zeroTagged.map(v=>v.maxTaggedFeed)):null,
+        }:{}),
+        ...(test.retractSpeed!==undefined?{
+          matchingSpeedBudget:wiping.filter(v=>hasSpeedBudget(v,test)).length,
+          minConcurrentE:wiping.length?Math.min(...wiping.map(v=>v.wipeE)):null,
+          maxConcurrentE:wiping.length?Math.max(...wiping.map(v=>v.wipeE)):null,
+          minBeforeE:wiping.length?Math.min(...wiping.map(v=>v.before)):null,
+          maxBeforeE:wiping.length?Math.max(...wiping.map(v=>v.before)):null,
         }:{}),
         zeroTaggedBounded:zeroTagged.filter(v=>v.taggedXY<=test.distance+0.02).length,
         zeroTaggedClampSplit:zeroTagged.filter(v=>Math.abs(v.before-0.56)<0.002&&
@@ -2860,8 +2896,16 @@ try {
         assert.ok(test.wiping>=10,'Need actual simultaneous XY/negative E witnesses');
         assert.equal(test.boundedWipes,test.wiping,'Wipe path bound and minimum pre-retract must hold');
         assert.equal(test.matchingAfter,test.wiping,'Positive wipe witnesses must respect post-wipe reserve and remaining E budget');
+        if(test.retractSpeed!==undefined){
+          assert.equal(test.wiping,test.pairs,'Every paired retract in speed-budget fixture must have simultaneous XY/E');
+          assert.equal(test.matchingSpeedBudget,test.wiping,'Actual tagged XY/E and F must respect upstream speed budget: '+JSON.stringify(test));
+        }
       }else assert.equal(test.wiping,0,'No simultaneous XY/negative E expected in control');
     }
+    const slowBudget=wipeReport.find(v=>v.retractSpeed===2&&v.speed==='20');
+    const fastBudget=wipeReport.find(v=>v.retractSpeed===2&&v.speed==='40');
+    assert.ok(slowBudget.minConcurrentE>fastBudget.maxConcurrentE+0.05,
+      'Faster wipe must reduce concurrent E on the same fixture');
     const exact=wipeReport.find(v=>v.before===70&&v.after===30&&v.enabled==='1');
     const clamped=wipeReport.find(v=>v.before===70&&v.after===60&&v.enabled==='1');
     assert.equal(clamped.pairs,exact.pairs,'Over-budget setting must preserve paired retraction count');
