@@ -99,7 +99,7 @@ const FILAMENT_INIT_VECTORS=Object.freeze({
 // Match the restricted resolver, but independently validate the init boundary.
 const FILAMENT_RETRACTION_INIT_VECTORS=Object.freeze({
   filament_retraction_length:[0,10],filament_retraction_speed:[1,100],
-  filament_deretraction_speed:[0,100],
+  filament_deretraction_speed:[0,100],filament_z_hop:[0,5],
 });
 const PLATE_INIT_FIELDS=Object.freeze({
   "High Temp Plate":"hot_plate_temp",
