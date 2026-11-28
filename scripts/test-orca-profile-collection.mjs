@@ -1192,13 +1192,13 @@ console.log("PASS: independent absolute Z-hop gates, inheritance and explicit ze
 console.log("PASS: native arc-fitting inheritance, legacy string conversion and absence");
 
 {
-  const values={wipe:["1"],wipe_distance:["2"],retract_before_wipe:["70%"]};
+  const values={wipe:["1"],wipe_distance:["2"],retract_before_wipe:["70%"],retract_after_wipe:["20%"]};
   const inherited=profiles.map(p=>p.name==="base printer"?{...p,...values}:p);
   const child=(key,value)=>inherited.map(p=>p.name===selection.machine?{...p,[key]:value}:p);
   for(const [key,value] of Object.entries(values)){
     assert.equal(result.machine.settings[key],undefined);
     assert.deepEqual(resolve(inherited,selection).machine.settings[key],value);
-    const zero=key==="retract_before_wipe"?"0%":"0";
+    const zero=key==="retract_before_wipe"||key==="retract_after_wipe"?"0%":"0";
     for(const token of [zero,[zero],value[0],value]){
       const machine=resolve(child(key,token),selection).machine;
       assert.deepEqual(machine.settings[key],Array.isArray(token)?token:[token]);
@@ -1210,6 +1210,10 @@ console.log("PASS: native arc-fitting inheritance, legacy string conversion and 
   for(const bad of [[],["1","2"],"-1","21","2%",null,true,{}])
     assert.throws(()=>resolve(child("wipe_distance",bad),selection),/Multi-extruder|Invalid|out of test limits/);
   for(const bad of [[],["0%","70%"],"70","70mm","-1%","101%","1e1%",70,null,true,{}])
-    assert.throws(()=>resolve(child("retract_before_wipe",bad),selection),/Invalid single-tool native retract-before-wipe/);
+    for(const key of ["retract_before_wipe","retract_after_wipe"])
+      assert.throws(()=>resolve(child(key,bad),selection),/Invalid single-tool native retract-(before|after)-wipe/);
+  // Preserve the independently requested percentage; upstream Extruder clamps the combined value.
+  assert.deepEqual(resolve(child("retract_after_wipe","80%"),selection).machine.settings.retract_after_wipe,["80%"]);
+  assert.deepEqual(resolve(child("retract_after_wipe","100.00%"),selection).machine.settings.retract_after_wipe,["100%"]);
 }
 console.log("PASS: machine wipe toggle, distance and before-wipe percent inheritance");
