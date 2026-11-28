@@ -144,10 +144,10 @@ export function makeRestrictedInitConfig(profileCollection=null) {
       if(!Array.isArray(value)||value.length!==1||(value[0]!=="0"&&value[0]!=="1"))
         throw new Error("Invalid single-tool native wipe toggle vector");
       machine[key]=[value[0]];
-    } else if (key==="retract_before_wipe") {
+    } else if ((key==="retract_before_wipe" || key==="retract_after_wipe")) {
       const token=Array.isArray(value)&&value.length===1?value[0]:null;
       if(typeof token!=="string"||!/^\d+(?:\.\d+)?%$/.test(token)||Number(token.slice(0,-1))>100)
-        throw new Error("Invalid single-tool native retract-before-wipe percent vector");
+        throw new Error("Invalid single-tool native "+key.replaceAll("_","-")+" percent vector");
       machine[key]=[String(Number(token.slice(0,-1)))+"%"];
     } else if (key==="z_hop_types") {
       if(!Array.isArray(value)||value.length!==1||!MACHINE_Z_HOP_TYPES.has(value[0]))
