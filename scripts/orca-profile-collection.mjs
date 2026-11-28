@@ -112,6 +112,7 @@ const PROCESS_ENUMS=Object.freeze({
   // CR-10 inherits aligned from Creality; preserve exact native enum tokens.
   seam_position:new Set(["nearest","aligned","aligned_back","back","random"]),
   enable_arc_fitting:new Set(["disabled","enabled","sparse_infill"]),
+  role_based_wipe_speed:new Set(["0","1"]),
   // Pinned native wall-order enum; preserve exact serialized tokens.
   wall_sequence:new Set(["inner wall/outer wall","outer wall/inner wall","inner-outer-inner wall"]),
   gap_fill_target:new Set(["everywhere","topbottom","nowhere"]),
@@ -237,7 +238,7 @@ export function resolveOrcaProfileFamily(records,type,selected,options={}) {
           // Native coPercent is scalar, not a nozzle vector or absolute width.
           // Share the final native-json validation, preserving the % token.
           settings[key]=parseTestProcessOverrides({[key]:value})[key];
-        }else if(type==="process" && (key==="infill_anchor" || key==="infill_anchor_max" || key==="infill_combination_max_layer_height")) {
+        }else if(type==="process" && (key==="infill_anchor" || key==="infill_anchor_max" || key==="infill_combination_max_layer_height" || key==="wipe_speed")) {
           // Native FloatOrPercent scalar; preserve mm vs % across inheritance.
           settings[key]=parseTestProcessOverrides({[key]:value})[key];
         }else if(type==="process" && (key==="minimum_sparse_infill_area" || key==="bottom_solid_infill_flow_ratio")) {

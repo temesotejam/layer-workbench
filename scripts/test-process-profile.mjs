@@ -96,6 +96,8 @@ const LIMITS = {
   // Native coFloatOrPercent: a first-layer travel percentage is relative to
   // travel_speed, never an absolute mm/s value. Explicit local test only.
   initial_layer_travel_speed: [1,1500],
+  // Native scalar FloatOrPercent, relative to travel_speed. Local caps only.
+  wipe_speed: [0,1500],
   // Validated absolute native settings; support generation remains unverified.
   support_line_width: [0.1,2],
   support_speed: [1,800],
@@ -131,6 +133,7 @@ const ENUMS = Object.freeze({
   // COOP/COEP diagnostic page only. Native v2.5.0 stores this bool as "0"/"1".
   // Never infer "1" from a manufacturer profile or deploy this test path on Pages.
   enable_support: new Set(["0","1"]),
+  role_based_wipe_speed: new Set(["0","1"]),
   // Native coBool: combine sparse infill layers, not a layer count.
   infill_combination: new Set(["0","1"]),
   // Native coBool; the classic perimeter generator can add thin-wall paths.
@@ -198,11 +201,11 @@ export function parseTestProcessOverrides(input) {
         continue;
       }
     }
-    if (key === "initial_layer_travel_speed" && typeof raw === "string") {
+    if ((key === "initial_layer_travel_speed" || key === "wipe_speed") && typeof raw === "string") {
       const percent = /^(\d+(?:\.\d+)?)%$/.exec(raw.trim());
       if (percent) {
         const ratio = Number(percent[1]);
-        if (!Number.isFinite(ratio) || ratio < 1 || ratio > 200)
+        if (!Number.isFinite(ratio) || ratio < (key === "wipe_speed" ? 0 : 1) || ratio > 200)
           throw new Error("Setting " + key + " is outside the safe test range.");
         clean[key] = String(ratio) + "%";
         continue;

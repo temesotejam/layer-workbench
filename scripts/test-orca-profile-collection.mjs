@@ -1217,3 +1217,22 @@ console.log("PASS: native arc-fitting inheritance, legacy string conversion and 
   assert.deepEqual(resolve(child("retract_after_wipe","100.00%"),selection).machine.settings.retract_after_wipe,["100%"]);
 }
 console.log("PASS: machine wipe toggle, distance and before-wipe percent inheritance");
+
+{
+  const parent=profiles.map(p=>p.name==="fdm_process_common"?{...p,wipe_speed:"80%",role_based_wipe_speed:"1"}:p);
+  const child=(fields)=>parent.map(p=>p.name===selection.process?{...p,...fields}:p);
+  assert.equal(result.process.settings.wipe_speed,undefined);
+  assert.equal(result.process.settings.role_based_wipe_speed,undefined);
+  assert.equal(resolve(parent,selection).process.settings.wipe_speed,"80%");
+  assert.equal(resolve(parent,selection).process.settings.role_based_wipe_speed,"1");
+  const resolved=resolve(child({wipe_speed:"35.5",role_based_wipe_speed:"0"}),selection).process;
+  assert.equal(resolved.settings.wipe_speed,"35.5");
+  assert.equal(resolved.settings.role_based_wipe_speed,"0");
+  assert.ok(!resolved.unsupported.includes("wipe_speed")&&!resolved.unsupported.includes("role_based_wipe_speed"));
+  assert.equal(resolve(child({wipe_speed:"0%"}),selection).process.settings.wipe_speed,"0%");
+  for(const bad of [["80%"],"201%","-1","1501",null,true])
+    assert.throws(()=>resolve(child({wipe_speed:bad}),selection),/Invalid|safe test range/);
+  for(const bad of [["1"],"2",1,true,null])
+    assert.throws(()=>resolve(child({role_based_wipe_speed:bad}),selection),/Invalid native process enum/);
+}
+console.log("PASS: native wipe speed and role-based switch inheritance");

@@ -397,3 +397,11 @@ assert.deepEqual(machine.chain.map(n=>indexed.records.find(p=>p.name===n).retrac
 assert.equal(machine.settings.retract_after_wipe,undefined);
 assert.equal(combined.machine.settings.retract_after_wipe,undefined);
 console.log("PASS: pinned CR-10 omits retract_after_wipe; native default is not fabricated");
+
+for(const [key,expected] of Object.entries({wipe_speed:"80%",role_based_wipe_speed:"1"})){
+  assert.deepEqual(process.chain.map(n=>indexed.records.find(p=>p.name===n)[key]),[undefined,undefined,expected]);
+  assert.equal(process.settings[key],expected);
+  assert.equal(combined.process.settings[key],expected);
+  assert.ok(!process.unsupported.includes(key));
+}
+console.log("PASS: pinned CR-10 scalar wipe speed and role-based switch");
