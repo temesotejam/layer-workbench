@@ -1258,3 +1258,19 @@ console.log("PASS: native wipe speed and role-based switch inheritance");
   assert.throws(()=>resolve(change("filament_retraction_length",["10.01"]),selection),/test limits/);
 }
 console.log("PASS: nullable single-tool filament retraction vectors, inheritance, explicit nil and strict bounds");
+
+{
+  const key="filament_z_hop";
+  const parent=profiles.map(p=>p.name==="Generic PLA @System"?{...p,[key]:["0.8"]}:p);
+  const change=value=>parent.map(p=>p.name===selection.filament?{...p,[key]:value}:p);
+  assert.equal(result.filament.settings[key],undefined);
+  assert.deepEqual(resolve(parent,selection).filament.settings[key],["0.8"]);
+  for(const token of ["0","0.6","5","nil"]){
+    const f=resolve(change([token]),selection).filament;
+    assert.deepEqual(f.settings[key],[token]);
+    assert.ok(!f.unsupported.includes(key));
+  }
+  for(const bad of ["0.4","nil",[],["0","1"],[[0.4]],[null],[true],["-0.1"],["5.01"],["0.4%"],["NIL"]])
+    assert.throws(()=>resolve(change(bad),selection),/Expected single-tool|Invalid|test limits/);
+}
+console.log("PASS: nullable single-tool filament Z-hop height and explicit zero/nil");

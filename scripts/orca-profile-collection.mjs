@@ -23,7 +23,7 @@ const MACHINE_RETRACTION_VECTORS=Object.freeze({
 // Native filament overrides are nullable coFloats, separate from machine keys.
 const FILAMENT_RETRACTION_VECTORS=Object.freeze({
   filament_retraction_length:[0,10],filament_retraction_speed:[1,100],
-  filament_deretraction_speed:[0,100],
+  filament_deretraction_speed:[0,100],filament_z_hop:[0,5],
 });
 const MACHINE_Z_HOP_TYPES=new Set(['Auto Lift','Normal Lift','Slope Lift','Spiral Lift']);
 const SPECS={
