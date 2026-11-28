@@ -518,7 +518,7 @@ console.log("PASS: Z-hop height gates reach native init; invalid inputs refused"
 console.log("PASS: canonical arc-fitting mode reaches native process application");
 
 {
-  const fields={wipe:["1"],wipe_distance:["2"],retract_before_wipe:["70%"]};
+  const fields={wipe:["1"],wipe_distance:["2"],retract_before_wipe:["70%"],retract_after_wipe:["80%"]};
   const preset={...selected,machine:{settings:{...selected.machine.settings,...fields}}};
   const {engine,calls}=mockedEngine();
   await sliceMultiStlWithEngine(engine,items,null,null,preset);
@@ -526,13 +526,14 @@ console.log("PASS: canonical arc-fitting mode reaches native process application
   for(const [key,value] of Object.entries(fields)){
     assert.deepEqual(init[key],value);
     assert.equal(makeRestrictedInitConfig(selected)[key],undefined);
-    const zero=key==="retract_before_wipe"?"0%":"0";
+    const zero=key==="retract_before_wipe"||key==="retract_after_wipe"?"0%":"0";
     assert.deepEqual(makeRestrictedInitConfig({...preset,machine:{settings:{...preset.machine.settings,[key]:[zero]}}})[key],[zero]);
   }
   for(const [key,bads] of Object.entries({
     wipe:["1",[],["0","1"],[true],[1],["true"],[null]],
     wipe_distance:["2",[],["1","2"],["21"],["-1"],["2%"],[null]],
     retract_before_wipe:["70%",[],["0%","70%"],["70"],["101%"],["-1%"],[70],[null]],
+    retract_after_wipe:["20%",[],["0%","20%"],["20"],["101%"],["-1%"],[20],[null]],
   })){
     for(const bad of bads){
       const invalid=mockedEngine();

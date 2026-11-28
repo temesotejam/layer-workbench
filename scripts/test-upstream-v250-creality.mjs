@@ -391,3 +391,9 @@ for(const [key,chainValues] of Object.entries({
   assert.ok(!machine.unsupported.includes(key));
 }
 console.log("PASS: pinned CR-10 explicit wipe toggle, distance and retract-before-wipe percent");
+
+// The pinned chain omits the option: preserve absence rather than inject a default.
+assert.deepEqual(machine.chain.map(n=>indexed.records.find(p=>p.name===n).retract_after_wipe),[undefined,undefined,undefined]);
+assert.equal(machine.settings.retract_after_wipe,undefined);
+assert.equal(combined.machine.settings.retract_after_wipe,undefined);
+console.log("PASS: pinned CR-10 omits retract_after_wipe; native default is not fabricated");
