@@ -2809,7 +2809,32 @@ try {
       budgetFixture.replace('G1 X1 E-0.2','G1 X2 E-0.2'),
     ]) assert.equal(wipeMotionWitness(malformed).filter(v=>hasSpeedBudget(v,budgetTest)).length,0,
       'Wrong split, feed, missing marker or shorter path must not prove speed budget');
-    const wipeReport=[];
+    // Compare like path lengths, not extrema across differently sized paths.
+    // Both fixed-speed cases are unsaturated: 2 * 2.02 / 20 < 0.24 mm.
+    // Sort by length to avoid assuming identical G-code event ordering.
+    const compareWipeBudgets=(slow,fast)=>{
+      const ordered=items=>[...items].sort((a,b)=>a.taggedXY-b.taggedXY||a.wipeE-b.wipeE);
+      const a=ordered(slow),b=ordered(fast);
+      let matching=0,maxPathDelta=0,maxRatioError=0;
+      for(let i=0;i<Math.min(a.length,b.length);i++){
+        const pathDelta=Math.abs(a[i].taggedXY-b[i].taggedXY);
+        const ratioError=Math.abs(a[i].wipeE-2*b[i].wipeE);
+        maxPathDelta=Math.max(maxPathDelta,pathDelta);
+        maxRatioError=Math.max(maxRatioError,ratioError);
+        if(pathDelta<0.002&&ratioError<0.004&&a[i].wipeE>b[i].wipeE)matching++;
+      }
+      return {slow:a.length,fast:b.length,matching,maxPathDelta,maxRatioError};
+    };
+    // Short paths overlap the E range of longer fast paths; that is valid.
+    const shortSlow={taggedXY:0.24,wipeE:0.024},longSlow={taggedXY:2,wipeE:0.2};
+    const shortFast={taggedXY:0.24,wipeE:0.012},longFast={taggedXY:2,wipeE:0.1};
+    assert.equal(compareWipeBudgets([longSlow,shortSlow],[shortFast,longFast]).matching,2);
+    assert.equal(compareWipeBudgets([shortSlow],[{...shortFast,taggedXY:0.3}]).matching,0);
+    assert.equal(compareWipeBudgets([longSlow],[{...longFast,wipeE:0.12}]).matching,0);
+    assert.equal(compareWipeBudgets([shortSlow],[{...shortFast,wipeE:0.024}]).matching,0);
+    assert.notEqual(compareWipeBudgets([shortSlow,longSlow],[shortFast]).slow,
+      compareWipeBudgets([shortSlow,longSlow],[shortFast]).fast);
+    const wipeReport=[],budgetWitnesses=new Map();
     for(const test of [
       {enabled:'0',distance:2,before:70,after:0},
       {enabled:'1',distance:0,before:70,after:0},
@@ -2846,6 +2871,8 @@ try {
       const pairs=wipeMotionWitness(code);
       const wiping=pairs.filter(v=>v.wipeXY>0.00001);
       const zeroTagged=pairs.filter(isTaggedZeroWipe);
+      if(test.retractSpeed!==undefined)budgetWitnesses.set(test.speed,
+        wiping.map(v=>({taggedXY:v.taggedXY,wipeE:v.wipeE})));
       wipeReport.push({...test,pairs:pairs.length,wiping:wiping.length,
         zeroTagged:zeroTagged.length,
         ...(test.expectedF!==undefined&&test.retractSpeed===undefined?{
@@ -2879,9 +2906,11 @@ try {
           Math.abs(v.before+v.wipeE+v.after-v.total)<0.002).length});
       console.log('MACHINE_WIPE_MOTION '+JSON.stringify(wipeReport.at(-1)));
     }
+    const speedBudgetComparison=compareWipeBudgets(budgetWitnesses.get('20'),budgetWitnesses.get('40'));
+    console.log('MACHINE_WIPE_SPEED_BUDGET_COMPARISON '+JSON.stringify(speedBudgetComparison));
     await writeFile(parityDir+'/machine-wipe-motion.json',
       JSON.stringify({fixture:'same two synthetic STL models; localhost only',
-        cases:wipeReport,desktop_native_parity:false,printer_ready:false},null,2));
+        cases:wipeReport,speedBudgetComparison,desktop_native_parity:false,printer_ready:false},null,2));
     for(const test of wipeReport){
       assert.ok(test.pairs>=10,'Need actual same-layer paired retracts: '+JSON.stringify(test));
       assert.equal(test.matchingTotal,test.pairs,'Total E retract/recovery must match');
@@ -2902,10 +2931,9 @@ try {
         }
       }else assert.equal(test.wiping,0,'No simultaneous XY/negative E expected in control');
     }
-    const slowBudget=wipeReport.find(v=>v.retractSpeed===2&&v.speed==='20');
-    const fastBudget=wipeReport.find(v=>v.retractSpeed===2&&v.speed==='40');
-    assert.ok(slowBudget.minConcurrentE>fastBudget.maxConcurrentE+0.05,
-      'Faster wipe must reduce concurrent E on the same fixture');
+    assert.equal(speedBudgetComparison.slow,speedBudgetComparison.fast,'Speed-budget fixture must retain the same number of paths');
+    assert.equal(speedBudgetComparison.matching,speedBudgetComparison.slow,
+      'Matched path lengths must show half the concurrent E at twice the speed: '+JSON.stringify(speedBudgetComparison));
     const exact=wipeReport.find(v=>v.before===70&&v.after===30&&v.enabled==='1');
     const clamped=wipeReport.find(v=>v.before===70&&v.after===60&&v.enabled==='1');
     assert.equal(clamped.pairs,exact.pairs,'Over-budget setting must preserve paired retraction count');
