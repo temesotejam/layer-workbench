@@ -2658,10 +2658,11 @@ try {
         }
         if(de< -eps){
           if(!deposited||trial?.travel||trial?.recovered){invalidate();continue;}
-          trial??={total:0,before:0,wipeE:0,wipeXY:0,travel:false,recovered:false,recovery:0};
+          trial??={total:0,before:0,after:0,wipeE:0,wipeXY:0,travel:false,recovered:false,recovery:0};
           trial.total-=de;
           if(dxy>eps){trial.wipeXY+=dxy;trial.wipeE-=de;}
           else if(!trial.wipeXY)trial.before-=de;
+          else trial.after-=de;
           continue;
         }
         if(!trial)continue;
@@ -2679,17 +2680,33 @@ try {
       assert.ok(pairs.every(v=>Math.abs(v.wipeXY-xy)<0.000001&&
         Math.abs(v.total-0.8)<0.000001&&Math.abs(v.recovery-0.8)<0.000001));
     }
+    // Explicit post-wipe E must be distinguished from the initial pure-E move.
+    // A zero-E XY move is not a negative-E wipe witness and cannot prove a split.
+    for(const mode of ['M83','M82']){
+      const relative=mode==='M83';
+      const code=['G90',mode,'G92 E0','G1 X0 Y0 Z0.2','G1 X3 E0.1',
+        'G1 E'+(relative?'-0.56':'-0.46'),
+        'G1 X1 E'+(relative?'-0.08':'-0.54'),
+        'G1 E'+(relative?'-0.16':'-0.70'),
+        'G1 X6','G1 E'+(relative?'0.8':'0.10'),
+        'G1 X7 E'+(relative?'0.1':'0.20')].join('\n');
+      const [pair,...rest]=wipeMotionWitness(code);
+      assert.ok(pair&&rest.length===0,'Expected one complete post-wipe witness');
+      for(const [key,want] of Object.entries({before:0.56,wipeE:0.08,after:0.16,total:0.8,recovery:0.8,wipeXY:2}))
+        assert.ok(Math.abs(pair[key]-want)<0.000001,'Post-wipe synthetic '+mode+' '+key);
+    }
     const wipeReport=[];
     for(const test of [
-      {enabled:'0',distance:2,before:70},
-      {enabled:'1',distance:0,before:70},
-      {enabled:'1',distance:2,before:70},
-      {enabled:'1',distance:2,before:100},
+      {enabled:'0',distance:2,before:70,after:0},
+      {enabled:'1',distance:0,before:70,after:0},
+      {enabled:'1',distance:2,before:70,after:0},
+      {enabled:'1',distance:2,before:100,after:0},
+      {enabled:'1',distance:2,before:70,after:20},
     ]){
       Object.assign(rawOrca[1],{retraction_length:'0.8',retraction_speed:'40',
         deretraction_speed:'40',retraction_minimum_travel:'0',z_hop:'0',
         wipe:test.enabled,wipe_distance:String(test.distance),
-        retract_before_wipe:String(test.before)+'%'});
+        retract_before_wipe:String(test.before)+'%',retract_after_wipe:String(test.after)+'%'});
       rawOrca[5].enable_arc_fitting='disabled';
       await uploadRawOrca();
       await prepare.locator('#lab-slice').click();
@@ -2708,7 +2725,12 @@ try {
         boundedWipes:wiping.filter(v=>v.wipeXY<=test.distance+0.02&&
           v.before>=0.8*test.before/100-0.002).length,
         maxWipeXY:wiping.reduce((m,v)=>Math.max(m,v.wipeXY),0),
-        maxWipeE:wiping.reduce((m,v)=>Math.max(m,v.wipeE),0)});
+        maxWipeE:wiping.reduce((m,v)=>Math.max(m,v.wipeE),0),
+        minAfter:wiping.length?Math.min(...wiping.map(v=>v.after)):null,
+        maxAfter:wiping.length?Math.max(...wiping.map(v=>v.after)):null,
+        matchingAfter:wiping.filter(v=>v.after>=0.8*test.after/100-0.002&&
+          v.wipeE<=0.8*(100-test.before-test.after)/100+0.002&&
+          Math.abs(v.before+v.wipeE+v.after-v.total)<0.002).length});
       console.log('MACHINE_WIPE_MOTION '+JSON.stringify(wipeReport.at(-1)));
     }
     await writeFile(parityDir+'/machine-wipe-motion.json',
@@ -2720,12 +2742,13 @@ try {
       if(test.enabled==='1'&&test.distance>0&&test.before<100){
         assert.ok(test.wiping>=10,'Need actual simultaneous XY/negative E witnesses');
         assert.equal(test.boundedWipes,test.wiping,'Wipe path bound and minimum pre-retract must hold');
+        assert.equal(test.matchingAfter,test.wiping,'Positive wipe witnesses must respect post-wipe reserve and remaining E budget');
       }else assert.equal(test.wiping,0,'No simultaneous XY/negative E expected in control');
     }
     delete rawOrca[5].enable_arc_fitting;
     for(const key of ['retraction_length','retraction_speed','deretraction_speed',
-      'retraction_minimum_travel','z_hop','wipe','wipe_distance','retract_before_wipe'])delete rawOrca[1][key];
-    console.log('PASS: actual wipe and retract motion with disabled, zero-distance and full pre-retract controls');
+      'retraction_minimum_travel','z_hop','wipe','wipe_distance','retract_before_wipe','retract_after_wipe'])delete rawOrca[1][key];
+    console.log('PASS: actual wipe and retract motion including explicit post-wipe reserve');
 
     // Selecting a native bed without raw Orca profiles must never fall back
     // to generic PLA output while silently ignoring the selected heater.
