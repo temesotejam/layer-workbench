@@ -222,11 +222,11 @@ export function resolveOrcaProfileFamily(records,type,selected,options={}) {
           const token=Array.isArray(value)&&value.length===1?value[0]:value;
           if(token!=="0"&&token!=="1")throw new Error("Invalid single-tool native wipe toggle");
           settings[key]=[token];
-        }else if(type==="machine" && key==="retract_before_wipe") {
+        }else if(type==="machine" && (key==="retract_before_wipe" || key==="retract_after_wipe")) {
           // Pinned coPercents: retain the explicit percent unit, never mm.
           const token=Array.isArray(value)&&value.length===1?value[0]:value;
           if(typeof token!=="string"||!/^\d+(?:\.\d+)?%$/.test(token)||Number(token.slice(0,-1))>100)
-            throw new Error("Invalid single-tool native retract-before-wipe percent");
+            throw new Error("Invalid single-tool native "+key.replaceAll("_","-")+" percent");
           settings[key]=[String(Number(token.slice(0,-1)))+"%"];
         }else if(type==="machine" && key==="z_hop_types") {
           const token=Array.isArray(value)&&value.length===1?value[0]:value;
