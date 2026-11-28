@@ -2229,6 +2229,53 @@ try {
       for(const key of ['retraction_length','retraction_speed','deretraction_speed'])delete record[key];
     console.log('PASS: real machine retraction length, independent speeds and zero-speed fallback');
 
+    // Same fixture and witness; distinguish native filament override from
+    // machine baseline and explicitly clear inherited numeric overrides.
+    const filamentRetractKeys=["filament_retraction_length","filament_retraction_speed","filament_deretraction_speed"];
+    const filamentRetractCases=[
+      {name:"absent",parent:null,child:null,expected:[0.8,40,40]},
+      {name:"inherited",parent:["1.6","25","30"],child:null,expected:[1.6,25,30]},
+      {name:"explicit nil",parent:["1.6","25","30"],child:["nil","nil","nil"],expected:[0.8,40,40]},
+      {name:"child zero recovery",parent:["1.6","25","30"],child:["1.2","20","0"],expected:[1.2,20,20]},
+    ];
+    const filamentRetractReport=[];
+    Object.assign(rawOrca[1],{retraction_length:"0.8",retraction_speed:"40",deretraction_speed:"40"});
+    for(const test of filamentRetractCases){
+      for(const [record,values] of [[rawOrca[2],test.parent],[rawOrca[3],test.child]])
+        for(const [i,key] of filamentRetractKeys.entries()){
+          delete record[key];
+          if(values)record[key]=[values[i]];
+        }
+      await uploadRawOrca();
+      await prepare.locator('#lab-slice').click();
+      await prepare.waitForFunction(()=>{
+        const status=document.querySelector('#lab-status')?.textContent||'';
+        return status.startsWith('PASS:')||status.startsWith('FAILED');
+      },null,{timeout:120000});
+      assert.match(await prepare.locator('#lab-status').innerText(),/^PASS: 2 STL model\(s\)/);
+      const code=await prepare.locator('#lab-download').evaluate(async link=>
+        await(await fetch(link.href)).text());
+      const pairs=retractionPairs(code);
+      const [length,retract,recovery]=test.expected;
+      const matched=pairs.filter(p=>Math.abs(p.length-length)<0.001&&
+        Math.abs(p.recovery-length)<0.001&&
+        Math.abs(p.retractFeed-retract*60)<0.01&&
+        Math.abs(p.recoveryFeed-recovery*60)<0.01);
+      filamentRetractReport.push({...test,pairs:pairs.length,matched:matched.length,sample:pairs.slice(0,5)});
+      console.log('FILAMENT_RETRACTION_MOTION '+JSON.stringify(filamentRetractReport.at(-1)));
+    }
+    await writeFile(parityDir+'/filament-retraction-motion.json',
+      JSON.stringify({fixture:'same two synthetic STL models; localhost only',
+        cases:filamentRetractReport,desktop_native_parity:false,printer_ready:false},null,2));
+    for(const test of filamentRetractReport){
+      assert.ok(test.pairs>=10,'Expected actual filament override travel retractions: '+JSON.stringify(test));
+      assert.equal(test.matched,test.pairs,'Filament override length and both feeds must match: '+JSON.stringify(test));
+    }
+    for(const record of rawOrca.slice(2,4))
+      for(const key of filamentRetractKeys)delete record[key];
+    for(const key of ['retraction_length','retraction_speed','deretraction_speed'])delete rawOrca[1][key];
+    console.log('PASS: native filament retraction inheritance, explicit nil and child override motion');
+
     // Pinned GCode::needs_retraction rejects travel shorter than the
     // configured threshold. Compare two extreme bounded thresholds on
     // the identical fixture, keeping the verified retract length/speeds.

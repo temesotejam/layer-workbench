@@ -20,6 +20,11 @@ const MACHINE_RETRACTION_VECTORS=Object.freeze({
   wipe_distance:[0,20],
 });
 // Pinned coEnums; the serialized tokens (including spaces) are not UI labels.
+// Native filament overrides are nullable coFloats, separate from machine keys.
+const FILAMENT_RETRACTION_VECTORS=Object.freeze({
+  filament_retraction_length:[0,10],filament_retraction_speed:[1,100],
+  filament_deretraction_speed:[0,100],
+});
 const MACHINE_Z_HOP_TYPES=new Set(['Auto Lift','Normal Lift','Slope Lift','Spiral Lift']);
 const SPECS={
   machine:{nozzle_diameter:[0.2,1.2],printable_height:[10,1000]},
@@ -268,6 +273,17 @@ export function resolveOrcaProfileFamily(records,type,selected,options={}) {
     // discard the shipped profile's initial-layer distinction.
     let selectedFilamentVariant=null;
     if(type==="filament"){
+      // Use the nearest definition: explicit nil clears an inherited override.
+      // Only an exact one-slot array is supported; no variant guessing.
+      for(const [key,bounds] of Object.entries(FILAMENT_RETRACTION_VECTORS)){
+        const source=[...chain].reverse().find(p=>Object.hasOwn(p,key));
+        if(!source)continue;
+        const raw=source[key];
+        if(!Array.isArray(raw)||raw.length!==1||!(0 in raw)||Array.isArray(raw[0]))
+          throw new Error("Expected single-tool nullable filament vector for "+key);
+        settings[key]=raw[0]==="nil"?["nil"]:[validateNum(key,raw[0],bounds)];
+        unsupported.delete(key);
+      }
       // The source-pinned v2.5.0 PLA base uses a one-slot material vector.
       // The approved localhost WASM candidate has only been exercised as PLA;
       // never misrepresent another selected material as generic test PLA.

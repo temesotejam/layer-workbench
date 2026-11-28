@@ -96,6 +96,11 @@ const FILAMENT_INIT_VECTORS=Object.freeze({
   filament_diameter:[1,3],
   filament_max_volumetric_speed:[0.1,200],
 });
+// Match the restricted resolver, but independently validate the init boundary.
+const FILAMENT_RETRACTION_INIT_VECTORS=Object.freeze({
+  filament_retraction_length:[0,10],filament_retraction_speed:[1,100],
+  filament_deretraction_speed:[0,100],
+});
 const PLATE_INIT_FIELDS=Object.freeze({
   "High Temp Plate":"hot_plate_temp",
   "Cool Plate":"cool_plate_temp",
@@ -171,7 +176,12 @@ export function makeRestrictedInitConfig(profileCollection=null) {
       filament[key]=boundedNativeNumber(value,key,FILAMENT_INIT_SCALARS[key]);
     else if (Object.hasOwn(FILAMENT_INIT_VECTORS,key))
       filament[key]=boundedNativeNumber(value,key,FILAMENT_INIT_VECTORS[key],true);
-    else if (key==="curr_bed_type") {
+    else if (Object.hasOwn(FILAMENT_RETRACTION_INIT_VECTORS,key)) {
+      if(Array.isArray(value)&&value.length===1&&value[0]==="nil")
+        filament[key]=["nil"];
+      else
+        filament[key]=boundedNativeNumber(value,key,FILAMENT_RETRACTION_INIT_VECTORS[key],true);
+    } else if (key==="curr_bed_type") {
       if (typeof value!=="string" || !Object.hasOwn(PLATE_INIT_FIELDS,value))
         throw new Error("Unsupported restricted native bed type");
       filament[key]=value;
