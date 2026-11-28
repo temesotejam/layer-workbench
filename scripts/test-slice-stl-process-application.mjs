@@ -545,3 +545,21 @@ console.log("PASS: canonical arc-fitting mode reaches native process application
   }
 }
 console.log("PASS: exact native wipe vectors reach init; malformed input refused before session");
+
+{
+  const preset={...selected,process:{settings:{...selected.process.settings,wipe_speed:"80%",role_based_wipe_speed:"1"}}};
+  for(const overrides of [null,{wipe_speed:35.5,role_based_wipe_speed:"0"},{wipe_speed:"0%"}]){
+    const {engine,calls}=mockedEngine();
+    await sliceMultiStlWithEngine(engine,items,null,overrides,preset);
+    const applied=calls.find(c=>c.name==="applyProfile");
+    assert.equal(applied.format,"orca.native-json");
+    assert.equal(applied.value.wipe_speed,overrides?String(overrides.wipe_speed):"80%");
+    assert.equal(applied.value.role_based_wipe_speed,overrides?.role_based_wipe_speed??"1");
+  }
+  for(const bad of [{wipe_speed:["80%"]},{wipe_speed:"201%"},{role_based_wipe_speed:true}]){
+    const invalid=mockedEngine();
+    await assert.rejects(()=>sliceMultiStlWithEngine(invalid.engine,items,null,bad,preset),/Invalid|safe test range|native enum/);
+    assert.equal(invalid.calls.length,0);
+  }
+}
+console.log("PASS: native scalar wipe speed and role switch reach process application");
