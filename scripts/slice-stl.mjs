@@ -83,6 +83,8 @@ const MACHINE_INIT_VECTORS=Object.freeze({
   z_hop:[0,5],travel_slope:[1,90],
   // Absolute Z in mm, locally bounded; zero below means no upper limit.
   retract_lift_above:[0,1000],retract_lift_below:[0,1000],
+  // Local diagnostic bound, not an upstream maximum.
+  wipe_distance:[0,20],
 });
 const MACHINE_Z_HOP_TYPES=new Set(['Auto Lift','Normal Lift','Slope Lift','Spiral Lift']);
 const FILAMENT_INIT_SCALARS=Object.freeze({
@@ -138,7 +140,16 @@ export function makeRestrictedInitConfig(profileCollection=null) {
       machine[key]=boundedNativeNumber(value,key,MACHINE_INIT_BOUNDS[key]);
     else if (Object.hasOwn(MACHINE_INIT_VECTORS,key))
       machine[key]=boundedNativeNumber(value,key,MACHINE_INIT_VECTORS[key],true);
-    else if (key==="z_hop_types") {
+    else if (key==="wipe") {
+      if(!Array.isArray(value)||value.length!==1||(value[0]!=="0"&&value[0]!=="1"))
+        throw new Error("Invalid single-tool native wipe toggle vector");
+      machine[key]=[value[0]];
+    } else if (key==="retract_before_wipe") {
+      const token=Array.isArray(value)&&value.length===1?value[0]:null;
+      if(typeof token!=="string"||!/^\d+(?:\.\d+)?%$/.test(token)||Number(token.slice(0,-1))>100)
+        throw new Error("Invalid single-tool native retract-before-wipe percent vector");
+      machine[key]=[String(Number(token.slice(0,-1)))+"%"];
+    } else if (key==="z_hop_types") {
       if(!Array.isArray(value)||value.length!==1||!MACHINE_Z_HOP_TYPES.has(value[0]))
         throw new Error("Invalid single-tool native Z-hop type vector");
       machine[key]=[value[0]];
