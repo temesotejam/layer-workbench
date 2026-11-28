@@ -379,3 +379,15 @@ assert.equal(process.settings.enable_arc_fitting,"disabled");
 assert.equal(combined.process.settings.enable_arc_fitting,"disabled");
 assert.ok(!process.unsupported.includes("enable_arc_fitting"));
 console.log("PASS: pinned CR-10 legacy arc-fitting 0 normalized to canonical disabled");
+
+for(const [key,chainValues] of Object.entries({
+  wipe:[["1"],["1"],"1"],
+  wipe_distance:[undefined,undefined,"2"],
+  retract_before_wipe:[["70%"],["70%"],"70%"],
+})){
+  assert.deepEqual(machine.chain.map(n=>indexed.records.find(p=>p.name===n)[key]),chainValues);
+  assert.deepEqual(machine.settings[key],[chainValues.at(-1)]);
+  assert.deepEqual(combined.machine.settings[key],[chainValues.at(-1)]);
+  assert.ok(!machine.unsupported.includes(key));
+}
+console.log("PASS: pinned CR-10 explicit wipe toggle, distance and retract-before-wipe percent");
