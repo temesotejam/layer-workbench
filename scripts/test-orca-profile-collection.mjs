@@ -1190,3 +1190,26 @@ console.log("PASS: independent absolute Z-hop gates, inheritance and explicit ze
     assert.throws(()=>resolve(child(bad),selection),/Invalid native process enum/);
 }
 console.log("PASS: native arc-fitting inheritance, legacy string conversion and absence");
+
+{
+  const values={wipe:["1"],wipe_distance:["2"],retract_before_wipe:["70%"]};
+  const inherited=profiles.map(p=>p.name==="base printer"?{...p,...values}:p);
+  const child=(key,value)=>inherited.map(p=>p.name===selection.machine?{...p,[key]:value}:p);
+  for(const [key,value] of Object.entries(values)){
+    assert.equal(result.machine.settings[key],undefined);
+    assert.deepEqual(resolve(inherited,selection).machine.settings[key],value);
+    const zero=key==="retract_before_wipe"?"0%":"0";
+    for(const token of [zero,[zero],value[0],value]){
+      const machine=resolve(child(key,token),selection).machine;
+      assert.deepEqual(machine.settings[key],Array.isArray(token)?token:[token]);
+      assert.ok(!machine.unsupported.includes(key));
+    }
+  }
+  for(const bad of [[],["0","1"],"true",true,1,null,{},["nil"]])
+    assert.throws(()=>resolve(child("wipe",bad),selection),/Invalid single-tool native wipe/);
+  for(const bad of [[],["1","2"],"-1","21","2%",null,true,{}])
+    assert.throws(()=>resolve(child("wipe_distance",bad),selection),/Multi-extruder|Invalid|out of test limits/);
+  for(const bad of [[],["0%","70%"],"70","70mm","-1%","101%","1e1%",70,null,true,{}])
+    assert.throws(()=>resolve(child("retract_before_wipe",bad),selection),/Invalid single-tool native retract-before-wipe/);
+}
+console.log("PASS: machine wipe toggle, distance and before-wipe percent inheritance");
