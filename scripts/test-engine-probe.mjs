@@ -2629,6 +2629,21 @@ try {
       let xyz=null, emode=null, e=0, pos={X:NaN,Y:NaN,Z:NaN}, deposited=false, trial=null;
       const invalidate=()=>{trial=null;deposited=false;};
       for(const line of code.split(/\r?\n/)){
+        const marker=line.trim();
+        if(/^;\s*WIPE_START\s*$/.test(marker)){
+          if(trial){
+            if(trial.tagOpen||trial.tagClosed||trial.travel||trial.recovered){invalidate();continue;}
+            trial.tagOpen=true;
+          }
+          continue;
+        }
+        if(/^;\s*WIPE_END\s*$/.test(marker)){
+          if(trial){
+            if(!trial.tagOpen){invalidate();continue;}
+            trial.tagOpen=false;trial.tagClosed=true;
+          }
+          continue;
+        }
         const words=line.split(';')[0].trim().split(/\s+/), cmd=words[0].toUpperCase();
         const args=Object.fromEntries(words.slice(1).filter(w=>/^[XYZE][+-]?(?:\d+(?:\.\d*)?|\.\d+)$/i.test(w)).map(w=>[w[0].toUpperCase(),Number(w.slice(1))]));
         if(cmd==='G90'||cmd==='G91'){xyz=cmd;continue;}
@@ -2652,16 +2667,23 @@ try {
         }
         const dxy=Math.hypot(pos.X-prev.X,pos.Y-prev.Y),dz=pos.Z-prev.Z;
         if(!['G0','G1'].includes(cmd)||![dxy,dz,de].every(Number.isFinite)||Math.abs(dz)>eps){invalidate();continue;}
+        // Tags identify the wipe window; require actual linear same-layer XY.
+        // Zero-E movement outside this window remains ordinary travel.
+        if(trial?.tagOpen){
+          if(de>eps|| (de< -eps&&dxy<=eps)){invalidate();continue;}
+          if(dxy>eps){trial.taggedXY+=dxy;trial.taggedE+=Math.max(0,-de);}
+          if(Math.abs(de)<=eps)continue;
+        }
         if(dxy>eps&&de>eps){
           if(trial?.recovered&&trial.travel)pairs.push(trial);
           trial=null;deposited=true;continue;
         }
         if(de< -eps){
           if(!deposited||trial?.travel||trial?.recovered){invalidate();continue;}
-          trial??={total:0,before:0,after:0,wipeE:0,wipeXY:0,travel:false,recovered:false,recovery:0};
+          trial??={total:0,before:0,after:0,wipeE:0,wipeXY:0,tagOpen:false,tagClosed:false,taggedXY:0,taggedE:0,travel:false,recovered:false,recovery:0};
           trial.total-=de;
           if(dxy>eps){trial.wipeXY+=dxy;trial.wipeE-=de;}
-          else if(!trial.wipeXY)trial.before-=de;
+          else if(!trial.wipeXY&&!(trial.tagClosed&&trial.taggedXY>eps))trial.before-=de;
           else trial.after-=de;
           continue;
         }
@@ -2695,6 +2717,25 @@ try {
       for(const [key,want] of Object.entries({before:0.56,wipeE:0.08,after:0.16,total:0.8,recovery:0.8,wipeXY:2}))
         assert.ok(Math.abs(pair[key]-want)<0.000001,'Post-wipe synthetic '+mode+' '+key);
     }
+    // A zero-E wipe must be witnessed by actual XY inside a closed native
+    // marker pair, not inferred from an absent simultaneous negative-E move.
+    const zeroWipeCode=['G90','M83','G1 X0 Y0 Z0.2','G1 X3 E0.1',
+      'G1 E-0.56','; WIPE_START','G1 X2 E0','G1 X1','; WIPE_END',
+      'G1 E-0.24','G1 X6','G1 E0.8','G1 X7 E0.1'].join('\n');
+    const isTaggedZeroWipe=v=>v.tagClosed&&!v.tagOpen&&v.taggedXY>0.00001&&
+      v.taggedE<=0.00001&&v.wipeXY<=0.00001;
+    const [zeroPair,...zeroRest]=wipeMotionWitness(zeroWipeCode);
+    assert.ok(zeroPair&&zeroRest.length===0&&isTaggedZeroWipe(zeroPair));
+    for(const [key,want] of Object.entries({before:0.56,after:0.24,taggedXY:2,total:0.8,recovery:0.8}))
+      assert.ok(Math.abs(zeroPair[key]-want)<0.000001,'Tagged zero-E synthetic '+key);
+    for(const malformed of [
+      zeroWipeCode.replace('; WIPE_START','; ordinary comment').replace('; WIPE_END','; ordinary comment'),
+      zeroWipeCode.replace('; WIPE_END','; missing end'),
+      zeroWipeCode.replace('G1 X2 E0\nG1 X1\n',''),
+      zeroWipeCode.replace('G1 X2 E0','G1 X2 E-0.01'),
+      zeroWipeCode.replace('G1 X2 E0','G1 X2 Z0.4 E0'),
+    ]) assert.equal(wipeMotionWitness(malformed).filter(isTaggedZeroWipe).length,0,
+      'Incomplete, empty, nonzero-E or layer-changing markers are not zero-E wipe evidence');
     const wipeReport=[];
     for(const test of [
       {enabled:'0',distance:2,before:70,after:0},
@@ -2702,6 +2743,8 @@ try {
       {enabled:'1',distance:2,before:70,after:0},
       {enabled:'1',distance:2,before:100,after:0},
       {enabled:'1',distance:2,before:70,after:20},
+      {enabled:'1',distance:2,before:70,after:30},
+      {enabled:'1',distance:2,before:70,after:60},
     ]){
       Object.assign(rawOrca[1],{retraction_length:'0.8',retraction_speed:'40',
         deretraction_speed:'40',retraction_minimum_travel:'0',z_hop:'0',
@@ -2719,7 +2762,13 @@ try {
         await(await fetch(link.href)).text());
       const pairs=wipeMotionWitness(code);
       const wiping=pairs.filter(v=>v.wipeXY>0.00001);
+      const zeroTagged=pairs.filter(isTaggedZeroWipe);
       wipeReport.push({...test,pairs:pairs.length,wiping:wiping.length,
+        zeroTagged:zeroTagged.length,
+        zeroTaggedBounded:zeroTagged.filter(v=>v.taggedXY<=test.distance+0.02).length,
+        zeroTaggedClampSplit:zeroTagged.filter(v=>Math.abs(v.before-0.56)<0.002&&
+          Math.abs(v.after-0.24)<0.002).length,
+        maxZeroTaggedXY:zeroTagged.reduce((m,v)=>Math.max(m,v.taggedXY),0),
         matchingTotal:pairs.filter(v=>Math.abs(v.total-0.8)<0.002&&
           Math.abs(v.recovery-0.8)<0.002).length,
         boundedWipes:wiping.filter(v=>v.wipeXY<=test.distance+0.02&&
@@ -2739,16 +2788,25 @@ try {
     for(const test of wipeReport){
       assert.ok(test.pairs>=10,'Need actual same-layer paired retracts: '+JSON.stringify(test));
       assert.equal(test.matchingTotal,test.pairs,'Total E retract/recovery must match');
-      if(test.enabled==='1'&&test.distance>0&&test.before<100){
+      if(test.enabled==='1'&&test.distance>0&&test.before===70&&test.after>=30){
+        assert.equal(test.wiping,0,'Zero remaining budget must not emit negative-E XY');
+        assert.ok(test.zeroTagged>=10,'Need observed tagged zero-E wipe XY, not just absent negative E');
+        assert.equal(test.zeroTaggedBounded,test.zeroTagged,'Tagged wipe path bound must hold');
+        assert.equal(test.zeroTaggedClampSplit,test.zeroTagged,'Effective 70/30 split must hold');
+      }else if(test.enabled==='1'&&test.distance>0&&test.before<100){
         assert.ok(test.wiping>=10,'Need actual simultaneous XY/negative E witnesses');
         assert.equal(test.boundedWipes,test.wiping,'Wipe path bound and minimum pre-retract must hold');
         assert.equal(test.matchingAfter,test.wiping,'Positive wipe witnesses must respect post-wipe reserve and remaining E budget');
       }else assert.equal(test.wiping,0,'No simultaneous XY/negative E expected in control');
     }
+    const exact=wipeReport.find(v=>v.before===70&&v.after===30&&v.enabled==='1');
+    const clamped=wipeReport.find(v=>v.before===70&&v.after===60&&v.enabled==='1');
+    assert.equal(clamped.pairs,exact.pairs,'Over-budget setting must preserve paired retraction count');
+    assert.equal(clamped.zeroTagged,exact.zeroTagged,'Over-budget setting must preserve tagged zero-E witness count');
     delete rawOrca[5].enable_arc_fitting;
     for(const key of ['retraction_length','retraction_speed','deretraction_speed',
       'retraction_minimum_travel','z_hop','wipe','wipe_distance','retract_before_wipe','retract_after_wipe'])delete rawOrca[1][key];
-    console.log('PASS: actual wipe and retract motion including explicit post-wipe reserve');
+    console.log('PASS: actual wipe and retract motion including explicit post-wipe reserve and tagged zero-E clamp');
 
     // Selecting a native bed without raw Orca profiles must never fall back
     // to generic PLA output while silently ignoring the selected heater.
