@@ -279,7 +279,7 @@ export function resolveOrcaProfileFamily(records,type,selected,options={}) {
         const source=[...chain].reverse().find(p=>Object.hasOwn(p,key));
         if(!source)continue;
         const raw=source[key];
-        if(!Array.isArray(raw)||raw.length!==1||!(0 in raw))
+        if(!Array.isArray(raw)||raw.length!==1||!(0 in raw)||Array.isArray(raw[0]))
           throw new Error("Expected single-tool nullable filament vector for "+key);
         settings[key]=raw[0]==="nil"?["nil"]:[validateNum(key,raw[0],bounds)];
         unsupported.delete(key);
