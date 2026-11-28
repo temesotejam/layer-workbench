@@ -3320,6 +3320,75 @@ try {
       buffer:Buffer.from(makeSupportSphereObj()),
     });
     await prepare.locator('#object-count').getByText('1 object').waitFor({timeout:30000});
+    // The flat-wall Auto witness cannot exercise the overhang branch. Reuse
+    // the existing sloped sphere, holding process and machine values fixed
+    // except for the explicit lift mode. A missing spiral is inconclusive,
+    // not evidence that Auto overhang selection is implemented correctly.
+    const sphereLiftRecords = [
+      {type:'machine',name:'test machine base',nozzle_diameter:'0.4',printable_height:'250'},
+      {type:'machine',name:'TestPrinter 0.4 nozzle',inherits:'test machine base',
+        retraction_length:'0.8',retraction_speed:'40',deretraction_speed:'40',
+        retraction_minimum_travel:'0',z_hop:'0.4',travel_slope:'45'},
+      {type:'filament',name:'Generic PLA @System',filament_diameter:['1.75'],
+        nozzle_temperature:'210',bed_temperature:'55'},
+      {type:'filament',name:'Generic PLA @TestPrinter',inherits:'Generic PLA @System',
+        compatible_printers:['TestPrinter 0.4 nozzle']},
+      {type:'process',name:'process base',layer_height:'0.2',wall_loops:'2'},
+      {type:'process',name:'0.16 Fine @TestPrinter',inherits:'process base',
+        layer_height:'0.16',wall_loops:'4',enable_arc_fitting:'enabled',
+        enable_support:'0',compatible_printers:['TestPrinter 0.4 nozzle']},
+    ];
+    const sphereLiftCases=[];
+    await prepare.locator('#lab-process').setInputFiles([]);
+    try {
+      for(const mode of ['Slope Lift','Auto Lift']){
+        sphereLiftRecords[1].z_hop_types=mode;
+        await prepare.locator('#lab-orca-profiles').setInputFiles({
+          name:'sphere-lift-records.json',mimeType:'application/json',
+          buffer:Buffer.from(JSON.stringify({vendor_index:indexedRawOrca.vendor_index,
+            files:Object.fromEntries(sphereLiftRecords.map(p=>[p.type+'/'+p.name+'.json',p]))})),
+        });
+        await prepare.locator('#lab-orca-machine').fill('TestPrinter 0.4 nozzle');
+        await prepare.locator('#lab-orca-filament').fill('Generic PLA @TestPrinter');
+        await prepare.locator('#lab-orca-process').fill('0.16 Fine @TestPrinter');
+        await prepare.locator('#lab-slice').click();
+        await prepare.waitForFunction(()=>{
+          const status=document.querySelector('#lab-status')?.textContent||'';
+          return status.startsWith('PASS:')||status.startsWith('FAILED');
+        },null,{timeout:120000});
+        const status=await prepare.locator('#lab-status').innerText();
+        assert.match(status,/^PASS: 1 STL\/OBJ mesh model\(s\)/);
+        assert.match(status,/Orca raw preset selection/);
+        const code=await prepare.locator('#lab-download').evaluate(async link=>
+          await(await fetch(link.href)).text());
+        const observed=sameLayerHopWitness(code,true);
+        const positive=observed.filter(v=>v.height>0.001);
+        const matching=positive.filter(v=>Math.abs(v.height-0.4)<0.002);
+        const report={mode,pairs:observed.length,positive:positive.length,
+          matchingHeight:matching.length,configuredSlope:0,otherSlope:0,
+          spiral:0,vertical:0,unclassified:0};
+        for(const v of matching)report[classifyAutoRise(v)]++;
+        sphereLiftCases.push(report);
+        console.log('MACHINE_AUTO_LIFT_SPHERE_CASE '+JSON.stringify(report));
+      }
+      const [forced,automatic]=sphereLiftCases;
+      const result=automatic.spiral>0?'observed_auto_spiral_on_sloped_fixture':
+        'inconclusive_no_auto_spiral_observed';
+      await writeFile(parityDir+'/machine-auto-lift-sphere.json',
+        JSON.stringify({fixture:'same synthetic sloped sphere OBJ; isolated localhost',
+          cases:sphereLiftCases,result,overhang_intersection_verified:false,
+          desktop_native_parity:false,printer_ready:false},null,2));
+      for(const test of sphereLiftCases){
+        assert.ok(test.positive>=10,'Need real same-layer sphere lift witnesses');
+        assert.equal(test.matchingHeight,test.positive,'Sphere lift must preserve hop height');
+      }
+      assert.ok(forced.configuredSlope>=10,'Need a positive forced-slope control');
+      assert.equal(forced.spiral,0,'Forced Slope Lift must not emit full spiral rises');
+      console.log('MACHINE_AUTO_LIFT_SPHERE_RESULT '+result);
+    } finally {
+      await prepare.locator('#lab-orca-profiles').setInputFiles([]);
+    }
+
     // Previously ensure_all only proved profile acceptance on two cubes.
     // The sphere has real sloped sidewalls. Hold the same geometry and all
     // process values fixed, varying ONLY the pinned native vertical-shell
