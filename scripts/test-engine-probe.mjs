@@ -2629,8 +2629,8 @@ try {
       let xyz=null, emode=null, e=0, pos={X:NaN,Y:NaN,Z:NaN}, deposited=false, trial=null;
       // Final G-code may omit redundant F words (CoolingBuffer). Keep the
       // commanded modal feed across markers, but never invent a missing value.
-      let modalFeed=null, metric=true, unitsPerMinute=true;
-      const invalidate=()=>{trial=null;deposited=false;};
+      let modalFeed=null, lastDepositFeed=null, metric=true, unitsPerMinute=true;
+      const invalidate=()=>{trial=null;deposited=false;lastDepositFeed=null;};
       for(const line of code.split(/\r?\n/)){
         const marker=line.trim();
         if(/^;\s*WIPE_START\s*$/.test(marker)){
@@ -2666,7 +2666,7 @@ try {
         if(['G10','G11'].includes(cmd)||/^T\d+$/.test(cmd)){modalFeed=null;invalidate();continue;}
         if(!['G0','G1','G2','G3'].includes(cmd)){
           // Unknown G commands can change motion interpretation. Do not carry F across them.
-          if(/^G\d/.test(cmd)&&cmd!=='G4')modalFeed=null;
+          if(/^G\d/.test(cmd)&&cmd!=='G4'){modalFeed=null;lastDepositFeed=null;}
           continue;
         }
         const feeds=words.slice(1).filter(w=>/^F/i.test(w));
@@ -2701,18 +2701,18 @@ try {
         }
         if(dxy>eps&&de>eps){
           if(trial?.recovered&&trial.travel)pairs.push(trial);
-          trial=null;deposited=true;continue;
+          trial=null;deposited=true;lastDepositFeed=modalFeed;continue;
         }
         if(de< -eps){
           if(!deposited||trial?.travel||trial?.recovered){invalidate();continue;}
-          trial??={total:0,before:0,after:0,wipeE:0,wipeXY:0,tagOpen:false,tagClosed:false,taggedXY:0,taggedE:0,tagExplicitFeed:false,inheritedTaggedFeed:0,missingTaggedFeed:0,minTaggedFeed:Infinity,maxTaggedFeed:0,travel:false,recovered:false,recovery:0};
+          trial??={depositFeed:lastDepositFeed,total:0,before:0,after:0,wipeE:0,wipeXY:0,tagOpen:false,tagClosed:false,taggedXY:0,taggedE:0,tagExplicitFeed:false,inheritedTaggedFeed:0,missingTaggedFeed:0,minTaggedFeed:Infinity,maxTaggedFeed:0,travel:false,recovered:false,recovery:0};
           trial.total-=de;
           if(dxy>eps){trial.wipeXY+=dxy;trial.wipeE-=de;}
           else if(!trial.wipeXY&&!(trial.tagClosed&&trial.taggedXY>eps))trial.before-=de;
           else trial.after-=de;
           continue;
         }
-        if(!trial)continue;
+        if(!trial){if(dxy>eps)lastDepositFeed=null;continue;}
         if(dxy>eps&&Math.abs(de)<=eps){trial.travel=true;continue;}
         if(de>eps){
           if(dxy>eps||!trial.travel||trial.recovered){invalidate();continue;}
@@ -2834,6 +2834,24 @@ try {
     assert.equal(compareWipeBudgets([shortSlow],[{...shortFast,wipeE:0.024}]).matching,0);
     assert.notEqual(compareWipeBudgets([shortSlow,longSlow],[shortFast]).slow,
       compareWipeBudgets([shortSlow,longSlow],[shortFast]).fast);
+    // Writer::set_speed stores the extrusion feed separately from pure-E retract.
+    // Final cooling postprocessing may rewrite deposition speeds, so count
+    // disagreements explicitly; only matching emitted commands are evidence.
+    const roleWipeEvidence=v=>isTaggedZeroWipe(v)&&
+      Number.isFinite(v.depositFeed)&&v.depositFeed>600&&
+      hasWipeFeed(v,v.depositFeed);
+    const roleFixture=feedFixture.replace('G1 X3 E0.1','G1 X3 E0.1 F2100')
+      .replace('G1 E-0.56','G1 E-0.56 F2400');
+    assert.equal(wipeMotionWitness(roleFixture).filter(roleWipeEvidence).length,1);
+    for(const [i,invalid] of [
+      roleFixture.replace('G1 X3 E0.1 F2100','G1 X3 E0.1'),
+      roleFixture.replace('G1 X3 E0.1 F2100','G1 X3 E0.1 F2400'),
+      roleFixture.replace('G1 F2100','G1 F600'),
+      roleFixture.replace('G1 E-0.56','G1 X4\nG1 E-0.56'),
+      roleFixture.replace('G1 X3 E0.1 F2100','G1 X3 E0.1 F600').replace('G1 F2100','G1 F600'),
+      roleFixture.replace('G1 E-0.56','G53\nG1 E-0.56'),
+    ].entries()) assert.equal(wipeMotionWitness(invalid).filter(roleWipeEvidence).length,0,
+      'Missing, stale, fixed-floor or different deposition feed is not a role-speed witness: '+i);
     const wipeReport=[],budgetWitnesses=new Map();
     for(const test of [
       {enabled:'0',distance:2,before:70,after:0},
@@ -2851,13 +2869,15 @@ try {
       // 2 mm at 20/40 mm/s permits 0.20/0.10 mm E at 2 mm/s (budget 0.24).
       {enabled:'1',distance:2,before:70,after:0,speed:'20',expectedF:1200,retractSpeed:2},
       {enabled:'1',distance:2,before:70,after:0,speed:'40',expectedF:2400,retractSpeed:2},
+      // Same geometry and zero concurrent E; fixed 5 mm/s is a conflicting control.
+      {enabled:'1',distance:2,before:70,after:30,speed:'5',role:true},
     ]){
       Object.assign(rawOrca[1],{retraction_length:'0.8',retraction_speed:String(test.retractSpeed??40),
         deretraction_speed:'40',retraction_minimum_travel:'0',z_hop:'0',
         wipe:test.enabled,wipe_distance:String(test.distance),
         retract_before_wipe:String(test.before)+'%',retract_after_wipe:String(test.after)+'%'});
       if(test.speed!==undefined)Object.assign(rawOrca[5],{
-        travel_speed:String(test.travel??80),role_based_wipe_speed:'0',wipe_speed:test.speed});
+        travel_speed:String(test.travel??80),role_based_wipe_speed:test.role?'1':'0',wipe_speed:test.speed});
       rawOrca[5].enable_arc_fitting='disabled';
       await uploadRawOrca();
       await prepare.locator('#lab-slice').click();
@@ -2875,6 +2895,14 @@ try {
         wiping.map(v=>({taggedXY:v.taggedXY,wipeE:v.wipeE})));
       wipeReport.push({...test,pairs:pairs.length,wiping:wiping.length,
         zeroTagged:zeroTagged.length,
+        ...(test.role?{
+          roleMatching:zeroTagged.filter(roleWipeEvidence).length,
+          roleDistinctMatchingFeeds:[...new Set(zeroTagged.filter(roleWipeEvidence).map(v=>v.depositFeed))].sort((a,b)=>a-b),
+          roleUnmatched:zeroTagged.filter(v=>!roleWipeEvidence(v)).length,
+          roleMissingDeposit:zeroTagged.filter(v=>!Number.isFinite(v.depositFeed)).length,
+          roleFixedFloor:zeroTagged.filter(v=>hasWipeFeed(v,600)).length,
+          roleMissingWipeFeed:zeroTagged.filter(v=>v.missingTaggedFeed>0).length,
+        }:{}),
         ...(test.expectedF!==undefined&&test.retractSpeed===undefined?{
           matchingFeed:zeroTagged.filter(v=>hasWipeFeed(v,test.expectedF)).length,
           missingFeed:zeroTagged.filter(v=>v.missingTaggedFeed>0).length,
@@ -2921,6 +2949,13 @@ try {
         assert.equal(test.zeroTaggedClampSplit,test.zeroTagged,'Effective 70/30 split must hold');
         if(test.expectedF!==undefined)assert.equal(test.matchingFeed,test.zeroTagged,
           'Every tagged zero-E wipe must have the expected commanded F: '+JSON.stringify(test));
+        if(test.role){
+          assert.equal(test.roleMissingWipeFeed,0,'Role-speed wipe must have actual modal F');
+          assert.ok(test.roleMatching>=10&&test.roleDistinctMatchingFeeds.length>=2,
+            'Need actual role-dependent speeds matching at least two distinct preceding deposition feeds: '+JSON.stringify(test));
+          // This is a positive witness, not a claim that every final F is identical
+          // to the pre-cooling writer state. Keep all unmatched counts in the report.
+        }
       }else if(test.enabled==='1'&&test.distance>0&&test.before<100){
         assert.ok(test.wiping>=10,'Need actual simultaneous XY/negative E witnesses');
         assert.equal(test.boundedWipes,test.wiping,'Wipe path bound and minimum pre-retract must hold');
@@ -2934,6 +2969,10 @@ try {
     assert.equal(speedBudgetComparison.slow,speedBudgetComparison.fast,'Speed-budget fixture must retain the same number of paths');
     assert.equal(speedBudgetComparison.matching,speedBudgetComparison.slow,
       'Matched path lengths must show half the concurrent E at twice the speed: '+JSON.stringify(speedBudgetComparison));
+    const role=wipeReport.find(v=>v.role);
+    const fixedFloor=wipeReport.find(v=>v.speed==='5'&&!v.role);
+    assert.equal(role.pairs,fixedFloor.pairs,'Role and fixed-floor controls must retain paired retractions');
+    assert.equal(role.zeroTagged,fixedFloor.zeroTagged,'Role and fixed-floor controls must retain tagged wipes');
     const exact=wipeReport.find(v=>v.before===70&&v.after===30&&v.enabled==='1');
     const clamped=wipeReport.find(v=>v.before===70&&v.after===60&&v.enabled==='1');
     assert.equal(clamped.pairs,exact.pairs,'Over-budget setting must preserve paired retraction count');
@@ -2942,7 +2981,7 @@ try {
     for(const key of ['retraction_length','retraction_speed','deretraction_speed',
       'retraction_minimum_travel','z_hop','wipe','wipe_distance','retract_before_wipe','retract_after_wipe'])delete rawOrca[1][key];
     for(const key of ['travel_speed','role_based_wipe_speed','wipe_speed'])delete rawOrca[5][key];
-    console.log('PASS: actual wipe and retract motion including explicit post-wipe reserve, tagged zero-E clamp and fixed modal feed');
+    console.log('PASS: actual wipe and retract motion including explicit post-wipe reserve, tagged zero-E clamp, fixed modal feed and positive role-speed witnesses; unmatched role feeds remain reported');
 
     // Selecting a native bed without raw Orca profiles must never fall back
     // to generic PLA output while silently ignoring the selected heater.
