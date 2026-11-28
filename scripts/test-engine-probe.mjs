@@ -2273,15 +2273,34 @@ try {
     // Measure a bounded same-layer retract/travel/recover witness using
     // actual modal XYZ and E motion, not comments or Z option echoes.
     // Preserve the height-only witness and optionally classify the ascending moves.
+    // A full rising polygon must return to its XY start, remain continuous,
+    // and wind counterclockwise; a straight slope or a backtrack is not a spiral.
+    function isClosedLinearRise(moves){
+      if(moves.length<8||moves.length>128||moves.some(m=>!m.linear))return false;
+      const start=moves[0].from,end=moves.at(-1).to;
+      const dist=(a,b)=>Math.hypot(a.X-b.X,a.Y-b.Y);
+      const tol=0.003;
+      if(!Number.isFinite(dist(start,end))||dist(start,end)>tol||end.Z<=start.Z)return false;
+      let twiceArea=0;
+      for(let i=0;i<moves.length;i++){
+        const {from:a,to:b}=moves[i];
+        if(!Number.isFinite(dist(a,b))||dist(a,b)<=0.00001||b.Z<=a.Z||
+          (i&&(dist(moves[i-1].to,a)>tol||Math.abs(moves[i-1].to.Z-a.Z)>tol)))return false;
+        twiceArea+=(a.X-start.X)*(b.Y-start.Y)-(a.Y-start.Y)*(b.X-start.X);
+      }
+      return twiceArea>0.00001;
+    }
     const sameLayerHopWitness=function sameLayerHopWitness(code,details=false){
   let xyzMode=null,eMode=null,e=0,pos={X:NaN,Y:NaN,Z:NaN},lastZ=NaN,trial=null;
   const excursions=[];
+  let plane=null;
   const eps=0.00001;
   for(const line of code.split(/\r?\n/)){
     const words=line.split(';')[0].trim().split(/\s+/), cmd=words[0].toUpperCase();
     const args=Object.fromEntries(words.slice(1)
-      .filter(w=>/^[XYZE][+-]?(?:\d+(?:\.\d*)?|\.\d+)$/i.test(w))
+      .filter(w=>/^[XYZEIJP][+-]?(?:\d+(?:\.\d*)?|\.\d+)$/i.test(w))
       .map(w=>[w[0].toUpperCase(),Number(w.slice(1))]));
+    if(['G17','G18','G19'].includes(cmd)){plane=cmd;continue;}
     if(cmd==='G90'||cmd==='G91'){xyzMode=cmd;continue;}
     if(cmd==='M82'||cmd==='M83'){eMode=cmd;continue;}
     if(cmd==='G28'||cmd==='G92'){
@@ -2308,7 +2327,8 @@ try {
       if(trial?.recovered&&trial.travel&&Number.isFinite(pos.Z)&&
         Math.abs(pos.Z-trial.base)<eps&&Math.abs(prev.Z-pos.Z)<eps)
         excursions.push(details?{base:trial.base,height:trial.peak-trial.base,vertical:trial.vertical,
-          slopes:trial.slopes,otherRise:trial.otherRise}:trial.peak-trial.base);
+          slopes:trial.slopes,otherRise:trial.otherRise,
+          spiralArcs:trial.spiralArcs,spiralLinear:isClosedLinearRise(trial.risingMoves)}:trial.peak-trial.base);
       trial=null;
       lastZ=Number.isFinite(pos.Z)&&Math.abs(prev.Z-pos.Z)<eps?pos.Z:NaN;
       continue;
@@ -2317,7 +2337,7 @@ try {
     if(!spatial&&cmd==='G1'&&de< -eps){
       trial=Number.isFinite(lastZ)&&Math.abs(pos.Z-lastZ)<eps?
         {base:lastZ,peak:lastZ,length:-de,travel:false,recovered:false,
-          vertical:0,slopes:[],otherRise:0}:null;
+          vertical:0,slopes:[],otherRise:0,spiralArcs:0,risingMoves:[]}:null;
       continue;
     }
     if(!trial)continue;
@@ -2325,6 +2345,10 @@ try {
     trial.peak=Math.max(trial.peak,pos.Z);
     const dz=pos.Z-prev.Z, dxy=Math.hypot(pos.X-prev.X,pos.Y-prev.Y);
     if(details&&dz>eps){
+      if(cmd==='G3'&&plane==='G17'&&args.P===1&&dxy<=eps&&Math.abs(de)<eps&&
+        Math.hypot(args.I??0,args.J??0)>eps)trial.spiralArcs++;
+      trial.risingMoves.push({linear:['G0','G1'].includes(cmd)&&Math.abs(de)<eps,
+        from:prev,to:{...pos}});
       if(!['G0','G1'].includes(cmd)||!Number.isFinite(dxy)||Math.abs(de)>=eps)
         trial.otherRise++;
       else if(dxy<=eps)trial.vertical++;
@@ -2479,6 +2503,69 @@ try {
       for(const key of ['retraction_length','retraction_speed','deretraction_speed',
         'retraction_minimum_travel','z_hop','z_hop_types','retract_lift_above','retract_lift_below'])delete record[key];
     console.log('PASS: real same-layer Z-hop absolute height gates');
+
+    // The pinned writer emits either 8–128 rising G1 segments returning to
+    // the original XY or a G17/G3 P1 full turn with nonzero I/J and rising Z.
+    // Isolate the mode switch; normal-lift fallbacks are allowed.
+    const spiralPolygon=Array.from({length:8},(_,i)=>{
+      const t=(i+1)/8,a=Math.PI+2*Math.PI*t;
+      return 'G1 X'+(1.2+0.2*Math.cos(a)).toFixed(5)+' Y'+
+        (0.2*Math.sin(a)).toFixed(5)+' Z'+(0.2+0.4*t).toFixed(5);
+    }).join('\n');
+    const spiralWitness=(body)=>sameLayerHopWitness(liftFixture+body+liftFinish,true)[0];
+    assert.equal(spiralWitness(spiralPolygon).spiralLinear,true);
+    assert.equal(spiralWitness(spiralPolygon).spiralArcs,0);
+    assert.equal(spiralWitness('G17\nG3 Z0.6 I0.2 J0 P1').spiralArcs,1);
+    assert.equal(spiralWitness('G17\nG3 Z0.6 I0.2 J0 P1').spiralLinear,false);
+    assert.equal(spiralWitness('G17\nG3 Z0.6 I0.2 J0').spiralArcs,0);
+    assert.equal(spiralWitness('G18\nG3 Z0.6 I0.2 J0 P1').spiralArcs,0);
+    assert.equal(spiralWitness('G17\nG3 X1.1 Z0.6 I0.2 J0 P1').spiralArcs,0);
+    assert.equal(spiralWitness('G17\nG3 Z0.6 I0 J0 P1').spiralArcs,0);
+    assert.equal(spiralWitness('G1 X1.4 Z0.6').spiralLinear,false);
+    const spiralReport=[];
+    for(const arcMode of ['disabled','enabled']){
+      Object.assign(rawOrca[1],{retraction_length:'0.8',retraction_speed:'40',
+        deretraction_speed:'40',retraction_minimum_travel:'0',z_hop:'0.4',
+        z_hop_types:'Spiral Lift',travel_slope:'15'});
+      rawOrca[5].enable_arc_fitting=arcMode;
+      await uploadRawOrca();
+      await prepare.locator('#lab-slice').click();
+      await prepare.waitForFunction(()=>{
+        const status=document.querySelector('#lab-status')?.textContent||'';
+        return status.startsWith('PASS:')||status.startsWith('FAILED');
+      },null,{timeout:120000});
+      assert.match(await prepare.locator('#lab-status').innerText(),/^PASS: 2 STL model\(s\)/);
+      const code=await prepare.locator('#lab-download').evaluate(async link=>
+        await(await fetch(link.href)).text());
+      const observed=sameLayerHopWitness(code,true);
+      const positive=observed.filter(v=>v.height>0.001);
+      const matching=positive.filter(v=>Math.abs(v.height-0.4)<0.002);
+      spiralReport.push({arcMode,pairs:observed.length,positive:positive.length,
+        matchingHeight:matching.length,linear:matching.filter(v=>v.spiralLinear).length,
+        arcs:matching.filter(v=>v.spiralArcs>0).length,
+        otherRise:matching.filter(v=>v.otherRise>0).length});
+      console.log('MACHINE_SPIRAL_LIFT_MOTION '+JSON.stringify(spiralReport.at(-1)));
+    }
+    await writeFile(parityDir+'/machine-spiral-lift-motion.json',
+      JSON.stringify({fixture:'same-layer two synthetic STL models; localhost only',
+        cases:spiralReport,desktop_native_parity:false,printer_ready:false},null,2));
+    for(const test of spiralReport){
+      assert.ok(test.positive>=10,'Need actual spiral-lift travel witnesses: '+JSON.stringify(test));
+      assert.equal(test.matchingHeight,test.positive,'Lift height must be preserved');
+      if(test.arcMode==='disabled'){
+        assert.ok(test.linear>=10,'Expected full rising G1 polygons: '+JSON.stringify(test));
+        assert.equal(test.otherRise,0,'Disabled arc fitting must not emit rising arcs');
+      }else{
+        assert.ok(test.arcs>=10,'Expected full rising G17/G3 P1 turns: '+JSON.stringify(test));
+        assert.equal(test.linear,0,'Enabled arc fitting must not emit rising G1 polygons');
+      }
+    }
+    delete rawOrca[5].enable_arc_fitting;
+    for(const record of rawOrca.slice(0,2))
+      for(const key of ['retraction_length','retraction_speed','deretraction_speed',
+        'retraction_minimum_travel','z_hop','z_hop_types','travel_slope'])delete record[key];
+    console.log('PASS: actual Spiral Lift with linear and arc fitting modes');
+
 
     // Selecting a native bed without raw Orca profiles must never fall back
     // to generic PLA output while silently ignoring the selected heater.
