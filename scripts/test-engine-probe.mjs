@@ -2453,6 +2453,55 @@ try {
         'retraction_minimum_travel','z_hop'])delete record[key];
     console.log('PASS: real same-layer Z-hop heights including explicit zero');
 
+    // Hold the machine height and mode fixed. Native filament overrides must
+    // distinguish an absent option, a parent value, explicit nil and zero.
+    const filamentHopKey='filament_z_hop';
+    const filamentHopCases=[
+      {name:'absent',parent:null,child:null,height:0.4},
+      {name:'inherited',parent:'0.8',child:null,height:0.8},
+      {name:'explicit nil',parent:'0.8',child:'nil',height:0.4},
+      {name:'explicit zero',parent:'0.8',child:'0',height:0},
+    ];
+    const filamentHopReport=[];
+    Object.assign(rawOrca[1],{retraction_length:'0.8',retraction_speed:'40',
+      deretraction_speed:'40',retraction_minimum_travel:'0',z_hop:'0.4',z_hop_types:'Normal Lift'});
+    for(const test of filamentHopCases){
+      for(const [record,value] of [[rawOrca[2],test.parent],[rawOrca[3],test.child]]){
+        delete record[filamentHopKey];
+        if(value!==null)record[filamentHopKey]=[value];
+      }
+      await uploadRawOrca();
+      await prepare.locator('#lab-slice').click();
+      await prepare.waitForFunction(()=>{
+        const status=document.querySelector('#lab-status')?.textContent||'';
+        return status.startsWith('PASS:')||status.startsWith('FAILED');
+      },null,{timeout:120000});
+      assert.match(await prepare.locator('#lab-status').innerText(),/^PASS: 2 STL model\(s\)/);
+      const code=await prepare.locator('#lab-download').evaluate(async link=>
+        await(await fetch(link.href)).text());
+      const rises=sameLayerHopWitness(code);
+      const positive=rises.filter(v=>v>0.001);
+      filamentHopReport.push({...test,pairs:rises.length,positive:positive.length,
+        matched:positive.filter(v=>Math.abs(v-test.height)<0.002).length,
+        min:positive.length?Math.min(...positive):null,max:positive.length?Math.max(...positive):null});
+      console.log('FILAMENT_Z_HOP_MOTION '+JSON.stringify(filamentHopReport.at(-1)));
+    }
+    await writeFile(parityDir+'/filament-z-hop-motion.json',
+      JSON.stringify({fixture:'same-layer two synthetic STL models; localhost only',
+        cases:filamentHopReport,desktop_native_parity:false,printer_ready:false},null,2));
+    for(const test of filamentHopReport){
+      assert.ok(test.pairs>=10,'Expected real same-layer travel witnesses: '+JSON.stringify(test));
+      if(test.height===0)assert.equal(test.positive,0,'Explicit filament zero must disable hop');
+      else {
+        assert.ok(test.matched>=10,'Expected real configured-height lift excursions: '+JSON.stringify(test));
+        assert.equal(test.matched,test.positive,'Every positive excursion must match effective height');
+      }
+    }
+    for(const record of rawOrca.slice(2,4))delete record[filamentHopKey];
+    for(const key of ['retraction_length','retraction_speed','deretraction_speed',
+      'retraction_minimum_travel','z_hop','z_hop_types'])delete rawOrca[1][key];
+    console.log('PASS: native filament Z-hop height, inheritance, explicit nil and zero motion');
+
     // Distinguish actual upward motion, not option echoes or lift comments.
     // A short slope travel may use a steeper straight diagonal, and a
     // spiral may fall back to a normal lift. Do not infer either from peak.
