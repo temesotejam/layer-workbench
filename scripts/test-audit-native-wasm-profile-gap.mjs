@@ -132,7 +132,8 @@ function machineVectorAudit(key,native,forwarded){
     {...restricted,machine:{settings:{...restricted.machine.settings,[key]:forwarded}}});
 }
 for(const [key,lo,hi] of [["retraction_length",0,10],["retraction_speed",1,100],
-  ["deretraction_speed",0,100],["retraction_minimum_travel",0,100],["z_hop",0,5]]){
+  ["deretraction_speed",0,100],["retraction_minimum_travel",0,100],["z_hop",0,5],
+  ["travel_slope",1,90],["retract_lift_above",0,1000],["retract_lift_below",0,1000]]){
   for(const n of [lo,hi]){
     const audit=machineVectorAudit(key,String(n),[String(n)]);
     assert.ok(audit.families.machine.raw_value_difference_shapes.some(v=>
@@ -147,6 +148,39 @@ for(const [key,lo,hi] of [["retraction_length",0,10],["retraction_speed",1,100],
     assert.equal(machineVectorAudit(key,native,forwarded).families.machine.unexplained_raw_value_difference_count,1);
 }
 assert.equal(machineVectorAudit("wipe_distance","1",["1"]).families.machine.unexplained_raw_value_difference_count,1);
+
+// Exact machine lift enum vector and legacy process arc fitting conversions.
+for(const mode of ["Auto Lift","Normal Lift","Slope Lift","Spiral Lift"]){
+  const a=machineVectorAudit("z_hop_types",mode,[mode]);
+  assert.deepEqual(a.families.machine.raw_value_difference_shapes.find(v=>v.key==="z_hop_types"),
+    {key:"z_hop_types",native_shape:"string",restricted_shape:"array(1)",syntax_only_hint:"single-machine-lift-enum-scalar-to-vector"});
+  assert.ok(a.families.machine.raw_value_differences_requiring_review.includes("z_hop_types"));
+  assert.equal(a.full_profile_parity_established,false);
+}
+for(const [native,forwarded] of [
+  ["auto lift",["auto lift"]],["Auto Lift",["Normal Lift"]],["Spiral Lift",["Spiral Lift","Spiral Lift"]],
+  ["Normal Lift",["Normal Lift "]],[null,["Normal Lift"]],[["Normal Lift","Normal Lift"],["Normal Lift"]]
+]){
+  assert.equal(machineVectorAudit("z_hop_types",native,forwarded).families.machine.unexplained_raw_value_difference_count,1);
+}
+function arcAudit(native,forwarded,key="enable_arc_fitting"){
+  return auditProfileCoverage({...full,process:{...full.process,[key]:native}},
+    {...restricted,process:{settings:{...restricted.process.settings,[key]:forwarded}}});
+}
+for(const [native,forwarded] of [["0","disabled"],["FALSE","disabled"],["false","disabled"],["1","enabled"],["True","enabled"],["true","enabled"]]){
+  const a=arcAudit(native,forwarded);
+  assert.ok(a.families.process.raw_value_difference_shapes.some(v=>v.key==="enable_arc_fitting"&&v.syntax_only_hint==="legacy-arc-fitting-string-to-enum"));
+  assert.ok(a.families.process.raw_value_differences_requiring_review.includes("enable_arc_fitting"));
+  assert.equal(a.families.process.unexplained_raw_value_difference_count,0);
+  assert.equal(a.full_profile_parity_established,false);
+  assert.equal(a.native_vs_wasm_gcode_compared,false);
+  assert.equal(a.print_ready,false);
+}
+for(const [native,forwarded] of [["0","enabled"],["1","disabled"],["0","sparse_infill"],[" false","disabled"],["true ", "enabled"],
+  [0,"disabled"],[true,"enabled"],[["0"],"disabled"],["disabled","enabled"],["enabled","sparse_infill"],["1",["enabled"]]]){
+  assert.equal(arcAudit(native,forwarded).families.process.unexplained_raw_value_difference_count,1);
+}
+assert.equal(arcAudit("0","disabled","unrelated_enum").families.process.unexplained_raw_value_difference_count,1);
 
 // Even exact keys/values cannot certify actual native/WASM execution parity.
 const exactlyMatched={machine:{settings:{nozzle_diameter:["0.4"],printable_height:"200",machine_start_gcode:"M104 S200"}},

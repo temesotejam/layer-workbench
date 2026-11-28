@@ -62,12 +62,26 @@ function rawRepresentationHint(kind,key,native,restricted) {
   // Explicitly supported single-tool machine coFloats, not a general
   // scalar-to-vector equivalence rule. Keep raw differences in the audit.
   const machineVectors={retraction_length:[0,10],retraction_speed:[1,100],
-    deretraction_speed:[0,100],retraction_minimum_travel:[0,100],z_hop:[0,5]};
+    deretraction_speed:[0,100],retraction_minimum_travel:[0,100],z_hop:[0,5],
+    travel_slope:[1,90],retract_lift_above:[0,1000],retract_lift_below:[0,1000]};
   if(kind==="machine" && Object.hasOwn(machineVectors,key) &&
       numeric(native) && Number(native)>=machineVectors[key][0] &&
       Number(native)<=machineVectors[key][1] && Array.isArray(restricted) &&
       restricted.length===1 && restricted[0]===String(Number(native)))
     return "single-machine-retraction-scalar-to-vector";
+  // Pinned coEnum machine lift mode; only exact, single-slot native tokens.
+  if(kind==="machine" && key==="z_hop_types" &&
+      ["Auto Lift","Normal Lift","Slope Lift","Spiral Lift"].includes(native) &&
+      Array.isArray(restricted) && restricted.length===1 && restricted[0]===native)
+    return "single-machine-lift-enum-scalar-to-vector";
+  // Pinned PrintConfig.cpp handle_legacy (9889–9894). Do not classify
+  // native numeric/boolean values, whitespace, or changed canonical enums.
+  if(kind==="process" && key==="enable_arc_fitting" && typeof native==="string"){
+    const old=native.toLowerCase();
+    const normalized=old==="0"||old==="false"?"disabled":old==="1"||old==="true"?"enabled":null;
+    if(normalized!==null && restricted===normalized)
+      return "legacy-arc-fitting-string-to-enum";
+  }
   // The restricted one-filament PLA bridge accepts these explicit single-slot
   // native arrays, but only these exact fields and this verified PLA material.
   if(kind === "filament" && key === "filament_type" &&
