@@ -2627,6 +2627,9 @@ try {
     function wipeMotionWitness(code){
       const eps=0.00001, pairs=[];
       let xyz=null, emode=null, e=0, pos={X:NaN,Y:NaN,Z:NaN}, deposited=false, trial=null;
+      // Final G-code may omit redundant F words (CoolingBuffer). Keep the
+      // commanded modal feed across markers, but never invent a missing value.
+      let modalFeed=null, metric=true, unitsPerMinute=true;
       const invalidate=()=>{trial=null;deposited=false;};
       for(const line of code.split(/\r?\n/)){
         const marker=line.trim();
@@ -2634,6 +2637,7 @@ try {
           if(trial){
             if(trial.tagOpen||trial.tagClosed||trial.travel||trial.recovered){invalidate();continue;}
             trial.tagOpen=true;
+            trial.tagExplicitFeed=false;
           }
           continue;
         }
@@ -2647,17 +2651,30 @@ try {
         const words=line.split(';')[0].trim().split(/\s+/), cmd=words[0].toUpperCase();
         const args=Object.fromEntries(words.slice(1).filter(w=>/^[XYZE][+-]?(?:\d+(?:\.\d*)?|\.\d+)$/i.test(w)).map(w=>[w[0].toUpperCase(),Number(w.slice(1))]));
         if(cmd==='G90'||cmd==='G91'){xyz=cmd;continue;}
+        if(cmd==='G20'||cmd==='G21'){metric=cmd==='G21';modalFeed=null;invalidate();continue;}
+        if(['G93','G94','G95'].includes(cmd)){unitsPerMinute=cmd==='G94';modalFeed=null;invalidate();continue;}
         if(cmd==='M82'||cmd==='M83'){emode=cmd;continue;}
         if(cmd==='G28'||cmd==='G92'){
           if(cmd==='G28'||['X','Y','Z'].some(k=>Object.hasOwn(args,k))){
+            modalFeed=null;
             invalidate();
             for(const k of ['X','Y','Z'])if(cmd==='G28'||Object.hasOwn(args,k))pos[k]=cmd==='G28'?NaN:args[k];
           }
           if(cmd==='G92'&&Object.hasOwn(args,'E'))e=args.E;
           continue;
         }
-        if(['G10','G11'].includes(cmd)||/^T\d+$/.test(cmd)){invalidate();continue;}
-        if(!['G0','G1','G2','G3'].includes(cmd))continue;
+        if(['G10','G11'].includes(cmd)||/^T\d+$/.test(cmd)){modalFeed=null;invalidate();continue;}
+        if(!['G0','G1','G2','G3'].includes(cmd)){
+          // Unknown G commands can change motion interpretation. Do not carry F across them.
+          if(/^G\d/.test(cmd)&&cmd!=='G4')modalFeed=null;
+          continue;
+        }
+        const feeds=words.slice(1).filter(w=>/^F/i.test(w));
+        if(feeds.length){
+          const value=feeds.length===1&&/^F[+]?(?:\d+(?:\.\d*)?|\.\d+)$/i.test(feeds[0])?Number(feeds[0].slice(1)):NaN;
+          modalFeed=metric&&unitsPerMinute&&Number.isFinite(value)&&value>0?value:null;
+          if(trial?.tagOpen)trial.tagExplicitFeed=true;
+        }
         const prev={...pos};
         for(const k of ['X','Y','Z'])if(Object.hasOwn(args,k))pos[k]=xyz==='G90'?args[k]:xyz==='G91'?pos[k]+args[k]:NaN;
         let de=0;
@@ -2671,7 +2688,15 @@ try {
         // Zero-E movement outside this window remains ordinary travel.
         if(trial?.tagOpen){
           if(de>eps|| (de< -eps&&dxy<=eps)){invalidate();continue;}
-          if(dxy>eps){trial.taggedXY+=dxy;trial.taggedE+=Math.max(0,-de);}
+          if(dxy>eps){
+            trial.taggedXY+=dxy;trial.taggedE+=Math.max(0,-de);
+            if(modalFeed===null)trial.missingTaggedFeed++;
+            else {
+              if(!trial.tagExplicitFeed)trial.inheritedTaggedFeed++;
+              trial.minTaggedFeed=Math.min(trial.minTaggedFeed,modalFeed);
+              trial.maxTaggedFeed=Math.max(trial.maxTaggedFeed,modalFeed);
+            }
+          }
           if(Math.abs(de)<=eps)continue;
         }
         if(dxy>eps&&de>eps){
@@ -2680,7 +2705,7 @@ try {
         }
         if(de< -eps){
           if(!deposited||trial?.travel||trial?.recovered){invalidate();continue;}
-          trial??={total:0,before:0,after:0,wipeE:0,wipeXY:0,tagOpen:false,tagClosed:false,taggedXY:0,taggedE:0,travel:false,recovered:false,recovery:0};
+          trial??={total:0,before:0,after:0,wipeE:0,wipeXY:0,tagOpen:false,tagClosed:false,taggedXY:0,taggedE:0,tagExplicitFeed:false,inheritedTaggedFeed:0,missingTaggedFeed:0,minTaggedFeed:Infinity,maxTaggedFeed:0,travel:false,recovered:false,recovery:0};
           trial.total-=de;
           if(dxy>eps){trial.wipeXY+=dxy;trial.wipeE-=de;}
           else if(!trial.wipeXY&&!(trial.tagClosed&&trial.taggedXY>eps))trial.before-=de;
@@ -2736,6 +2761,28 @@ try {
       zeroWipeCode.replace('G1 X2 E0','G1 X2 Z0.4 E0'),
     ]) assert.equal(wipeMotionWitness(malformed).filter(isTaggedZeroWipe).length,0,
       'Incomplete, empty, nonzero-E or layer-changing markers are not zero-E wipe evidence');
+    const hasWipeFeed=(v,expected)=>isTaggedZeroWipe(v)&&v.missingTaggedFeed===0&&
+      Math.abs(v.minTaggedFeed-expected)<0.1&&Math.abs(v.maxTaggedFeed-expected)<0.1;
+    const feedFixture=zeroWipeCode.replace('; WIPE_START','; WIPE_START\nG1 F2100');
+    assert.equal(wipeMotionWitness(feedFixture).filter(v=>hasWipeFeed(v,2100)).length,1,
+      'Explicit F-only command inside wipe applies modally to subsequent XY');
+    const inheritedFixture=zeroWipeCode.replace('G1 E-0.56','G1 E-0.56 F2100');
+    assert.equal(wipeMotionWitness(inheritedFixture).filter(v=>hasWipeFeed(v,2100)&&v.inheritedTaggedFeed===2).length,1,
+      'Redundant F removed by postprocessing: inherit actual prior retract feed on both XY moves');
+    assert.equal(wipeMotionWitness(inheritedFixture.replace('G1 X1','G1 X1 F2100')).filter(v=>hasWipeFeed(v,2100)&&v.inheritedTaggedFeed===1).length,1);
+    for(const invalidFeed of [
+      zeroWipeCode,
+      inheritedFixture.replace('F2100','F2400'),
+      inheritedFixture.replace('; WIPE_START','G1 Fbad\n; WIPE_START'),
+      inheritedFixture.replace('; WIPE_START','G1 F2100 F2400\n; WIPE_START'),
+      inheritedFixture.replace('; WIPE_START','G93\n; WIPE_START'),
+      inheritedFixture.replace('; WIPE_START','G20\n; WIPE_START'),
+      feedFixture.replace('G1 X1','G1 X1 F2400'),
+      feedFixture.replace('G1 F2100','G1 F0'),
+      feedFixture.replace('G1 F2100','G1 Fbad'),
+      feedFixture.replace('G1 F2100','G1 F2100 F2400'),
+    ]) assert.equal(wipeMotionWitness(invalidFeed).filter(v=>hasWipeFeed(v,2100)).length,0,
+      'Missing, changed, invalid or unsupported-mode feed is not fixed-speed evidence');
     const wipeReport=[];
     for(const test of [
       {enabled:'0',distance:2,before:70,after:0},
@@ -2745,11 +2792,18 @@ try {
       {enabled:'1',distance:2,before:70,after:20},
       {enabled:'1',distance:2,before:70,after:30},
       {enabled:'1',distance:2,before:70,after:60},
+      // Zero concurrent E isolates the speed witness from retraction budget.
+      {enabled:'1',distance:2,before:70,after:30,speed:'35',expectedF:2100},
+      {enabled:'1',distance:2,before:70,after:30,speed:'50%',expectedF:2400},
+      {enabled:'1',distance:2,before:70,after:30,speed:'50%',travel:100,expectedF:3000},
+      {enabled:'1',distance:2,before:70,after:30,speed:'5',expectedF:600},
     ]){
       Object.assign(rawOrca[1],{retraction_length:'0.8',retraction_speed:'40',
         deretraction_speed:'40',retraction_minimum_travel:'0',z_hop:'0',
         wipe:test.enabled,wipe_distance:String(test.distance),
         retract_before_wipe:String(test.before)+'%',retract_after_wipe:String(test.after)+'%'});
+      if(test.speed!==undefined)Object.assign(rawOrca[5],{
+        travel_speed:String(test.travel??80),role_based_wipe_speed:'0',wipe_speed:test.speed});
       rawOrca[5].enable_arc_fitting='disabled';
       await uploadRawOrca();
       await prepare.locator('#lab-slice').click();
@@ -2765,6 +2819,13 @@ try {
       const zeroTagged=pairs.filter(isTaggedZeroWipe);
       wipeReport.push({...test,pairs:pairs.length,wiping:wiping.length,
         zeroTagged:zeroTagged.length,
+        ...(test.expectedF!==undefined?{
+          matchingFeed:zeroTagged.filter(v=>hasWipeFeed(v,test.expectedF)).length,
+          missingFeed:zeroTagged.filter(v=>v.missingTaggedFeed>0).length,
+          inheritedFeed:zeroTagged.filter(v=>v.inheritedTaggedFeed>0).length,
+          observedMinF:zeroTagged.length?Math.min(...zeroTagged.map(v=>v.minTaggedFeed)):null,
+          observedMaxF:zeroTagged.length?Math.max(...zeroTagged.map(v=>v.maxTaggedFeed)):null,
+        }:{}),
         zeroTaggedBounded:zeroTagged.filter(v=>v.taggedXY<=test.distance+0.02).length,
         zeroTaggedClampSplit:zeroTagged.filter(v=>Math.abs(v.before-0.56)<0.002&&
           Math.abs(v.after-0.24)<0.002).length,
@@ -2793,6 +2854,8 @@ try {
         assert.ok(test.zeroTagged>=10,'Need observed tagged zero-E wipe XY, not just absent negative E');
         assert.equal(test.zeroTaggedBounded,test.zeroTagged,'Tagged wipe path bound must hold');
         assert.equal(test.zeroTaggedClampSplit,test.zeroTagged,'Effective 70/30 split must hold');
+        if(test.expectedF!==undefined)assert.equal(test.matchingFeed,test.zeroTagged,
+          'Every tagged zero-E wipe must have the expected commanded F: '+JSON.stringify(test));
       }else if(test.enabled==='1'&&test.distance>0&&test.before<100){
         assert.ok(test.wiping>=10,'Need actual simultaneous XY/negative E witnesses');
         assert.equal(test.boundedWipes,test.wiping,'Wipe path bound and minimum pre-retract must hold');
@@ -2806,7 +2869,8 @@ try {
     delete rawOrca[5].enable_arc_fitting;
     for(const key of ['retraction_length','retraction_speed','deretraction_speed',
       'retraction_minimum_travel','z_hop','wipe','wipe_distance','retract_before_wipe','retract_after_wipe'])delete rawOrca[1][key];
-    console.log('PASS: actual wipe and retract motion including explicit post-wipe reserve and tagged zero-E clamp');
+    for(const key of ['travel_speed','role_based_wipe_speed','wipe_speed'])delete rawOrca[5][key];
+    console.log('PASS: actual wipe and retract motion including explicit post-wipe reserve, tagged zero-E clamp and fixed modal feed');
 
     // Selecting a native bed without raw Orca profiles must never fall back
     // to generic PLA output while silently ignoring the selected heater.
