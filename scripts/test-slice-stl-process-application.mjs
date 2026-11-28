@@ -591,3 +591,25 @@ console.log("PASS: native scalar wipe speed and role switch reach process applic
       /outside diagnostic bounds/);
 }
 console.log("PASS: nullable filament vectors reach native init without replacing machine keys; invalid input refused");
+
+{
+  const key="filament_z_hop";
+  const preset={...selected,machine:{settings:{...selected.machine.settings,z_hop:["0.4"]}}};
+  assert.equal(makeRestrictedInitConfig(preset)[key],undefined);
+  for(const token of ["0","0.8","5","nil"]){
+    const {engine,calls}=mockedEngine();
+    await sliceMultiStlWithEngine(engine,items,null,null,{...preset,
+      filament:{settings:{...preset.filament.settings,[key]:[token]}}});
+    const init=calls.find(c=>c.name==="init").value;
+    assert.deepEqual(init[key],[token]);
+    assert.deepEqual(init.z_hop,["0.4"]);
+  }
+  for(const bad of ["0.4","nil",[],["0","1"],[[0.4]],[null],[true],["-0.1"],["5.01"],["0.4%"],["NIL"]]){
+    const invalid=mockedEngine();
+    await assert.rejects(()=>sliceMultiStlWithEngine(invalid.engine,items,null,null,
+      {...preset,filament:{settings:{...preset.filament.settings,[key]:bad}}}),
+      /Expected single-tool|Invalid restricted|outside diagnostic bounds/);
+    assert.equal(invalid.calls.length,0);
+  }
+}
+console.log("PASS: nullable filament Z-hop height reaches init independently of machine height");
