@@ -68,3 +68,12 @@ for(const key of ["filament_retraction_length","filament_retraction_speed","fila
   }
 }
 console.log("PASS: pinned Generic PLA preserves three inherited native nil retraction overrides");
+
+const hopKey="filament_z_hop";
+assert.deepEqual(resolved.chain.map(n=>indexed.records.find(p=>p.name===n)[hopKey]),
+  [["nil"],undefined,undefined],"Pinned official nullable Z-hop height inheritance");
+for(const profile of [resolved,ddHighFlow,bowdenExtra,hotBed]){
+  assert.deepEqual(profile.settings[hopKey],["nil"]);
+  assert.ok(!profile.unsupported.includes(hopKey));
+}
+console.log("PASS: pinned Generic PLA preserves inherited native nil Z-hop height");
