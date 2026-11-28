@@ -1236,3 +1236,25 @@ console.log("PASS: machine wipe toggle, distance and before-wipe percent inherit
     assert.throws(()=>resolve(child({role_based_wipe_speed:bad}),selection),/Invalid native process enum/);
 }
 console.log("PASS: native wipe speed and role-based switch inheritance");
+
+{
+  const keys=["filament_retraction_length","filament_retraction_speed","filament_deretraction_speed"];
+  const parentValues=["1.6","25","30"];
+  const childValues=["0","40","0"];
+  const parent=profiles.map(p=>p.name==="Generic PLA @System"
+    ? {...p,...Object.fromEntries(keys.map((k,i)=>[k,[parentValues[i]]]))}:p);
+  const change=(key,value)=>parent.map(p=>p.name===selection.filament?{...p,[key]:value}:p);
+  for(const [i,key] of keys.entries()){
+    assert.equal(result.filament.settings[key],undefined);
+    assert.deepEqual(resolve(parent,selection).filament.settings[key],[parentValues[i]]);
+    assert.deepEqual(resolve(change(key,[childValues[i]]),selection).filament.settings[key],[childValues[i]]);
+    const cleared=resolve(change(key,["nil"]),selection).filament;
+    assert.deepEqual(cleared.settings[key],["nil"]);
+    assert.ok(!cleared.unsupported.includes(key));
+    for(const bad of ["nil","1",[],["nil","1"],[null],[true],[["1"]],["-1"],["1%"],["101"],["NIL"]])
+      assert.throws(()=>resolve(change(key,bad),selection),/Expected single-tool|Invalid|test limits/);
+  }
+  assert.throws(()=>resolve(change("filament_retraction_speed",["0"]),selection),/test limits/);
+  assert.throws(()=>resolve(change("filament_retraction_length",["10.01"]),selection),/test limits/);
+}
+console.log("PASS: nullable single-tool filament retraction vectors, inheritance, explicit nil and strict bounds");

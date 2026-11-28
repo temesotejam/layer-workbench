@@ -563,3 +563,31 @@ console.log("PASS: exact native wipe vectors reach init; malformed input refused
   }
 }
 console.log("PASS: native scalar wipe speed and role switch reach process application");
+
+{
+  const machine={...selected.machine.settings,retraction_length:["0.8"],retraction_speed:["40"],deretraction_speed:["40"]};
+  const values={filament_retraction_length:["1.6"],filament_retraction_speed:["25"],filament_deretraction_speed:["0"]};
+  for(const [key,value] of Object.entries(values)){
+    assert.equal(makeRestrictedInitConfig(selected)[key],undefined);
+    for(const vector of [value,["nil"]]){
+      const preset={...selected,machine:{settings:machine},filament:{settings:{...selected.filament.settings,[key]:vector}}};
+      const {engine,calls}=mockedEngine();
+      await sliceMultiStlWithEngine(engine,items,null,null,preset);
+      const init=calls.find(c=>c.name==="init").value;
+      assert.deepEqual(init[key],vector);
+      for(const k of ["retraction_length","retraction_speed","deretraction_speed"])
+        assert.deepEqual(init[k],machine[k]);
+    }
+    for(const bad of ["nil","1",[],["nil","1"],[null],[true],["-1"],["1%"],["101"],["NIL"]]){
+      const invalid=mockedEngine();
+      await assert.rejects(()=>sliceMultiStlWithEngine(invalid.engine,items,null,null,
+        {...selected,filament:{settings:{...selected.filament.settings,[key]:bad}}}),
+        /Expected single-tool|Invalid restricted|outside diagnostic bounds/);
+      assert.equal(invalid.calls.length,0);
+    }
+  }
+  for(const [key,bad] of [["filament_retraction_speed",["0"]],["filament_retraction_length",["10.01"]]])
+    assert.throws(()=>makeRestrictedInitConfig({...selected,filament:{settings:{...selected.filament.settings,[key]:bad}}}),
+      /outside diagnostic bounds/);
+}
+console.log("PASS: nullable filament vectors reach native init without replacing machine keys; invalid input refused");

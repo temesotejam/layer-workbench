@@ -58,3 +58,13 @@ console.log("PASS: pinned real OrcaSlicer v2.5.0 Generic PLA @System indexed inh
 console.log("Confirmed native nozzle temperature:",resolved.settings.nozzle_temperature);
 console.log("Confirmed native inherited flow ratio:",JSON.stringify(resolved.settings.filament_flow_ratio));
 console.log("Unsupported official fields across selected chain:",resolved.unsupported.length);
+
+for(const key of ["filament_retraction_length","filament_retraction_speed","filament_deretraction_speed"]){
+  assert.deepEqual(resolved.chain.map(n=>indexed.records.find(p=>p.name===n)[key]),
+    [["nil"],undefined,undefined],"Pinned official nullable inheritance "+key);
+  for(const profile of [resolved,ddHighFlow,bowdenExtra,hotBed]){
+    assert.deepEqual(profile.settings[key],["nil"]);
+    assert.ok(!profile.unsupported.includes(key));
+  }
+}
+console.log("PASS: pinned Generic PLA preserves three inherited native nil retraction overrides");
