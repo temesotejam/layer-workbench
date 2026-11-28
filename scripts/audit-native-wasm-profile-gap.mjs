@@ -63,12 +63,23 @@ function rawRepresentationHint(kind,key,native,restricted) {
   // scalar-to-vector equivalence rule. Keep raw differences in the audit.
   const machineVectors={retraction_length:[0,10],retraction_speed:[1,100],
     deretraction_speed:[0,100],retraction_minimum_travel:[0,100],z_hop:[0,5],
-    travel_slope:[1,90],retract_lift_above:[0,1000],retract_lift_below:[0,1000]};
+    travel_slope:[1,90],retract_lift_above:[0,1000],retract_lift_below:[0,1000],wipe_distance:[0,20]};
   if(kind==="machine" && Object.hasOwn(machineVectors,key) &&
       numeric(native) && Number(native)>=machineVectors[key][0] &&
       Number(native)<=machineVectors[key][1] && Array.isArray(restricted) &&
       restricted.length===1 && restricted[0]===String(Number(native)))
     return "single-machine-retraction-scalar-to-vector";
+  // Pinned coBools and coPercents: only exact serialized tokens and the
+  // explicit local one-slot conversion; do not infer combined clamp semantics.
+  if(kind==="machine" && Array.isArray(restricted) && restricted.length===1){
+    if(key==="wipe" && (native==="0"||native==="1") && restricted[0]===native)
+      return "single-machine-wipe-bool-scalar-to-vector";
+    if((key==="retract_before_wipe"||key==="retract_after_wipe") &&
+        typeof native==="string" && /^\d+(?:\.\d+)?%$/.test(native) &&
+        Number(native.slice(0,-1))<=100 &&
+        restricted[0]===String(Number(native.slice(0,-1)))+"%")
+      return "single-machine-wipe-percent-scalar-to-vector";
+  }
   // Pinned coEnum machine lift mode; only exact, single-slot native tokens.
   if(kind==="machine" && key==="z_hop_types" &&
       ["Auto Lift","Normal Lift","Slope Lift","Spiral Lift"].includes(native) &&
